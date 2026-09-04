@@ -4942,20 +4942,25 @@ mod tests {
         owned_event_id, room_id, user_id,
     };
     use wiremock::{
-        Mock, MockServer, ResponseTemplate,
-        matchers::{header, method, path, path_regex},
+        Mock, ResponseTemplate,
+        matchers::{method, path},
+    };
+    #[cfg(all(feature = "sqlite", feature = "e2e-encryption"))]
+    use wiremock::{
+        MockServer,
+        matchers::{header, path_regex},
     };
 
     use crate::{
         Client, Room,
-        config::RequestConfig,
         room::messages::{IncludeRelations, ListThreadsOptions, RelationsOptions},
         test_utils::{
-            client::mock_matrix_session,
             logged_in_client,
             mocks::{MatrixMockServer, RoomRelationsResponseTemplate},
         },
     };
+    #[cfg(all(feature = "sqlite", feature = "e2e-encryption"))]
+    use crate::{config::RequestConfig, test_utils::client::mock_matrix_session};
 
     #[cfg(all(feature = "sqlite", feature = "e2e-encryption"))]
     #[async_test]

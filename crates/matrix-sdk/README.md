@@ -64,7 +64,7 @@ The following crate feature flags are available:
 | `js`             |   No    | Enables JavaScript API usage on WASM (does nothing on other targets)                                                                            |
 | `markdown`       |   No    | Support for sending Markdown-formatted messages                                                                                                 |
 | `qrcode`         |   Yes   | QR code verification support                                                                                                                    |
-| `sqlite`         |   Yes   | Persistent storage of state and E2EE data (optionally, if feature `e2e-encryption` is enabled), via SQLite available on system                  |
+| `sqlite`         |   No    | Persistent storage of state and E2EE data (optionally, if feature `e2e-encryption` is enabled), via SQLite available on system                  |
 | `bundled-sqlite` |   No    | Persistent storage of state and E2EE data (optionally, if feature `e2e-encryption` is enabled), via SQLite compiled and bundled with the binary |
 | `indexeddb`      |   No    | Persistent storage of state and E2EE data (optionally, if feature `e2e-encryption` is enabled) for browsers, via IndexedDB                      |
 | `socks`          |   No    | SOCKS support in the default HTTP client, [`reqwest`]                                                                                           |
@@ -99,6 +99,87 @@ matrix-sdk = { version = "0.18", default-features = false, features = ["e2e-encr
 Note that `tokio` remains a dependency for its synchronisation primitives
 (`Mutex`, `RwLock`, `broadcast`, …), which the SDK uses in its public API.
 Those contain no runtime, no reactor and no timers, and work on any executor.
+
+## Storage
+
+The SDK does not talk to a concrete database either. It persists its data
+through four traits, all of which live in `matrix-sdk-base` and can be
+implemented against any backend:
+
+| Trait             | Holds                                                  |
+| ----------------- | ------------------------------------------------------ |
+| `StateStore`      | Room state, account data, the send queue                |
+| `EventCacheStore` | The persisted event cache (linked chunks)               |
+| `MediaStore`      | Cached media, with its retention policy                 |
+| `CryptoStore`     | E2EE data, with the `e2e-encryption` feature            |
+
+SQLite (the `sqlite` feature) and IndexedDB (the `indexeddb` feature) are
+implementations shipped with the SDK, not requirements. Neither is on by
+default: with no store configured the SDK keeps everything in memory, which is
+enough for bots and tests, and applications that want persistence pick a
+backend explicitly.
+
+```toml
+# Persist to SQLite, linking against the system's libsqlite3.
+matrix-sdk = { version = "0.18", features = ["sqlite"] }
+# ...or compile SQLite into the binary instead.
+matrix-sdk = { version = "0.18", features = ["bundled-sqlite"] }
+```
+
+To plug in a backend of your own, there are two entry points on
+[`ClientBuilder`]:
+
+- [`ClientBuilder::store_config`] takes a [`StoreConfig`] holding stores you
+  have already opened. Use it when opening them is synchronous and infallible.
+- [`ClientBuilder::store_provider`] takes a [`StoreProvider`], which the SDK
+  calls while building the [`Client`]. Use it when opening the stores is
+  asynchronous or fallible; a failure is reported as
+  `ClientBuildError::StoreProvider`.
+
+```rust,no_run
+use matrix_sdk::{
+    BoxFuture, Client, StoreProvider, StoreProviderError, config::StoreConfig,
+    cross_process_lock::CrossProcessLockConfig, store::MemoryStore,
+};
+
+#[derive(Debug)]
+struct MyBackend {
+    connection_string: String,
+}
+
+impl StoreProvider for MyBackend {
+    fn open_stores<'a>(
+        &'a self,
+        cross_process_lock_config: &'a CrossProcessLockConfig,
+    ) -> BoxFuture<'a, Result<StoreConfig, StoreProviderError>> {
+        Box::pin(async move {
+            // Open your own `StateStore`, `EventCacheStore`, `MediaStore` and
+            // `CryptoStore` here, however that is done for your backend.
+            Ok(StoreConfig::new(cross_process_lock_config.clone())
+                .state_store(MemoryStore::new()))
+        })
+    }
+}
+
+# async fn example() -> anyhow::Result<()> {
+let client = Client::builder()
+    .homeserver_url("http://localhost:8008")
+    .store_provider(MyBackend { connection_string: "postgres://...".to_owned() })
+    .build()
+    .await?;
+# anyhow::Ok(())
+# }
+```
+
+Every store a [`StoreConfig`] is not given falls back to the in-memory
+implementation, so a backend can cover only the stores it cares about.
+
+[`Client`]: https://docs.rs/matrix-sdk/latest/matrix_sdk/struct.Client.html
+[`ClientBuilder`]: https://docs.rs/matrix-sdk/latest/matrix_sdk/struct.ClientBuilder.html
+[`ClientBuilder::store_config`]: https://docs.rs/matrix-sdk/latest/matrix_sdk/struct.ClientBuilder.html#method.store_config
+[`ClientBuilder::store_provider`]: https://docs.rs/matrix-sdk/latest/matrix_sdk/struct.ClientBuilder.html#method.store_provider
+[`StoreConfig`]: https://docs.rs/matrix-sdk/latest/matrix_sdk/config/struct.StoreConfig.html
+[`StoreProvider`]: https://docs.rs/matrix-sdk/latest/matrix_sdk/trait.StoreProvider.html
 
 ## Enabling logging
 

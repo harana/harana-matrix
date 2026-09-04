@@ -18,11 +18,13 @@
 
 #[cfg(feature = "experimental-send-custom-to-device")]
 use std::ops::Deref;
+#[cfg(feature = "sqlite")]
+use std::path::Path;
 use std::{
     collections::{BTreeMap, HashSet},
     io::{Cursor, Read, Write},
     iter,
-    path::{Path, PathBuf},
+    path::PathBuf,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -117,6 +119,7 @@ pub mod secret_storage;
 pub(crate) mod tasks;
 pub mod verification;
 
+#[cfg(feature = "sqlite")]
 use matrix_sdk_base::crypto::OlmMachineBuilder;
 pub use matrix_sdk_base::crypto::{
     CrossSigningStatus, CryptoStoreError, DecryptorError, EventError, KeyExportError, LocalTrust,
@@ -2279,15 +2282,14 @@ mod tests {
         matchers::{header, method, path_regex},
     };
 
+    #[cfg(feature = "sqlite")]
+    use crate::{Client, config::RequestConfig, test_utils::client::mock_matrix_session};
     use crate::{
-        Client, assert_next_matches_with_timeout,
-        config::RequestConfig,
+        assert_next_matches_with_timeout,
         encryption::{
             DuplicateOneTimeKeyErrorMessage, OAuthCrossSigningResetInfo, VerificationState,
         },
-        test_utils::{
-            client::mock_matrix_session, logged_in_client, no_retry_test_client, set_client_session,
-        },
+        test_utils::{logged_in_client, no_retry_test_client, set_client_session},
     };
 
     #[async_test]
