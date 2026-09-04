@@ -254,12 +254,11 @@ pub(crate) async fn reopen_connections(
     }
 
     // Rebuild the pool (connections are created lazily on first get()).
-    let pool =
-        Pool::builder(Manager::new(db_path)).config(pool_config).build().map_err(|e| {
-            crate::error::Error::InvalidData {
-                details: format!("Failed to rebuild connection pool: {e}"),
-            }
-        })?;
+    let pool = Pool::builder(Manager::new(db_path)).config(pool_config).build().map_err(|e| {
+        crate::error::Error::InvalidData {
+            details: format!("Failed to rebuild connection pool: {e}"),
+        }
+    })?;
 
     let write_conn = pool.get().await?;
     // Re-apply runtime config (WAL mode, busy timeout, etc.)

@@ -1296,8 +1296,7 @@ macro_rules! media_store_integration_tests_time {
             use std::time::Duration;
 
             use matrix_sdk_test::async_test;
-            use $crate::sleep::sleep;
-            use $crate::media::store::MediaStore;
+            use $crate::{media::store::MediaStore, sleep::sleep};
 
             use super::get_media_store;
 

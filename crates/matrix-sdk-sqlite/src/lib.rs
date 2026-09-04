@@ -26,9 +26,9 @@ mod connection;
 #[cfg(feature = "crypto-store")]
 mod crypto_store;
 mod error;
-mod fs;
 #[cfg(feature = "event-cache-store")]
 mod event_cache_store;
+mod fs;
 #[cfg(feature = "media-store")]
 mod media_store;
 #[cfg(feature = "state-store")]

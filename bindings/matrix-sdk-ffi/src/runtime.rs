@@ -145,7 +145,6 @@ mod sys {
     /// This function returns a unified `Handle` type that works across both
     /// Wasm and non-Wasm platforms, allowing code to be written that is
     /// agnostic to the platform-specific runtime implementation.
-    ///
     pub fn get_runtime_handle() -> Handle {
         Handle
     }

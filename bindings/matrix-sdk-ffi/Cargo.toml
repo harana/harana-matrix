@@ -56,6 +56,7 @@ eyeball-im.workspace = true
 futures-util.workspace = true
 language-tags = "0.3.2"
 log-panics = { version = "2.1.0", default-features = false, features = ["with-backtrace"] }
+http.workspace = true
 matrix-sdk = { workspace = true, features = [
     "anyhow",
     "e2e-encryption",

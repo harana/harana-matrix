@@ -40,10 +40,10 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, instrument};
 
 use crate::{
-    fs,
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     error::{Error, Result},
+    fs,
     utils::{
         EncryptableStore, SqliteAsyncConnExt, SqliteKeyValueStoreAsyncConnExt,
         SqliteKeyValueStoreConnExt, SqliteTransactionExt, time_to_timestamp,

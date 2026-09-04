@@ -69,8 +69,36 @@ The following crate feature flags are available:
 | `indexeddb`      |   No    | Persistent storage of state and E2EE data (optionally, if feature `e2e-encryption` is enabled) for browsers, via IndexedDB                      |
 | `socks`          |   No    | SOCKS support in the default HTTP client, [`reqwest`]                                                                                           |
 | `sso-login`      |   No    | Support for SSO login with a local HTTP server                                                                                                  |
+| `reqwest-transport` | Yes  | Send HTTP requests with [`reqwest`], which needs a Tokio runtime                                                                                |
+| `tokio-runtime`  |   Yes   | Spawn tasks and sleep on Tokio                                                                                                                  |
 
 [`reqwest`]: https://docs.rs/reqwest/0.11.5/reqwest/index.html
+
+## Running on another async runtime
+
+The SDK does not talk to a concrete async runtime. There are two things it
+needs from one, and both can be replaced:
+
+- **Spawning tasks, sleeping and running blocking work.** This is described by
+  [`matrix_sdk_common::runtime::AsyncRuntime`]. Tokio is used by default (the
+  `tokio-runtime` feature); install your own with
+  [`matrix_sdk_common::runtime::set_runtime`] before creating a [`Client`].
+- **Sending HTTP requests.** This is described by [`HttpSend`]. `reqwest` is
+  used by default (the `reqwest-transport` feature); hand your own to
+  [`ClientBuilder::http_transport`].
+
+Both defaults are on by default, and installing your own runtime with
+`set_runtime()` takes precedence over the Tokio one, so most applications need
+to do nothing. To build with neither Tokio nor `reqwest`, turn the default
+features off:
+
+```toml
+matrix-sdk = { version = "0.18", default-features = false, features = ["e2e-encryption", "sqlite"] }
+```
+
+Note that `tokio` remains a dependency for its synchronisation primitives
+(`Mutex`, `RwLock`, `broadcast`, …), which the SDK uses in its public API.
+Those contain no runtime, no reactor and no timers, and work on any executor.
 
 ## Enabling logging
 

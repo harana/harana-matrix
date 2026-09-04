@@ -15,6 +15,7 @@ use matrix_sdk::{
         backups::BackupState,
         recovery::{RecoveryError, RecoveryState},
     },
+    executor::JoinHandle,
 };
 use matrix_sdk_common::executor::spawn;
 use ratatui::{
@@ -22,7 +23,6 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 use throbber_widgets_tui::{Throbber, ThrobberState};
-use matrix_sdk::executor::JoinHandle;
 
 use super::{ShouldExit, create_centered_throbber_area};
 

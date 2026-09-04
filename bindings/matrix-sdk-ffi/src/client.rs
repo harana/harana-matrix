@@ -1110,13 +1110,23 @@ impl Client {
     /// Note: When an HTTP error occurs, the error response can be found in the
     /// `ClientError::Generic`'s `details` field.
     pub async fn get_url(&self, url: String) -> Result<Vec<u8>, ClientError> {
-        let response = self.inner.http_client().get(url).send().await?;
-        if response.status().is_success() {
-            Ok(response.bytes().await?.into())
+        let request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri(url)
+            .body(matrix_sdk::bytes::Bytes::new())
+            .map_err(|error| ClientError::Generic { msg: error.to_string(), details: None })?;
+
+        let response =
+            self.inner.http_client().send_request(request, None, Default::default()).await?;
+
+        let status = response.status();
+
+        if status.is_success() {
+            Ok(response.into_body().into())
         } else {
             Err(ClientError::Generic {
-                msg: response.status().to_string(),
-                details: response.text().await.ok(),
+                msg: status.to_string(),
+                details: String::from_utf8(response.into_body().into()).ok(),
             })
         }
     }

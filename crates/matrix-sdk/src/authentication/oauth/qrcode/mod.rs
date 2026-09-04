@@ -225,14 +225,12 @@ pub enum DeviceAuthorizationOAuthError {
     /// An error happened while we attempted to request a device authorization
     /// from the OAuth 2.0 authorization server.
     #[error(transparent)]
-    DeviceAuthorization(#[from] BasicRequestTokenError<HttpClientError<reqwest::Error>>),
+    DeviceAuthorization(#[from] BasicRequestTokenError<HttpClientError<HttpError>>),
 
     /// An error happened while waiting for the access token to be issued and
     /// sent to us by the OAuth 2.0 authorization server.
     #[error(transparent)]
-    RequestToken(
-        #[from] RequestTokenError<HttpClientError<reqwest::Error>, DeviceCodeErrorResponse>,
-    ),
+    RequestToken(#[from] RequestTokenError<HttpClientError<HttpError>, DeviceCodeErrorResponse>),
 }
 
 impl DeviceAuthorizationOAuthError {

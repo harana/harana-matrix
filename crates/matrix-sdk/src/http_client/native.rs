@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "reqwest-transport")]
+use std::mem;
 use std::{
     fmt::Debug,
-    mem,
     sync::atomic::{AtomicU64, Ordering},
     time::Duration,
 };
@@ -23,14 +24,18 @@ use backon::{ExponentialBuilder, Retryable};
 use bytes::Bytes;
 use bytesize::ByteSize;
 use eyeball::SharedObservable;
+#[cfg(feature = "reqwest-transport")]
 use http::header::CONTENT_LENGTH;
-#[cfg(not(target_family = "wasm"))]
-use reqwest::Certificate;
-use reqwest::tls;
+#[cfg(feature = "reqwest-transport")]
+use reqwest::{Certificate, tls};
 use ruma::api::{IncomingResponseExt as _, OutgoingRequest, error::FromHttpResponseError};
-use tracing::{debug, info, warn};
+use tracing::debug;
+#[cfg(feature = "reqwest-transport")]
+use tracing::{info, warn};
 
-use super::{DEFAULT_REQUEST_TIMEOUT, HttpClient, TransmissionProgress, response_to_http_response};
+#[cfg(feature = "reqwest-transport")]
+use super::{DEFAULT_REQUEST_TIMEOUT, response_to_http_response};
+use super::{HttpClient, HttpSend, TransmissionProgress};
 use crate::{
     HttpResult,
     config::RequestConfig,
@@ -73,7 +78,7 @@ impl HttpClient {
             backoff
         }
         async fn send_request_inner(
-            http_client: &reqwest::Client,
+            http_client: &dyn HttpSend,
             request: &http::Request<Bytes>,
             timeout: Option<Duration>,
             retry_count: &AtomicU64,
@@ -83,7 +88,8 @@ impl HttpClient {
             debug!(num_attempt, "Sending request");
             let before = ruma::time::Instant::now();
 
-            let response = execute_request(http_client, request, timeout, send_progress).await?;
+            let response =
+                http_client.send_request(request.clone(), timeout, send_progress).await?;
 
             let request_duration = ruma::time::Instant::now().saturating_duration_since(before);
 
@@ -145,7 +151,7 @@ impl HttpClient {
             let send_progress = send_progress.clone();
             async {
                 let response = send_request_inner(
-                    &self.inner,
+                    self.inner.as_ref(),
                     &request,
                     config.timeout,
                     &retry_count,
@@ -162,6 +168,8 @@ impl HttpClient {
 
         send_request
             .retry(make_backoff(&config))
+            // `backon` would sleep on Tokio by default; go through the SDK's runtime instead.
+            .sleep(matrix_sdk_common::sleep::sleep)
             .adjust(|err, backon_suggested_timeout| {
                 adjust_backoff(err, backon_suggested_timeout, has_retry_limit)
             })
@@ -169,7 +177,7 @@ impl HttpClient {
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(feature = "reqwest-transport")]
 #[derive(Clone, Debug)]
 pub(crate) struct HttpSettings {
     pub(crate) disable_ssl_verification: bool,
@@ -181,7 +189,7 @@ pub(crate) struct HttpSettings {
     pub(crate) disable_built_in_root_certificates: bool,
 }
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(feature = "reqwest-transport")]
 impl Default for HttpSettings {
     fn default() -> Self {
         Self {
@@ -196,7 +204,7 @@ impl Default for HttpSettings {
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(feature = "reqwest-transport")]
 impl HttpSettings {
     /// Build a client with the specified configuration.
     pub(crate) fn make_client(&self) -> Result<reqwest::Client, HttpError> {
@@ -236,9 +244,10 @@ impl HttpSettings {
     }
 }
 
+#[cfg(feature = "reqwest-transport")]
 pub(super) async fn execute_request(
     client: &reqwest::Client,
-    request: &http::Request<Bytes>,
+    request: http::Request<Bytes>,
     timeout: Option<Duration>,
     send_progress: SharedObservable<TransmissionProgress>,
 ) -> Result<http::Response<Bytes>, HttpError> {
@@ -246,7 +255,6 @@ pub(super) async fn execute_request(
 
     use futures_util::stream;
 
-    let request = request.clone();
     let request = {
         let mut request = if send_progress.subscriber_count() != 0 {
             let content_length = request.body().len();
@@ -285,11 +293,13 @@ pub(super) async fn execute_request(
     Ok(response_to_http_response(response).await?)
 }
 
+#[cfg(feature = "reqwest-transport")]
 struct BytesChunks {
     bytes: Bytes,
     size: usize,
 }
 
+#[cfg(feature = "reqwest-transport")]
 impl BytesChunks {
     fn new(bytes: Bytes, size: usize) -> Self {
         assert_ne!(size, 0);
@@ -297,6 +307,7 @@ impl BytesChunks {
     }
 }
 
+#[cfg(feature = "reqwest-transport")]
 impl Iterator for BytesChunks {
     type Item = Bytes;
 

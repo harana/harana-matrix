@@ -34,7 +34,7 @@ pub use super::cross_process::CrossProcessRefreshLockError;
 
 /// An error when interacting with the OAuth 2.0 authorization server.
 pub type OAuthRequestError<T> =
-    RequestTokenError<HttpClientError<reqwest::Error>, StandardErrorResponse<T>>;
+    RequestTokenError<HttpClientError<crate::HttpError>, StandardErrorResponse<T>>;
 
 /// An error when trying to parse the query of a redirect URI.
 #[derive(Debug, Clone, thiserror::Error)]

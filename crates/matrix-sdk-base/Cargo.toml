@@ -16,7 +16,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [features]
-default = []
+default = ["tokio-runtime"]
 e2e-encryption = ["dep:matrix-sdk-crypto"]
 js = [
     "matrix-sdk-common/js",
@@ -73,6 +73,11 @@ unstable-msc4426 = ["ruma/unstable-msc4426"]
 
 experimental-element-recent-emojis = []
 experimental-x509-identity-verification = ["e2e-encryption", "matrix-sdk-crypto/experimental-x509-identity-verification"]
+
+# Use Tokio as the async runtime, unless another one is installed with
+# `matrix_sdk_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = ["matrix-sdk-common/tokio-runtime", "matrix-sdk-crypto?/tokio-runtime"]
 
 [dependencies]
 as_variant.workspace = true

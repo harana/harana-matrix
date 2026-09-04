@@ -37,9 +37,6 @@ use futures_util::{
     FutureExt,
     future::{AbortHandle as RawAbortHandle, Abortable, Aborted},
 };
-
-use crate::{SendOutsideWasm, runtime};
-
 /// The Tokio runtime handle, for callers that need to enter the SDK's runtime
 /// context themselves.
 ///
@@ -48,6 +45,8 @@ use crate::{SendOutsideWasm, runtime};
 /// [`crate::runtime::set_runtime`].
 #[cfg(all(not(target_family = "wasm"), feature = "tokio-runtime"))]
 pub use tokio::runtime::{Handle, Runtime};
+
+use crate::{SendOutsideWasm, runtime};
 
 /// The reason a spawned task did not run to completion.
 ///

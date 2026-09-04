@@ -50,10 +50,10 @@ use vodozemac::Curve25519PublicKey;
 use zeroize::Zeroizing;
 
 use crate::{
-    fs,
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     error::{Error, Result},
+    fs,
     utils::{
         EncryptableStore, Key, SqliteAsyncConnExt, SqliteKeyValueStoreAsyncConnExt,
         SqliteKeyValueStoreConnExt,

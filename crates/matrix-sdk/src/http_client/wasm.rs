@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, time::Duration};
 
 use bytes::Bytes;
 use bytesize::ByteSize;
@@ -22,12 +22,24 @@ use ruma::api::{IncomingResponseExt as _, OutgoingRequest, error::FromHttpRespon
 use super::{HttpClient, TransmissionProgress, response_to_http_response};
 use crate::{config::RequestConfig, error::HttpError};
 
+#[cfg(feature = "reqwest-transport")]
+pub(super) async fn execute_request(
+    client: &reqwest::Client,
+    request: http::Request<Bytes>,
+    _timeout: Option<Duration>,
+    _send_progress: SharedObservable<TransmissionProgress>,
+) -> Result<http::Response<Bytes>, HttpError> {
+    let request = reqwest::Request::try_from(request)?;
+
+    Ok(response_to_http_response(client.execute(request).await?).await?)
+}
+
 impl HttpClient {
     pub(super) async fn send_request<R>(
         &self,
         request: http::Request<Bytes>,
-        _config: RequestConfig,
-        _send_progress: SharedObservable<TransmissionProgress>,
+        config: RequestConfig,
+        send_progress: SharedObservable<TransmissionProgress>,
     ) -> Result<R::IncomingResponse, HttpError>
     where
         R: OutgoingRequest + Debug,
@@ -35,11 +47,9 @@ impl HttpClient {
     {
         tracing::debug!("Sending request");
 
-        let request = reqwest::Request::try_from(request)?;
-
         let before = ruma::time::Instant::now();
 
-        let response = response_to_http_response(self.inner.execute(request).await?).await?;
+        let response = self.inner.send_request(request, config.timeout, send_progress).await?;
 
         let request_duration = ruma::time::Instant::now().saturating_duration_since(before);
         let status_code = response.status();

@@ -608,7 +608,10 @@ mod test {
         server.mock_upload_keys().ok().expect(1).named("upload_keys").mount().await;
         server.mock_query_keys().ok().expect(1).named("query_keys").mount().await;
 
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let alice = SecureChannel::reciprocate(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Alice should be able to create a secure channel.");
@@ -1024,7 +1027,10 @@ mod test {
         server.mock_versions().ok().named("versions").mount().await;
         server.mock_who_am_i().ok().named("whoami").mount().await;
 
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let alice = SecureChannel::reciprocate(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Alice should be able to create a secure channel.");
@@ -1361,7 +1367,10 @@ mod test {
         server.mock_versions().ok().named("versions").mount().await;
         server.mock_who_am_i().ok().named("whoami").mount().await;
 
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let alice = SecureChannel::reciprocate(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Alice should be able to create a secure channel.");

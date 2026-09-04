@@ -24,7 +24,7 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 ignored = ["rustls-webpki", "rustls-pki-types"]
 
 [features]
-default = []
+default = ["tokio-runtime"]
 automatic-room-key-forwarding = []
 experimental-send-custom-to-device = []
 
@@ -58,6 +58,11 @@ experimental-x509-identity-verification = ["dep:cms", "dep:pkcs1", "dep:sha2_0_1
 
 # Enable a pure-rust implementation of the X.509 signer and verifier, via `rustls`.
 rust-x509-verifier-impl = ["experimental-x509-identity-verification", "dep:rustls", "dep:rustls-pki-types", "dep:rustls-webpki", "dep:ring"]
+
+# Use Tokio as the async runtime, unless another one is installed with
+# `matrix_sdk_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = ["matrix-sdk-common/tokio-runtime"]
 
 [dependencies]
 aes = { version = "0.9.2", default-features = false }

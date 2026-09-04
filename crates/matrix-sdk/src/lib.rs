@@ -30,6 +30,7 @@ pub use matrix_sdk_base::{
     store::{self, DynStateStore, MemoryStore, StateStoreExt},
 };
 pub use matrix_sdk_common::*;
+#[cfg(feature = "reqwest-transport")]
 pub use reqwest;
 
 mod account;
@@ -80,7 +81,9 @@ pub use error::{
     BeaconError, Error, HttpError, HttpResult, NotificationSettingsError, RefreshTokenError,
     Result, RumaApiError,
 };
-pub use http_client::{SupportedAuthScheme, SupportedPathBuilder, TransmissionProgress};
+#[cfg(feature = "reqwest-transport")]
+pub use http_client::ReqwestTransport;
+pub use http_client::{HttpSend, SupportedAuthScheme, SupportedPathBuilder, TransmissionProgress};
 #[cfg(all(feature = "e2e-encryption", feature = "sqlite"))]
 pub use matrix_sdk_sqlite::SqliteCryptoStore;
 #[cfg(feature = "sqlite")]

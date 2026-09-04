@@ -58,7 +58,6 @@ itertools = { version = "0.15.0", default-features = false, features = ["use_std
 js-sys = { version = "0.3.82", default-features = false, features = ["std"] }
 mime = { version = "0.3.17", default-features = false }
 oauth2 = { version = "5.0.0", default-features = false, features = ["timing-resistant-secret-traits"] }
-oauth2-reqwest = { version = "0.1.0-alpha.3", default-features = false }
 once_cell = { version = "1.21.4", default-features = false, features = ["std"] }
 pbkdf2 = { version = "0.13.0", default-features = false }
 pin-project-lite = { version = "0.2.17", default-features = false }
@@ -131,10 +130,10 @@ zeroize = "1.9.0"
 zxcvbn = { git = "https://github.com/shssoichiro/zxcvbn-rs", rev = "4e8e784b23541d118800df84feedf8160879d1af", default-features = false }
 
 matrix-sdk = { path = "crates/matrix-sdk", version = "0.18.0", default-features = false }
-matrix-sdk-base = { path = "crates/matrix-sdk-base", version = "0.18.0" }
-matrix-sdk-common = { path = "crates/matrix-sdk-common", version = "0.18.0" }
+matrix-sdk-base = { path = "crates/matrix-sdk-base", version = "0.18.0", default-features = false }
+matrix-sdk-common = { path = "crates/matrix-sdk-common", version = "0.18.0", default-features = false }
 matrix-sdk-contentscanner = { path = "crates/matrix-sdk-contentscanner", version = "0.18.0" }
-matrix-sdk-crypto = { path = "crates/matrix-sdk-crypto", version = "0.18.0" }
+matrix-sdk-crypto = { path = "crates/matrix-sdk-crypto", version = "0.18.0", default-features = false }
 matrix-sdk-ffi-macros = { path = "bindings/matrix-sdk-ffi-macros", version = "0.7.0" }
 matrix-sdk-indexeddb = { path = "crates/matrix-sdk-indexeddb", version = "0.18.0", default-features = false }
 matrix-sdk-qrcode = { path = "crates/matrix-sdk-qrcode", version = "0.18.0" }

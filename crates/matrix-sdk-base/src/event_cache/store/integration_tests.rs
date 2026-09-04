@@ -2647,8 +2647,7 @@ macro_rules! event_cache_store_integration_tests_time {
             use std::time::Duration;
 
             use matrix_sdk_test::async_test;
-            use $crate::sleep::sleep;
-            use $crate::event_cache::store::IntoEventCacheStore;
+            use $crate::{event_cache::store::IntoEventCacheStore, sleep::sleep};
 
             use super::get_event_cache_store;
 

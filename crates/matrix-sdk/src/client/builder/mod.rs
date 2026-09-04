@@ -42,7 +42,7 @@ use matrix_sdk_base::{
 use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
 #[cfg(feature = "sqlite")]
 use matrix_sdk_sqlite::SqliteStoreConfig;
-#[cfg(not(target_family = "wasm"))]
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
 use reqwest::Certificate;
 use ruma::{
     OwnedServerName, ServerName,
@@ -58,7 +58,7 @@ use tracing::{Span, debug, field::debug, instrument};
 use super::{Client, ClientInner};
 #[cfg(feature = "e2e-encryption")]
 use crate::encryption::EncryptionSettings;
-#[cfg(not(target_family = "wasm"))]
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
 use crate::http_client::HttpSettings;
 #[cfg(feature = "experimental-search")]
 use crate::search_index::SearchIndex;
@@ -70,7 +70,7 @@ use crate::{
     client::caches::CachedValue::{Cached, NotSet},
     config::RequestConfig,
     error::RumaApiError,
-    http_client::HttpClient,
+    http_client::{HttpClient, HttpSend},
     media::{DefaultMediaFetcher, MediaFetcher},
     send_queue::SendQueueData,
     sliding_sync::VersionBuilder as SlidingSyncVersionBuilder,
@@ -439,21 +439,21 @@ impl ClientBuilder {
     ///
     /// let client_config = Client::builder().proxy("http://localhost:8080");
     /// ```
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
     pub fn proxy(mut self, proxy: impl AsRef<str>) -> Self {
         self.http_settings().proxy = Some(proxy.as_ref().to_owned());
         self
     }
 
     /// Disable SSL verification for the HTTP requests.
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
     pub fn disable_ssl_verification(mut self) -> Self {
         self.http_settings().disable_ssl_verification = true;
         self
     }
 
     /// Set a custom HTTP user agent for the client.
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
     pub fn user_agent(mut self, user_agent: impl AsRef<str>) -> Self {
         self.http_settings().user_agent = Some(user_agent.as_ref().to_owned());
         self
@@ -467,7 +467,7 @@ impl ClientBuilder {
     ///
     /// Internally this will call the
     /// [`reqwest::ClientBuilder::add_root_certificate()`] method.
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
     pub fn add_root_certificates(mut self, certificates: Vec<Certificate>) -> Self {
         self.http_settings().additional_root_certificates = certificates;
         self
@@ -476,7 +476,7 @@ impl ClientBuilder {
     /// Don't trust any system root certificates, only trust the certificates
     /// provided through
     /// [`add_root_certificates`][ClientBuilder::add_root_certificates].
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
     pub fn disable_built_in_root_certificates(mut self) -> Self {
         self.http_settings().disable_built_in_root_certificates = true;
         self
@@ -491,8 +491,28 @@ impl ClientBuilder {
     /// [`add_root_certificates`][ClientBuilder::add_root_certificates],
     /// [`disable_built_in_root_certificates`][ClientBuilder::disable_built_in_root_certificates],
     /// and [`user_agent()`][ClientBuilder::user_agent].
+    #[cfg(feature = "reqwest-transport")]
     pub fn http_client(mut self, client: reqwest::Client) -> Self {
         self.http_cfg = Some(HttpConfig::Custom(client));
+        self
+    }
+
+    /// Send every HTTP request through the given [`HttpSend`] implementation
+    /// instead of the built-in `reqwest`-based one.
+    ///
+    /// Use this to run the SDK on an async runtime `reqwest` doesn't support,
+    /// or to share an HTTP stack with the rest of an application.
+    ///
+    /// This method is mutually exclusive with
+    /// [`http_client()`][ClientBuilder::http_client],
+    /// [`proxy()`][ClientBuilder::proxy],
+    /// [`disable_ssl_verification`][ClientBuilder::disable_ssl_verification],
+    /// [`add_root_certificates`][ClientBuilder::add_root_certificates],
+    /// [`disable_built_in_root_certificates`][ClientBuilder::disable_built_in_root_certificates],
+    /// and [`user_agent()`][ClientBuilder::user_agent]: the SDK doesn't build
+    /// the HTTP client, so it can't configure it either.
+    pub fn http_transport(mut self, transport: Arc<dyn HttpSend>) -> Self {
+        self.http_cfg = Some(HttpConfig::Transport(transport));
         self
     }
 
@@ -505,7 +525,7 @@ impl ClientBuilder {
         self
     }
 
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
     fn http_settings(&mut self) -> &mut HttpSettings {
         self.http_cfg.get_or_insert_with(Default::default).settings()
     }
@@ -659,14 +679,23 @@ impl ClientBuilder {
         let homeserver_cfg = self.homeserver_cfg.ok_or(ClientBuildError::MissingHomeserver)?;
         Span::current().record("homeserver", debug(&homeserver_cfg));
 
-        #[cfg_attr(target_family = "wasm", allow(clippy::infallible_destructuring_match))]
-        let inner_http_client = match self.http_cfg.unwrap_or_default() {
-            #[cfg(not(target_family = "wasm"))]
+        let http_cfg = match self.http_cfg {
+            Some(http_cfg) => http_cfg,
+            #[cfg(feature = "reqwest-transport")]
+            None => HttpConfig::default(),
+            #[cfg(not(feature = "reqwest-transport"))]
+            None => return Err(ClientBuildError::MissingHttpTransport),
+        };
+
+        let inner_http_client: Arc<dyn HttpSend> = match http_cfg {
+            #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
             HttpConfig::Settings(mut settings) => {
                 settings.timeout = self.request_config.timeout;
-                settings.make_client()?
+                crate::http_client::reqwest_transport(settings.make_client()?)
             }
-            HttpConfig::Custom(c) => c,
+            #[cfg(feature = "reqwest-transport")]
+            HttpConfig::Custom(client) => crate::http_client::reqwest_transport(client),
+            HttpConfig::Transport(transport) => transport,
         };
 
         let base_client = if let Some(base_client) = self.base_client {
@@ -872,27 +901,30 @@ async fn build_indexeddb_store_config(
 
 #[derive(Clone, Debug)]
 enum HttpConfig {
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
     Settings(HttpSettings),
+    #[cfg(feature = "reqwest-transport")]
     Custom(reqwest::Client),
+    Transport(Arc<dyn HttpSend>),
 }
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
 impl HttpConfig {
     fn settings(&mut self) -> &mut HttpSettings {
         match self {
             Self::Settings(s) => s,
-            Self::Custom(_) => {
+            _ => {
                 *self = Self::default();
                 match self {
                     Self::Settings(s) => s,
-                    Self::Custom(_) => unreachable!(),
+                    _ => unreachable!(),
                 }
             }
         }
     }
 }
 
+#[cfg(feature = "reqwest-transport")]
 impl Default for HttpConfig {
     fn default() -> Self {
         #[cfg(not(target_family = "wasm"))]
@@ -946,6 +978,15 @@ pub enum ClientBuildError {
     /// No homeserver or user ID was configured
     #[error("No homeserver or user ID was configured")]
     MissingHomeserver,
+
+    /// No HTTP transport was configured, and the crate was built without the
+    /// `reqwest-transport` feature, so there is no default one either.
+    #[cfg(not(feature = "reqwest-transport"))]
+    #[error(
+        "No HTTP transport was configured; pass one to `ClientBuilder::http_transport()`, \
+         or enable the `reqwest-transport` feature"
+    )]
+    MissingHttpTransport,
 
     /// The supplied server name was invalid.
     #[error("The supplied server name is invalid")]
