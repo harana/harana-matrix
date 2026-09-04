@@ -254,8 +254,10 @@ mod tests {
 
     #[async_test]
     async fn test_url() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         let result = HomeserverConfig::HomeserverUrl("https://matrix-client.matrix.org".to_owned())
             .discover(&http_client, false)
@@ -269,8 +271,10 @@ mod tests {
 
     #[async_test]
     async fn test_server_name() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         let server = MockServer::start().await;
         let homeserver = MockServer::start().await;
@@ -300,8 +304,10 @@ mod tests {
 
     #[async_test]
     async fn test_server_name_or_url_with_name() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         let server = MockServer::start().await;
         let homeserver = MockServer::start().await;
@@ -328,8 +334,10 @@ mod tests {
 
     #[async_test]
     async fn test_server_name_or_url_with_url() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         let homeserver = MockServer::start().await;
 
@@ -369,8 +377,10 @@ mod tests {
 
     #[async_test]
     async fn test_url_with_well_known_lookup_disabled() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         // A homeserver URL never needs a lookup, so the flag changes nothing.
         let result = HomeserverConfig::HomeserverUrl("https://matrix-client.matrix.org".to_owned())
@@ -385,8 +395,10 @@ mod tests {
 
     #[async_test]
     async fn test_server_name_with_well_known_lookup_disabled() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         let server = MockServer::start().await;
         let homeserver = MockServer::start().await;
@@ -409,8 +421,10 @@ mod tests {
 
     #[async_test]
     async fn test_server_name_or_url_with_name_and_well_known_lookup_disabled() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         let server = MockServer::start().await;
         let homeserver = MockServer::start().await;
@@ -431,8 +445,10 @@ mod tests {
 
     #[async_test]
     async fn test_server_name_or_url_with_url_and_well_known_lookup_disabled() {
-        let http_client =
-            HttpClient::new(HttpSettings::default().make_client().unwrap(), Default::default());
+        let http_client = HttpClient::new(
+            crate::http_client::reqwest_transport(HttpSettings::default().make_client().unwrap()),
+            Default::default(),
+        );
 
         let homeserver = MockServer::start().await;
 

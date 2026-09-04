@@ -107,7 +107,7 @@ use crate::{
         EventHandler, EventHandlerContext, EventHandlerDropGuard, EventHandlerHandle,
         EventHandlerStore, ObservableEventHandler, SyncEvent,
     },
-    http_client::{HttpClient, SupportedAuthScheme, SupportedPathBuilder},
+    http_client::{HttpClient, HttpSend, SupportedAuthScheme, SupportedPathBuilder},
     latest_events::LatestEvents,
     live_locations_observer::BeaconInfoUpdate,
     media::{MediaError, MediaFetcher},
@@ -575,8 +575,12 @@ impl Client {
         &self.inner.base_client
     }
 
-    /// The underlying HTTP client.
-    pub fn http_client(&self) -> &reqwest::Client {
+    /// The transport the client sends its HTTP requests over.
+    ///
+    /// This is the [`ReqwestTransport`](crate::ReqwestTransport) the SDK builds
+    /// by default, unless another one was given to
+    /// [`ClientBuilder::http_transport()`](crate::ClientBuilder::http_transport).
+    pub fn http_client(&self) -> &Arc<dyn HttpSend> {
         &self.inner.http_client.inner
     }
 

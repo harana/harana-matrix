@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
 #[cfg(feature = "event-cache-store")]
 use std::sync::Arc;
 
@@ -24,7 +25,6 @@ use matrix_sdk_base::store::StoreError as StateStoreError;
 #[cfg(feature = "crypto-store")]
 use matrix_sdk_crypto::CryptoStoreError;
 use thiserror::Error;
-use tokio::io;
 
 use crate::connection::{CreatePoolError, PoolError};
 

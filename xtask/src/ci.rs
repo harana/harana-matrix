@@ -360,17 +360,21 @@ fn run_wasm_checks(cmd: Option<WasmFeatureSet>) -> Result<()> {
 
     let args = BTreeMap::from([
         (WasmFeatureSet::MatrixSdkQrcode, "-p matrix-sdk-qrcode --features js"),
-        (WasmFeatureSet::MatrixSdkNoDefault, "-p matrix-sdk --no-default-features --features js"),
+        (
+            WasmFeatureSet::MatrixSdkNoDefault,
+            "-p matrix-sdk --no-default-features --features js,reqwest-transport",
+        ),
         (WasmFeatureSet::MatrixSdkBase, "-p matrix-sdk-base --features js,test-send-sync"),
         (WasmFeatureSet::MatrixSdkCommon, "-p matrix-sdk-common --features js"),
         (WasmFeatureSet::MatrixSdkUi, "-p matrix-sdk-ui --features js"),
         (
             WasmFeatureSet::MatrixSdkIndexeddbStoresNoCrypto,
-            "-p matrix-sdk --no-default-features --features js,indexeddb",
+            "-p matrix-sdk --no-default-features --features js,indexeddb,reqwest-transport",
         ),
         (
             WasmFeatureSet::MatrixSdkIndexeddbStores,
-            "-p matrix-sdk --no-default-features --features js,indexeddb,e2e-encryption",
+            "-p matrix-sdk --no-default-features --features \
+             js,indexeddb,e2e-encryption,reqwest-transport",
         ),
         (WasmFeatureSet::IndexeddbAllFeatures, "-p matrix-sdk-indexeddb"),
         (

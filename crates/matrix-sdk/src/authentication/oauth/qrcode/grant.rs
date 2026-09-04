@@ -474,7 +474,7 @@ mod test {
 
         // Use the QR code to establish the secure channel from the new client (Bob).
         let mut bob = EstablishedSecureChannel::from_qr_code(
-            reqwest::Client::new(),
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
             &qr_code_data,
             QrCodeIntent::Login,
         )
@@ -1022,8 +1022,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -1155,8 +1159,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -1408,8 +1416,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -1662,8 +1674,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -1921,8 +1937,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -2114,8 +2134,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -2317,8 +2341,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -2584,8 +2612,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -2870,8 +2902,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -3120,8 +3156,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");
@@ -3384,8 +3424,12 @@ mod test {
             .mount()
             .await;
 
-        // Create a secure channel on the new client (Bob) and extract the QR code.
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        // Create a secure channel on the new client (Bob) and extract the QR
+        // code.
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let channel = SecureChannel::login(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Bob should be able to create a secure channel.");

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crypto_channel::*;
 use matrix_sdk_base::crypto::types::qr_login::{
     Msc4108IntentData, QrCodeData, QrCodeIntent, QrCodeIntentData,
@@ -25,7 +27,10 @@ use super::{
     SecureChannelError as Error,
     rendezvous_channel::{InboundChannelCreationResult, RendezvousChannel, RendezvousInfo},
 };
-use crate::{config::RequestConfig, http_client::HttpClient};
+use crate::{
+    config::RequestConfig,
+    http_client::{HttpClient, HttpSend},
+};
 mod crypto_channel;
 
 const LOGIN_INITIATE_MESSAGE: &str = "MATRIX_QR_CODE_LOGIN_INITIATE";
@@ -155,7 +160,7 @@ impl EstablishedSecureChannel {
     /// Establish a secure channel from a scanned QR code.
     #[instrument(skip(client))]
     pub(super) async fn from_qr_code(
-        client: reqwest::Client,
+        client: Arc<dyn HttpSend>,
         qr_code_data: &QrCodeData,
         expected_mode: QrCodeIntent,
     ) -> Result<Self, Error> {
@@ -433,7 +438,10 @@ pub(super) mod test {
         let rendezvous_server =
             MockedRendezvousServer::new(&server, "abcdEFG12345", Duration::MAX).await;
 
-        let client = HttpClient::new(reqwest::Client::new(), Default::default());
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            Default::default(),
+        );
         let alice = SecureChannel::reciprocate(client, &rendezvous_server.homeserver_url)
             .await
             .expect("Alice should be able to create a secure channel.");
@@ -442,7 +450,7 @@ pub(super) mod test {
 
         let bob_task = spawn(async move {
             EstablishedSecureChannel::from_qr_code(
-                reqwest::Client::new(),
+                crate::http_client::reqwest_transport(reqwest::Client::new()),
                 &qr_code_data,
                 QrCodeIntent::Login,
             )

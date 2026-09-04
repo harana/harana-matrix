@@ -42,11 +42,21 @@ use crate::{HttpResult, config::RequestConfig, error::HttpError};
 
 #[cfg(not(target_family = "wasm"))]
 mod native;
+mod transport;
 #[cfg(target_family = "wasm")]
 mod wasm;
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
 pub(crate) use native::HttpSettings;
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
+use native::execute_request;
+pub use transport::HttpSend;
+#[cfg(feature = "reqwest-transport")]
+pub use transport::ReqwestTransport;
+#[cfg(feature = "reqwest-transport")]
+pub(crate) use transport::reqwest_transport;
+#[cfg(all(target_family = "wasm", feature = "reqwest-transport"))]
+use wasm::execute_request;
 
 pub(crate) const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -76,14 +86,14 @@ impl MaybeSemaphore {
 
 #[derive(Clone, Debug)]
 pub(crate) struct HttpClient {
-    pub(crate) inner: reqwest::Client,
+    pub(crate) inner: Arc<dyn HttpSend>,
     pub(crate) request_config: RequestConfig,
     concurrent_request_semaphore: MaybeSemaphore,
     next_request_id: Arc<AtomicU64>,
 }
 
 impl HttpClient {
-    pub(crate) fn new(inner: reqwest::Client, request_config: RequestConfig) -> Self {
+    pub(crate) fn new(inner: Arc<dyn HttpSend>, request_config: RequestConfig) -> Self {
         HttpClient {
             inner,
             request_config,
@@ -240,6 +250,7 @@ pub struct TransmissionProgress {
     pub total: usize,
 }
 
+#[cfg(feature = "reqwest-transport")]
 async fn response_to_http_response(
     mut response: reqwest::Response,
 ) -> Result<http::Response<Bytes>, reqwest::Error> {

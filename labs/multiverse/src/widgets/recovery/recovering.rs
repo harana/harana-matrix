@@ -3,6 +3,7 @@ use futures_util::FutureExt as _;
 use matrix_sdk::{
     Client,
     encryption::{CrossSigningResetAuthType, recovery::RecoveryError},
+    executor::JoinHandle,
     reqwest::Url,
     ruma::api::client::uiaa::{AuthData, Password},
 };
@@ -13,12 +14,9 @@ use ratatui::{
 };
 use ratatui_textarea::TextArea;
 use throbber_widgets_tui::{Throbber, ThrobberState};
-use tokio::{
-    sync::{
-        mpsc::{UnboundedSender, unbounded_channel},
-        oneshot,
-    },
-    task::JoinHandle,
+use tokio::sync::{
+    mpsc::{UnboundedSender, unbounded_channel},
+    oneshot,
 };
 
 use super::ShouldExit;

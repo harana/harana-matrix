@@ -14,6 +14,7 @@
 
 use std::time::Duration;
 
+use bytes::Bytes;
 use http::{
     HeaderMap, HeaderName, Method, StatusCode,
     header::{CONTENT_TYPE, ETAG, EXPIRES, IF_MATCH, IF_NONE_MATCH, LAST_MODIFIED},
@@ -26,7 +27,10 @@ use ruma::api::{
 use tracing::{debug, instrument, trace};
 use url::Url;
 
-use crate::{HttpError, RumaApiError, http_client::HttpClient};
+use crate::{
+    HttpError, RumaApiError,
+    http_client::{HttpClient, HttpSend},
+};
 
 const TEXT_PLAIN_CONTENT_TYPE: &str = "text/plain";
 #[cfg(test)]
@@ -143,9 +147,10 @@ impl Channel {
         client: HttpClient,
         rendezvous_url: &Url,
     ) -> Result<InboundChannelCreationResult, HttpError> {
-        // Receive the initial message, which should be empty. But we need the ETAG to
-        // fully establish the rendezvous channel.
-        let response = Self::receive_message_impl(&client.inner, None, rendezvous_url).await?;
+        // Receive the initial message, which should be empty. But we need the
+        // ETAG to fully establish the rendezvous channel.
+        let response =
+            Self::receive_message_impl(client.inner.as_ref(), None, rendezvous_url).await?;
 
         let etag = response.etag.clone();
 
@@ -174,17 +179,21 @@ impl Channel {
     pub(super) async fn send(&mut self, message: Vec<u8>) -> Result<(), HttpError> {
         let etag = self.etag.clone();
 
-        let request = self
-            .client
-            .inner
-            .request(Method::PUT, self.rendezvous_url().to_owned())
-            .body(message)
+        let request = http::Request::builder()
+            .method(Method::PUT)
+            .uri(self.rendezvous_url().as_str())
             .header(IF_MATCH, etag)
-            .header(CONTENT_TYPE, TEXT_PLAIN_CONTENT_TYPE);
+            .header(CONTENT_TYPE, TEXT_PLAIN_CONTENT_TYPE)
+            .body(Bytes::from(message))
+            .map_err(|error| HttpError::IntoHttp(IntoHttpError::from(error)))?;
 
         debug!("Sending a request to the rendezvous channel {request:?}");
 
-        let response = request.send().await?;
+        let response = self
+            .client
+            .inner
+            .send_request(request, self.client.request_config.timeout, Default::default())
+            .await?;
         let status = response.status();
 
         debug!("Response for the rendezvous sending request {response:?}");
@@ -197,8 +206,7 @@ impl Channel {
 
             Ok(())
         } else {
-            let body = response.bytes().await?;
-            let error = response_to_error(status, &body);
+            let error = response_to_error(status, response.body());
 
             return Err(error);
         }
@@ -237,26 +245,30 @@ impl Channel {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(client))]
     async fn receive_message_impl(
-        client: &reqwest::Client,
+        client: &dyn HttpSend,
         etag: Option<String>,
         rendezvous_url: &Url,
     ) -> Result<RendezvousGetResponse, HttpError> {
-        let mut builder = client.request(Method::GET, rendezvous_url.to_owned());
+        let mut builder = http::Request::builder().method(Method::GET).uri(rendezvous_url.as_str());
 
         if let Some(etag) = etag {
             builder = builder.header(IF_NONE_MATCH, etag);
         }
 
-        let response = builder.send().await?;
+        let request = builder
+            .body(Bytes::new())
+            .map_err(|error| HttpError::IntoHttp(IntoHttpError::from(error)))?;
+
+        let response = client.send_request(request, None, Default::default()).await?;
 
         debug!("Received data from the rendezvous channel {response:?}");
 
         let status_code = response.status();
 
         if status_code.is_client_error() {
-            return Err(response_to_error(status_code, &response.bytes().await?));
+            return Err(response_to_error(status_code, response.body()));
         }
 
         let headers = response.headers();
@@ -270,7 +282,7 @@ impl Channel {
             .transpose()?
             .map(ToOwned::to_owned);
 
-        let body = response.bytes().await?.to_vec();
+        let body = response.body().to_vec();
 
         let response =
             RendezvousGetResponse { status_code, etag, expires, last_modified, content_type, body };
@@ -282,7 +294,8 @@ impl Channel {
         let etag = Some(self.etag.clone());
 
         let RendezvousGetResponse { status_code, etag, content_type, body, .. } =
-            Self::receive_message_impl(&self.client.inner, etag, &self.rendezvous_url).await?;
+            Self::receive_message_impl(self.client.inner.as_ref(), etag, &self.rendezvous_url)
+                .await?;
 
         // We received a response with an ETAG, put it into the copy of our etag.
         self.etag = etag;
@@ -339,7 +352,10 @@ mod test {
 
         mock_rendzvous_create(&server, &rendezvous_url).await;
 
-        let client = HttpClient::new(reqwest::Client::new(), RequestConfig::new().disable_retry());
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            RequestConfig::new().disable_retry(),
+        );
 
         let mut alice = Channel::create_outbound(client, &url)
             .await
@@ -366,7 +382,10 @@ mod test {
                 )
                 .await;
 
-            let client = HttpClient::new(reqwest::Client::new(), RequestConfig::short_retry());
+            let client = HttpClient::new(
+                crate::http_client::reqwest_transport(reqwest::Client::new()),
+                RequestConfig::short_retry(),
+            );
             let InboundChannelCreationResult { channel: bob, initial_message: _ } =
                 Channel::create_inbound(client, &rendezvous_url).await.expect(
                     "We should be able to create a rendezvous channel from a received message",
@@ -459,7 +478,10 @@ mod test {
             url.join("abcdEFG12345").expect("We should be able to create a rendezvous URL");
         mock_rendzvous_create(&server, &rendezvous_url).await;
 
-        let client = HttpClient::new(reqwest::Client::new(), RequestConfig::new().disable_retry());
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            RequestConfig::new().disable_retry(),
+        );
 
         let mut alice = Channel::create_outbound(client, &url)
             .await
@@ -516,7 +538,10 @@ mod test {
             url.join("abcdEFG12345").expect("We should be able to create a rendezvous URL");
         mock_rendzvous_create(&server, &rendezvous_url).await;
 
-        let client = HttpClient::new(reqwest::Client::new(), RequestConfig::new().disable_retry());
+        let client = HttpClient::new(
+            crate::http_client::reqwest_transport(reqwest::Client::new()),
+            RequestConfig::new().disable_retry(),
+        );
 
         let mut alice = Channel::create_outbound(client, &url)
             .await

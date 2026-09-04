@@ -14,22 +14,15 @@
 
 use std::time::Duration;
 
+use crate::runtime;
+
 /// Sleep for the specified duration.
 ///
-/// This is a cross-platform sleep implementation that works on both wasm32 and
-/// non-wasm32 targets.
+/// The timer comes from whichever runtime the SDK was configured with, so this
+/// works the same on native targets, on Wasm, and on any runtime installed with
+/// [`crate::runtime::set_runtime`].
 pub async fn sleep(duration: Duration) {
-    #[cfg(not(target_family = "wasm"))]
-    tokio::time::sleep(duration).await;
-
-    #[cfg(target_family = "wasm")]
-    gloo_timers::future::TimeoutFuture::new(u32::try_from(duration.as_millis()).unwrap_or_else(
-        |_| {
-            tracing::error!("Sleep duration too long, sleeping for u32::MAX ms");
-            u32::MAX
-        },
-    ))
-    .await;
+    runtime::runtime().sleep(duration).await;
 }
 
 #[cfg(test)]

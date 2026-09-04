@@ -16,7 +16,14 @@ features = ["docsrs"]
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [features]
-default = ["e2e-encryption", "automatic-room-key-forwarding", "sqlite", "rustls-aws-lc-rs"]
+default = [
+    "e2e-encryption",
+    "automatic-room-key-forwarding",
+    "sqlite",
+    "reqwest-transport",
+    "rustls-aws-lc-rs",
+    "tokio-runtime",
+]
 testing = [
     "matrix-sdk-sqlite?/testing",
     "matrix-sdk-indexeddb?/testing",
@@ -24,6 +31,8 @@ testing = [
     "wiremock",
     "matrix-sdk-test",
     "assert_matches2",
+    # The test helpers build clients with the default transport.
+    "reqwest-transport",
 ]
 
 e2e-encryption = [
@@ -50,9 +59,24 @@ indexeddb = [
     "matrix-sdk-indexeddb/event-cache-store",
     "matrix-sdk-indexeddb/media-store"
 ]
+# Use Tokio as the async runtime, unless another one is installed with
+# `matrix_sdk_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = [
+    "matrix-sdk-base/tokio-runtime",
+    "matrix-sdk-common/tokio-runtime",
+    "matrix-sdk-indexeddb?/tokio-runtime",
+    "matrix-sdk-sqlite?/tokio-runtime",
+]
+
+# Send HTTP requests with `reqwest`, which needs a Tokio runtime. Turn this off
+# to build without `reqwest` and supply an implementation of
+# [`HttpSend`](crate::HttpSend) to `ClientBuilder::http_transport()` instead.
+reqwest-transport = ["dep:reqwest", "tokio-runtime"]
+
 # If enabled, reqwest depends on and installs aws-lc-rs as the default crypto
 # provider for rustls
-rustls-aws-lc-rs = ["reqwest/rustls"]
+rustls-aws-lc-rs = ["reqwest-transport", "reqwest?/rustls"]
 
 qrcode = ["e2e-encryption", "matrix-sdk-base/qrcode"]
 automatic-room-key-forwarding = ["e2e-encryption", "matrix-sdk-base/automatic-room-key-forwarding"]
@@ -76,8 +100,10 @@ experimental-push-secrets = [
 ]
 
 markdown = ["ruma/markdown"]
-socks = ["reqwest/socks"]
-local-server = ["dep:axum", "dep:rand", "dep:tower"]
+socks = ["reqwest-transport", "reqwest?/socks"]
+# Requires a Tokio runtime: the local HTTP server is built on `axum`, which
+# only speaks Tokio.
+local-server = ["dep:axum", "dep:rand", "dep:tower", "tokio/net", "tokio/rt"]
 sso-login = ["local-server"]
 # Enable methods that make calls to the federation API.
 federation-api = ["ruma/federation-api-c"]
@@ -135,7 +161,6 @@ matrix-sdk-test = { workspace = true, optional = true }
 mime.workspace = true
 mime2ext = "0.1.54"
 oauth2.workspace = true
-oauth2-reqwest.workspace = true
 percent-encoding = "2.3.2"
 pin-project-lite.workspace = true
 rand = { workspace = true, optional = true }
@@ -166,16 +191,16 @@ vodozemac.workspace = true
 zeroize.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-backon = "1.6.0"
+backon = { version = "1.6.0", default-features = false, features = ["std"] }
 # only activate reqwest's stream feature on non-wasm, the wasm part seems to not
 # support *sending* streams, which makes it useless for us.
-reqwest = { workspace = true, features = ["stream", "gzip", "http2", "rustls-no-provider"] }
-tokio = { workspace = true, features = ["fs", "rt", "macros"] }
+reqwest = { workspace = true, optional = true, features = ["stream", "gzip", "http2", "rustls-no-provider"] }
+tokio = { workspace = true, features = ["macros"] }
 wiremock = { workspace = true, optional = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 gloo-timers = { workspace = true, features = ["futures"] }
-reqwest = { workspace = true, features = ["gzip", "http2", "rustls-no-provider"] }
+reqwest = { workspace = true, optional = true, features = ["gzip", "http2", "rustls-no-provider"] }
 tokio = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]

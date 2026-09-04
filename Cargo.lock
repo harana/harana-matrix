@@ -441,8 +441,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
 dependencies = [
  "fastrand",
- "gloo-timers 0.3.0",
- "tokio",
 ]
 
 [[package]]
@@ -1474,18 +1472,6 @@ name = "deadpool-runtime"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2657f61fb1dd8bf37a8d51093cc7cee4e77125b22f7753f49b289f831bec2bae"
-dependencies = [
- "tokio",
-]
-
-[[package]]
-name = "deadpool-sync"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e385cc95d3d582c328b36d1ff90feac061102b001894b555e6b465a2e0eaabbf"
-dependencies = [
- "deadpool-runtime 0.3.1",
-]
 
 [[package]]
 name = "debugid"
@@ -2433,18 +2419,6 @@ name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
-
-[[package]]
-name = "gloo-timers"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
-dependencies = [
- "futures-channel",
- "futures-core",
- "js-sys",
- "wasm-bindgen",
-]
 
 [[package]]
 name = "gloo-timers"
@@ -3548,7 +3522,7 @@ dependencies = [
  "futures-core",
  "futures-executor",
  "futures-util",
- "gloo-timers 0.4.0",
+ "gloo-timers",
  "hex",
  "http",
  "imbl",
@@ -3568,7 +3542,6 @@ dependencies = [
  "mime",
  "mime2ext",
  "oauth2",
- "oauth2-reqwest",
  "percent-encoding",
  "pin-project-lite",
  "proptest",
@@ -3618,7 +3591,7 @@ dependencies = [
  "futures-executor",
  "futures-util",
  "getrandom 0.3.4",
- "gloo-timers 0.4.0",
+ "gloo-timers",
  "growable-bloom-filter",
  "http",
  "matrix-sdk-common",
@@ -3648,12 +3621,13 @@ dependencies = [
  "assert_matches",
  "assert_matches2",
  "eyeball-im",
+ "futures-channel",
  "futures-core",
  "futures-executor",
  "futures-util",
  "getrandom 0.3.4",
  "getrandom 0.4.3",
- "gloo-timers 0.4.0",
+ "gloo-timers",
  "imbl",
  "insta",
  "js-sys",
@@ -3791,6 +3765,7 @@ dependencies = [
  "eyeball-im",
  "futures-executor",
  "futures-util",
+ "http",
  "jni",
  "jvm-getter",
  "language-tags",
@@ -3847,7 +3822,7 @@ dependencies = [
  "base64 0.23.0",
  "futures-util",
  "getrandom 0.4.3",
- "gloo-timers 0.4.0",
+ "gloo-timers",
  "gloo-utils",
  "growable-bloom-filter",
  "hkdf",
@@ -3955,7 +3930,6 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "deadpool 0.13.0",
- "deadpool-sync",
  "glob",
  "itertools 0.15.0",
  "matrix-sdk-base",
@@ -4402,16 +4376,6 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 1.0.63",
  "url",
-]
-
-[[package]]
-name = "oauth2-reqwest"
-version = "0.1.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "234fb5c965bbce983ee5de636a7a51d6a3223da8067ea02f9ab2d2d78ac08be2"
-dependencies = [
- "oauth2",
- "reqwest",
 ]
 
 [[package]]

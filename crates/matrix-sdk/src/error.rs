@@ -30,6 +30,7 @@ use matrix_sdk_base::{
     cross_process_lock::CrossProcessLockUnobtained, event_cache::store::EventCacheStoreError,
     media::store::MediaStoreError,
 };
+#[cfg(feature = "reqwest-transport")]
 use reqwest::Error as ReqwestError;
 use ruma::{
     IdParseError,
@@ -65,8 +66,14 @@ pub type RumaApiError = UiaaResponse;
 #[derive(Error, Debug)]
 pub enum HttpError {
     /// Error at the HTTP layer.
+    #[cfg(feature = "reqwest-transport")]
     #[error(transparent)]
     Reqwest(#[from] ReqwestError),
+
+    /// Error at the HTTP layer, reported by a custom
+    /// [`HttpSend`](crate::HttpSend) transport.
+    #[error(transparent)]
+    Transport(Box<dyn std::error::Error + Send + Sync>),
 
     /// API response error (deserialization, or a Matrix-specific error).
     // `Box` its inner value to reduce the enum size.
@@ -142,7 +149,9 @@ impl HttpError {
         match self {
             // If it was a plain network error, it's either that we're disconnected from the
             // internet, or that the remote is, so retry a few times.
+            #[cfg(feature = "reqwest-transport")]
             HttpError::Reqwest(_) => RetryKind::NetworkFailure,
+            HttpError::Transport(_) => RetryKind::NetworkFailure,
 
             HttpError::Api(error) => match error.as_ref() {
                 FromHttpResponseError::Server(api_error) => RetryKind::from_api_error(api_error),
@@ -611,6 +620,7 @@ impl From<SdkBaseError> for Error {
     }
 }
 
+#[cfg(feature = "reqwest-transport")]
 impl From<ReqwestError> for Error {
     fn from(e: ReqwestError) -> Self {
         Error::Http(Box::new(HttpError::Reqwest(e)))

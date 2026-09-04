@@ -55,7 +55,10 @@ use matrix_sdk_base::{
     sleep::sleep,
     timeout::timeout,
 };
-use matrix_sdk_common::{executor::spawn, locks::Mutex as StdMutex};
+use matrix_sdk_common::{
+    executor::{spawn, spawn_blocking},
+    locks::Mutex as StdMutex,
+};
 use ruma::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId, TransactionId, UserId,
     api::{
@@ -1650,7 +1653,7 @@ impl Encryption {
             Ok(())
         };
 
-        let task = tokio::task::spawn_blocking(encrypt);
+        let task = spawn_blocking(encrypt);
         task.await.expect("Task join error")
     }
 
@@ -1706,7 +1709,7 @@ impl Encryption {
             matrix_sdk_base::crypto::decrypt_room_key_export(file, &passphrase)
         };
 
-        let task = tokio::task::spawn_blocking(decrypt);
+        let task = spawn_blocking(decrypt);
         let import = task.await.expect("Task join error")?;
 
         let ret = olm.store().import_exported_room_keys(import, |_, _| {}).await?;

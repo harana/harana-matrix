@@ -11,11 +11,15 @@ rust-version.workspace = true
 rustdoc-args = ["--generate-link-to-definition"]
 
 [features]
-default = ["rustls-aws-lc-rs"]
+default = ["rustls-aws-lc-rs", "tokio-runtime"]
 js = ["matrix-sdk/js"]
 uniffi = ["dep:uniffi", "matrix-sdk/uniffi", "matrix-sdk-base/uniffi"]
 
-rustls-aws-lc-rs = ["matrix-sdk/rustls-aws-lc-rs"]
+rustls-aws-lc-rs = ["reqwest-transport", "matrix-sdk/rustls-aws-lc-rs"]
+
+# Send HTTP requests with `reqwest`; see `matrix-sdk`'s feature of the same
+# name.
+reqwest-transport = ["matrix-sdk/reqwest-transport"]
 
 # Add support for encrypted extensible events.
 unstable-msc3956 = ["ruma/unstable-msc3956"]
@@ -35,6 +39,15 @@ experimental-search = ["matrix-sdk/experimental-search"]
 experimental-encrypted-state-events = [
     "matrix-sdk-base/experimental-encrypted-state-events",
     "ruma/unstable-msc4362"
+]
+
+# Use Tokio as the async runtime, unless another one is installed with
+# `matrix_sdk_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = [
+    "matrix-sdk/tokio-runtime",
+    "matrix-sdk-base/tokio-runtime",
+    "matrix-sdk-common/tokio-runtime",
 ]
 
 [dependencies]

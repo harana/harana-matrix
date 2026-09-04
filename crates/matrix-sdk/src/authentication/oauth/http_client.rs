@@ -14,16 +14,27 @@
 
 //! HTTP client and helpers for making OAuth 2.0 requests.
 
+use std::sync::Arc;
+
+use bytes::Bytes;
 use matrix_sdk_base::BoxFuture;
 use oauth2::{
     AsyncHttpClient, ErrorResponse, HttpClientError, HttpRequest, HttpResponse, RequestTokenError,
 };
-use oauth2_reqwest::ReqwestClient;
+
+use crate::{HttpError, http_client::HttpSend};
+
+/// The error type OAuth 2.0 requests fail with.
+///
+/// The SDK sends OAuth 2.0 requests over the same transport as every other
+/// request, so failures come back as [`HttpError`] rather than as an error of
+/// whichever HTTP client happens to be in use.
+pub(super) type OAuthHttpError = HttpClientError<HttpError>;
 
 /// An HTTP client for making OAuth 2.0 requests.
 #[derive(Debug, Clone)]
 pub(super) struct OAuthHttpClient {
-    pub(super) inner: ReqwestClient,
+    pub(super) inner: Arc<dyn HttpSend>,
     /// Rewrite HTTPS requests to use HTTP instead.
     ///
     /// This is a workaround to bypass some checks that require an HTTPS URL,
@@ -33,7 +44,7 @@ pub(super) struct OAuthHttpClient {
 }
 
 impl<'c> AsyncHttpClient<'c> for OAuthHttpClient {
-    type Error = HttpClientError<reqwest::Error>;
+    type Error = OAuthHttpError;
 
     type Future = BoxFuture<'c, Result<HttpResponse, Self::Error>>;
 
@@ -55,9 +66,13 @@ impl<'c> AsyncHttpClient<'c> for OAuthHttpClient {
                 request
             };
 
-            let response = self.inner.call(request).await?;
+            let response = self
+                .inner
+                .send_request(request.map(Bytes::from), None, Default::default())
+                .await
+                .map_err(|error| HttpClientError::Reqwest(Box::new(error)))?;
 
-            Ok(response)
+            Ok(response.map(|body| body.to_vec()))
         })
     }
 }
@@ -65,7 +80,7 @@ impl<'c> AsyncHttpClient<'c> for OAuthHttpClient {
 /// Check the status code of the given HTTP response to identify errors.
 pub(super) fn check_http_response_status_code<T: ErrorResponse + 'static>(
     http_response: &HttpResponse,
-) -> Result<(), RequestTokenError<HttpClientError<reqwest::Error>, T>> {
+) -> Result<(), RequestTokenError<OAuthHttpError, T>> {
     if http_response.status().as_u16() < 400 {
         return Ok(());
     }
@@ -86,7 +101,7 @@ pub(super) fn check_http_response_status_code<T: ErrorResponse + 'static>(
 /// Check that the server returned a response with a JSON `Content-Type`.
 pub(super) fn check_http_response_json_content_type<T: ErrorResponse + 'static>(
     http_response: &HttpResponse,
-) -> Result<(), RequestTokenError<HttpClientError<reqwest::Error>, T>> {
+) -> Result<(), RequestTokenError<OAuthHttpError, T>> {
     let Some(content_type) = http_response.headers().get(http::header::CONTENT_TYPE) else {
         return Ok(());
     };

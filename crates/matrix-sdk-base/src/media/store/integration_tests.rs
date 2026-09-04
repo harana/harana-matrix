@@ -1295,12 +1295,8 @@ macro_rules! media_store_integration_tests_time {
         mod media_store_integration_tests_time {
             use std::time::Duration;
 
-            #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-            use gloo_timers::future::sleep;
             use matrix_sdk_test::async_test;
-            #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-            use tokio::time::sleep;
-            use $crate::media::store::MediaStore;
+            use $crate::{media::store::MediaStore, sleep::sleep};
 
             use super::get_media_store;
 
