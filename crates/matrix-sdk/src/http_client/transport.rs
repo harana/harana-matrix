@@ -38,6 +38,71 @@ use crate::error::HttpError;
 /// SDK: an implementation is only expected to send the request and give back
 /// what the server said. Failures at the network layer should be reported as
 /// [`HttpError::Transport`], which the SDK treats as worth retrying.
+///
+/// # Example
+///
+/// Sending requests with [cyper], the HTTP client of the [compio] runtime.
+/// Note the channel: the SDK awaits `Send` futures, while compio's are not, so
+/// the request runs as a task of its own and its outcome comes back through
+/// something that is `Send`.
+///
+/// ```ignore
+/// use std::time::Duration;
+///
+/// use bytes::Bytes;
+/// use eyeball::SharedObservable;
+/// use matrix_sdk::{BoxFuture, HttpError, HttpSend, TransmissionProgress};
+///
+/// #[derive(Debug)]
+/// struct CyperTransport {
+///     client: cyper::Client,
+/// }
+///
+/// impl HttpSend for CyperTransport {
+///     fn send_request<'a>(
+///         &'a self,
+///         request: http::Request<Bytes>,
+///         _timeout: Option<Duration>,
+///         _send_progress: SharedObservable<TransmissionProgress>,
+///     ) -> BoxFuture<'a, Result<http::Response<Bytes>, HttpError>> {
+///         let client = self.client.clone();
+///         let (sender, receiver) = futures_channel::oneshot::channel();
+///
+///         compio::runtime::spawn(async move {
+///             let _ = sender.send(send(client, request).await);
+///         })
+///         .detach();
+///
+///         Box::pin(async move {
+///             receiver
+///                 .await
+///                 .map_err(|error| HttpError::Transport(Box::new(error)))?
+///                 .map_err(|error| HttpError::Transport(Box::new(error)))
+///         })
+///     }
+/// }
+///
+/// async fn send(
+///     client: cyper::Client,
+///     request: http::Request<Bytes>,
+/// ) -> Result<http::Response<Bytes>, cyper::Error> {
+///     let (parts, body) = request.into_parts();
+///     let url = url::Url::parse(&parts.uri.to_string())?;
+///
+///     let response =
+///         client.request(parts.method, url)?.headers(parts.headers).body(body).send().await?;
+///
+///     let mut builder = http::Response::builder().status(response.status());
+///     if let Some(headers) = builder.headers_mut() {
+///         *headers = response.headers().clone();
+///     }
+///
+///     Ok(builder.body(response.bytes().await?).expect("a valid response"))
+/// }
+/// ```
+///
+/// [compio]: https://docs.rs/compio
+/// [cyper]: https://docs.rs/cyper
 pub trait HttpSend: fmt::Debug + SendOutsideWasm + SyncOutsideWasm + 'static {
     /// Send the given request and wait for its response.
     ///

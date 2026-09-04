@@ -59,7 +59,19 @@
 //!     }
 //!
 //!     fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
-//!         Box::pin(compio::time::sleep(duration))
+//!         // compio's timers are `!Send`, so run one as a task of its own and
+//!         // wait for it through a channel, which is `Send`.
+//!         let (sender, receiver) = futures_channel::oneshot::channel();
+//!
+//!         compio::runtime::spawn(async move {
+//!             compio::time::sleep(duration).await;
+//!             let _ = sender.send(());
+//!         })
+//!         .detach();
+//!
+//!         Box::pin(async move {
+//!             let _ = receiver.await;
+//!         })
 //!     }
 //! }
 //!
@@ -68,6 +80,10 @@
 //!     // … use the SDK here …
 //! });
 //! ```
+//!
+//! Note the `Send` bounds: the SDK spawns and awaits `Send` futures
+//! throughout, so a thread-per-core runtime whose own futures are `!Send`
+//! needs a bridge like the one above wherever it hands a future back.
 //!
 //! [compio]: https://docs.rs/compio
 

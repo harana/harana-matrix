@@ -31,6 +31,8 @@ testing = [
     "wiremock",
     "matrix-sdk-test",
     "assert_matches2",
+    # The test helpers build clients with the default transport.
+    "reqwest-transport",
 ]
 
 e2e-encryption = [
@@ -70,11 +72,11 @@ tokio-runtime = [
 # Send HTTP requests with `reqwest`, which needs a Tokio runtime. Turn this off
 # to build without `reqwest` and supply an implementation of
 # [`HttpSend`](crate::HttpSend) to `ClientBuilder::http_transport()` instead.
-reqwest-transport = ["dep:reqwest"]
+reqwest-transport = ["dep:reqwest", "tokio-runtime"]
 
 # If enabled, reqwest depends on and installs aws-lc-rs as the default crypto
 # provider for rustls
-rustls-aws-lc-rs = ["reqwest?/rustls"]
+rustls-aws-lc-rs = ["reqwest-transport", "reqwest?/rustls"]
 
 qrcode = ["e2e-encryption", "matrix-sdk-base/qrcode"]
 automatic-room-key-forwarding = ["e2e-encryption", "matrix-sdk-base/automatic-room-key-forwarding"]
@@ -98,7 +100,7 @@ experimental-push-secrets = [
 ]
 
 markdown = ["ruma/markdown"]
-socks = ["reqwest?/socks"]
+socks = ["reqwest-transport", "reqwest?/socks"]
 # Requires a Tokio runtime: the local HTTP server is built on `axum`, which
 # only speaks Tokio.
 local-server = ["dep:axum", "dep:rand", "dep:tower", "tokio/net", "tokio/rt"]

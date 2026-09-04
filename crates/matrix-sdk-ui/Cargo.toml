@@ -15,7 +15,11 @@ default = ["rustls-aws-lc-rs", "tokio-runtime"]
 js = ["matrix-sdk/js"]
 uniffi = ["dep:uniffi", "matrix-sdk/uniffi", "matrix-sdk-base/uniffi"]
 
-rustls-aws-lc-rs = ["matrix-sdk/rustls-aws-lc-rs"]
+rustls-aws-lc-rs = ["reqwest-transport", "matrix-sdk/rustls-aws-lc-rs"]
+
+# Send HTTP requests with `reqwest`; see `matrix-sdk`'s feature of the same
+# name.
+reqwest-transport = ["matrix-sdk/reqwest-transport"]
 
 # Add support for encrypted extensible events.
 unstable-msc3956 = ["ruma/unstable-msc3956"]

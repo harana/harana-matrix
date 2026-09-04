@@ -8,4 +8,5 @@ new `Transport` variant for failures reported by a custom transport.
 `ClientBuilder::{http_client, proxy, user_agent, disable_ssl_verification,
 add_root_certificates, disable_built_in_root_certificates}` now require the
 `reqwest-transport` feature, as they configure the `reqwest` client the SDK
-would otherwise build itself.
+would otherwise build itself. The `rustls-aws-lc-rs`, `socks` and `testing`
+features enable it, so builds that use any of those are unaffected.
