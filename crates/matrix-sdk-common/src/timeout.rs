@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{error::Error, fmt, time::Duration};
+use std::{error::Error, fmt, future::IntoFuture, time::Duration};
 
-use futures_core::Future;
 use futures_util::future::{Either, select};
 
 use crate::sleep::sleep;
@@ -39,11 +38,11 @@ impl Error for ElapsedError {}
 ///
 /// The timer comes from whichever runtime the SDK was configured with; see
 /// [`crate::runtime`].
-pub async fn timeout<F, T>(future: F, duration: Duration) -> Result<T, ElapsedError>
+pub async fn timeout<F>(future: F, duration: Duration) -> Result<F::Output, ElapsedError>
 where
-    F: Future<Output = T>,
+    F: IntoFuture,
 {
-    match select(std::pin::pin!(future), std::pin::pin!(sleep(duration))).await {
+    match select(std::pin::pin!(future.into_future()), std::pin::pin!(sleep(duration))).await {
         Either::Left((result, _)) => Ok(result),
         Either::Right((_, _)) => Err(ElapsedError()),
     }

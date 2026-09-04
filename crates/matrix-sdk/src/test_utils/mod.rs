@@ -127,7 +127,7 @@ macro_rules! assert_next_with_timeout {
         // Needed for subscribers, as they won't use the StreamExt features
         #[allow(unused_imports)]
         use futures_util::StreamExt as _;
-        tokio::time::timeout(std::time::Duration::from_millis($timeout_ms), $stream.next())
+        $crate::timeout::timeout($stream.next(), std::time::Duration::from_millis($timeout_ms))
             .await
             .expect("Next event timed out")
             .expect("No next event received")
@@ -174,7 +174,7 @@ macro_rules! assert_recv_with_timeout {
     };
 
     ($receiver:expr, $timeout_ms:expr) => {{
-        tokio::time::timeout(std::time::Duration::from_millis($timeout_ms), $receiver.recv())
+        $crate::timeout::timeout($receiver.recv(), std::time::Duration::from_millis($timeout_ms))
             .await
             .expect("Next event timed out")
             .expect("No next event received")
@@ -367,9 +367,9 @@ macro_rules! assert_let_decrypted_state_event_content {
 #[macro_export]
 macro_rules! assert_next_eq_with_timeout_impl {
     ($stream:expr, $expected:expr, $timeout:expr) => {
-        let next_value = tokio::time::timeout(
-            $timeout,
-            $stream.next()
+        let next_value = $crate::timeout::timeout(
+            $stream.next(),
+            $timeout
         )
         .await
         .expect("We should be able to get the next value out of the stream by now")
@@ -378,9 +378,9 @@ macro_rules! assert_next_eq_with_timeout_impl {
         assert_eq!(next_value, $expected);
     };
     ($stream:expr, $expected:expr, $timeout:expr, $($msg:tt)*) => {{
-        let next_value = tokio::time::timeout(
-            $timeout,
-            futures_util::StreamExt::next(&mut $stream)
+        let next_value = $crate::timeout::timeout(
+            futures_util::StreamExt::next(&mut $stream),
+            $timeout
         )
         .await
         .expect("We should be able to get the next value out of the stream by now")
@@ -396,7 +396,7 @@ macro_rules! assert_next_eq_with_timeout_impl {
 #[macro_export]
 macro_rules! assert_let_timeout {
     ($timeout:expr, $pat:pat = $future:expr) => {
-        assert_matches2::assert_let!(Ok($pat) = tokio::time::timeout($timeout, $future).await);
+        assert_matches2::assert_let!(Ok($pat) = $crate::timeout::timeout($future, $timeout).await);
     };
 
     ($pat:pat = $future:expr) => {

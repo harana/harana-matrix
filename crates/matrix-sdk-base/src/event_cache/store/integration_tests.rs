@@ -2646,11 +2646,8 @@ macro_rules! event_cache_store_integration_tests_time {
         mod event_cache_store_integration_tests_time {
             use std::time::Duration;
 
-            #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-            use gloo_timers::future::sleep;
             use matrix_sdk_test::async_test;
-            #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-            use tokio::time::sleep;
+            use $crate::sleep::sleep;
             use $crate::event_cache::store::IntoEventCacheStore;
 
             use super::get_event_cache_store;

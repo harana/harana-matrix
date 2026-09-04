@@ -77,7 +77,9 @@ experimental-push-secrets = [
 
 markdown = ["ruma/markdown"]
 socks = ["reqwest/socks"]
-local-server = ["dep:axum", "dep:rand", "dep:tower"]
+# Requires a Tokio runtime: the local HTTP server is built on `axum`, which
+# only speaks Tokio.
+local-server = ["dep:axum", "dep:rand", "dep:tower", "tokio/net", "tokio/rt"]
 sso-login = ["local-server"]
 # Enable methods that make calls to the federation API.
 federation-api = ["ruma/federation-api-c"]
@@ -170,7 +172,7 @@ backon = "1.6.0"
 # only activate reqwest's stream feature on non-wasm, the wasm part seems to not
 # support *sending* streams, which makes it useless for us.
 reqwest = { workspace = true, features = ["stream", "gzip", "http2", "rustls-no-provider"] }
-tokio = { workspace = true, features = ["fs", "rt", "macros"] }
+tokio = { workspace = true, features = ["macros"] }
 wiremock = { workspace = true, optional = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
