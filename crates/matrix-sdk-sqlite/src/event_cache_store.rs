@@ -46,13 +46,11 @@ use ruma::{
 use rusqlite::{
     OptionalExtension, ToSql, Transaction, TransactionBehavior, params, params_from_iter,
 };
-use tokio::{
-    fs,
-    sync::{Mutex, OwnedMutexGuard},
-};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, error, instrument, trace};
 
 use crate::{
+    fs,
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     error::{Error, Result},

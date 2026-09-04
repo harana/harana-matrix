@@ -36,13 +36,11 @@ use matrix_sdk_base::{
 use matrix_sdk_store_encryption::StoreCipher;
 use ruma::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
 use rusqlite::{OptionalExtension, params_from_iter};
-use tokio::{
-    fs,
-    sync::{Mutex, OwnedMutexGuard},
-};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, instrument};
 
 use crate::{
+    fs,
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     error::{Error, Result},

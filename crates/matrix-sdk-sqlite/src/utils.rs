@@ -21,7 +21,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use deadpool_sync::InteractError;
 use itertools::Itertools;
 use matrix_sdk_store_encryption::{EncryptableValue, StoreCipher};
 use ruma::{OwnedEventId, OwnedRoomId, serde::Raw, time::SystemTime};
@@ -34,6 +33,7 @@ use crate::{
     OpenStoreError, RuntimeConfig, Secret,
     connection::Connection as SqliteAsyncConn,
     error::{Error, Result},
+    sync_wrapper::InteractError,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

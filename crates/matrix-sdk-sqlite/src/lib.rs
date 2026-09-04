@@ -26,12 +26,14 @@ mod connection;
 #[cfg(feature = "crypto-store")]
 mod crypto_store;
 mod error;
+mod fs;
 #[cfg(feature = "event-cache-store")]
 mod event_cache_store;
 #[cfg(feature = "media-store")]
 mod media_store;
 #[cfg(feature = "state-store")]
 mod state_store;
+mod sync_wrapper;
 mod utils;
 use std::{
     cmp::max,
@@ -233,7 +235,6 @@ impl SqliteStoreConfig {
 
         connection::Pool::builder(manager)
             .config(self.pool_config)
-            .runtime(connection::RUNTIME)
             .build()
             .map_err(connection::CreatePoolError::Build)
     }

@@ -1474,18 +1474,6 @@ name = "deadpool-runtime"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2657f61fb1dd8bf37a8d51093cc7cee4e77125b22f7753f49b289f831bec2bae"
-dependencies = [
- "tokio",
-]
-
-[[package]]
-name = "deadpool-sync"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e385cc95d3d582c328b36d1ff90feac061102b001894b555e6b465a2e0eaabbf"
-dependencies = [
- "deadpool-runtime 0.3.1",
-]
 
 [[package]]
 name = "debugid"
@@ -3956,7 +3944,6 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "deadpool 0.13.0",
- "deadpool-sync",
  "glob",
  "itertools 0.15.0",
  "matrix-sdk-base",

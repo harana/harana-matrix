@@ -39,13 +39,11 @@ use ruma::{
 };
 use rusqlite::{OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
-use tokio::{
-    fs,
-    sync::{Mutex, OwnedMutexGuard},
-};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, instrument, warn};
 
 use crate::{
+    fs,
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     error::{Error, Result},
@@ -2682,12 +2680,12 @@ mod migration_tests {
     use serde::{Deserialize, Serialize};
     use serde_json::json;
     use tempfile::{TempDir, tempdir};
-    use tokio::{fs, sync::Mutex};
+    use tokio::sync::Mutex;
     use zeroize::Zeroizing;
 
     use super::{DATABASE_NAME, SqliteStateStore, init, keys};
     use crate::{
-        OpenStoreError, Secret, SqliteStoreConfig, connection,
+        OpenStoreError, Secret, SqliteStoreConfig, connection, fs,
         error::{Error, Result},
         utils::{EncryptableStore as _, SqliteAsyncConnExt, SqliteKeyValueStoreAsyncConnExt},
     };

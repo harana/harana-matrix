@@ -255,7 +255,7 @@ pub(super) async fn execute_request(
             // Make sure any concurrent futures in the same task get a chance
             // to also add to the progress total before the first chunks are
             // pulled out of the body stream.
-            tokio::task::yield_now().await;
+            matrix_sdk_common::executor::yield_now().await;
 
             let mut req = reqwest::Request::try_from(request.map(|body| {
                 let chunks = stream::iter(BytesChunks::new(body, 8192).map(

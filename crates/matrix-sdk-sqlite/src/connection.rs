@@ -64,16 +64,19 @@
 //! [spawn_blocking]: https://github.com/deadpool-rs/deadpool/blob/d6f7d58756f0cc7bdd1f3d54d820c1332d67e4d5/crates/deadpool-sync/src/lib.rs#L113-L131
 //! [WAL]: https://www.sqlite.org/wal.html
 
-use std::{convert::Infallible, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    convert::Infallible,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-pub use deadpool::managed::reexports::*;
 use deadpool::managed::{self, Metrics, PoolConfig, RecycleError};
-use deadpool_sync::SyncWrapper;
+use matrix_sdk_common::{executor::spawn_blocking, sleep::sleep};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
-/// The default runtime used by `matrix-sdk-sqlite` for `deadpool`.
-pub const RUNTIME: Runtime = Runtime::Tokio1;
+use crate::sync_wrapper::SyncWrapper;
 
 deadpool::managed_reexports!(
     "matrix-sdk-sqlite",
@@ -107,7 +110,7 @@ impl managed::Manager for Manager {
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
         let path = self.database_path.clone();
-        SyncWrapper::new(RUNTIME, move || rusqlite::Connection::open(path)).await
+        SyncWrapper::new(move || rusqlite::Connection::open(path)).await
     }
 
     async fn recycle(
@@ -154,7 +157,7 @@ pub async fn close_connection(write_connection: Arc<Mutex<Connection>>) {
     drop(guard);
 
     // Drop the store-owned Arc on a blocking thread.
-    let _ = tokio::task::spawn_blocking(move || drop(write_connection)).await;
+    let _ = spawn_blocking(move || drop(write_connection)).await;
 }
 
 /// Live database connections held by each SQLite store.
@@ -217,9 +220,9 @@ pub(crate) async fn close_connections(connections: &Mutex<Option<SqliteConnectio
     // The write connection has already been released above, so
     // pool.status().size == 0 now correctly means every connection is gone
     // and no SQLite file locks are held.
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(5);
     while pool.status().size > 0 {
-        if tokio::time::Instant::now() >= deadline {
+        if Instant::now() >= deadline {
             let status = pool.status();
             warn!(
                 size = status.size,
@@ -229,7 +232,7 @@ pub(crate) async fn close_connections(connections: &Mutex<Option<SqliteConnectio
             );
             break;
         }
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
     }
 }
 
@@ -252,11 +255,11 @@ pub(crate) async fn reopen_connections(
 
     // Rebuild the pool (connections are created lazily on first get()).
     let pool =
-        Pool::builder(Manager::new(db_path)).config(pool_config).runtime(RUNTIME).build().map_err(
-            |e| crate::error::Error::InvalidData {
+        Pool::builder(Manager::new(db_path)).config(pool_config).build().map_err(|e| {
+            crate::error::Error::InvalidData {
                 details: format!("Failed to rebuild connection pool: {e}"),
-            },
-        )?;
+            }
+        })?;
 
     let write_conn = pool.get().await?;
     // Re-apply runtime config (WAL mode, busy timeout, etc.)

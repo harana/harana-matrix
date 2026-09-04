@@ -25,6 +25,8 @@ use eyeball::SharedObservable;
 use futures_util::future::try_join;
 use matrix_sdk_base::media::store::IgnoreMediaRetentionPolicy;
 pub use matrix_sdk_base::media::{store::MediaRetentionPolicy, *};
+#[cfg(not(target_family = "wasm"))]
+use matrix_sdk_common::executor::spawn_blocking;
 use matrix_sdk_common::{BoxFuture, SendOutsideWasm, SyncOutsideWasm};
 use mime::Mime;
 use ruma::{
@@ -40,8 +42,6 @@ use ruma::{
 use serde_json::value::RawValue as RawJsonValue;
 #[cfg(not(target_family = "wasm"))]
 use tempfile::{Builder as TempFileBuilder, NamedTempFile, TempDir};
-#[cfg(not(target_family = "wasm"))]
-use tokio::{fs::File as TokioFile, io::AsyncWriteExt};
 
 use crate::{
     Client, Error, Result, TransmissionProgress, attachment::Thumbnail,
@@ -410,10 +410,18 @@ impl Media {
                 _ => (TempFileBuilder::new().tempfile()?, None),
             };
 
-        let mut file = TokioFile::from_std(temp_file.reopen()?);
-        file.write_all(&data).await?;
-        // Make sure the file metadata is flushed to disk.
-        file.sync_all().await?;
+        let mut file = temp_file.reopen()?;
+
+        // Writing to disk can block for a while, so keep it off the executor.
+        spawn_blocking(move || {
+            use std::io::Write as _;
+
+            file.write_all(&data)?;
+            // Make sure the file metadata is flushed to disk.
+            file.sync_all()
+        })
+        .await
+        .expect("Writing a media file to disk should never panic")?;
 
         Ok(MediaFileHandle { file: temp_file, _directory: temp_dir })
     }

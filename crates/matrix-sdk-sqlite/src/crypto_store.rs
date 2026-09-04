@@ -44,15 +44,13 @@ use ruma::{
     events::secret::request::SecretName,
 };
 use rusqlite::{OptionalExtension, named_params, params_from_iter};
-use tokio::{
-    fs,
-    sync::{Mutex, OwnedMutexGuard},
-};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, instrument, warn};
 use vodozemac::Curve25519PublicKey;
 use zeroize::Zeroizing;
 
 use crate::{
+    fs,
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     error::{Error, Result},
@@ -1916,10 +1914,9 @@ mod tests {
     use ruma::{device_id, room_id, user_id};
     use similar_asserts::assert_eq;
     use tempfile::{TempDir, tempdir};
-    use tokio::fs;
 
     use super::SqliteCryptoStore;
-    use crate::SqliteStoreConfig;
+    use crate::{SqliteStoreConfig, fs};
 
     static TMP_DIR: LazyLock<TempDir> = LazyLock::new(|| tempdir().unwrap());
 
@@ -2557,9 +2554,9 @@ mod encrypted_tests {
 
     use matrix_sdk_crypto::{cryptostore_integration_tests, cryptostore_integration_tests_time};
     use tempfile::{TempDir, tempdir};
-    use tokio::fs;
 
     use super::SqliteCryptoStore;
+    use crate::fs;
 
     static TMP_DIR: LazyLock<TempDir> = LazyLock::new(|| tempdir().unwrap());
 
