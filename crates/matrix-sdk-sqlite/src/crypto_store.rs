@@ -163,10 +163,17 @@ impl SqliteCryptoStore {
 
         let pool = config.build_pool_of_connections(DATABASE_NAME)?;
         let pool_config = config.pool_config();
-        let runtime_config = config.runtime_config();
+        let mut runtime_config = config.runtime_config();
+        // The crypto store holds encryption keys that cannot be recovered if lost,
+        // so keep the durable `FULL` default unless the caller overrode it.
+        runtime_config.synchronous.get_or_insert(crate::Synchronous::Full);
 
         let this =
             Self::open_with_pool(pool, config.secret.clone(), pool_config, runtime_config).await?;
+        // Apply the runtime config on both the write connection (this is where
+        // commits, and thus `fsync`s, happen) and on a pooled read connection
+        // (most read queries will reuse it afterwards).
+        this.write().await?.apply_runtime_config(runtime_config).await?;
         this.read().await?.apply_runtime_config(runtime_config).await?;
 
         Ok(this)

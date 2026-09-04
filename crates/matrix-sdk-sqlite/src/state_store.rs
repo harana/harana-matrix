@@ -123,10 +123,18 @@ impl SqliteStateStore {
 
         let pool = config.build_pool_of_connections(DATABASE_NAME)?;
         let pool_config = config.pool_config;
-        let runtime_config = config.runtime_config;
+        let mut runtime_config = config.runtime_config;
+        // The state store only holds a cache that can be re-synchronized from the
+        // server, so `NORMAL` is a good default: it avoids `fsync`ing on every
+        // commit while still being durable across application crashes.
+        runtime_config.synchronous.get_or_insert(crate::Synchronous::Normal);
 
         let this =
             Self::open_with_pool(pool, config.secret.clone(), pool_config, runtime_config).await?;
+        // Apply the runtime config on both the write connection (this is where
+        // commits, and thus `fsync`s, happen) and on a pooled read connection
+        // (most read queries will reuse it afterwards).
+        this.write().await?.apply_runtime_config(runtime_config).await?;
         this.read().await?.apply_runtime_config(runtime_config).await?;
 
         Ok(this)

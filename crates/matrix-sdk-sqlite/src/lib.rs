@@ -215,6 +215,27 @@ impl SqliteStoreConfig {
         self
     }
 
+    /// Override the [`PRAGMA synchronous`] value used for this store.
+    ///
+    /// In WAL mode (which is always enabled by this crate), SQLite's
+    /// compiled-in default is [`Synchronous::Full`], meaning `fsync` is
+    /// called on every commit. This is the most durable option, but it can
+    /// be very slow, especially on spinning disks or RAID arrays, where a
+    /// single logical write can be amplified into several physical `fsync`
+    /// calls.
+    ///
+    /// If this is never called, each store picks its own sensible default:
+    /// [`Synchronous::Normal`] for the state, event cache and media stores,
+    /// since they only hold data that can be re-synchronized from the
+    /// server, and [`Synchronous::Full`] for the crypto store, since losing
+    /// encryption keys is not recoverable.
+    ///
+    /// [`PRAGMA synchronous`]: https://www.sqlite.org/pragma.html#pragma_synchronous
+    pub fn synchronous(mut self, synchronous: Synchronous) -> Self {
+        self.runtime_config.synchronous = Some(synchronous);
+        self
+    }
+
     /// Returns the pool configuration.
     pub(crate) fn pool_config(&self) -> PoolConfig {
         self.pool_config
@@ -257,6 +278,11 @@ struct RuntimeConfig {
     /// [`utils::SqliteAsyncConnExt::journal_size_limit`] will always be called
     /// with this value.
     journal_size_limit: u32,
+
+    /// If `Some`, [`utils::SqliteAsyncConnExt::synchronous`] will be called
+    /// with this value. If `None`, each store applies its own default; see
+    /// [`SqliteStoreConfig::synchronous`].
+    synchronous: Option<Synchronous>,
 }
 
 impl Default for RuntimeConfig {
@@ -268,6 +294,46 @@ impl Default for RuntimeConfig {
             cache_size: 2_000_000,
             // A limit of 10Mib.
             journal_size_limit: 10_000_000,
+            // No override; each store picks its own default.
+            synchronous: None,
+        }
+    }
+}
+
+/// The value to use for [`PRAGMA synchronous`].
+///
+/// This controls how often SQLite calls `fsync` when committing a
+/// transaction. See the SQLite documentation for the full semantics of each
+/// level.
+///
+/// [`PRAGMA synchronous`]: https://www.sqlite.org/pragma.html#pragma_synchronous
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Synchronous {
+    /// Never call `fsync`. The database could be corrupted if the
+    /// application crashes during a write, or the power is lost.
+    Off,
+    /// Call `fsync` less often than [`Self::Full`]; transactions remain
+    /// durable across application crashes, but a small window of the most
+    /// recently committed transactions could be rolled back if the
+    /// operating system crashes or power is lost.
+    Normal,
+    /// Call `fsync` on every commit. This is the slowest, but safest,
+    /// option: durable across application crashes, operating system
+    /// crashes, and power loss.
+    Full,
+    /// Like [`Self::Full`], but also `fsync`s the database file after a WAL
+    /// checkpoint.
+    Extra,
+}
+
+impl Synchronous {
+    /// Returns the SQL keyword to use in `PRAGMA synchronous = <value>`.
+    pub(crate) fn as_pragma_str(self) -> &'static str {
+        match self {
+            Self::Off => "OFF",
+            Self::Normal => "NORMAL",
+            Self::Full => "FULL",
+            Self::Extra => "EXTRA",
         }
     }
 }
@@ -279,7 +345,7 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use super::{POOL_MINIMUM_SIZE, Secret, SqliteStoreConfig};
+    use super::{POOL_MINIMUM_SIZE, Secret, SqliteStoreConfig, Synchronous};
 
     #[test]
     fn test_new() {
@@ -289,6 +355,7 @@ mod tests {
         assert!(store_config.runtime_config.optimize);
         assert_eq!(store_config.runtime_config.cache_size, 2_000_000);
         assert_eq!(store_config.runtime_config.journal_size_limit, 10_000_000);
+        assert_eq!(store_config.runtime_config.synchronous, None);
     }
 
     #[test]
@@ -349,6 +416,13 @@ mod tests {
         let store_config = SqliteStoreConfig::new(Path::new("foo")).path(Path::new("bar"));
 
         assert_eq!(store_config.path, PathBuf::from("bar"));
+    }
+
+    #[test]
+    fn test_store_config_synchronous() {
+        let store_config = SqliteStoreConfig::new(Path::new("foo")).synchronous(Synchronous::Off);
+
+        assert_eq!(store_config.runtime_config.synchronous, Some(Synchronous::Off));
     }
 
     #[test]
