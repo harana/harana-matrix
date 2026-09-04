@@ -15,12 +15,9 @@
 use std::{error::Error, fmt, time::Duration};
 
 use futures_core::Future;
-#[cfg(target_family = "wasm")]
 use futures_util::future::{Either, select};
-#[cfg(target_family = "wasm")]
-use gloo_timers::future::TimeoutFuture;
-#[cfg(not(target_family = "wasm"))]
-use tokio::time::timeout as tokio_timeout;
+
+use crate::sleep::sleep;
 
 /// Error type notifying that a timeout has elapsed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,22 +36,16 @@ impl Error for ElapsedError {}
 ///
 /// If the given timeout has elapsed the method will stop waiting and return
 /// an error.
+///
+/// The timer comes from whichever runtime the SDK was configured with; see
+/// [`crate::runtime`].
 pub async fn timeout<F, T>(future: F, duration: Duration) -> Result<T, ElapsedError>
 where
     F: Future<Output = T>,
 {
-    #[cfg(not(target_family = "wasm"))]
-    return tokio_timeout(duration, future).await.map_err(|_| ElapsedError());
-
-    #[cfg(target_family = "wasm")]
-    {
-        let timeout_future =
-            TimeoutFuture::new(u32::try_from(duration.as_millis()).expect("Overlong duration"));
-
-        match select(std::pin::pin!(future), timeout_future).await {
-            Either::Left((res, _)) => Ok(res),
-            Either::Right((_, _)) => Err(ElapsedError()),
-        }
+    match select(std::pin::pin!(future), std::pin::pin!(sleep(duration))).await {
+        Either::Left((result, _)) => Ok(result),
+        Either::Right((_, _)) => Err(ElapsedError()),
     }
 }
 

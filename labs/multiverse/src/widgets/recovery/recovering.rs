@@ -13,12 +13,10 @@ use ratatui::{
 };
 use ratatui_textarea::TextArea;
 use throbber_widgets_tui::{Throbber, ThrobberState};
-use tokio::{
-    sync::{
-        mpsc::{UnboundedSender, unbounded_channel},
-        oneshot,
-    },
-    task::JoinHandle,
+use matrix_sdk::executor::JoinHandle;
+use tokio::sync::{
+    mpsc::{UnboundedSender, unbounded_channel},
+    oneshot,
 };
 
 use super::ShouldExit;

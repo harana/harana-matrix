@@ -22,7 +22,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 use throbber_widgets_tui::{Throbber, ThrobberState};
-use tokio::task::JoinHandle;
+use matrix_sdk::executor::JoinHandle;
 
 use super::{ShouldExit, create_centered_throbber_area};
 

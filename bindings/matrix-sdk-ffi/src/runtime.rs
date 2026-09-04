@@ -19,19 +19,66 @@
 
 #[cfg(not(target_family = "wasm"))]
 mod sys {
-    pub use tokio::runtime::Handle;
+    use std::future::Future;
+
+    use matrix_sdk_common::executor::{JoinHandle, spawn, spawn_blocking};
+    pub use tokio::runtime::EnterGuard as RuntimeGuard;
+
+    /// A handle to the Tokio runtime the bindings run their tasks on.
+    ///
+    /// Tasks are spawned through [`matrix_sdk_common::executor`], so they end
+    /// up on whichever runtime the SDK was configured with; entering this
+    /// handle's context first is what lets that happen from a foreign thread
+    /// that isn't inside a runtime yet.
+    #[derive(Clone, Debug)]
+    pub struct Handle(tokio::runtime::Handle);
+
+    impl Handle {
+        /// Spawn a future on the runtime.
+        #[track_caller]
+        pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
+        where
+            F: Future + Send + 'static,
+            F::Output: Send + 'static,
+        {
+            let _guard = self.0.enter();
+            spawn(future)
+        }
+
+        /// Run the given function on an executor dedicated to blocking
+        /// operations.
+        #[track_caller]
+        pub fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
+        where
+            F: FnOnce() -> R + Send + 'static,
+            R: Send + 'static,
+        {
+            let _guard = self.0.enter();
+            spawn_blocking(func)
+        }
+
+        /// Run a future to completion on the current thread.
+        #[allow(dead_code)]
+        pub fn block_on<F, T>(&self, future: F) -> T
+        where
+            F: Future<Output = T>,
+        {
+            self.0.block_on(future)
+        }
+
+        /// Enter the runtime context.
+        pub fn enter(&self) -> RuntimeGuard<'_> {
+            self.0.enter()
+        }
+    }
 
     /// Get a runtime handle appropriate for the current target platform.
     ///
     /// This function returns a unified `Handle` type that works across both
     /// Wasm and non-Wasm platforms, allowing code to be written that is
     /// agnostic to the platform-specific runtime implementation.
-    ///
-    /// Returns:
-    /// - A `tokio::runtime::Handle` on non-Wasm platforms
-    /// - A `WasmRuntimeHandle` on Wasm platforms
     pub fn get_runtime_handle() -> Handle {
-        async_compat::get_runtime_handle()
+        Handle(async_compat::get_runtime_handle())
     }
 }
 
@@ -99,9 +146,6 @@ mod sys {
     /// Wasm and non-Wasm platforms, allowing code to be written that is
     /// agnostic to the platform-specific runtime implementation.
     ///
-    /// Returns:
-    /// - A `tokio::runtime::Handle` on non-Wasm platforms
-    /// - A `WasmRuntimeHandle` on Wasm platforms
     pub fn get_runtime_handle() -> Handle {
         Handle
     }

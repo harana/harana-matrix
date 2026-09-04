@@ -39,6 +39,7 @@ dirs = { version = "6.0.0", default-features = false }
 eyeball = { version = "0.8.8", default-features = false, features = ["tracing"] }
 eyeball-im = { version = "0.9.0", default-features = false, features = ["tracing"] }
 eyeball-im-util = { version = "0.11.0", default-features = false }
+futures-channel = { version = "0.3.33", default-features = false, features = ["std"] }
 futures-core = { version = "0.3.33", default-features = false, features = ["std"] }
 futures-executor = { version = "0.3.33", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.33", default-features = false, features = ["std"] }
