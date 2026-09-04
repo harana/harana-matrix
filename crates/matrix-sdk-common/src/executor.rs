@@ -195,7 +195,9 @@ impl<T> Future for JoinHandle<T> {
 /// if the returned [`JoinHandle`] is dropped.
 ///
 /// Panics inside the task are caught and reported through the [`JoinHandle`]
-/// rather than unwinding into the runtime.
+/// rather than unwinding into the runtime. Wasm is the exception: it aborts on
+/// a panic instead of unwinding, so there is nothing to catch and the handle
+/// never resolves.
 pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
 where
     F: Future + SendOutsideWasm + 'static,
@@ -357,17 +359,17 @@ mod tests {
         assert!(join_handle.await.unwrap_err().is_cancelled());
     }
 
+    // Wasm aborts on a panic rather than unwinding, so `catch_unwind` in
+    // `spawn` never returns and the `JoinHandle` never resolves. The test would
+    // hang until the harness times out.
+    #[cfg(not(target_family = "wasm"))]
     #[async_test]
     async fn test_panicking_task_is_reported_as_such() {
         let join_handle = spawn(async { panic!("this task is doomed") });
 
         let error = join_handle.await.unwrap_err();
 
-        // Panics can't be caught on Wasm, where unwinding isn't supported.
-        #[cfg(not(target_family = "wasm"))]
         assert!(error.is_panic(), "{error:?}");
-        #[cfg(target_family = "wasm")]
-        let _ = error;
     }
 
     #[async_test]
