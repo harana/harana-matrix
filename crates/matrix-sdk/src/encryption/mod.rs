@@ -1617,6 +1617,23 @@ impl Encryption {
     ///     }
     /// }
     /// # anyhow::Ok(()) };
+    pub async fn bootstrap_cross_signing_if_needed(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<()> {
+        let olm_machine = self.client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
+        let user_id = olm_machine.user_id();
+
+        self.ensure_initial_key_query().await?;
+
+        if self.client.encryption().get_user_identity(user_id).await?.is_none() {
+            self.bootstrap_cross_signing(auth_data).await?;
+        }
+
+        Ok(())
+    }
+
     /// Bootstrap cross-signing for this account if it does not have a
     /// cross-signing identity yet, reporting what happened.
     ///
@@ -1659,23 +1676,6 @@ impl Encryption {
                 }
             }
         }
-    }
-
-    pub async fn bootstrap_cross_signing_if_needed(
-        &self,
-        auth_data: Option<AuthData>,
-    ) -> Result<()> {
-        let olm_machine = self.client.olm_machine().await;
-        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
-        let user_id = olm_machine.user_id();
-
-        self.ensure_initial_key_query().await?;
-
-        if self.client.encryption().get_user_identity(user_id).await?.is_none() {
-            self.bootstrap_cross_signing(auth_data).await?;
-        }
-
-        Ok(())
     }
 
     /// Export E2EE keys that match the given predicate encrypting them with the

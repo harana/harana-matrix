@@ -715,8 +715,7 @@ impl Backups {
             return Err(Error::UnreadableBackedUpRoomKeys {
                 count: unreadable_session_ids.len(),
                 session_id,
-            }
-            .into());
+            });
         }
 
         let result = olm_machine
