@@ -55,6 +55,62 @@ async fn test_user_presence() {
 }
 
 #[async_test]
+async fn test_banned_member_has_no_profile() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let admin = user_id!("@admin:localhost");
+    let banned = user_id!("@banned:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(banned).member(banned).display_name("Spammer").avatar_url(
+                    mxc_uri!("mxc://localhost/spammer"),
+                ))
+                .add_state_event(f().sender(admin).member(admin).display_name("Admin")),
+        )
+        .await;
+
+    // While they are joined, the member has the profile they set.
+    let member = room.get_member_no_sync(banned).await.unwrap().expect("the member is known");
+    assert_eq!(member.display_name(), Some("Spammer"));
+    assert_eq!(member.avatar_url(), Some(mxc_uri!("mxc://localhost/spammer")));
+
+    // The ban event carries the profile the member had. A banned member must not
+    // be shown with it.
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_state_event(
+                f().sender(admin)
+                    .member(banned)
+                    .banned(banned)
+                    .display_name("Spammer")
+                    .avatar_url(mxc_uri!("mxc://localhost/spammer"))
+                    .reason("spam"),
+            ),
+        )
+        .await;
+
+    let member = room.get_member_no_sync(banned).await.unwrap().expect("the member is known");
+    assert_eq!(member.membership(), &MembershipState::Ban);
+    assert!(member.is_banned());
+    assert_eq!(member.display_name(), None);
+    assert_eq!(member.avatar_url(), None);
+    assert_eq!(member.name(), "banned");
+    // The raw event is still there for a caller that needs it.
+    assert_eq!(member.event().displayname_value(), Some("Spammer"));
+
+    // The other member is unaffected.
+    let member = room.get_member_no_sync(admin).await.unwrap().expect("the member is known");
+    assert_eq!(member.display_name(), Some("Admin"));
+}
+
+#[async_test]
 async fn test_calculate_room_names_from_summary() {
     let (client, server) = logged_in_client_with_server().await;
 

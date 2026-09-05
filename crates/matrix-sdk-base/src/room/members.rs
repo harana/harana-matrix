@@ -330,7 +330,13 @@ impl RoomMember {
     }
 
     /// Get the display name of the member if there is one.
+    ///
+    /// A banned member never has one: see [`RoomMember::is_banned`].
     pub fn display_name(&self) -> Option<&str> {
+        if self.is_banned() {
+            return None;
+        }
+
         if let Some(p) = self.profile.as_ref() {
             p.content.displayname.as_deref()
         } else {
@@ -347,12 +353,30 @@ impl RoomMember {
     }
 
     /// Get the avatar url of the member, if there is one.
+    ///
+    /// A banned member never has one: see [`RoomMember::is_banned`].
     pub fn avatar_url(&self) -> Option<&MxcUri> {
+        if self.is_banned() {
+            return None;
+        }
+
         if let Some(p) = self.profile.as_ref() {
             p.content.avatar_url.as_deref()
         } else {
             self.event.avatar_url()
         }
+    }
+
+    /// Whether this member is banned from the room.
+    ///
+    /// A banned member is not shown with the profile they had when they were
+    /// still in the room: [`RoomMember::display_name`] and
+    /// [`RoomMember::avatar_url`] return `None` for them, and
+    /// [`RoomMember::name`] falls back to the localpart of their user ID. The
+    /// raw member event is still available through [`RoomMember::event`] for
+    /// the rare caller that needs it, for instance to render a moderation log.
+    pub fn is_banned(&self) -> bool {
+        *self.membership() == MembershipState::Ban
     }
 
     /// Get the user's status, if any.
