@@ -113,6 +113,7 @@ similar-asserts = { version = "2.0.0", default-features = false }
 stream_assert = { version = "0.1.1", default-features = false }
 syn = { version = "3.0.3", default-features = false, features = ["derive", "parsing", "printing", "clone-impls"] }
 tempfile = { version = "3.27.0", default-features = false }
+test-log = { version = "0.2.19", default-features = false, features = ["trace"] }
 thiserror = { version = "2.0.19", default-features = false }
 tokio = { version = "1.53.1", default-features = false, features = ["sync"] }
 tokio-stream = { version = "0.1.19", default-features = false }

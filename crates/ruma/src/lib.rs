@@ -12,9 +12,11 @@
 //! | `ruma-federation-api`  | `api::federation`    |
 //! | `ruma-html`            | `html`               |
 //! | `ruma-signatures`      | `signatures`         |
+//! | `ruma-state-res`       | `state_res`          |
 //!
-//! Only the parts used by this workspace are kept: the appservice, identity-service and
-//! push-gateway APIs and the state resolution implementation are not vendored.
+//! Only the parts used by this workspace are kept: of the appservice API only the
+//! registration-file types are vendored (`api::appservice`), and the identity-service and
+//! push-gateway APIs are not vendored at all.
 //!
 //! > For internal consistency, Ruma uses American spelling for variable names. Names may differ
 //! > in the serialized representation, as the Matrix specification has a mix of British and
@@ -22,6 +24,10 @@
 //!
 //! # Cargo features
 //!
+//! * `appservice-api-c` / `appservice-api-s` -- the appservice registration-file types
+//!   (`api::appservice`).
+//! * `state-res` -- state resolution and the PDU authorization rules ([`state_res`]). Implies
+//!   `signatures`.
 //! * `client` -- `OutgoingRequest` / `IncomingResponse` impls, for code talking *to* a server.
 //! * `server` -- `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
 //! * `federation-api` -- the server-server API ([`api::federation`]). Implies `signatures`.
@@ -83,6 +89,8 @@ pub mod room_version_rules;
 pub mod serde;
 #[cfg(feature = "signatures")]
 pub mod signatures;
+#[cfg(feature = "state-res")]
+pub mod state_res;
 pub mod third_party_invite;
 pub mod thirdparty;
 mod timestamp;

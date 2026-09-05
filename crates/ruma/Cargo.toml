@@ -23,10 +23,13 @@ default = []
 
 # Everything the vendored test suite needs. Not meant for downstream use.
 full = [
+    "appservice-api-c",
+    "appservice-api-s",
     "client",
     "server",
     "federation-api",
     "signatures",
+    "state-res",
     "html",
     "markdown",
     "rand",
@@ -116,6 +119,14 @@ full = [
     "unstable-msc4495",
 ]
 
+# The registration-file types of the Application Service API, in
+# `api::appservice`. The appservice HTTP endpoints themselves are not vendored,
+# so the client and server halves of the feature are the same thing here; both
+# names are kept so that dependents can ask for the one matching their
+# direction.
+appservice-api-c = []
+appservice-api-s = []
+
 # `OutgoingRequest` / `IncomingResponse` impls, for code talking to a homeserver.
 client = []
 # `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
@@ -133,6 +144,9 @@ federation-api = [
 ]
 # Digital signatures, in `signatures`.
 signatures = ["dep:ed25519-dalek", "dep:pkcs8", "dep:rand", "dep:sha2"]
+
+# State resolution and the PDU authorization rules, in `state_res`.
+state-res = ["signatures"]
 # HTML parsing and sanitizing, in `html`.
 html = ["dep:html5ever"]
 # Parse markdown to construct messages.
@@ -324,6 +338,7 @@ assert_matches2.workspace = true
 insta.workspace = true
 macro_rules_attribute = "0.2.2"
 smol-macros = "0.1.1"
+test-log.workspace = true
 
 [lints]
 workspace = true
