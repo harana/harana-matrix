@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use bitflags::bitflags;
+use futures_util::{Stream, StreamExt};
 use ruma::events::room::member::MembershipState;
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,45 @@ impl Room {
     /// Get the state of the room.
     pub fn state(&self) -> RoomState {
         self.info.read().room_state
+    }
+
+    /// Subscribe to the state of the room, i.e. to the membership of our own
+    /// user in it.
+    ///
+    /// The returned stream yields the current state right away, and then a new
+    /// value on every transition: this is how a client learns that it was
+    /// invited, that it joined, or that it was kicked or banned, without
+    /// having to watch the timeline or reason about sync updates.
+    ///
+    /// Only actual transitions are yielded; an update to the room that leaves
+    /// our membership untouched does not produce an item.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use futures_util::StreamExt;
+    /// use matrix_sdk_base::RoomState;
+    /// # async {
+    /// # let room: matrix_sdk_base::Room = unimplemented!();
+    /// let mut states = Box::pin(room.subscribe_state());
+    ///
+    /// while let Some(state) = states.next().await {
+    ///     if state == RoomState::Banned {
+    ///         println!("We have been banned from {}", room.room_id());
+    ///     }
+    /// }
+    /// # };
+    /// ```
+    pub fn subscribe_state(&self) -> impl Stream<Item = RoomState> + use<> {
+        let mut previous = None;
+
+        self.info.subscribe_reset().filter_map(move |info| {
+            let state = info.room_state;
+            let is_transition = previous != Some(state);
+            previous = Some(state);
+
+            async move { is_transition.then_some(state) }
+        })
     }
 }
 
@@ -118,11 +158,79 @@ impl RoomStateFilter {
 
 #[cfg(test)]
 mod tests {
-    use matrix_sdk_test::async_test;
-    use ruma::owned_room_id;
+    use assert_matches::assert_matches;
+    use futures_util::pin_mut;
+    use matrix_sdk_test::{
+        InvitedRoomBuilder, JoinedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
+        event_factory::EventFactory,
+    };
+    use ruma::{owned_room_id, room_id, user_id};
+    use stream_assert::{assert_next_eq, assert_pending};
 
     use super::{RoomState, RoomStateFilter};
     use crate::test_utils::logged_in_base_client;
+
+    #[async_test]
+    async fn test_subscribe_state() {
+        let user_id = user_id!("@alice:example.org");
+        let admin = user_id!("@admin:example.org");
+        let room_id = room_id!("!r0:example.org");
+
+        let client = logged_in_base_client(Some(user_id)).await;
+        let mut sync_builder = SyncResponseBuilder::new();
+
+        // The invite arrives first.
+        client
+            .receive_sync_response(
+                sync_builder
+                    .add_invited_room(InvitedRoomBuilder::new(room_id))
+                    .build_sync_response(),
+            )
+            .await
+            .unwrap();
+
+        let room = client.get_room(room_id).expect("the room is known");
+        let states = room.subscribe_state();
+        pin_mut!(states);
+
+        // The current state comes first.
+        assert_next_eq!(states, RoomState::Invited);
+        assert_pending!(states);
+
+        // Then every transition.
+        client
+            .receive_sync_response(
+                sync_builder.add_joined_room(JoinedRoomBuilder::new(room_id)).build_sync_response(),
+            )
+            .await
+            .unwrap();
+        assert_next_eq!(states, RoomState::Joined);
+
+        // An update that leaves our membership alone yields nothing.
+        client
+            .receive_sync_response(
+                sync_builder
+                    .add_joined_room(
+                        JoinedRoomBuilder::new(room_id)
+                            .add_timeline_event(EventFactory::new().sender(admin).text_msg("hi")),
+                    )
+                    .build_sync_response(),
+            )
+            .await
+            .unwrap();
+        assert_pending!(states);
+
+        // Being kicked or banned is a transition like any other.
+        client
+            .receive_sync_response(
+                sync_builder.add_left_room(LeftRoomBuilder::new(room_id)).build_sync_response(),
+            )
+            .await
+            .unwrap();
+        assert_next_eq!(states, RoomState::Left);
+
+        assert_matches!(room.state(), RoomState::Left);
+    }
 
     #[async_test]
     async fn test_room_state_filters() {

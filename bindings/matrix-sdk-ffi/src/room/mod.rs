@@ -200,6 +200,28 @@ impl Room {
         self.inner.state().into()
     }
 
+    /// Subscribe to our own membership in this room.
+    ///
+    /// The listener is called with the current membership right away, and then
+    /// on every transition, so a client learns that it was invited, joined,
+    /// kicked or banned without watching the timeline.
+    ///
+    /// Use the returned [`TaskHandle`] to cancel the subscription.
+    pub fn subscribe_to_membership(
+        self: Arc<Self>,
+        listener: Box<dyn MembershipListener>,
+    ) -> Arc<TaskHandle> {
+        let states = self.inner.subscribe_state();
+
+        Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
+            pin_mut!(states);
+
+            while let Some(state) = states.next().await {
+                listener.call(state.into());
+            }
+        })))
+    }
+
     /// Returns the room heroes for this room.
     pub async fn heroes(&self) -> Vec<RoomHero> {
         self.inner.heroes().await.into_iter().map(Into::into).collect()
@@ -1515,6 +1537,11 @@ pub fn matrix_to_room_alias_permalink(
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, room_info: RoomInfo);
+}
+
+#[matrix_sdk_ffi_macros::export(callback_interface)]
+pub trait MembershipListener: SyncOutsideWasm + SendOutsideWasm {
+    fn call(&self, membership: Membership);
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
