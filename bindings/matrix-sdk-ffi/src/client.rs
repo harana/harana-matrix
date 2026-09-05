@@ -1460,7 +1460,17 @@ impl Client {
     }
 
     pub async fn create_room(&self, request: CreateRoomParameters) -> Result<String, ClientError> {
-        let response = self.inner.create_room(request.try_into()?).await?;
+        // A space also needs the power levels that keep ordinary members from posting
+        // into it, which `Client::create_space` fills in.
+        let is_space = request.is_space;
+        let request = request.try_into()?;
+
+        let response = if is_space {
+            self.inner.create_space(request).await?
+        } else {
+            self.inner.create_room(request).await?
+        };
+
         Ok(String::from(response.room_id()))
     }
 

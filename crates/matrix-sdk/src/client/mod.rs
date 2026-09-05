@@ -66,7 +66,7 @@ use ruma::{
             membership::{join_room_by_id, join_room_by_id_or_alias},
             presence::set_presence as set_presence_status,
             retention::get_retention_configuration,
-            room::create_room,
+            room::create_room::{self, RoomPowerLevelsContentOverride, v3::CreationContent},
             rtc::{RtcTransport, transports},
             session::login::v3::DiscoveryInfo,
             sync::sync_events,
@@ -81,6 +81,9 @@ use ruma::{
     events::{
         StateEventType, beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier,
     },
+    int,
+    room::RoomType,
+    serde::Raw,
     presence::PresenceState,
     push::Ruleset,
     time::Instant,
@@ -2072,6 +2075,66 @@ impl Client {
         }
 
         Ok(joined_room)
+    }
+
+    /// Create a space.
+    ///
+    /// A space is a room whose type is `m.space`. Its timeline is not meant to
+    /// be written to, but the specification leaves enforcing that to whoever
+    /// creates the space, so this raises `events_default` to 100 to stop
+    /// ordinary members from posting into it.
+    ///
+    /// Everything else works as in [`Client::create_room`]. The request is only
+    /// filled in where the caller left it empty:
+    ///
+    /// - the room type of the creation content is set to `m.space` unless the
+    ///   creation content already names one;
+    /// - the power level override is set unless the caller provided one, in
+    ///   which case it is used verbatim and it is up to the caller to keep
+    ///   ordinary members from posting.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use matrix_sdk::{
+    ///     Client,
+    ///     ruma::{
+    ///         api::client::room::create_room::v3::Request as CreateRoomRequest, assign,
+    ///     },
+    /// };
+    /// # use url::Url;
+    /// #
+    /// # async {
+    /// # let homeserver = Url::parse("http://example.com")?;
+    /// # let client = Client::new(homeserver).await?;
+    /// let request = assign!(CreateRoomRequest::new(), {
+    ///     name: Some("My space".to_owned()),
+    /// });
+    /// let space = client.create_space(request).await?;
+    /// assert!(space.is_space());
+    /// # anyhow::Ok(()) };
+    /// ```
+    pub async fn create_space(&self, mut request: create_room::v3::Request) -> Result<Room> {
+        let mut creation_content = match &request.creation_content {
+            Some(raw) => raw.deserialize_as_unchecked::<CreationContent>()?,
+            None => CreationContent::new(),
+        };
+
+        if creation_content.room_type.is_none() {
+            creation_content.room_type = Some(RoomType::Space);
+        }
+
+        request.creation_content = Some(Raw::new(&creation_content)?);
+
+        if request.power_level_content_override.is_none() {
+            let mut power_levels = RoomPowerLevelsContentOverride::new();
+            // Nobody but the creator can post into the space room itself.
+            power_levels.events_default = Some(int!(100));
+
+            request.power_level_content_override = Some(Raw::new(&power_levels)?);
+        }
+
+        self.create_room(request).await
     }
 
     /// Create a DM room.
@@ -4147,7 +4210,12 @@ pub(crate) mod tests {
         RoomId, ServerName, UserId,
         api::{
             FeatureFlag, MatrixVersion,
-            client::{room::create_room::v3::Request as CreateRoomRequest, rtc::RtcTransport},
+            client::{
+                room::create_room::{
+                    RoomPowerLevelsContentOverride, v3::Request as CreateRoomRequest,
+                },
+                rtc::RtcTransport,
+            },
         },
         assign,
         events::{
@@ -4157,7 +4225,7 @@ pub(crate) mod tests {
         },
         owned_device_id, owned_room_id, owned_user_id,
         presence::PresenceState,
-        room_alias_id, room_id,
+        int, room_alias_id, room_id,
         serde::Raw,
         user_id,
     };
@@ -5228,6 +5296,58 @@ pub(crate) mod tests {
         timeout(Duration::from_secs(1), client.await_room_remote_echo(room.room_id()))
             .await
             .unwrap_err();
+    }
+
+    #[async_test]
+    async fn test_create_space() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // A space is a room of type `m.space` whose timeline ordinary members cannot
+        // write to.
+        server
+            .mock_create_room()
+            .body_matches_partial_json(json!({
+                "creation_content": { "type": "m.space" },
+                "power_level_content_override": { "events_default": 100 },
+            }))
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        client.create_space(CreateRoomRequest::new()).await.unwrap();
+    }
+
+    #[async_test]
+    async fn test_create_space_does_not_override_what_the_caller_set() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // The caller took over the power levels, so they are used verbatim, and the
+        // creation content already names a room type, so it is left alone.
+        server
+            .mock_create_room()
+            .body_matches_partial_json(json!({
+                "creation_content": { "type": "org.example.custom" },
+                "power_level_content_override": { "events_default": 50 },
+            }))
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        let mut power_levels = RoomPowerLevelsContentOverride::new();
+        power_levels.events_default = Some(int!(50));
+
+        let request = assign!(CreateRoomRequest::new(), {
+            creation_content: Some(
+                Raw::new(&json!({ "type": "org.example.custom" })).unwrap().cast_unchecked(),
+            ),
+            power_level_content_override: Some(Raw::new(&power_levels).unwrap()),
+        });
+
+        client.create_space(request).await.unwrap();
     }
 
     #[async_test]
