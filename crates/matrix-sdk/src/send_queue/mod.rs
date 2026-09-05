@@ -317,6 +317,143 @@ impl SendQueue {
         self.data().global_update_sender.subscribe()
     }
 
+    /// Put back in the queue the requests that couldn't be sent because of a
+    /// verification problem, when that problem is gone.
+    ///
+    /// A request that failed because the room contains insecure devices,
+    /// because a previously verified user changed their identity, or because
+    /// our own session isn't verified, is wedged: it blocks its room's queue
+    /// until something unwedges it. Verifying the devices in question is
+    /// exactly what the user is expected to do about it, but nothing was
+    /// looking at those requests again afterwards, so the message stayed stuck
+    /// with no way to deliver it.
+    ///
+    /// Requests whose blocker is still there are left alone. This is called
+    /// whenever the device keys we know about change; a client that resolves
+    /// such a problem in some other way can also call it directly.
+    #[cfg(feature = "e2e-encryption")]
+    pub async fn retry_requests_blocked_on_verification(&self) {
+        let room_ids = match self.client.state_store().load_rooms_with_unsent_requests().await {
+            Ok(room_ids) => room_ids,
+            Err(err) => {
+                warn!("error when loading rooms with unsent requests: {err}");
+                return;
+            }
+        };
+
+        for room_id in room_ids {
+            let requests = match self.client.state_store().load_send_queue_requests(&room_id).await
+            {
+                Ok(requests) => requests,
+                Err(err) => {
+                    warn!(%room_id, "error when loading the send queue requests: {err}");
+                    continue;
+                }
+            };
+
+            let mut unwedged = Vec::new();
+
+            for request in requests {
+                let Some(error) = &request.error else { continue };
+
+                if !self.is_verification_problem_resolved(error).await {
+                    continue;
+                }
+
+                if let Err(err) = self
+                    .client
+                    .state_store()
+                    .update_send_queue_request_status(&room_id, &request.transaction_id, None)
+                    .await
+                {
+                    warn!(%room_id, "error when unwedging a send queue request: {err}");
+                    continue;
+                }
+
+                unwedged.push(request.transaction_id);
+            }
+
+            if unwedged.is_empty() {
+                continue;
+            }
+
+            let Some(room) = self.client.get_room(&room_id) else { continue };
+            let room_queue = self.for_room(room);
+
+            for transaction_id in unwedged {
+                debug!(%room_id, %transaction_id, "unwedged a request blocked on verification");
+                room_queue.send_update(RoomSendQueueUpdate::RetryEvent { transaction_id });
+            }
+
+            // Wake up the queue, in case the room was asleep while the request was
+            // wedged.
+            room_queue.inner.notifier.notify_one();
+        }
+    }
+
+    /// Whether the verification problem that wedged a request is now gone.
+    ///
+    /// Errors that aren't about verification never resolve on their own, and
+    /// so are reported as unresolved.
+    #[cfg(feature = "e2e-encryption")]
+    async fn is_verification_problem_resolved(&self, error: &QueueWedgeError) -> bool {
+        match error {
+            QueueWedgeError::InsecureDevices { user_device_map } => {
+                for (user_id, device_ids) in user_device_map {
+                    for device_id in device_ids {
+                        match self.client.encryption().get_device(user_id, device_id).await {
+                            // The device is gone; it can't block the send anymore.
+                            Ok(None) => {}
+                            // It blocks the send for as long as its owner hasn't signed it.
+                            Ok(Some(device)) => {
+                                if !device.is_cross_signed_by_owner() {
+                                    return false;
+                                }
+                            }
+                            Err(err) => {
+                                warn!(%user_id, %device_id, "error when reading a device: {err}");
+                                return false;
+                            }
+                        }
+                    }
+                }
+
+                true
+            }
+
+            QueueWedgeError::IdentityViolations { users } => {
+                for user_id in users {
+                    match self.client.encryption().get_user_identity(user_id).await {
+                        // No identity at all: there's no violation to resolve.
+                        Ok(None) => {}
+                        Ok(Some(identity)) => {
+                            if identity.has_verification_violation() {
+                                return false;
+                            }
+                        }
+                        Err(err) => {
+                            warn!(%user_id, "error when reading a user identity: {err}");
+                            return false;
+                        }
+                    }
+                }
+
+                true
+            }
+
+            QueueWedgeError::CrossVerificationRequired => {
+                // Sending needed our own session to be verified, which it is once our own
+                // identity is.
+                self.client.inner.verification_state.get()
+                    == crate::encryption::VerificationState::Verified
+            }
+
+            QueueWedgeError::MissingMediaContent
+            | QueueWedgeError::InvalidMimeType { .. }
+            | QueueWedgeError::GenericApiError { .. } => false,
+        }
+    }
+
     /// Get local echoes from all room send queues.
     pub async fn local_echoes(
         &self,

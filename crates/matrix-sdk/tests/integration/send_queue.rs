@@ -1721,6 +1721,71 @@ async fn test_unwedge_unrecoverable_errors() {
 }
 
 #[async_test]
+#[cfg(feature = "e2e-encryption")]
+async fn test_retry_requests_blocked_on_verification() {
+    use matrix_sdk_base::store::QueueWedgeError;
+    use ruma::device_id;
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    client.send_queue().set_enabled(true).await;
+
+    let q = room.send_queue();
+    let mut global_watch = client.send_queue().subscribe();
+    let (local_echoes, mut watch) = q.subscribe().await.unwrap();
+
+    assert!(local_echoes.is_empty());
+
+    mock.verify_and_reset().await;
+    mock.mock_room_state_encryption().plain().mount().await;
+
+    // The first attempt fails unrecoverably, which wedges the request.
+    mock.mock_room_send().error_too_large().mock_once().mount().await;
+    // The second attempt, after unwedging, succeeds.
+    mock.mock_room_send().ok(event_id!("$42")).mock_once().mount().await;
+
+    q.send(RoomMessageEventContent::text_plain("hello").into()).await.unwrap();
+
+    let (txn, _) = assert_update!((global_watch, watch) => local echo { body = "hello" });
+    assert_update!((global_watch, watch) => error { recoverable=false, txn=txn });
+
+    room.send_queue().set_enabled(true);
+
+    // The request is wedged, but not on anything verification can fix, so it is
+    // left alone.
+    client.send_queue().retry_requests_blocked_on_verification().await;
+    sleep(Duration::from_millis(100)).await;
+    assert!(watch.is_empty());
+
+    // Pretend it had been wedged because of an insecure device instead. The
+    // device is unknown to us, so it can't be blocking the send anymore.
+    client
+        .state_store()
+        .update_send_queue_request_status(
+            room_id,
+            &txn,
+            Some(QueueWedgeError::InsecureDevices {
+                user_device_map: [(
+                    owned_user_id!("@bob:example.org"),
+                    vec![device_id!("BOBDEVICE").to_owned()],
+                )]
+                .into(),
+            }),
+        )
+        .await
+        .unwrap();
+
+    client.send_queue().retry_requests_blocked_on_verification().await;
+
+    assert_update!((global_watch, watch) => retry { txn=txn });
+    assert_update!((global_watch, watch) => sent { txn=txn, event_id=event_id!("$42") });
+}
+
+#[async_test]
 async fn test_no_network_access_error_is_recoverable() {
     // This is subtle, but for the `drop(server)` below to be effectful, it needs to
     // not be a pooled wiremock server (the default), which will keep the dropped
