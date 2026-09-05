@@ -246,6 +246,48 @@ macro_rules! cryptostore_integration_tests {
             }
 
             #[async_test]
+            async fn test_delete_sessions() {
+                let store = get_store("delete_sessions", None, true).await;
+                let (account, session) = get_account_and_session().await;
+                let sender_key = session.sender_key.to_base64();
+
+                store
+                    .save_pending_changes(PendingChanges { account: Some(account.deep_clone()) })
+                    .await
+                    .expect("Can't save account");
+                store
+                    .save_changes(Changes {
+                        sessions: vec![session.clone()],
+                        devices: DeviceChanges {
+                            new: vec![DeviceData::from_account(&account)],
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap();
+
+                assert_eq!(store.get_sessions(&sender_key).await.unwrap().unwrap().len(), 1);
+
+                // Deleting a session ID we do not have is not an error.
+                store
+                    .delete_sessions(&sender_key, &["not-a-session".to_owned()])
+                    .await
+                    .unwrap();
+                assert_eq!(store.get_sessions(&sender_key).await.unwrap().unwrap().len(), 1);
+
+                store
+                    .delete_sessions(&sender_key, &[session.session_id().to_owned()])
+                    .await
+                    .unwrap();
+
+                assert!(
+                    store.get_sessions(&sender_key).await.unwrap().is_none_or(|s| s.is_empty()),
+                    "The deleted session should be gone from the store",
+                );
+            }
+
+            #[async_test]
             async fn test_add_and_save_session() {
                 let store_name = "add_and_save_session";
 

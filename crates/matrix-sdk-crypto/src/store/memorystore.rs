@@ -437,6 +437,22 @@ impl CryptoStore for MemoryStore {
         }
     }
 
+    async fn delete_sessions(&self, sender_key: &str, session_ids: &[String]) -> Result<()> {
+        let mut session_store = self.sessions.write();
+
+        if let Some(entry) = session_store.get_mut(sender_key) {
+            for session_id in session_ids {
+                entry.remove(session_id);
+            }
+
+            if entry.is_empty() {
+                session_store.remove(sender_key);
+            }
+        }
+
+        Ok(())
+    }
+
     async fn get_inbound_group_session(
         &self,
         room_id: &RoomId,
@@ -1443,6 +1459,14 @@ mod integration_tests {
             sender_key: &str,
         ) -> Result<Option<Vec<Session>>, Self::Error> {
             self.0.get_sessions(sender_key).await
+        }
+
+        async fn delete_sessions(
+            &self,
+            sender_key: &str,
+            session_ids: &[String],
+        ) -> Result<(), Self::Error> {
+            self.0.delete_sessions(sender_key, session_ids).await
         }
 
         async fn get_inbound_group_session(
