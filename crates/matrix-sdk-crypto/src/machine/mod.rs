@@ -842,6 +842,13 @@ impl OlmMachine {
         {
             info!("Creating new cross signing identity");
 
+            // A `/keys/query` landing while we do this sees a public identity it doesn't
+            // recognise and throws the private keys away, leaving an account that can log
+            // in but can't set up recovery. Take the same lock that processing a
+            // `/keys/query` response takes, so the new identity is written before any
+            // response can act on it.
+            let _identity_guard = self.store().lock_identity_update().await;
+
             let (identity, upload_signing_keys_req, upload_signatures_req) = {
                 let cache = self.inner.store.cache().await?;
                 let account = cache.account().await?;

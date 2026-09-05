@@ -423,7 +423,18 @@ impl GossipMachine {
                     );
 
                     match self.share_secret(&device, content, secret_name).await {
-                        Ok(s) => Ok(Some(s)),
+                        Ok(s) => {
+                            // The device now has the secret. Drop any request for it that
+                            // is still waiting for an Olm session, so that establishing
+                            // one doesn't make us send the same secret a second time.
+                            self.inner.wait_queue.remove_secret_requests(
+                                device.user_id(),
+                                device.device_id(),
+                                secret_name,
+                            );
+
+                            Ok(Some(s))
+                        }
                         Err(OlmError::MissingSession) => {
                             info!(
                                 user_id = ?device.user_id(),
