@@ -19,7 +19,10 @@ use std::{
 };
 
 use extension_trait::extension_trait;
-use matrix_sdk::attachment::{BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo};
+use matrix_sdk::{
+    attachment::{BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo},
+    utils::markdown_formatted_body,
+};
 use ruma::{
     KeyDerivationAlgorithm as RumaKeyDerivationAlgorithm, MatrixToUri, MatrixUri as RumaMatrixUri,
     OwnedRoomId, OwnedUserId, SecondsSinceUnixEpoch, UInt, UserId, assign,
@@ -276,14 +279,20 @@ pub fn message_event_content_new(
 pub fn message_event_content_from_markdown(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
-    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::text_markdown(md)))
+    let formatted = markdown_formatted_body(&md);
+    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Text(
+        assign!(RumaTextMessageEventContent::plain(md), { formatted }),
+    )))
 }
 
 #[matrix_sdk_ffi_macros::export]
 pub fn message_event_content_from_markdown_as_emote(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
-    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::emote_markdown(md)))
+    let formatted = markdown_formatted_body(&md);
+    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Emote(
+        assign!(RumaEmoteMessageEventContent::plain(md), { formatted }),
+    )))
 }
 
 #[matrix_sdk_ffi_macros::export]

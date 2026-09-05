@@ -238,7 +238,44 @@ pub fn formatted_body_from(
     body: Option<&str>,
     formatted_body: Option<FormattedBody>,
 ) -> Option<FormattedBody> {
-    if formatted_body.is_some() { formatted_body } else { body.and_then(FormattedBody::markdown) }
+    if formatted_body.is_some() { formatted_body } else { body.and_then(markdown_formatted_body) }
+}
+
+/// Interpret `body` as markdown, unless doing so would drop what the user
+/// typed.
+///
+/// A body that is nothing but an ordered list marker, e.g. `5.`, parses as a
+/// list item with no content: the rendered HTML then carries no text at all,
+/// and a client showing the formatted body displays a bare list marker instead
+/// of the message. Send those as plain text.
+#[cfg(feature = "markdown")]
+pub fn markdown_formatted_body(body: &str) -> Option<FormattedBody> {
+    if body.trim().is_empty() {
+        return None;
+    }
+
+    let formatted_body = FormattedBody::markdown(body)?;
+
+    if html_text_is_empty(&formatted_body.body) { None } else { Some(formatted_body) }
+}
+
+/// Whether the given HTML fragment renders no text at all, i.e. it is only
+/// made of tags.
+#[cfg(feature = "markdown")]
+fn html_text_is_empty(html: &str) -> bool {
+    let mut in_tag = false;
+
+    for char in html.chars() {
+        match char {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if in_tag => {}
+            _ if char.is_whitespace() => {}
+            _ => return false,
+        }
+    }
+
+    true
 }
 
 /// A full URL or just the query part of a URL.
@@ -287,7 +324,7 @@ mod test {
     use ruma::events::room::message::FormattedBody;
 
     #[cfg(feature = "markdown")]
-    use crate::utils::formatted_body_from;
+    use crate::utils::{formatted_body_from, markdown_formatted_body};
     use crate::utils::is_room_alias_format_valid;
 
     #[cfg(feature = "e2e-encryption")]
@@ -380,6 +417,24 @@ mod test {
         let expected_formatted_body = FormattedBody::html("<h1>Parsed</h1>\n".to_owned());
         assert_eq!(expected_formatted_body.body, result_formatted_body.body);
         assert_eq!(expected_formatted_body.format, result_formatted_body.format);
+    }
+
+    #[test]
+    #[cfg(feature = "markdown")]
+    fn test_markdown_formatted_body_keeps_plain_text_plain() {
+        // A body that is only an ordered list marker parses as a list item with no
+        // content, which would render as a bare marker instead of what was typed.
+        assert_matches!(markdown_formatted_body("5."), None);
+        assert_matches!(markdown_formatted_body("5. "), None);
+        assert_matches!(markdown_formatted_body("- "), None);
+        assert_matches!(markdown_formatted_body("   "), None);
+
+        // Anything that does render text keeps its formatted body.
+        assert_let!(Some(formatted_body) = markdown_formatted_body("5. hello"));
+        assert_eq!(formatted_body.body, "<ol start=\"5\">\n<li>hello</li>\n</ol>\n");
+
+        assert_let!(Some(formatted_body) = markdown_formatted_body("# Parsed"));
+        assert_eq!(formatted_body.body, "<h1>Parsed</h1>\n");
     }
 
     #[test]
