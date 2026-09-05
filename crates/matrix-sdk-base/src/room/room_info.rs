@@ -2275,3 +2275,206 @@ mod tests {
         assert!(retention.min_lifetime().is_none());
     }
 }
+
+/// Tests for the [redaction algorithm].
+///
+/// [redaction algorithm]: https://spec.matrix.org/v1.16/client-server-api/#redactions
+#[cfg(test)]
+mod redaction_tests {
+    use ruma::{
+        events::{AnySyncTimelineEvent, room::redaction::SyncRoomRedactionEvent},
+        room_version_rules::RedactionRules,
+        serde::Raw,
+    };
+    use serde_json::{Value, json};
+
+    use super::apply_redaction;
+
+    fn redaction_event(reason: &str) -> Raw<SyncRoomRedactionEvent> {
+        Raw::new(&json!({
+            "type": "m.room.redaction",
+            "event_id": "$redaction",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 1_000_000,
+            "redacts": "$original",
+            "content": { "reason": reason },
+        }))
+        .unwrap()
+        .cast_unchecked()
+    }
+
+    fn redact(event: Value, rules: &RedactionRules) -> Option<Value> {
+        let event: Raw<AnySyncTimelineEvent> = Raw::new(&event).unwrap().cast_unchecked();
+
+        apply_redaction(&event, &redaction_event("spam"), rules)
+            .map(|raw| serde_json::to_value(raw.json()).unwrap())
+    }
+
+    /// Redacting a message strips its `content`, but keeps the keys that the
+    /// algorithm mandates, and records the redaction in
+    /// `unsigned.redacted_because`.
+    #[test]
+    fn test_message_content_is_stripped() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.message",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "origin_server_ts": 42,
+                "content": { "msgtype": "m.text", "body": "hello" },
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["type"], "m.room.message");
+        assert_eq!(redacted["event_id"], "$original");
+        assert_eq!(redacted["sender"], "@bob:localhost");
+        assert_eq!(redacted["origin_server_ts"], 42);
+        assert_eq!(redacted["content"], json!({}));
+
+        let because = &redacted["unsigned"]["redacted_because"];
+        assert_eq!(because["event_id"], "$redaction");
+        assert_eq!(because["content"]["reason"], "spam");
+    }
+
+    /// Keys that are not in the list of preserved keys are dropped, even at
+    /// the top level of the event.
+    #[test]
+    fn test_unknown_top_level_keys_are_dropped() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.message",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "origin_server_ts": 42,
+                "content": {},
+                "org.example.custom": "gone",
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert!(redacted.get("org.example.custom").is_none());
+    }
+
+    /// `m.room.member` keeps the `membership` key of its content.
+    #[test]
+    fn test_member_event_keeps_its_membership() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.member",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "state_key": "@bob:localhost",
+                "origin_server_ts": 42,
+                "content": {
+                    "membership": "join",
+                    "displayname": "Bob",
+                    "avatar_url": "mxc://localhost/avatar",
+                },
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["state_key"], "@bob:localhost");
+        assert_eq!(redacted["content"], json!({ "membership": "join" }));
+    }
+
+    /// Before room version 11, a redacted `m.room.create` keeps only its
+    /// `creator`.
+    #[test]
+    fn test_create_event_before_room_version_11() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.create",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "state_key": "",
+                "origin_server_ts": 42,
+                "content": { "creator": "@bob:localhost", "m.federate": false },
+            }),
+            &RedactionRules::V1,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["content"], json!({ "creator": "@bob:localhost" }));
+    }
+
+    /// From room version 11, a redacted `m.room.create` keeps its whole
+    /// content.
+    #[test]
+    fn test_create_event_from_room_version_11() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.create",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "state_key": "",
+                "origin_server_ts": 42,
+                "content": { "room_version": "11", "m.federate": false },
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["content"], json!({ "room_version": "11", "m.federate": false }));
+    }
+
+    /// Room version 11 introduced the `redacts` key of `m.room.redaction`
+    /// events as a preserved key; before that, it was dropped from the
+    /// content.
+    #[test]
+    fn test_redaction_event_redacts_key_depends_on_the_room_version() {
+        let event = json!({
+            "type": "m.room.redaction",
+            "event_id": "$original",
+            "sender": "@bob:localhost",
+            "origin_server_ts": 42,
+            "content": { "redacts": "$something", "reason": "spam" },
+        });
+
+        let redacted = redact(event.clone(), &RedactionRules::V1).unwrap();
+        assert_eq!(redacted["content"], json!({}));
+
+        let redacted = redact(event, &RedactionRules::V11).unwrap();
+        assert_eq!(redacted["content"], json!({ "redacts": "$something" }));
+    }
+
+    /// An event that isn't a JSON object cannot be redacted.
+    #[test]
+    fn test_a_non_object_event_is_not_redacted() {
+        let event: Raw<AnySyncTimelineEvent> = Raw::new(&json!("nope")).unwrap().cast_unchecked();
+
+        assert!(apply_redaction(&event, &redaction_event("spam"), &RedactionRules::V11).is_none());
+    }
+
+    /// A redaction event that isn't valid canonical JSON, e.g. because it
+    /// contains a float, cannot be applied.
+    #[test]
+    fn test_an_invalid_redaction_event_is_not_applied() {
+        let event: Raw<AnySyncTimelineEvent> = Raw::new(&json!({
+            "type": "m.room.message",
+            "event_id": "$original",
+            "sender": "@bob:localhost",
+            "origin_server_ts": 42,
+            "content": {},
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let invalid_redaction: Raw<SyncRoomRedactionEvent> = Raw::new(&json!({
+            "type": "m.room.redaction",
+            "event_id": "$redaction",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 1_000_000,
+            "redacts": "$original",
+            "content": { "score": 1.5 },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert!(apply_redaction(&event, &invalid_redaction, &RedactionRules::V11).is_none());
+    }
+}
