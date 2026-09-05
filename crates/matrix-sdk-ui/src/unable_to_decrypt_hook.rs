@@ -36,6 +36,10 @@ use ruma::{
 use tokio::sync::{Mutex as AsyncMutex, MutexGuard};
 use tracing::{error, trace};
 
+/// The late-decryption grace period used by other Matrix clients: a UTD that
+/// gets decrypted within this period of being observed is not reported.
+pub const DEFAULT_LATE_DECRYPTION_GRACE_PERIOD: Duration = Duration::from_secs(4);
+
 /// A generic interface which methods get called whenever we observe a
 /// unable-to-decrypt (UTD) event.
 pub trait UnableToDecryptHook: std::fmt::Debug + SendOutsideWasm + SyncOutsideWasm {
@@ -114,6 +118,13 @@ pub struct UtdHookManager {
     /// An optional delay before marking the event as UTD ("grace period").
     max_delay: Option<Duration>,
 
+    /// An optional grace period for late decryptions.
+    ///
+    /// An event that gets decrypted within this period of being marked as a
+    /// UTD is not reported at all, rather than being reported as a late
+    /// decryption.
+    late_decryption_grace_period: Option<Duration>,
+
     /// A mapping of events we're going to report as UTDs, to the tasks to do
     /// so.
     ///
@@ -181,6 +192,7 @@ impl UtdHookManager {
             client,
             parent,
             max_delay: None,
+            late_decryption_grace_period: None,
             pending_delayed: Default::default(),
             reported_utds: Arc::new(AsyncMutex::new(bloom_filter)),
         }
@@ -188,10 +200,26 @@ impl UtdHookManager {
 
     /// Reports UTDs with the given max delay.
     ///
-    /// Note: late decryptions are always reported, even if there was a grace
-    /// period set for the reporting of the UTD.
+    /// Note: a late decryption is still reported, unless it happened within the
+    /// grace period configured with
+    /// [`Self::with_late_decryption_grace_period`].
     pub fn with_max_delay(mut self, delay: Duration) -> Self {
         self.max_delay = Some(delay);
+        self
+    }
+
+    /// Do not report events that get decrypted within the given period of
+    /// being marked as a UTD.
+    ///
+    /// An event that decrypts a moment after it was first seen was never
+    /// really undecryptable to the user, it just arrived before its room key
+    /// did. Reporting it as a (late-decrypted) UTD skews the metrics; other
+    /// Matrix clients ignore such decryptions, and
+    /// [`DEFAULT_LATE_DECRYPTION_GRACE_PERIOD`] matches the period they use.
+    ///
+    /// Without this, every late decryption is reported, however quick it was.
+    pub fn with_late_decryption_grace_period(mut self, grace_period: Duration) -> Self {
+        self.late_decryption_grace_period = Some(grace_period);
         self
     }
 
@@ -346,9 +374,24 @@ impl UtdHookManager {
         // We can also cancel the reporting task.
         pending_utd_report.report_task.abort();
 
+        let time_to_decrypt = pending_utd_report.marked_utd_at.elapsed();
+
+        // If the event decrypted quickly enough, the user never saw a UTD, so there is
+        // nothing worth reporting.
+        if let Some(grace_period) = self.late_decryption_grace_period
+            && time_to_decrypt <= grace_period
+        {
+            trace!(
+                %event_id,
+                ?time_to_decrypt,
+                "UtdHookManager: event was decrypted within the grace period, not reporting it"
+            );
+            return;
+        }
+
         // Update the UTD Info struct with new data, then report it
         let mut info = pending_utd_report.utd_info;
-        info.time_to_decrypt = Some(pending_utd_report.marked_utd_at.elapsed());
+        info.time_to_decrypt = Some(time_to_decrypt);
         Self::report_utd(info, &self.parent, &self.client, &mut reported_utds_lock).await;
     }
 

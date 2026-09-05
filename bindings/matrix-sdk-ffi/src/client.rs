@@ -72,7 +72,7 @@ use matrix_sdk_ui::{
         NotificationProcessSetup as MatrixNotificationProcessSetup,
     },
     spaces::SpaceService as UISpaceService,
-    unable_to_decrypt_hook::UtdHookManager,
+    unable_to_decrypt_hook::{DEFAULT_LATE_DECRYPTION_GRACE_PERIOD, UtdHookManager},
 };
 use mime::Mime;
 use oauth2::Scope;
@@ -1345,7 +1345,8 @@ impl Client {
             Arc::new(UtdHook { delegate: utd_delegate.into() }),
             (*self.inner).clone(),
         )
-        .with_max_delay(UTD_HOOK_GRACE_PERIOD);
+        .with_max_delay(UTD_HOOK_GRACE_PERIOD)
+        .with_late_decryption_grace_period(DEFAULT_LATE_DECRYPTION_GRACE_PERIOD);
 
         if let Err(e) = utd_hook_manager.reload_from_store().await {
             error!("Unable to reload UTD hook data from data store: {e}");

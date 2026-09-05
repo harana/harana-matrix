@@ -359,6 +359,22 @@ pub struct Account {
     /// from a `AccountPickle` that didn't use time-based fallback key
     /// rotation.
     fallback_creation_timestamp: Option<MilliSecondsSinceUnixEpoch>,
+    /// Has this `Account` been modified since it was loaded from, or last
+    /// written to, the store?
+    ///
+    /// Pickling and persisting an account is expensive, and most sync cycles do
+    /// not touch it at all, so this lets the store skip the write when there is
+    /// nothing to write. It is deliberately not part of the pickle: an account
+    /// read back from the store is, by definition, in sync with it.
+    dirty: bool,
+    /// The one-time key count reported by the most recent `/keys/upload`
+    /// response, if we have not yet seen a sync that accounts for it.
+    ///
+    /// The one-time key count in a sync response may have been computed by the
+    /// server before it processed our upload. Believing such a count would make
+    /// us think the keys we just uploaded had already been consumed, and upload
+    /// a second batch on top of the first.
+    unacknowledged_upload_key_count: Option<u64>,
 }
 
 impl Deref for Account {
@@ -448,6 +464,9 @@ impl Account {
             shared: false,
             uploaded_signed_key_count: 0,
             fallback_creation_timestamp: None,
+            // A brand new account has never been written to the store.
+            dirty: true,
+            unacknowledged_upload_key_count: None,
         }
     }
 
@@ -484,13 +503,27 @@ impl Account {
         &self.static_data
     }
 
+    /// Has this account been modified since it was loaded from, or last
+    /// written to, the store?
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Record that this account is in sync with the store again.
+    pub(crate) fn reset_dirty(&mut self) {
+        self.dirty = false;
+    }
+
     /// Update the uploaded key count.
     ///
     /// # Arguments
     ///
     /// * `new_count` - The new count that was reported by the server.
     pub fn update_uploaded_key_count(&mut self, new_count: u64) {
-        self.uploaded_signed_key_count = new_count;
+        if self.uploaded_signed_key_count != new_count {
+            self.uploaded_signed_key_count = new_count;
+            self.dirty = true;
+        }
     }
 
     /// Get the currently known uploaded key count.
@@ -508,7 +541,10 @@ impl Account {
     /// Messages shouldn't be encrypted with the session before it has been
     /// shared.
     pub fn mark_as_shared(&mut self) {
-        self.shared = true;
+        if !self.shared {
+            self.shared = true;
+            self.dirty = true;
+        }
     }
 
     /// Get the one-time keys of the account.
@@ -520,7 +556,21 @@ impl Account {
 
     /// Generate count number of one-time keys.
     pub fn generate_one_time_keys(&mut self, count: usize) -> OneTimeKeyGenerationResult {
-        self.inner.generate_one_time_keys(count)
+        let result = self.inner.generate_one_time_keys(count);
+
+        if !result.created.is_empty() || !result.removed.is_empty() {
+            self.dirty = true;
+
+            debug!(
+                created = result.created.len(),
+                removed = result.removed.len(),
+                uploaded_key_count = self.uploaded_signed_key_count,
+                max_one_time_keys = self.inner.max_number_of_one_time_keys(),
+                "Generated new one-time keys"
+            );
+        }
+
+        result
     }
 
     /// Get the maximum number of one-time keys the account can hold.
@@ -564,18 +614,31 @@ impl Account {
         if let Some(count) = count.map(Into::into) {
             let old_count = self.uploaded_key_count();
 
-            // Some servers might always return the key counts in the sync
-            // response, we don't want to the logs with noop changes if they do
-            // so.
-            if count != old_count {
-                debug!(
-                    "Updated uploaded one-time key count {} -> {count}.",
-                    self.uploaded_key_count(),
-                );
-            }
+            // The server may have computed the count in this sync response before it
+            // processed our last one-time key upload, in which case it is stale: acting
+            // on it would make us believe the keys we just uploaded had already been
+            // consumed, and upload a second batch on top of the first one.
+            let is_stale = self
+                .unacknowledged_upload_key_count
+                .take()
+                .is_some_and(|uploaded_count| count < uploaded_count);
 
-            self.update_uploaded_key_count(count);
-            self.generate_one_time_keys_if_needed();
+            if is_stale {
+                debug!(
+                    "Ignoring a one-time key count of {count}, which predates our last \
+                     one-time key upload."
+                );
+            } else {
+                // Some servers might always return the key counts in the sync
+                // response, we don't want to the logs with noop changes if they do
+                // so.
+                if count != old_count {
+                    debug!("Updated uploaded one-time key count {old_count} -> {count}.");
+                }
+
+                self.update_uploaded_key_count(count);
+                self.generate_one_time_keys_if_needed();
+            }
         }
 
         // If the server supports fallback keys or if it did so in the past, shown by
@@ -613,14 +676,7 @@ impl Account {
         let key_count = (max_keys as u64) - count;
         let key_count: usize = key_count.try_into().unwrap_or(max_keys);
 
-        let result = self.generate_one_time_keys(key_count);
-
-        debug!(
-            count = key_count,
-            discarded_keys = ?result.removed,
-            created_keys = ?result.created,
-            "Generated new one-time keys"
-        );
+        self.generate_one_time_keys(key_count);
 
         Some(key_count as u64)
     }
@@ -635,6 +691,7 @@ impl Account {
         if self.inner.fallback_key().is_empty() && self.fallback_key_expired() {
             let removed_fallback_key = self.inner.generate_fallback_key();
             self.fallback_creation_timestamp = Some(MilliSecondsSinceUnixEpoch::now());
+            self.dirty = true;
 
             debug!(
                 ?removed_fallback_key,
@@ -701,6 +758,7 @@ impl Account {
     /// Mark the current set of one-time keys as being published.
     pub fn mark_keys_as_published(&mut self) {
         self.inner.mark_keys_as_published();
+        self.dirty = true;
     }
 
     /// Sign the given string using the accounts signing key.
@@ -806,6 +864,8 @@ impl Account {
             shared: pickle.shared,
             uploaded_signed_key_count: pickle.uploaded_signed_key_count,
             fallback_creation_timestamp: pickle.fallback_key_creation_timestamp,
+            dirty: false,
+            unacknowledged_upload_key_count: None,
         })
     }
 
@@ -999,6 +1059,7 @@ impl Account {
             created_using_fallback_key: fallback_used,
             creation_time: now,
             last_use_time: now,
+            last_successful_decryption_time: None,
         })
     }
 
@@ -1120,6 +1181,18 @@ impl Account {
         let config = SessionConfig::version_2();
 
         let result = self.inner.create_inbound_session(config, their_identity_key, message)?;
+
+        // Creating an inbound session consumes the one-time key the sender claimed,
+        // which both modifies the account and reduces the number of keys we have left
+        // on the server.
+        self.dirty = true;
+        debug!(
+            remaining_one_time_keys = self.inner.one_time_keys().len(),
+            uploaded_key_count = self.uploaded_signed_key_count,
+            max_one_time_keys = self.inner.max_number_of_one_time_keys(),
+            "Consumed a one-time key to establish an inbound Olm session"
+        );
+
         let now = SecondsSinceUnixEpoch::now();
         let session_id = result.session.session_id();
 
@@ -1133,6 +1206,7 @@ impl Account {
             created_using_fallback_key: false,
             creation_time: now,
             last_use_time: now,
+            last_successful_decryption_time: None,
         };
 
         let plaintext = String::from_utf8_lossy(&result.plaintext).to_string();
@@ -1313,6 +1387,11 @@ impl Account {
         // generate some new keys if we're still below the limit.
         self.mark_keys_as_published();
         self.update_key_counts(&response.one_time_key_counts, None, false);
+
+        // Remember what the server told us it now holds, so that a sync response which
+        // was computed before this upload landed cannot talk us into uploading a second
+        // batch of keys.
+        self.unacknowledged_upload_key_count = Some(self.uploaded_key_count());
 
         Ok(())
     }
@@ -1956,6 +2035,7 @@ mod tests {
         DeviceId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OneTimeKeyId, UserId, device_id,
         events::room::history_visibility::HistoryVisibility, room_id, user_id,
     };
+    use ruma::uint;
     use serde_json::json;
 
     use super::Account;
@@ -2008,6 +2088,61 @@ mod tests {
 
         assert_ne!(one_time_key_ids, fourth_one_time_key_ids);
         Ok(())
+    }
+
+    #[test]
+    fn test_stale_one_time_key_count_after_upload_is_ignored() {
+        let mut account = Account::with_device_id(user_id(), device_id());
+        let max_keys = account.max_one_time_keys() as u64;
+
+        // Publish our initial batch of one-time keys, as a `/keys/upload` response
+        // reporting that the server now holds all of them would.
+        account.mark_keys_as_published();
+        account.update_uploaded_key_count(max_keys);
+        account.unacknowledged_upload_key_count = Some(max_keys);
+
+        // The next sync was computed by the server before it processed our upload, so
+        // it still reports zero keys. We must not believe it and generate a second
+        // batch.
+        let counts = BTreeMap::from([(OneTimeKeyAlgorithm::SignedCurve25519, uint!(0))]);
+        account.update_key_counts(&counts, None, false);
+
+        assert_eq!(account.uploaded_key_count(), max_keys);
+        let (_, one_time_keys, _) = account.keys_for_upload();
+        assert!(one_time_keys.is_empty(), "We should not have generated a second batch of keys");
+
+        // A later sync which still reports zero keys is authoritative: by then the
+        // keys really have been claimed.
+        account.update_key_counts(&counts, None, false);
+
+        assert_eq!(account.uploaded_key_count(), 0);
+        let (_, one_time_keys, _) = account.keys_for_upload();
+        assert!(!one_time_keys.is_empty(), "We should have generated new keys by now");
+    }
+
+    #[test]
+    fn test_account_is_only_dirty_when_modified() {
+        let mut account = Account::with_device_id(user_id(), device_id());
+        assert!(account.is_dirty(), "A brand new account has never been stored");
+
+        account.reset_dirty();
+        assert!(!account.is_dirty());
+
+        // Reading does not dirty the account.
+        let _ = account.identity_keys();
+        let _ = account.uploaded_key_count();
+        assert!(!account.is_dirty());
+
+        // Neither does a key count that doesn't change anything.
+        account.update_uploaded_key_count(0);
+        assert!(!account.is_dirty());
+
+        account.update_uploaded_key_count(10);
+        assert!(account.is_dirty(), "Changing the uploaded key count modifies the account");
+
+        account.reset_dirty();
+        account.mark_keys_as_published();
+        assert!(account.is_dirty(), "Publishing the one-time keys modifies the account");
     }
 
     #[test]

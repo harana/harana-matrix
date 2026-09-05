@@ -144,6 +144,12 @@ pub enum MegolmError {
     #[cfg(feature = "experimental-encrypted-state-events")]
     #[error("decryption failed because the state key failed to validate")]
     StateKeyVerificationFailed,
+
+    /// The event was redacted before we got a chance to decrypt it: the
+    /// ciphertext, and usually the algorithm as well, have been stripped, so
+    /// there is nothing to decrypt.
+    #[error("the event was redacted before it could be decrypted")]
+    RedactedEvent,
 }
 
 /// Decryption failed because of a mismatch between the identity keys of the

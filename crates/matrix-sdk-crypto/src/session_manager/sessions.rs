@@ -106,20 +106,26 @@ impl SessionManager {
         sender: &UserId,
         curve_key: Curve25519PublicKey,
     ) -> OlmResult<()> {
-        if let Some(device) = self.store.get_device_from_curve_key(sender, curve_key).await?
-            && let Some(session) = device.get_most_recent_session().await?
-        {
-            info!(sender_key = ?curve_key, "Marking session to be unwedged");
+        if let Some(device) = self.store.get_device_from_curve_key(sender, curve_key).await? {
+            // If we have no session stored for the device at all, we still need to
+            // unwedge: this happens when the very first session we created for the
+            // device is the wedged one and it was never persisted. Rate limiting the
+            // unwedging is only possible when we do have a session to look at.
+            let should_unwedge = match device.get_most_recent_session().await? {
+                Some(session) => {
+                    let creation_time = Duration::from_secs(session.creation_time.get().into());
+                    let now = Duration::from_secs(SecondsSinceUnixEpoch::now().get().into());
 
-            let creation_time = Duration::from_secs(session.creation_time.get().into());
-            let now = Duration::from_secs(SecondsSinceUnixEpoch::now().get().into());
-
-            let should_unwedge = now
-                .checked_sub(creation_time)
-                .map(|elapsed| elapsed > Self::UNWEDGING_INTERVAL)
-                .unwrap_or(true);
+                    now.checked_sub(creation_time)
+                        .map(|elapsed| elapsed > Self::UNWEDGING_INTERVAL)
+                        .unwrap_or(true)
+                }
+                None => true,
+            };
 
             if should_unwedge {
+                info!(sender_key = ?curve_key, "Marking session to be unwedged");
+
                 self.users_for_key_claim
                     .write()
                     .entry(device.user_id().to_owned())

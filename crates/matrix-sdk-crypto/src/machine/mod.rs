@@ -2476,6 +2476,15 @@ impl OlmMachine {
     ) -> MegolmResult<DecryptedRoomEvent> {
         let _timer = timer!(tracing::Level::TRACE, "_method");
 
+        // A redacted event has had its ciphertext (and its `algorithm` field)
+        // stripped by the server, so there is nothing left to decrypt. Detect that
+        // before we try, otherwise we report it as a malformed event and inflate the
+        // UTD metrics with events that were never going to decrypt.
+        if is_redacted_event(event) {
+            debug!("Not decrypting an event which has already been redacted");
+            return Err(MegolmError::RedactedEvent);
+        }
+
         let event = event.deserialize()?;
 
         Span::current()
@@ -3373,6 +3382,23 @@ pub struct EncryptionSyncChanges<'a> {
 /// `UnableToDecryptInfo`. The exception is [`MegolmError::Store`], which
 /// represents a problem with our datastore rather than with the message itself,
 /// and is therefore returned as a `CryptoStoreError`.
+/// Check whether the given `m.room.encrypted` event has already been redacted.
+///
+/// Redaction strips the event content, so such an event can never be
+/// decrypted; it is not a decryption failure either.
+fn is_redacted_event(event: &Raw<EncryptedEvent>) -> bool {
+    #[derive(serde::Deserialize)]
+    struct UnsignedStub {
+        redacted_because: Option<serde::de::IgnoredAny>,
+    }
+
+    event
+        .get_field::<UnsignedStub>("unsigned")
+        .ok()
+        .flatten()
+        .is_some_and(|unsigned| unsigned.redacted_because.is_some())
+}
+
 fn megolm_error_to_utd_info(
     raw_event: &Raw<EncryptedEvent>,
     error: MegolmError,
@@ -3391,6 +3417,7 @@ fn megolm_error_to_utd_info(
         JsonError(_) => UnableToDecryptReason::PayloadDeserializationFailure,
         MismatchedIdentityKeys(_) => UnableToDecryptReason::MismatchedIdentityKeys,
         SenderIdentityNotTrusted(level) => UnableToDecryptReason::SenderIdentityNotTrusted(level),
+        RedactedEvent => UnableToDecryptReason::RedactedEvent,
         #[cfg(feature = "experimental-encrypted-state-events")]
         StateKeyVerificationFailed => UnableToDecryptReason::StateKeyVerificationFailed,
 

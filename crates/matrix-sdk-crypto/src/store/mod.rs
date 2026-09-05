@@ -463,13 +463,25 @@ impl StoreTransaction {
 
     /// Commits all dirty fields to the store, and maintains the cache so it
     /// reflects the current state of the database.
-    pub async fn commit(self) -> Result<()> {
+    pub async fn commit(mut self) -> Result<()> {
+        // Merely reading the account through `Self::account()` moves it into the
+        // pending changes, so check whether it was actually modified before paying for
+        // a pickle and a store write on every sync.
+        if self.changes.account.as_ref().is_some_and(|account| !account.is_dirty()) {
+            let account = self.changes.account.take();
+            *self.cache.account.lock().await = account;
+        }
+
         if self.changes.is_empty() {
             return Ok(());
         }
 
         // Save changes in the database.
-        let account = self.changes.account.as_ref().map(|acc| acc.deep_clone());
+        let account = self.changes.account.as_ref().map(|acc| {
+            let mut account = acc.deep_clone();
+            account.reset_dirty();
+            account
+        });
 
         self.store.save_pending_changes(self.changes).await?;
 

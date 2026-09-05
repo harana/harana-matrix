@@ -63,6 +63,7 @@ use crate::{
         },
         requests::ToDeviceRequest,
     },
+    utilities::new_to_device_message_id,
 };
 
 #[derive(Clone, Debug)]
@@ -561,9 +562,12 @@ impl GroupSessionManager {
         group_session: &OutboundGroupSession,
         withheld_devices: Vec<(DeviceData, WithheldCode)>,
     ) -> OlmResult<()> {
-        // Convert a withheld code for the group session into a to-device event content.
+        // Convert a withheld code for the group session into a to-device event
+        // content, tagged with a fresh message ID so it can be traced through the
+        // logs just like the other to-device messages we send.
         let to_content = |code| {
-            let content = group_session.withheld_code(code);
+            let mut content = group_session.withheld_code(code);
+            content.set_message_id(new_to_device_message_id());
             Raw::new(&content).expect("We can always serialize a withheld content info").cast()
         };
 
