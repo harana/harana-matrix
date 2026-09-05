@@ -140,6 +140,20 @@ where
     }
 }
 
+impl<Key, Val> std::ops::Deref for MutexMapGuard<Key, Val> {
+    type Target = Val;
+
+    fn deref(&self) -> &Val {
+        self.val.as_ref().expect("locked")
+    }
+}
+
+impl<Key, Val> std::ops::DerefMut for MutexMapGuard<Key, Val> {
+    fn deref_mut(&mut self) -> &mut Val {
+        self.val.as_mut().expect("locked")
+    }
+}
+
 impl<Key, Val> MutexMapGuard<Key, Val> {
     async fn lock(mut self) -> Self {
         // The in-flight claim must release before this guard, so a cancellation

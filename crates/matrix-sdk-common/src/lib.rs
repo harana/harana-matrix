@@ -40,6 +40,7 @@ pub mod mutex_map;
 pub mod ring_buffer;
 pub mod runtime;
 pub mod serde_helpers;
+pub mod single_flight;
 pub mod sleep;
 pub mod stream;
 pub mod task_monitor;
