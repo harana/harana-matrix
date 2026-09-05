@@ -298,6 +298,21 @@ impl SendQueue {
         self.respawn_tasks_for_rooms_with_unsent_requests().await;
     }
 
+    /// Disable the send queue without reloading rooms from the store.
+    ///
+    /// [`Self::set_enabled()`] respawns the tasks of rooms with unsent
+    /// requests, which is the wrong thing to do when the session the queue
+    /// belongs to is going away.
+    pub(crate) fn disable_without_respawning(&self) {
+        debug!("disabling the global send queue without respawning room tasks");
+
+        self.data().globally_enabled.store(false, Ordering::SeqCst);
+
+        for room in self.data().rooms.read().unwrap().values() {
+            room.set_enabled(false);
+        }
+    }
+
     /// Returns whether the send queue is enabled, at a client-wide
     /// granularity.
     pub fn is_enabled(&self) -> bool {

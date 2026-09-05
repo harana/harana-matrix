@@ -1675,6 +1675,36 @@ impl Client {
             .await
     }
 
+    /// Stop the background tasks this client runs on the session's behalf.
+    ///
+    /// Called as part of logging out: without it, the send queue keeps retrying
+    /// its requests and the encryption tasks keep polling, so a client that has
+    /// logged out (and possibly logged in again elsewhere) goes on talking to
+    /// the previous account's homeserver.
+    ///
+    /// This does not stop a sync loop, which the caller owns and must stop
+    /// itself, nor the services built on top of the client (the sync service,
+    /// the room list service), which own their own tasks.
+    pub(crate) fn stop_background_tasks(&self) {
+        // Queued requests belong to the session that queued them; they must not be
+        // sent under another one.
+        self.send_queue().disable_without_respawning();
+
+        #[cfg(feature = "e2e-encryption")]
+        {
+            // Dropping the tasks aborts the ones holding an abort-on-drop handle; the
+            // plain join handles need to be told.
+            let tasks = std::mem::take(&mut *self.inner.e2ee.tasks.lock());
+
+            if let Some(handle) = &tasks.update_recovery_state_after_backup {
+                handle.abort();
+            }
+            if let Some(handle) = &tasks.setup_e2ee {
+                handle.abort();
+            }
+        }
+    }
+
     /// Refresh the access token using the authentication API used to log into
     /// this session.
     ///

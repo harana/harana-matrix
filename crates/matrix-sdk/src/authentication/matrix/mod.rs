@@ -630,6 +630,11 @@ impl MatrixAuth {
     }
     /// Log out the current user.
     pub async fn logout(&self) -> HttpResult<logout::v3::Response> {
+        // Stop the background tasks before sending the request: whatever they still
+        // have queued belongs to this session, and the access token is about to stop
+        // being valid.
+        self.client.stop_background_tasks();
+
         let request = logout::v3::Request::new();
         self.client.send(request).await
     }
