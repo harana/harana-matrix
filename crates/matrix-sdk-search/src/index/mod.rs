@@ -21,102 +21,21 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
-use ruma::{
-    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt,
-};
+use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
 use tantivy::{
     Index, IndexReader, ReloadPolicy, TantivyDocument, collector::TopDocs,
     directory::error::OpenDirectoryError, query::QueryParser, schema::Value,
 };
 use tracing::{debug, error, warn};
 
+pub use crate::backend::{IndexableEvent, RoomIndexOperation};
 use crate::{
     OpStamp, TANTIVY_INDEX_MEMORY_BUDGET,
+    backend::RoomSearchIndex,
     error::IndexError,
     schema::{MatrixSearchIndexSchema, RoomMessageSchema},
     writer::SearchIndexWriter,
 };
-
-/// The subset of an event's data required to index it and later retrieve it.
-///
-/// Produced by the matrix-sdk layer, which knows how to extract searchable text
-/// from each event type. This crate stays agnostic to Matrix event content.
-#[derive(Clone)]
-pub struct IndexableEvent {
-    /// The event's own id (primary key).
-    pub(crate) event_id: OwnedEventId,
-    /// The id used as the deletion key: the original event id for edits,
-    /// otherwise the event's own id.
-    pub(crate) original_event_id: OwnedEventId,
-    /// The sender of the event.
-    pub(crate) sender: OwnedUserId,
-    /// The origin server timestamp of the event.
-    ///
-    /// Please use the `matrix_sdk_common::TimelineEvent::timestamp` as much as
-    /// possible as it protects against malformed `origin_server_ts`. At worst,
-    /// use the `matrix_sdk_common::serde_helpers::extract_timestamp` function.
-    pub(crate) timestamp: Option<MilliSecondsSinceUnixEpoch>,
-    /// The text to index for this event.
-    pub(crate) body: String,
-}
-
-impl fmt::Debug for IndexableEvent {
-    /// Don't log bodies
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("IndexableEvent")
-            .field("event_id", &self.event_id)
-            .field("original_event_id", &self.original_event_id)
-            .field("sender", &self.sender)
-            .field("timestamp", &self.timestamp)
-            .finish_non_exhaustive()
-    }
-}
-
-/// Maximum value for the timestamp to not overflow when converted to
-/// nanoseconds by Tantivy. See [`IndexableEvent::new`] to learn more.
-const MAX_MILLISECONDS: u64 = (i64::MAX / 1_000_000).cast_unsigned();
-
-impl IndexableEvent {
-    /// Create a new [`IndexableEvent`].
-    pub fn new(
-        event_id: OwnedEventId,
-        original_event_id: OwnedEventId,
-        sender: OwnedUserId,
-        mut timestamp: Option<MilliSecondsSinceUnixEpoch>,
-        body: String,
-    ) -> Self {
-        // Tantivy will transform the number of milliseconds to nanoseconds
-        // by multiplying by 1_000_000 [1]. If the number of milliseconds is too
-        // big, the multiplication will overflow.
-        //
-        // To avoid this panic, we cap the number of milliseconds to a maximum value.
-        //
-        // [1]: https://github.com/quickwit-oss/tantivy/blob/31ca1a8ba290b425f871d2e2384592045ec01b8d/common/src/datetime.rs#L62-L67
-        if let Some(timestamp) = &mut timestamp {
-            *timestamp = MilliSecondsSinceUnixEpoch(
-                timestamp.get().min(UInt::new_saturating(MAX_MILLISECONDS)),
-            );
-        }
-
-        Self { event_id, original_event_id, sender, timestamp, body }
-    }
-}
-
-/// A struct to represent the operations on a [`RoomIndex`]
-#[derive(Debug, Clone)]
-pub enum RoomIndexOperation {
-    /// Add this event to the index.
-    Add(IndexableEvent),
-    /// Remove all documents in the index where
-    /// `MatrixSearchIndexSchema::deletion_key()` matches this event id.
-    Remove(OwnedEventId),
-    /// Replace all documents in the index where
-    /// `MatrixSearchIndexSchema::deletion_key()` matches this event id with
-    /// the new event.
-    Edit(OwnedEventId, IndexableEvent),
-    /// Do nothing.
-    Noop,
-}
 
 /// A struct that holds all data pertaining to a particular room's
 /// message index.
@@ -294,10 +213,11 @@ impl RoomIndex {
             self.uncommitted_removes.insert(event);
         }
 
-        // Uncommitted documents added in this same batch also get deleted by the
-        // term above, so reconcile them too. Otherwise `contains` would still
-        // report them as present and a subsequent re-add (e.g. from an edit)
-        // would be wrongly skipped, leaving the document deleted.
+        // Uncommitted documents added in this same batch also get deleted by
+        // the term above, so reconcile them too. Otherwise `contains`
+        // would still report them as present and a subsequent re-add
+        // (e.g. from an edit) would be wrongly skipped, leaving the
+        // document deleted.
         let uncommitted: Vec<_> = self
             .uncommitted_adds
             .iter()
@@ -366,7 +286,7 @@ impl RoomIndex {
                     | OpenDirectoryError::NotADirectory(_) => return Err(err),
                 },
                 // Bubble
-                IndexError::QueryParserError(_) => return Err(err),
+                IndexError::QueryParserError(_) | IndexError::Backend(_) => return Err(err),
                 // Ignore
                 IndexError::CannotIndexRedactedMessage
                 | IndexError::EmptyMessage
@@ -437,13 +357,32 @@ impl RoomIndex {
     }
 }
 
+impl RoomSearchIndex for RoomIndex {
+    fn execute(&mut self, operation: RoomIndexOperation) -> Result<(), IndexError> {
+        RoomIndex::execute(self, operation)
+    }
+
+    fn bulk_execute(&mut self, operations: Vec<RoomIndexOperation>) -> Result<(), IndexError> {
+        RoomIndex::bulk_execute(self, operations)
+    }
+
+    fn search(
+        &self,
+        query: &str,
+        max_number_of_results: usize,
+        pagination_offset: Option<usize>,
+    ) -> Result<Vec<(f32, OwnedEventId)>, IndexError> {
+        RoomIndex::search(self, query, max_number_of_results, pagination_offset)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, error::Error};
 
     use matrix_sdk_test::event_factory::EventFactory;
     use ruma::{
-        EventId, event_id,
+        EventId, MilliSecondsSinceUnixEpoch, UInt, event_id,
         events::{
             AnySyncMessageLikeEvent,
             room::message::{
@@ -454,11 +393,8 @@ mod tests {
         room_id, user_id,
     };
 
-    use super::{
-        IndexableEvent, MAX_MILLISECONDS, MilliSecondsSinceUnixEpoch, RoomIndex,
-        RoomIndexOperation, UInt, builder::RoomIndexBuilder,
-    };
-    use crate::error::IndexError;
+    use super::{IndexableEvent, RoomIndex, RoomIndexOperation, builder::RoomIndexBuilder};
+    use crate::{backend::MAX_MILLISECONDS, error::IndexError};
 
     /// Build an [`IndexableEvent`] from a text room message (tests only handle
     /// text).
@@ -804,8 +740,9 @@ mod tests {
         let edit = to_indexable(&edit);
 
         // An original and its edit arriving in the same batch produce an `Add`
-        // and an `Edit` of the same document. The `Edit`'s removal must not drop
-        // the document added earlier in the same uncommitted batch.
+        // and an `Edit` of the same document. The `Edit`'s removal must not
+        // drop the document added earlier in the same uncommitted
+        // batch.
         index.bulk_execute(vec![
             RoomIndexOperation::Add(edit.clone()),
             RoomIndexOperation::Edit(original_id.to_owned(), edit),

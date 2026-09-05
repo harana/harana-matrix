@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "tantivy")]
 use tantivy::{
     directory::error::OpenDirectoryError as TantivyOpenDirectoryError,
     query::QueryParserError as TantivyQueryParserError,
@@ -20,26 +21,38 @@ use thiserror::Error;
 
 /// Internal representation of Search Index errors.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum IndexError {
     /// Tantivy Error
+    #[cfg(feature = "tantivy")]
     #[error(transparent)]
     TantivyError(tantivy::TantivyError),
 
     /// Open Directory Error
+    #[cfg(feature = "tantivy")]
     #[error(transparent)]
     OpenDirectoryError(TantivyOpenDirectoryError),
 
     /// Query Parse Error
+    #[cfg(feature = "tantivy")]
     #[error(transparent)]
     QueryParserError(TantivyQueryParserError),
 
     /// Schema Error
+    #[cfg(feature = "tantivy")]
     #[error(transparent)]
     IndexSchemaError(IndexSchemaError),
 
     /// Write Error
+    #[cfg(feature = "tantivy")]
     #[error(transparent)]
     IndexWriteError(IndexWriteError),
+
+    /// An error raised by a search backend other than the built-in one.
+    ///
+    /// See [`crate::backend::SearchIndexProvider`].
+    #[error(transparent)]
+    Backend(Box<dyn std::error::Error + Send + Sync + 'static>),
 
     /// Message Type Error
     #[error("Message type not supported")]
@@ -58,30 +71,35 @@ pub enum IndexError {
     IO(std::io::Error),
 }
 
+#[cfg(feature = "tantivy")]
 impl From<tantivy::TantivyError> for IndexError {
     fn from(err: tantivy::TantivyError) -> IndexError {
         IndexError::TantivyError(err)
     }
 }
 
+#[cfg(feature = "tantivy")]
 impl From<TantivyOpenDirectoryError> for IndexError {
     fn from(err: TantivyOpenDirectoryError) -> IndexError {
         IndexError::OpenDirectoryError(err)
     }
 }
 
+#[cfg(feature = "tantivy")]
 impl From<TantivyQueryParserError> for IndexError {
     fn from(err: TantivyQueryParserError) -> IndexError {
         IndexError::QueryParserError(err)
     }
 }
 
+#[cfg(feature = "tantivy")]
 impl From<IndexSchemaError> for IndexError {
     fn from(err: IndexSchemaError) -> IndexError {
         IndexError::IndexSchemaError(err)
     }
 }
 
+#[cfg(feature = "tantivy")]
 impl From<IndexWriteError> for IndexError {
     fn from(err: IndexWriteError) -> IndexError {
         IndexError::IndexWriteError(err)
@@ -95,6 +113,7 @@ impl From<std::io::Error> for IndexError {
 }
 
 /// Internal representation of Schema errors.
+#[cfg(feature = "tantivy")]
 #[derive(Error, Debug)]
 pub enum IndexSchemaError {
     /// Tantivy Error
@@ -102,6 +121,7 @@ pub enum IndexSchemaError {
     TantivyError(tantivy::TantivyError),
 }
 
+#[cfg(feature = "tantivy")]
 impl From<tantivy::TantivyError> for IndexSchemaError {
     fn from(err: tantivy::TantivyError) -> IndexSchemaError {
         IndexSchemaError::TantivyError(err)
@@ -109,6 +129,7 @@ impl From<tantivy::TantivyError> for IndexSchemaError {
 }
 
 /// Internal representation of Writer errors.
+#[cfg(feature = "tantivy")]
 #[derive(Error, Debug)]
 pub enum IndexWriteError {
     /// Tantivy Error
@@ -116,6 +137,7 @@ pub enum IndexWriteError {
     TantivyError(tantivy::TantivyError),
 }
 
+#[cfg(feature = "tantivy")]
 impl From<tantivy::TantivyError> for IndexWriteError {
     fn from(err: tantivy::TantivyError) -> IndexWriteError {
         IndexWriteError::TantivyError(err)

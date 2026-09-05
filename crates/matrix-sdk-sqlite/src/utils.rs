@@ -22,16 +22,18 @@ use std::{
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use matrix_sdk_store_encryption::{EncryptableValue, StoreCipher};
+use matrix_sdk_store_encryption::{
+    CodecError, EncryptableValue, StoreCipherBackend, StoreCodec, StoreCodecExt as _,
+};
 use ruma::{OwnedEventId, OwnedRoomId, serde::Raw, time::SystemTime};
 use rusqlite::{OptionalExtension, Params, Row, Statement, Transaction, limits::Limit};
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::{error, trace, warn};
-use zeroize::Zeroize;
 
 use crate::{
-    OpenStoreError, RuntimeConfig, Secret, Synchronous,
+    OpenStoreError, RuntimeConfig, Synchronous,
     connection::Connection as SqliteAsyncConn,
+    encryption::{EncryptionConfig, StoreEncryption},
     error::{Error, Result},
     sync_wrapper::InteractError,
 };
@@ -242,7 +244,8 @@ pub(crate) trait SqliteAsyncConnExt {
             return Err(error.into());
         } else {
             trace!("VACUUM complete");
-            // Once vacuumed, truncate the WAL file again to purge the copied DB contents.
+            // Once vacuumed, truncate the WAL file again to purge the copied DB
+            // contents.
             self.wal_checkpoint().await;
         }
 
@@ -605,38 +608,39 @@ pub(crate) trait SqliteKeyValueStoreAsyncConnExt: SqliteAsyncConnExt {
         }
     }
 
-    /// Get the [`StoreCipher`] of the database or create it.
-    async fn get_or_create_store_cipher(
+    /// Open the store's encryption: ask the configured
+    /// [`StoreCipherProvider`] for the database's cipher, and pair it with the
+    /// configured codecs.
+    ///
+    /// A config without a cipher provider leaves the store unencrypted.
+    ///
+    /// [`StoreCipherProvider`]: matrix_sdk_store_encryption::StoreCipherProvider
+    async fn open_store_encryption(
         &self,
-        mut secret: Secret,
-    ) -> Result<StoreCipher, OpenStoreError> {
-        let encrypted_cipher = self.get_kv("cipher").await.map_err(OpenStoreError::LoadCipher)?;
+        config: &EncryptionConfig,
+    ) -> Result<StoreEncryption, OpenStoreError> {
+        let Some(provider) = &config.cipher_provider else {
+            return Ok(StoreEncryption::new(None, config));
+        };
 
-        let cipher = if let Some(encrypted) = encrypted_cipher {
-            match &secret {
-                Secret::PassPhrase(passphrase) => StoreCipher::import(passphrase, &encrypted)?,
-                Secret::Key(key) => StoreCipher::import_with_key(key.as_slice(), &encrypted)?,
-            }
+        let exported = self.get_kv("cipher").await.map_err(OpenStoreError::LoadCipher)?;
+
+        let cipher = if let Some(exported) = exported {
+            provider.import(&exported)?
         } else {
-            let cipher = StoreCipher::new()?;
-            let export = match &secret {
-                Secret::PassPhrase(passphrase) => {
-                    #[cfg(not(test))]
-                    {
-                        cipher.export(passphrase)
-                    }
-                    #[cfg(test)]
-                    {
-                        cipher._insecure_export_fast_for_testing(passphrase)
-                    }
-                }
-                Secret::Key(key) => cipher.export_with_key(key.as_slice()),
-            };
-            self.set_kv("cipher", export?).await.map_err(OpenStoreError::SaveCipher)?;
+            let (cipher, export) = provider.create()?;
+
+            // A provider that keeps its key material outside the database
+            // hands back no export, and is asked to create the cipher again on
+            // the next open.
+            if let Some(export) = export {
+                self.set_kv("cipher", export).await.map_err(OpenStoreError::SaveCipher)?;
+            }
+
             cipher
         };
-        secret.zeroize();
-        Ok(cipher)
+
+        Ok(StoreEncryption::new(Some(cipher), config))
     }
 }
 
@@ -697,7 +701,23 @@ pub(crate) fn time_to_timestamp(time: SystemTime) -> i64 {
 /// All the other methods come for free, based on the implementation of
 /// `get_cypher`.
 pub(crate) trait EncryptableStore {
-    fn get_cypher(&self) -> Option<&StoreCipher>;
+    /// How this store encrypts and serializes what it writes.
+    fn encryption(&self) -> &StoreEncryption;
+
+    /// The cipher this store encrypts keys and values with, if any.
+    fn get_cypher(&self) -> Option<&dyn StoreCipherBackend> {
+        self.encryption().cipher()
+    }
+
+    /// The codec this store writes opaque values with.
+    fn value_codec(&self) -> &dyn StoreCodec {
+        self.encryption().value_codec()
+    }
+
+    /// The codec this store writes Matrix payloads with.
+    fn json_codec(&self) -> &dyn StoreCodec {
+        self.encryption().json_codec()
+    }
 
     /// If the store is using encryption, this will hash the given key. This is
     /// useful when we need to do queries against a given key, but we don't
@@ -712,22 +732,22 @@ pub(crate) trait EncryptableStore {
         }
     }
 
-    fn encode_value<V>(&self, value: V) -> Result<Vec<u8>>
+    fn encode_value<V>(&self, mut value: V) -> Result<Vec<u8>>
     where
         V: EncryptableValue + Into<Vec<u8>>,
     {
-        if let Some(key) = self.get_cypher() {
-            let encrypted = key.encrypt_value_data(value)?;
-            Ok(rmp_serde::to_vec_named(&encrypted)?)
+        if let Some(cipher) = self.get_cypher() {
+            let encrypted = cipher.encrypt_value_data(&mut value)?;
+            Ok(self.value_codec().encode_value(&encrypted)?)
         } else {
             Ok(value.into())
         }
     }
 
     fn decode_value<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, [u8]>> {
-        if let Some(key) = self.get_cypher() {
-            let encrypted = rmp_serde::from_slice(value)?;
-            let decrypted = key.decrypt_value_data(encrypted)?;
+        if let Some(cipher) = self.get_cypher() {
+            let encrypted = self.value_codec().decode_value(value)?;
+            let decrypted = cipher.decrypt_value_data(encrypted)?;
             Ok(Cow::Owned(decrypted))
         } else {
             Ok(Cow::Borrowed(value))
@@ -735,48 +755,71 @@ pub(crate) trait EncryptableStore {
     }
 
     fn serialize_value(&self, value: &impl Serialize) -> Result<Vec<u8>> {
-        let serialized = rmp_serde::to_vec_named(value)?;
+        let serialized = self.value_codec().encode_value(value)?;
         self.encode_value(serialized)
     }
 
     fn deserialize_value<T: DeserializeOwned>(&self, value: &[u8]) -> Result<T> {
         let decoded = self.decode_value(value)?;
-        Ok(rmp_serde::from_slice(&decoded)?)
+        Ok(self.value_codec().decode_value(&decoded)?)
     }
 
     fn serialize_json(&self, value: &impl Serialize) -> Result<Vec<u8>> {
-        let serialized = serde_json::to_vec(value)?;
+        let serialized = self.json_codec().encode_value(value)?;
         self.encode_value(serialized)
     }
 
     fn deserialize_json<T: DeserializeOwned>(&self, data: &[u8]) -> Result<T> {
         let decoded = self.decode_value(data)?;
+        let codec = self.json_codec();
+        let mut deserialized = None;
 
-        let json_deserializer = &mut serde_json::Deserializer::from_slice(&decoded);
-
-        serde_path_to_error::deserialize(json_deserializer).map_err(|err| {
-            let raw_json: Option<Raw<serde_json::Value>> = serde_json::from_slice(&decoded).ok();
-
-            let target_type = std::any::type_name::<T>();
-            let serde_path = err.path().to_string();
-
-            error!(
-                sentry = true,
-                %err,
-                "Failed to deserialize {target_type} in a store: {serde_path}",
-            );
-
-            if let Some(raw) = raw_json {
-                if let Some(room_id) = raw.get_field::<OwnedRoomId>("room_id").ok().flatten() {
-                    warn!("Found a room id in the source data to deserialize: {room_id}");
+        // Deserialize through the codec, but keep `serde_path_to_error` on top
+        // of it, so a malformed stored value still says which field of which
+        // type failed to parse.
+        codec.with_deserializer(&decoded, &mut |deserializer| {
+            match serde_path_to_error::deserialize::<_, T>(deserializer) {
+                Ok(value) => {
+                    deserialized = Some(Ok(value));
                 }
-                if let Some(event_id) = raw.get_field::<OwnedEventId>("event_id").ok().flatten() {
-                    warn!("Found an event id in the source data to deserialize: {event_id}");
+
+                Err(err) => {
+                    let raw_json: Option<Raw<serde_json::Value>> =
+                        serde_json::from_slice(&decoded).ok();
+
+                    let target_type = std::any::type_name::<T>();
+                    let serde_path = err.path().to_string();
+
+                    error!(
+                        sentry = true,
+                        %err,
+                        "Failed to deserialize {target_type} in a store: {serde_path}",
+                    );
+
+                    if let Some(raw) = raw_json {
+                        if let Some(room_id) =
+                            raw.get_field::<OwnedRoomId>("room_id").ok().flatten()
+                        {
+                            warn!("Found a room id in the source data to deserialize: {room_id}");
+                        }
+                        if let Some(event_id) =
+                            raw.get_field::<OwnedEventId>("event_id").ok().flatten()
+                        {
+                            warn!(
+                                "Found an event id in the source data to deserialize: {event_id}"
+                            );
+                        }
+                    }
+
+                    deserialized =
+                        Some(Err(CodecError::new(codec.name(), err.into_inner()).into()));
                 }
             }
 
-            err.into_inner().into()
-        })
+            Ok(())
+        })?;
+
+        deserialized.expect("a `StoreCodec` must call the visitor it is handed")
     }
 }
 
