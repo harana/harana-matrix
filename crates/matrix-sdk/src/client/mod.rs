@@ -718,7 +718,8 @@ impl Client {
     /// The URL built from the server name that was used for `.well-known`
     /// discovery, if any.
     ///
-    /// This is set when the client was built with [`ClientBuilder::server_name`],
+    /// This is set when the client was built with
+    /// [`ClientBuilder::server_name`],
     /// [`ClientBuilder::insecure_server_name_no_tls`], or
     /// [`ClientBuilder::server_name_or_homeserver_url`] and a server name (as
     /// opposed to a homeserver URL) was resolved. It is `None` when the
