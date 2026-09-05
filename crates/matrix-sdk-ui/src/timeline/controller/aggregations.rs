@@ -499,6 +499,42 @@ impl Aggregations {
         self.pending_beacon_stops.clear();
     }
 
+    /// Clear the aggregations that only concern remote events, keeping those
+    /// that involve a local echo.
+    ///
+    /// Clearing a timeline that has local echoes keeps their items, since they
+    /// haven't reached the server and nothing else will bring them back. Their
+    /// aggregations must be kept for the same reason: an aggregation still
+    /// identified by a transaction id has not been sent yet, and dropping it
+    /// loses the mapping `mark_aggregation_as_sent` needs when the send queue
+    /// reports it sent, leaving the reaction or edit stuck in its local state
+    /// forever. An aggregation whose *target* is a local echo is kept for the
+    /// same reason: its target survives the clear.
+    ///
+    /// Everything else is dropped: it is re-added as the remote events are
+    /// processed again.
+    pub fn clear_remote(&mut self) {
+        fn is_local(id: &TimelineEventItemId) -> bool {
+            matches!(id, TimelineEventItemId::TransactionId(_))
+        }
+
+        self.related_events.retain(|target, aggregations| {
+            if is_local(target) {
+                return true;
+            }
+
+            aggregations.retain(|aggregation| is_local(&aggregation.own_id));
+
+            !aggregations.is_empty()
+        });
+
+        self.inverted_map.retain(|own_id, target| is_local(own_id) || is_local(target));
+
+        // A pending beacon stop targets a live `beacon_info` state event, which is
+        // always remote.
+        self.pending_beacon_stops.clear();
+    }
+
     /// Stash a [`AggregationKind::BeaconStop`] that arrived before its target
     /// live `beacon_info` item. It will be promoted into
     /// [`Self::related_events`] (and thus picked up by [`Self::apply_all`])
@@ -1116,4 +1152,82 @@ pub(crate) enum AggregationError {
          expected {expected}, actual {actual}"
     )]
     InvalidType { expected: String, actual: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use ruma::{MilliSecondsSinceUnixEpoch, TransactionId, event_id, owned_event_id, user_id};
+
+    use super::{Aggregation, AggregationKind, Aggregations};
+    use crate::timeline::{ReactionStatus, TimelineEventItemId};
+
+    fn reaction() -> AggregationKind {
+        AggregationKind::Reaction {
+            key: "👍".to_owned(),
+            sender: user_id!("@alice:localhost").to_owned(),
+            timestamp: MilliSecondsSinceUnixEpoch(ruma::uint!(42)),
+            reaction_status: ReactionStatus::RemoteToRemote(owned_event_id!("$reaction")),
+        }
+    }
+
+    /// Clearing a timeline keeps the local echoes, which haven't reached the
+    /// server and that nothing else would bring back. The aggregations that
+    /// involve them must be kept for the same reason: an aggregation still
+    /// identified by a transaction id hasn't been sent yet, and dropping it
+    /// loses the mapping needed to mark it as sent later.
+    #[test]
+    fn test_clear_remote_keeps_the_aggregations_of_local_echoes() {
+        let local_target = TimelineEventItemId::TransactionId(TransactionId::new());
+        let remote_target = TimelineEventItemId::EventId(owned_event_id!("$target"));
+
+        let local_on_local = TimelineEventItemId::TransactionId(TransactionId::new());
+        let local_on_remote = TimelineEventItemId::TransactionId(TransactionId::new());
+        let remote_on_local = TimelineEventItemId::EventId(owned_event_id!("$agg1"));
+        let remote_on_remote = TimelineEventItemId::EventId(owned_event_id!("$agg2"));
+
+        let mut aggregations = Aggregations::default();
+
+        for (target, own_id) in [
+            (&local_target, &local_on_local),
+            (&remote_target, &local_on_remote),
+            (&local_target, &remote_on_local),
+            (&remote_target, &remote_on_remote),
+        ] {
+            aggregations.add(target.clone(), Aggregation::new(own_id.clone(), reaction()));
+        }
+
+        aggregations.clear_remote();
+
+        // An aggregation that is a local echo, or whose target is one, is kept.
+        assert!(aggregations.is_aggregation_of(&local_on_local).is_some());
+        assert!(aggregations.is_aggregation_of(&local_on_remote).is_some());
+        assert!(aggregations.is_aggregation_of(&remote_on_local).is_some());
+
+        // A purely remote one is dropped: it comes back when the remote events are
+        // processed again.
+        assert!(aggregations.is_aggregation_of(&remote_on_remote).is_none());
+
+        // And clearing everything drops the rest.
+        aggregations.clear();
+        assert!(aggregations.is_aggregation_of(&local_on_local).is_none());
+        assert!(aggregations.is_aggregation_of(&local_on_remote).is_none());
+        assert!(aggregations.is_aggregation_of(&remote_on_local).is_none());
+    }
+
+    #[test]
+    fn test_clear_remote_keeps_the_related_events_of_local_echoes() {
+        let local_target = TimelineEventItemId::TransactionId(TransactionId::new());
+        let remote_target = TimelineEventItemId::EventId(owned_event_id!("$target"));
+        let local_agg = TimelineEventItemId::TransactionId(TransactionId::new());
+        let remote_agg = TimelineEventItemId::EventId(event_id!("$agg").to_owned());
+
+        let mut aggregations = Aggregations::default();
+        aggregations.add(local_target.clone(), Aggregation::new(remote_agg, reaction()));
+        aggregations.add(remote_target.clone(), Aggregation::new(local_agg, reaction()));
+
+        aggregations.clear_remote();
+
+        assert_eq!(aggregations.related_events.get(&local_target).unwrap().len(), 1);
+        assert_eq!(aggregations.related_events.get(&remote_target).unwrap().len(), 1);
+    }
 }

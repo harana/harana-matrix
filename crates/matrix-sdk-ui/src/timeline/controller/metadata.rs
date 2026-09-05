@@ -179,10 +179,19 @@ impl TimelineMetadata {
         Self { active_call: active_call_info, ..self }
     }
 
-    pub(super) fn clear(&mut self) {
+    /// Clear the metadata derived from the timeline's events.
+    ///
+    /// `keep_local_aggregations` must be set when the clear keeps the local
+    /// echoes in the timeline, so the aggregations that involve them are kept
+    /// too. See [`Aggregations::clear_remote`].
+    pub(super) fn clear(&mut self, keep_local_aggregations: bool) {
         // Note: we don't clear the next internal id to avoid bad cases of stale unique
         // ids across timeline clears.
-        self.aggregations.clear();
+        if keep_local_aggregations {
+            self.aggregations.clear_remote();
+        } else {
+            self.aggregations.clear();
+        }
         self.replies.clear();
         self.fully_read_event = None;
         // We forgot about the fully read marker right above, so wait for a new one
