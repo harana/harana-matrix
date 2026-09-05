@@ -213,6 +213,13 @@ impl RoomSendQueue {
 
         let filename = filename.into();
         let extra_content = config.extra_content.take();
+
+        // Remove the image's metadata, if the caller asked for it, before it is
+        // cached: what is cached is what will be uploaded.
+        let (data, thumbnail) =
+            crate::attachment::preprocess(&content_type, data, config.thumbnail.take(), &config)
+                .await;
+
         let upload_file_txn = TransactionId::new();
         let send_event_txn = config.txn_id.map_or_else(ChildTransactionId::new, Into::into);
 
@@ -222,8 +229,7 @@ impl RoomSendQueue {
         let file_media_request = Media::make_local_file_media_request(&upload_file_txn);
 
         let MediaCacheResult { upload_thumbnail_txn, event_thumbnail_info, queue_thumbnail_info } =
-            RoomSendQueue::cache_media(&room, data, config.thumbnail.take(), &file_media_request)
-                .await?;
+            RoomSendQueue::cache_media(&room, data, thumbnail, &file_media_request).await?;
 
         // Create the content for the media event.
         let event_content = room

@@ -82,6 +82,7 @@ impl<'a> IntoFuture for SendAttachment<'a> {
                 mentions: config.mentions,
                 extra_content: config.extra_content,
                 reply,
+                strip_exif: config.strip_exif,
             };
 
             if use_send_queue {

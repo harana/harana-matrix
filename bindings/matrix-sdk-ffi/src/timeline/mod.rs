@@ -131,6 +131,7 @@ impl Timeline {
             mentions: params.mentions.map(Into::into),
             in_reply_to: in_reply_to_event_id,
             extra_content,
+            strip_exif: params.strip_exif,
             ..Default::default()
         };
 
@@ -211,6 +212,13 @@ pub struct UploadParameters {
     /// as a serialized JSON object.
     #[uniffi(default = None)]
     extra_content_json: Option<String>,
+    /// Whether to remove the metadata embedded in the image (Exif, XMP, IPTC,
+    /// comments) before uploading it, keeping only its orientation.
+    ///
+    /// Applies to JPEG, PNG and WebP images; any other attachment is uploaded
+    /// unchanged. Defaults to `false`, since the sender may want to keep it.
+    #[uniffi(default = false)]
+    strip_exif: bool,
 }
 
 /// A source for uploading a file

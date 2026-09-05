@@ -221,6 +221,9 @@ pub struct AttachmentConfig {
     pub mentions: Option<Mentions>,
     pub in_reply_to: Option<OwnedEventId>,
     pub extra_content: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Whether to remove the metadata embedded in the image before uploading
+    /// it. See [`matrix_sdk::attachment::AttachmentConfig::strip_exif`].
+    pub strip_exif: bool,
 }
 
 impl Timeline {

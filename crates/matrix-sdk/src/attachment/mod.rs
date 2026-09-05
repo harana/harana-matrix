@@ -14,6 +14,8 @@
 
 //! Types and traits for attachments.
 
+mod exif;
+
 use std::time::Duration;
 
 use ruma::{
@@ -204,6 +206,12 @@ pub struct AttachmentConfig {
     /// Additional top-level fields to include in the media event's content.
     /// The event's own fields take precedence on conflicts.
     pub extra_content: Option<serde_json::Map<String, serde_json::Value>>,
+
+    /// Whether to remove the metadata embedded in the image before uploading
+    /// it.
+    ///
+    /// See [`AttachmentConfig::strip_exif`].
+    pub strip_exif: bool,
 }
 
 impl AttachmentConfig {
@@ -279,6 +287,29 @@ impl AttachmentConfig {
         self
     }
 
+    /// Remove the metadata embedded in the image before uploading it.
+    ///
+    /// A photo straight off a phone carries an Exif block holding the GPS
+    /// coordinates and the wall-clock time of the shot, the device model and
+    /// sometimes its serial number. With this set, that block, and the other
+    /// metadata containers (XMP, IPTC, PNG text chunks, comments), are removed
+    /// from the attachment and from its thumbnail before either is uploaded.
+    ///
+    /// The Exif `Orientation` tag is deliberately kept, so photos are still
+    /// displayed the right way up. The pixels are never re-encoded, so this
+    /// costs no image quality.
+    ///
+    /// This applies to JPEG, PNG and WebP images. Any other attachment is
+    /// uploaded unchanged, including HEIC/HEIF photos, whose metadata this SDK
+    /// cannot yet parse; a client handling those should strip them itself.
+    ///
+    /// Off by default, since the sender may well want to keep the metadata.
+    #[must_use]
+    pub fn strip_exif(mut self, strip_exif: bool) -> Self {
+        self.strip_exif = strip_exif;
+        self
+    }
+
     /// Set additional top-level fields for the media event's content.
     ///
     /// # Arguments
@@ -291,6 +322,38 @@ impl AttachmentConfig {
         self.extra_content = extra_content;
         self
     }
+}
+
+/// Apply the preprocessing steps [`AttachmentConfig`] asks for to an
+/// attachment and its thumbnail, before either is cached or uploaded.
+///
+/// This runs on a blocking thread: an attachment can be tens of megabytes, and
+/// walking it must not stall the caller's executor.
+pub(crate) async fn preprocess(
+    content_type: &mime::Mime,
+    data: Vec<u8>,
+    thumbnail: Option<Thumbnail>,
+    config: &AttachmentConfig,
+) -> (Vec<u8>, Option<Thumbnail>) {
+    if !config.strip_exif {
+        return (data, thumbnail);
+    }
+
+    let content_type = content_type.clone();
+
+    matrix_sdk_common::executor::spawn_blocking(move || {
+        let data = exif::strip_metadata(&content_type, data);
+
+        let thumbnail = thumbnail.map(|mut thumbnail| {
+            thumbnail.data = exif::strip_metadata(&thumbnail.content_type, thumbnail.data);
+            thumbnail.size = UInt::new_saturating(thumbnail.data.len() as u64);
+            thumbnail
+        });
+
+        (data, thumbnail)
+    })
+    .await
+    .expect("Stripping the metadata of an attachment should never panic")
 }
 
 /// Configuration for sending a gallery.
