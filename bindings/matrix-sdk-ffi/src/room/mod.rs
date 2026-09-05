@@ -25,8 +25,8 @@ use matrix_sdk::{
     deserialized_responses::{RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent},
     encryption::LocalTrust,
     room::{
-        Room as SdkRoom, RoomMemberRole, RoomMemberSortOrder as SdkRoomMemberSortOrder,
-        edit::EditedContent, power_levels::RoomPowerLevelChanges,
+        Room as SdkRoom, RoomMemberRole, RoomMemberSortOrder, edit::EditedContent,
+        power_levels::RoomPowerLevelChanges,
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
@@ -377,7 +377,7 @@ impl Room {
         offset: u32,
         limit: u32,
     ) -> Result<RoomMemberListPage, ClientError> {
-        let mut request = self.inner.member_list().sort_by(query.sort.into());
+        let mut request = self.inner.member_list().sort_by(query.sort);
 
         if !query.sync_first {
             request = request.no_sync();
@@ -1688,26 +1688,6 @@ pub struct RoomMemberListQuery {
     /// is incomplete.
     #[uniffi(default = true)]
     pub sync_first: bool,
-}
-
-/// How to order the members of a room. See `RoomMemberListQuery`.
-#[derive(uniffi::Enum)]
-pub enum RoomMemberSortOrder {
-    /// By display name, case-insensitively, and by user ID between members
-    /// that share one.
-    Name,
-    /// By power level, highest first, and by name between members that share
-    /// one.
-    PowerLevelThenName,
-}
-
-impl From<RoomMemberSortOrder> for SdkRoomMemberSortOrder {
-    fn from(value: RoomMemberSortOrder) -> Self {
-        match value {
-            RoomMemberSortOrder::Name => Self::Name,
-            RoomMemberSortOrder::PowerLevelThenName => Self::PowerLevelThenName,
-        }
-    }
 }
 
 /// Which memberships to keep. Empty keeps all of them.
