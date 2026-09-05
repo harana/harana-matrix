@@ -20,9 +20,15 @@ use matrix_sdk_base::{
     ThreadingSupport,
     event_cache::Event,
     linked_chunk::Position,
+    serde_helpers::extract_read_receipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate},
 };
-use ruma::{OwnedEventId, RoomId, room_version_rules::RoomVersionRules};
+use ruma::{
+    OwnedEventId, RoomId,
+    events::{AnySyncEphemeralRoomEvent, receipt::ReceiptEventContent},
+    room_version_rules::RoomVersionRules,
+    serde::Raw,
+};
 use tokio::sync::{
     OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock, broadcast::Sender, mpsc,
 };
@@ -32,6 +38,30 @@ use super::{
     EventCacheError, EventsOrigin, Result, back_pagination_queue::BackPaginationQueue, states,
 };
 use crate::{client::WeakClient, room::WeakRoom};
+
+/// The ephemeral events of a sync response, with the read receipts they
+/// contain deserialized exactly once.
+///
+/// Several caches (the room cache, and one per thread) are interested in the
+/// same read receipts. Deserializing the raw events once, at the top of the
+/// update pipeline, avoids repeating that work for every cache on every sync.
+#[derive(Clone, Debug, Default)]
+pub(super) struct EphemeralEvents {
+    /// The raw ephemeral events, forwarded verbatim to the room cache's
+    /// subscribers.
+    pub raw: Vec<Raw<AnySyncEphemeralRoomEvent>>,
+
+    /// Every read receipt event content found in `raw`, in order.
+    pub receipts: Vec<ReceiptEventContent>,
+}
+
+impl EphemeralEvents {
+    /// Deserialize the read receipts out of the given raw ephemeral events.
+    pub fn new(raw: Vec<Raw<AnySyncEphemeralRoomEvent>>) -> Self {
+        let receipts = extract_read_receipts(&raw);
+        Self { raw, receipts }
+    }
+}
 
 mod aggregator;
 pub mod event_focused;
@@ -312,18 +342,21 @@ impl Caches {
             avatar_changes,
         } = updates;
 
+        // Deserialize the read receipts carried by the ephemeral events exactly once:
+        // the room cache and every thread cache are interested in the same ones.
+        let ephemeral = EphemeralEvents::new(original_ephemeral);
+
         // Room.
         {
             let updates = JoinedRoomUpdate {
                 timeline: aggregator::aggregate_timeline_for_room(&original_timeline),
-                ephemeral: original_ephemeral.clone(),
                 account_data,
                 ambiguity_changes,
                 avatar_changes,
                 ..Default::default()
             };
 
-            room.handle_joined_room_update(updates).await?;
+            room.handle_joined_room_update(updates, ephemeral.clone()).await?;
         }
 
         // Threads.
@@ -340,7 +373,7 @@ impl Caches {
 
                 aggregator::aggregate_timeline_for_threads(
                     &original_timeline,
-                    &original_ephemeral,
+                    &ephemeral.receipts,
                     all_states.threads(),
                     all_states.room(),
                     &internals.room_version_rules.redaction,
@@ -349,17 +382,13 @@ impl Caches {
             };
 
             for (thread_id, timeline) in timeline_for_threads {
-                let updates = JoinedRoomUpdate {
-                    timeline,
-                    ephemeral: original_ephemeral.clone(),
-                    ..Default::default()
-                };
+                let updates = JoinedRoomUpdate { timeline, ..Default::default() };
 
                 // Update the thread summary if and only if there are new events.
                 let update_thread_summary = updates.timeline.events.is_empty().not();
 
                 let thread = self.thread(thread_id).await?;
-                thread.handle_joined_room_update(updates).await?;
+                thread.handle_joined_room_update(updates, &ephemeral.receipts).await?;
 
                 if update_thread_summary {
                     let new_thread_summary =

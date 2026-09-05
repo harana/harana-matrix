@@ -21,14 +21,11 @@ use matrix_sdk_base::{
 use ruma::{
     OwnedEventId,
     events::{
-        AnySyncEphemeralRoomEvent,
-        receipt::{ReceiptThread, SyncReceiptEvent},
+        receipt::{ReceiptEventContent, ReceiptThread},
         relation::RelationType,
     },
     room_version_rules::RedactionRules,
-    serde::Raw,
 };
-use tracing::error;
 
 use super::{
     super::{Result, states::StateLockReadGuard},
@@ -42,7 +39,7 @@ pub fn aggregate_timeline_for_room(timeline: &Timeline) -> Timeline {
 
 pub async fn aggregate_timeline_for_threads<'sync, 'state>(
     timeline: &'sync Timeline,
-    ephemerals: &'sync [Raw<AnySyncEphemeralRoomEvent>],
+    receipt_events: &'sync [ReceiptEventContent],
     existing_threads: StateLockReadGuard<'state, HashMap<OwnedEventId, ThreadEventCacheState>>,
     maybe_room: Option<StateLockReadGuard<'state, RoomEventCacheState>>,
     redaction_rules: &'sync RedactionRules,
@@ -159,31 +156,22 @@ pub async fn aggregate_timeline_for_threads<'sync, 'state>(
         }
     }
 
-    // We must also look in the `ephemeral` events. Maybe the `timeline` is empty,
-    // but some ephemeral events target specific threads.
-    for ephemeral in ephemerals {
-        match ephemeral.deserialize() {
-            Ok(AnySyncEphemeralRoomEvent::Receipt(SyncReceiptEvent { content, .. })) => {
-                for thread_root in content.values().flat_map(|receipts_by_event| {
-                    receipts_by_event.values().flat_map(|receipts| {
-                        receipts.values().filter_map(|receipt| match &receipt.thread {
-                            ReceiptThread::Thread(thread_id) => Some(thread_id),
-                            _ => None,
-                        })
-                    })
-                }) {
-                    new_events_by_thread
-                        .entry(thread_root.to_owned())
-                        .or_insert_with(default_timeline);
-                }
-            }
-
-            // Not a read receipt; not interested for now.
-            Ok(_) => {}
-
-            Err(err) => {
-                error!(%err, "error when deserializing an ephemeral event");
-            }
+    // We must also look in the read receipts. Maybe the `timeline` is empty, but
+    // some receipts target specific threads.
+    //
+    // These have already been deserialized once, at the top of the update pipeline;
+    // we work off the parsed values here rather than parsing the raw ephemeral
+    // events a second time.
+    for content in receipt_events {
+        for thread_root in content.values().flat_map(|receipts_by_event| {
+            receipts_by_event.values().flat_map(|receipts| {
+                receipts.values().filter_map(|receipt| match &receipt.thread {
+                    ReceiptThread::Thread(thread_id) => Some(thread_id),
+                    _ => None,
+                })
+            })
+        }) {
+            new_events_by_thread.entry(thread_root.to_owned()).or_insert_with(default_timeline);
         }
     }
 

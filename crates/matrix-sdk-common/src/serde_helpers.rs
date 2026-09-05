@@ -163,15 +163,21 @@ pub fn extract_timestamp(
     Some(origin_server_ts)
 }
 
-/// Extract the first valid read receipt event from a list of ephemeral events,
-/// if available.
-pub fn extract_read_receipt(
+/// Extract every valid read receipt event from a list of ephemeral events.
+///
+/// A single sync response can carry more than one `m.receipt` ephemeral event:
+/// typically one holding the unthreaded and main-timeline receipts for the
+/// room, plus one per thread. Stopping at the first one would silently drop
+/// the thread receipts, so all of them are returned, in the order they appear.
+pub fn extract_read_receipts(
     ephemeral_events: &[Raw<AnySyncEphemeralRoomEvent>],
-) -> Option<ReceiptEventContent> {
+) -> Vec<ReceiptEventContent> {
+    let mut receipts = Vec::new();
+
     for raw_ephemeral in ephemeral_events {
         match raw_ephemeral.deserialize() {
             Ok(AnySyncEphemeralRoomEvent::Receipt(SyncReceiptEvent { content, .. })) => {
-                return Some(content);
+                receipts.push(content);
             }
 
             Ok(_) => {}
@@ -182,18 +188,22 @@ pub fn extract_read_receipt(
         }
     }
 
-    None
+    receipts
 }
 
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use ruma::{UInt, event_id, owned_event_id};
+    use ruma::{
+        UInt, event_id,
+        events::receipt::{ReceiptThread, ReceiptType},
+        owned_event_id, user_id,
+    };
     use serde_json::json;
 
     use super::{
-        MilliSecondsSinceUnixEpoch, Raw, extract_bundled_thread_summary, extract_thread_root,
-        extract_timestamp,
+        MilliSecondsSinceUnixEpoch, Raw, extract_bundled_thread_summary, extract_read_receipts,
+        extract_thread_root, extract_timestamp,
     };
     use crate::{
         deserialized_responses::{ThreadSummary, ThreadSummaryStatus},
@@ -461,5 +471,76 @@ mod tests {
         let timestamp = extract_timestamp(&event, MilliSecondsSinceUnixEpoch(UInt::from(100u32)));
 
         assert_eq!(timestamp, Some(MilliSecondsSinceUnixEpoch(UInt::from(100u32))));
+    }
+    #[test]
+    fn test_extract_read_receipts_keeps_every_receipt_event() {
+        // A sync can carry one receipt event for the room, and one per thread. All of
+        // them must be returned, not just the first one.
+        let room_receipt = Raw::new(&json!({
+            "type": "m.receipt",
+            "content": {
+                "$room_event:example.com": {
+                    "m.read": {
+                        "@alice:example.com": { "ts": 1 },
+                    },
+                },
+            },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        // A non-receipt ephemeral event in the middle must be skipped, not stop the
+        // iteration.
+        let typing = Raw::new(&json!({
+            "type": "m.typing",
+            "content": { "user_ids": ["@bob:example.com"] },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let thread_receipt = Raw::new(&json!({
+            "type": "m.receipt",
+            "content": {
+                "$thread_event:example.com": {
+                    "m.read": {
+                        "@alice:example.com": {
+                            "ts": 2,
+                            "thread_id": "$thread_root:example.com",
+                        },
+                    },
+                },
+            },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let receipts = extract_read_receipts(&[room_receipt, typing, thread_receipt]);
+
+        assert_eq!(receipts.len(), 2);
+        assert!(receipts[0].get(event_id!("$room_event:example.com")).is_some());
+
+        let thread_receipt =
+            receipts[1].get(event_id!("$thread_event:example.com")).expect("thread receipt");
+        let receipt = thread_receipt
+            .get(&ReceiptType::Read)
+            .and_then(|receipts| receipts.get(user_id!("@alice:example.com")))
+            .expect("read receipt for alice");
+        assert_eq!(
+            receipt.thread,
+            ReceiptThread::Thread(owned_event_id!("$thread_root:example.com"))
+        );
+    }
+
+    #[test]
+    fn test_extract_read_receipts_without_any_receipt() {
+        let typing = Raw::new(&json!({
+            "type": "m.typing",
+            "content": { "user_ids": ["@bob:example.com"] },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert!(extract_read_receipts(&[typing]).is_empty());
+        assert!(extract_read_receipts(&[]).is_empty());
     }
 }

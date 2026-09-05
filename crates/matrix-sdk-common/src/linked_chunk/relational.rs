@@ -98,6 +98,13 @@ pub enum RelationalLinkedChunkError {
         /// The chunk identifier.
         identifier: ChunkIdentifier,
     },
+
+    /// A chunk identifier is already in use in this linked chunk.
+    #[error("duplicate chunk identifier: `{identifier:?}`")]
+    DuplicateChunkIdentifier {
+        /// The chunk identifier.
+        identifier: ChunkIdentifier,
+    },
 }
 
 /// The [`IndexableItem`] trait is used to mark items that can be indexed into a
@@ -307,6 +314,15 @@ where
         new: ChunkIdentifier,
         next: Option<ChunkIdentifier>,
     ) -> Result<(), RelationalLinkedChunkError> {
+        // A chunk identifier must be unique within a linked chunk. Reject the
+        // insertion before touching anything, so a rejected insert leaves the
+        // store untouched rather than half-relinked.
+        if chunks.iter().any(|ChunkRow { linked_chunk_id: linked_chunk_id_candidate, chunk, .. }| {
+            linked_chunk_id == linked_chunk_id_candidate && *chunk == new
+        }) {
+            return Err(RelationalLinkedChunkError::DuplicateChunkIdentifier { identifier: new });
+        }
+
         // Find the previous chunk, and update its next chunk.
         if let Some(previous) = previous {
             let entry_for_previous_chunk = chunks
@@ -852,6 +868,98 @@ mod tests {
 
         // Items have not been modified.
         assert!(relational_linked_chunk.items_chunks.is_empty());
+    }
+
+    #[test]
+    fn test_new_items_chunk_rejects_a_duplicate_chunk_identifier() {
+        let room_id = room_id!("!r0:matrix.org");
+        let linked_chunk_id = OwnedLinkedChunkId::Room(room_id.to_owned());
+
+        let mut relational_linked_chunk = RelationalLinkedChunk::<_, char, ()>::new();
+
+        relational_linked_chunk
+            .apply_updates(
+                linked_chunk_id.as_ref(),
+                vec![
+                    Update::NewItemsChunk { previous: None, new: CId::new(0), next: None },
+                    Update::NewItemsChunk {
+                        previous: Some(CId::new(0)),
+                        new: CId::new(1),
+                        next: None,
+                    },
+                ],
+            )
+            .unwrap();
+
+        // Re-using chunk identifier 1 is refused.
+        let error = relational_linked_chunk
+            .apply_updates(
+                linked_chunk_id.as_ref(),
+                vec![Update::NewItemsChunk {
+                    previous: Some(CId::new(1)),
+                    new: CId::new(1),
+                    next: None,
+                }],
+            )
+            .unwrap_err();
+
+        assert_matches!(
+            error,
+            RelationalLinkedChunkError::DuplicateChunkIdentifier { identifier } => {
+                assert_eq!(identifier, CId::new(1));
+            }
+        );
+
+        // A gap chunk re-using an existing identifier is refused too.
+        let error = relational_linked_chunk
+            .apply_updates(
+                linked_chunk_id.as_ref(),
+                vec![Update::NewGapChunk {
+                    previous: Some(CId::new(1)),
+                    new: CId::new(0),
+                    next: None,
+                    gap: (),
+                }],
+            )
+            .unwrap_err();
+
+        assert_matches!(
+            error,
+            RelationalLinkedChunkError::DuplicateChunkIdentifier { identifier } => {
+                assert_eq!(identifier, CId::new(0));
+            }
+        );
+
+        // The rejected inserts left the store untouched: the two original chunks are
+        // still linked as they were, and no item row was created for the gap.
+        assert_eq!(
+            relational_linked_chunk.chunks,
+            &[
+                ChunkRow {
+                    linked_chunk_id: linked_chunk_id.clone(),
+                    previous_chunk: None,
+                    chunk: CId::new(0),
+                    next_chunk: Some(CId::new(1))
+                },
+                ChunkRow {
+                    linked_chunk_id,
+                    previous_chunk: Some(CId::new(0)),
+                    chunk: CId::new(1),
+                    next_chunk: None
+                },
+            ],
+        );
+        assert!(relational_linked_chunk.items_chunks.is_empty());
+
+        // The same identifier is fine in a *different* linked chunk.
+        let other_linked_chunk_id =
+            OwnedLinkedChunkId::Room(room_id!("!r1:matrix.org").to_owned());
+        relational_linked_chunk
+            .apply_updates(
+                other_linked_chunk_id.as_ref(),
+                vec![Update::NewItemsChunk { previous: None, new: CId::new(0), next: None }],
+            )
+            .unwrap();
     }
 
     #[test]
