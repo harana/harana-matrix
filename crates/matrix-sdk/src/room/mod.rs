@@ -42,6 +42,7 @@ pub use matrix_sdk_base::store::StoredThreadSubscription;
 use matrix_sdk_base::{
     ComposerDraft, DmRoomDefinition, EncryptionState, RoomInfoNotableUpdateReasons,
     RoomMemberships, SendOutsideWasm, StateStoreDataKey, StateStoreDataValue,
+    read_receipts::ReadReceipts,
     deserialized_responses::{
         RawAnySyncOrStrippedState, RawSyncOrStrippedState, SyncOrStrippedState,
     },
@@ -71,8 +72,9 @@ use ruma::events::{
     AnySyncTimelineEvent, SyncMessageLikeEvent, room::encrypted::OriginalSyncRoomEncryptedEvent,
 };
 use ruma::{
-    EventId, Int, MatrixToUri, MatrixUri, MxcUri, OwnedEventId, OwnedRoomId, OwnedServerName,
-    OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt, UserId,
+    EventId, Int, MatrixToUri, MatrixUri, MilliSecondsSinceUnixEpoch, MxcUri, OwnedEventId,
+    OwnedRoomId, OwnedServerName, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt,
+    UserId,
     api::{
         client::{
             config::{set_global_account_data, set_room_account_data},
@@ -113,7 +115,7 @@ use ruma::{
         beacon_info::BeaconInfoEventContent,
         direct::DirectEventContent,
         marked_unread::MarkedUnreadEventContent,
-        receipt::{Receipt, ReceiptThread, ReceiptType},
+        receipt::{Receipt, ReceiptEventContent, ReceiptThread, ReceiptType},
         relation::RelationType,
         room::{
             ImageInfo, MediaSource, ThumbnailInfo,
@@ -2173,6 +2175,19 @@ impl Room {
                 // We will unset the unread flag if we send an unthreaded receipt.
                 let is_unthreaded = thread == ReceiptThread::Unthreaded;
 
+                // Apply the receipt locally right away, so the room stops showing as
+                // unread without waiting for it to come back through sync. This is what
+                // the receipt event will look like when it does.
+                //  Boxed: this future ends up inside the deduplicating handler's, and the
+                // read receipt computation it awaits is large enough to overflow the
+                // stack otherwise.
+                let echo = Box::pin(self.apply_local_read_receipt_echo(
+                    receipt_type.clone(),
+                    &thread,
+                    &event_id,
+                ))
+                .await;
+
                 let mut request = create_receipt::v3::Request::new(
                     self.room_id().to_owned(),
                     receipt_type,
@@ -2180,7 +2195,13 @@ impl Room {
                 );
                 request.thread = thread;
 
-                self.client.send(request).await?;
+                if let Err(error) = self.client.send(request).await {
+                    if let Some(echo) = echo {
+                        echo.roll_back(self).await;
+                    }
+
+                    return Err(error.into());
+                }
 
                 if is_unthreaded {
                     self.set_unread_flag(false).await?;
@@ -2189,6 +2210,58 @@ impl Room {
                 Ok(())
             })
             .await
+    }
+
+    /// Apply a read receipt we are about to send as if it had already come
+    /// back through sync.
+    ///
+    /// Without this, marking a room as read leaves it showing as unread until
+    /// the receipt is echoed by the server, which on a slow connection or a
+    /// busy homeserver takes long enough to look broken.
+    ///
+    /// Returns what is needed to undo it if the request fails, or `None` when
+    /// nothing was applied (the event cache isn't running, or the receipt
+    /// doesn't affect the room's unread state).
+    async fn apply_local_read_receipt_echo(
+        &self,
+        receipt_type: create_receipt::v3::ReceiptType,
+        thread: &ReceiptThread,
+        event_id: &EventId,
+    ) -> Option<ReadReceiptEcho> {
+        // A receipt in a thread doesn't move the room's own unread state, which is
+        // what this echo is about.
+        if !matches!(thread, ReceiptThread::Unthreaded | ReceiptThread::Main) {
+            return None;
+        }
+
+        let receipt_type = match receipt_type {
+            create_receipt::v3::ReceiptType::Read => ReceiptType::Read,
+            create_receipt::v3::ReceiptType::ReadPrivate => ReceiptType::ReadPrivate,
+            // `m.fully_read` isn't a receipt that counts towards unread messages.
+            _ => return None,
+        };
+
+        let user_id = self.client.user_id()?;
+
+        let (room_event_cache, _drop_handles) = self.event_cache().await.ok()?;
+
+        let mut receipt = Receipt::new(MilliSecondsSinceUnixEpoch::now());
+        receipt.thread = thread.clone();
+
+        let receipts = BTreeMap::from([(
+            event_id.to_owned(),
+            BTreeMap::from([(receipt_type, BTreeMap::from([(user_id.to_owned(), receipt)]))]),
+        )]);
+        let receipt_event = ReceiptEventContent(receipts);
+
+        let previous = self.inner.read_receipts();
+
+        if let Err(error) = room_event_cache.apply_local_read_receipts(&[receipt_event]).await {
+            debug!(?error, "Couldn't apply the local read receipt echo");
+            return None;
+        }
+
+        Some(ReadReceiptEcho { previous, echoed: self.inner.read_receipts() })
     }
 
     /// Send a request to set multiple receipts at once.
@@ -4798,6 +4871,39 @@ impl WeakRoom {
     /// The room id for that room.
     pub fn room_id(&self) -> &RoomId {
         &self.room_id
+    }
+}
+
+/// What an optimistically applied read receipt replaced, so it can be undone.
+struct ReadReceiptEcho {
+    /// The read receipts as they were before the echo was applied.
+    previous: ReadReceipts,
+
+    /// The read receipts the echo produced.
+    echoed: ReadReceipts,
+}
+
+impl ReadReceiptEcho {
+    /// Undo the echo, unless something else changed the read receipts since.
+    ///
+    /// A sync landing in between knows better than we do, so leave its result
+    /// alone rather than replacing it with a stale snapshot.
+    async fn roll_back(self, room: &Room) {
+        if room.inner.read_receipts() != self.echoed {
+            return;
+        }
+
+        let result = room
+            .inner
+            .update_and_save_room_info(|mut room_info| {
+                room_info.set_read_receipts(self.previous);
+                (room_info, RoomInfoNotableUpdateReasons::READ_RECEIPT)
+            })
+            .await;
+
+        if let Err(error) = result {
+            warn!(?error, "Couldn't roll back the local read receipt echo");
+        }
     }
 }
 
