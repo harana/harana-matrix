@@ -1890,19 +1890,19 @@ impl Encryption {
     /// cause confusing issues because of stale data contained in in-memory
     /// caches.
     ///
-    /// The provided `lock_value` must be a unique identifier for this process.
+    /// The provided `holder_name` must be a unique identifier for this process.
     /// Use [`Client::cross_process_lock_config`] to get the global value, if
     /// multi-process is enabled.
-    pub async fn enable_cross_process_store_lock(&self, lock_value: String) -> Result<(), Error> {
+    pub async fn enable_cross_process_store_lock(&self, holder_name: String) -> Result<(), Error> {
         // If the lock has already been created, don't recreate it from scratch.
         if let Some(prev_lock) = self.client.locks().cross_process_crypto_store_lock.get() {
             let prev_holder = prev_lock.lock_holder();
-            if prev_holder.is_some() && prev_holder.unwrap() == lock_value {
+            if prev_holder.is_some() && prev_holder.unwrap() == holder_name {
                 return Ok(());
             }
             warn!(
-                "Recreating cross-process store lock with a different holder value: \
-                 prev was {prev_holder:?}, new is {lock_value}"
+                "Recreating cross-process store lock with a different holder name: \
+                 prev was {prev_holder:?}, new is {holder_name}"
             );
         }
 
@@ -1911,7 +1911,7 @@ impl Encryption {
 
         let lock = olm_machine.store().create_store_lock(
             "cross_process_lock".to_owned(),
-            CrossProcessLockConfig::multi_process(lock_value.to_owned()),
+            CrossProcessLockConfig::multi_process(holder_name.to_owned()),
         );
 
         // Gently try to initialize the crypto store generation counter.

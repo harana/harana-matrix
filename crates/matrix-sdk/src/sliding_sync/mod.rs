@@ -2224,6 +2224,81 @@ mod tests {
         Ok(())
     }
 
+    // A sliding sync configured with
+    // `mark_tracked_users_dirty_without_pos(false)` must leave the device list
+    // cache alone when it sends a request without a `pos`.
+    #[async_test]
+    #[cfg(feature = "e2e-encryption")]
+    async fn test_no_pos_with_e2ee_can_keep_tracked_users_clean() -> anyhow::Result<()> {
+        use matrix_sdk_base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
+        use matrix_sdk_test::ruma_response_from_json;
+        use ruma::user_id;
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let alice = user_id!("@alice:localhost");
+        let me = user_id!("@example:localhost");
+
+        // Track a user and drain the resulting requests, so that nothing is dirty
+        // anymore.
+        {
+            let olm_machine = client.olm_machine().await;
+            let olm_machine = olm_machine.as_ref().unwrap();
+
+            olm_machine.update_tracked_users([alice]).await?;
+
+            // Draining once isn't enough: answering a `/keys/query` can schedule the
+            // next one. Loop until nothing is left, with a bound so a bug here can't
+            // hang the test.
+            for _ in 0..5 {
+                let requests = olm_machine.outgoing_requests().await?;
+                if requests.is_empty() {
+                    break;
+                }
+
+                for request in requests {
+                    let response = match request.request() {
+                        AnyOutgoingRequest::KeysUpload(_) => AnyIncomingResponse::KeysUpload(
+                            &ruma_response_from_json(&json!({ "one_time_key_counts": {} })),
+                        ),
+                        AnyOutgoingRequest::KeysQuery(_) => {
+                            AnyIncomingResponse::KeysQuery(&ruma_response_from_json(&json!({
+                                "device_keys": { alice: {}, me: {} }
+                            })))
+                        }
+                        _ => panic!("unexpected outgoing request"),
+                    };
+
+                    olm_machine.mark_request_as_sent(request.request_id(), response).await?;
+                }
+            }
+
+            assert!(olm_machine.outgoing_requests().await?.is_empty());
+        }
+
+        let sync = client
+            .sliding_sync("test-slidingsync")?
+            .add_list(SlidingSyncList::builder("new_list"))
+            .with_e2ee_extension(assign!(http::request::E2EE::default(), { enabled: Some(true)}))
+            .mark_tracked_users_dirty_without_pos(false)
+            .build()
+            .await?;
+
+        // First request: no `pos`.
+        let (_request, _, _) = sync.generate_sync_request().await?;
+
+        // Tracked users are still clean: no `/keys/query` was scheduled.
+        {
+            let olm_machine = client.olm_machine().await;
+            let olm_machine = olm_machine.as_ref().unwrap();
+
+            assert!(olm_machine.outgoing_requests().await?.is_empty());
+        }
+
+        Ok(())
+    }
+
     #[cfg(feature = "e2e-encryption")]
     #[async_test]
     async fn test_sliding_sync_doesnt_remember_pos() -> Result<()> {

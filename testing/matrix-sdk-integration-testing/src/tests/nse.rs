@@ -366,7 +366,9 @@ impl NotificationClientWrapper {
 
         let notif_client = NotificationClient::new(
             inner_client.clone(),
-            NotificationProcessSetup::MultipleProcesses,
+            NotificationProcessSetup::MultipleProcesses {
+                lock_holder_name: NotificationClient::DEFAULT_LOCK_HOLDER_NAME.to_owned(),
+            },
         )
         .await
         .expect("Failed to build NotificationClient");

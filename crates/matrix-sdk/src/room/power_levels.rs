@@ -63,6 +63,11 @@ pub struct RoomPowerLevelChanges {
     /// The level required to send a beacon info state event.
     #[cfg_attr(feature = "uniffi", uniffi(default = None))]
     pub beacon_info: Option<i64>,
+
+    // Notifications
+    /// The level required to trigger an `@room` notification.
+    #[cfg_attr(feature = "uniffi", uniffi(default = None))]
+    pub notification_room: Option<i64>,
 }
 
 impl RoomPowerLevelChanges {
@@ -82,6 +87,7 @@ impl RoomPowerLevelChanges {
             space_child: None,
             beacon: None,
             beacon_info: None,
+            notification_room: None,
         }
     }
 }
@@ -132,6 +138,7 @@ impl From<RoomPowerLevels> for RoomPowerLevelChanges {
                 .get(&StateEventType::BeaconInfo.into())
                 .map(|v| (*v).into())
                 .or(Some(value.state_default.into())),
+            notification_room: Some(value.notifications.room.into()),
         }
     }
 }
@@ -185,6 +192,9 @@ impl RoomPowerLevelsExt for RoomPowerLevels {
         }
         if let Some(beacon_info) = settings.beacon_info {
             self.events.insert(StateEventType::BeaconInfo.into(), beacon_info.try_into()?);
+        }
+        if let Some(notification_room) = settings.notification_room {
+            self.notifications.room = notification_room.try_into()?;
         }
 
         Ok(())
@@ -262,6 +272,7 @@ mod tests {
             space_child: None,
             beacon: None,
             beacon_info: None,
+            notification_room: None,
         };
 
         // When applying the settings to the power levels.
@@ -301,6 +312,7 @@ mod tests {
             space_child: Some(new_level.into()),
             beacon: None,
             beacon_info: None,
+            notification_room: None,
         };
 
         // When applying the settings to the power levels.
@@ -354,6 +366,7 @@ mod tests {
             space_child: None,
             beacon: None,
             beacon_info: None,
+            notification_room: None,
         };
 
         // When applying the settings to the power levels.
@@ -402,6 +415,7 @@ mod tests {
             space_child: None,
             beacon: Some(new_level.into()),
             beacon_info: Some(new_level.into()),
+            notification_room: None,
         };
 
         // When applying the settings to the power levels.
@@ -425,6 +439,45 @@ mod tests {
         assert_eq!(power_levels.events_default, original_levels.events_default);
         assert_eq!(power_levels.state_default, original_levels.state_default);
         assert_eq!(power_levels.users_default, original_levels.users_default);
+    }
+
+    #[test]
+    fn test_apply_notification_room_setting() {
+        // Given a set of power levels and some settings that only change the level
+        // required to trigger an `@room` notification.
+        let mut power_levels = default_power_levels();
+
+        let new_level = int!(75);
+        let settings = RoomPowerLevelChanges {
+            notification_room: Some(new_level.into()),
+            ..RoomPowerLevelChanges::new()
+        };
+
+        // When applying the settings to the power levels.
+        let original_levels = power_levels.clone();
+        power_levels.apply(settings).unwrap();
+
+        // Then the notifications level should be updated.
+        assert_eq!(power_levels.notifications.room, new_level);
+        // And the rest should remain unchanged.
+        assert_eq!(power_levels.ban, original_levels.ban);
+        assert_eq!(power_levels.events, original_levels.events);
+        assert_eq!(power_levels.events_default, original_levels.events_default);
+        assert_eq!(power_levels.state_default, original_levels.state_default);
+        assert_eq!(power_levels.users_default, original_levels.users_default);
+    }
+
+    #[test]
+    fn test_notification_room_is_mapped_into_changes() {
+        // Given a set of power levels with a custom `@room` notification level.
+        let mut power_levels = default_power_levels();
+        power_levels.notifications.room = int!(75);
+
+        // When converting them into changes.
+        let changes = RoomPowerLevelChanges::from(power_levels);
+
+        // Then the notification level is carried over.
+        assert_eq!(changes.notification_room, Some(75));
     }
 
     #[test]

@@ -47,7 +47,9 @@ use tokio::sync::{
 use tracing::{Instrument, Level, Span, error, info, instrument, trace, warn};
 
 use crate::{
-    encryption_sync_service::{self, EncryptionSyncPermit, EncryptionSyncService},
+    encryption_sync_service::{
+        self, EncryptionSyncMode, EncryptionSyncPermit, EncryptionSyncService,
+    },
     room_list_service::{
         self, DEFAULT_CONNECTION_ID, DEFAULT_LIST_TIMELINE_LIMIT, RoomListService,
     },
@@ -1005,7 +1007,8 @@ impl SyncServiceBuilder {
         )
         .await?;
 
-        let encryption_sync = Arc::new(EncryptionSyncService::new(client, None).await?);
+        let encryption_sync =
+            Arc::new(EncryptionSyncService::new(client, None, EncryptionSyncMode::App).await?);
 
         let room_list_service = Arc::new(room_list);
         let state = SharedObservable::new(State::Idle);

@@ -11,7 +11,9 @@ use matrix_sdk::test_utils::mocks::MatrixMockServer;
 use matrix_sdk_base::crypto::store::types::Changes;
 use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
 use matrix_sdk_test::async_test;
-use matrix_sdk_ui::encryption_sync_service::{EncryptionSyncPermit, EncryptionSyncService};
+use matrix_sdk_ui::encryption_sync_service::{
+    EncryptionSyncMode, EncryptionSyncPermit, EncryptionSyncService,
+};
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::Mutex as AsyncMutex;
@@ -36,7 +38,7 @@ async fn test_smoke_encryption_sync_works() -> anyhow::Result<()> {
 
     let sync_permit = Arc::new(AsyncMutex::new(EncryptionSyncPermit::new_for_testing()));
     let sync_permit_guard = sync_permit.clone().lock_owned().await;
-    let encryption_sync = EncryptionSyncService::new(client, None).await?;
+    let encryption_sync = EncryptionSyncService::new(client, None, EncryptionSyncMode::App).await?;
 
     let stream = encryption_sync.sync(sync_permit_guard);
     pin_mut!(stream);
@@ -182,7 +184,7 @@ async fn test_encryption_sync_default_sync_presence_is_online() -> anyhow::Resul
 
     let sync_permit = Arc::new(AsyncMutex::new(EncryptionSyncPermit::new_for_testing()));
     let sync_permit_guard = sync_permit.lock_owned().await;
-    let encryption_sync = EncryptionSyncService::new(client, None).await?;
+    let encryption_sync = EncryptionSyncService::new(client, None, EncryptionSyncMode::App).await?;
 
     encryption_sync.run_fixed_iterations(1, sync_permit_guard).await?;
 
@@ -200,7 +202,7 @@ async fn test_encryption_sync_one_fixed_iteration() -> anyhow::Result<()> {
 
     let sync_permit = Arc::new(AsyncMutex::new(EncryptionSyncPermit::new_for_testing()));
     let sync_permit_guard = sync_permit.lock_owned().await;
-    let encryption_sync = EncryptionSyncService::new(client, None).await?;
+    let encryption_sync = EncryptionSyncService::new(client, None, EncryptionSyncMode::App).await?;
 
     // Run all the iterations.
     encryption_sync.run_fixed_iterations(1, sync_permit_guard).await?;
@@ -232,7 +234,7 @@ async fn test_encryption_sync_two_fixed_iterations() -> anyhow::Result<()> {
 
     let sync_permit = Arc::new(AsyncMutex::new(EncryptionSyncPermit::new_for_testing()));
     let sync_permit_guard = sync_permit.lock_owned().await;
-    let encryption_sync = EncryptionSyncService::new(client, None).await?;
+    let encryption_sync = EncryptionSyncService::new(client, None, EncryptionSyncMode::App).await?;
 
     encryption_sync.run_fixed_iterations(2, sync_permit_guard).await?;
 
@@ -273,7 +275,8 @@ async fn test_encryption_sync_always_reloads_todevice_token() -> anyhow::Result<
 
     let sync_permit = Arc::new(AsyncMutex::new(EncryptionSyncPermit::new_for_testing()));
     let sync_permit_guard = sync_permit.lock_owned().await;
-    let encryption_sync = EncryptionSyncService::new(client.clone(), None).await?;
+    let encryption_sync =
+        EncryptionSyncService::new(client.clone(), None, EncryptionSyncMode::App).await?;
 
     let stream = encryption_sync.sync(sync_permit_guard);
     pin_mut!(stream);
@@ -382,7 +385,8 @@ async fn test_notification_client_does_not_upload_duplicate_one_time_keys() -> a
 
     let sync_permit = Arc::new(AsyncMutex::new(EncryptionSyncPermit::new_for_testing()));
     let sync_permit_guard = sync_permit.lock_owned().await;
-    let encryption_sync = EncryptionSyncService::new(client.clone(), None).await?;
+    let encryption_sync =
+        EncryptionSyncService::new(client.clone(), None, EncryptionSyncMode::App).await?;
 
     let stream = encryption_sync.sync(sync_permit_guard);
     pin_mut!(stream);

@@ -161,7 +161,6 @@ pub(crate) trait SqliteAsyncConnExt {
 
         self.cache_size(cache_size).await?;
         self.journal_size_limit(journal_size_limit).await?;
-        self.synchronous(synchronous).await?;
 
         if let Some(synchronous) = synchronous {
             self.synchronous(synchronous).await?;

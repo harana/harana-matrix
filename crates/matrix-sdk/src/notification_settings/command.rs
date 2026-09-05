@@ -17,6 +17,10 @@ pub(crate) enum Command {
     SetRoomPushRule { room_id: OwnedRoomId, notify: bool },
     /// Set a new `Override` push rule matching a `RoomId`
     SetOverridePushRule { rule_id: String, room_id: OwnedRoomId, notify: bool },
+    /// Set a new `Override` push rule that notifies for the encrypted events
+    /// of a room, so that the client can evaluate the push rules itself once
+    /// it has decrypted them.
+    SetEncryptedEventsPushRule { rule_id: String, room_id: OwnedRoomId },
     /// Set a new push rule for a keyword.
     SetKeywordPushRule { keyword: String },
     /// Set whether a push rule is enabled
@@ -56,6 +60,29 @@ impl Command {
                         room_id.to_string(),
                     ))],
                     get_notify_actions(*notify),
+                );
+                Ok(NewPushRule::Override(new_rule))
+            }
+
+            Self::SetEncryptedEventsPushRule { rule_id, room_id } => {
+                // `Override` push rule matching the encrypted events of this `room_id`.
+                //
+                // It only notifies: whether the notification is noisy, or should be shown at
+                // all, is decided by the client once the event is decrypted and the push rules
+                // are evaluated again, locally.
+                let new_rule = NewConditionalPushRule::new(
+                    rule_id.clone(),
+                    vec![
+                        PushCondition::EventMatch(EventMatchConditionData::new(
+                            "room_id".to_owned(),
+                            room_id.to_string(),
+                        )),
+                        PushCondition::EventMatch(EventMatchConditionData::new(
+                            "type".to_owned(),
+                            "m.room.encrypted".to_owned(),
+                        )),
+                    ],
+                    vec![Action::Notify],
                 );
                 Ok(NewPushRule::Override(new_rule))
             }

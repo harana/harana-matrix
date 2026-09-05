@@ -314,10 +314,17 @@ impl OAuth {
 
     /// Enable a cross-process store lock on the state store, to coordinate
     /// refreshes across different processes.
+    ///
+    /// The provided `holder_name` must be a unique identifier for this
+    /// process. This lock is independent from the crypto-store lock enabled by
+    /// [`Encryption::enable_cross_process_store_lock`]: this one guards token
+    /// refreshes, that one guards writes to the crypto store.
+    ///
+    /// [`Encryption::enable_cross_process_store_lock`]: crate::encryption::Encryption::enable_cross_process_store_lock
     #[cfg(feature = "e2e-encryption")]
     pub async fn enable_cross_process_refresh_lock(
         &self,
-        lock_value: String,
+        holder_name: String,
     ) -> Result<(), OAuthError> {
         // FIXME: it must be deferred only because we're using the crypto store and it's
         // initialized only in `set_or_reload_session`, not if we use a dedicated store.
@@ -325,7 +332,7 @@ impl OAuth {
         if lock.is_some() {
             return Err(CrossProcessRefreshLockError::DuplicatedLock.into());
         }
-        *lock = Some(lock_value);
+        *lock = Some(holder_name);
 
         Ok(())
     }
