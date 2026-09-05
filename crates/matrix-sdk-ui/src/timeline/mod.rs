@@ -95,8 +95,9 @@ pub use self::{
         EventItemOrigin, EventSendState, EventTimelineItem, InReplyToDetails, LiveLocationState,
         MediaUploadProgress, MemberProfileChange, MembershipChange, Message, MsgLikeContent,
         MsgLikeKind, OtherMessageLike, OtherState, PollResult, PollState, Profile, ReactionInfo,
-        ReactionStatus, ReactionsByKeyBySender, RoomMembershipChange, RoomPinnedEventsChange,
-        Sticker, ThreadSummary, TimelineDetails, TimelineEventItemId, TimelineEventShieldState,
+        ReactionStatus, ReactionsByKeyBySender, RedactedMessage, RoomMembershipChange,
+        RoomPinnedEventsChange, Sticker, ThreadSummary, TimelineDetails, TimelineEventItemId,
+        TimelineEventShieldState,
         TimelineEventShieldStateCode, TimelineItemContent,
     },
     item::{TimelineItem, TimelineItemKind, TimelineUniqueId},
@@ -199,12 +200,20 @@ impl TimelineFocus {
     }
 }
 
-/// Changes how dividers get inserted, either in between each day or in between
-/// each month
+/// Changes how dividers get inserted: in between each day, in between each
+/// month, or not at all.
 #[derive(Debug, Clone)]
 pub enum DateDividerMode {
+    /// Insert a date divider whenever the day changes.
     Daily,
+    /// Insert a date divider whenever the month changes.
     Monthly,
+    /// Never insert a date divider.
+    ///
+    /// This is useful for timelines that render their items without any chrome,
+    /// e.g. a media swipe-through gallery, and would otherwise have to
+    /// filter the dividers out again.
+    None,
 }
 
 /// Configuration for sending an attachment.

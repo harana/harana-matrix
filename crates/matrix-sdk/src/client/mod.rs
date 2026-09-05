@@ -577,6 +577,18 @@ impl Client {
         &self.inner.base_client
     }
 
+    /// The threading support this client was configured with, via
+    /// [`ClientBuilder::with_threading_support()`].
+    ///
+    /// Note this only reflects the client's own configuration; it says nothing
+    /// about whether the homeserver supports threads. See
+    /// [`Client::enabled_thread_subscriptions()`] for that.
+    ///
+    /// [`ClientBuilder::with_threading_support()`]: crate::ClientBuilder::with_threading_support
+    pub fn threading_support(&self) -> ThreadingSupport {
+        self.base_client().threading_support
+    }
+
     /// The transport the client sends its HTTP requests over.
     ///
     /// This is the [`ReqwestTransport`](crate::ReqwestTransport) the SDK builds

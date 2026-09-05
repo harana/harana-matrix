@@ -43,7 +43,7 @@ use ruma::{
     api::client::receipt::create_receipt::v3::ReceiptType as SendReceiptType,
     events::{
         AnyMessageLikeEventContent, AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent,
-        AnySyncTimelineEvent, MessageLikeEventType,
+        AnySyncTimelineEvent, MessageLikeEventContent as _, MessageLikeEventType,
         poll::unstable_start::UnstablePollStartEventContent,
         reaction::ReactionEventContent,
         receipt::{Receipt, ReceiptThread, ReceiptType},
@@ -69,8 +69,8 @@ pub(super) use self::{
 };
 use super::{
     DateDividerMode, EmbeddedEvent, Error, EventSendState, EventTimelineItem, InReplyToDetails,
-    MediaUploadProgress, Profile, TimelineDetails, TimelineEventItemId, TimelineFocus,
-    TimelineItem, TimelineItemContent, TimelineItemKind, TimelineReadReceiptTracking,
+    MediaUploadProgress, Profile, RedactedMessage, TimelineDetails, TimelineEventItemId,
+    TimelineFocus, TimelineItem, TimelineItemContent, TimelineItemKind, TimelineReadReceiptTracking,
     VirtualTimelineItem,
     algorithms::{rfind_event_by_id, rfind_event_item},
     event_item::{ReactionStatus, RemoteEventOrigin},
@@ -862,6 +862,30 @@ impl<P: RoomDataProvider> TimelineController<P> {
 
     /// Creates the local echo for an event we're sending.
     #[instrument(skip_all)]
+    /// Runs the timeline's event filter against a local echo, to decide whether
+    /// it may become a timeline item of its own.
+    ///
+    /// Local echoes have no server-side representation yet, so a synthetic
+    /// [`AnySyncTimelineEvent`] is built from the content the send queue is
+    /// about to send. If that synthetic event can't be built or read back, the
+    /// local echo is let through, so a filter can never make an
+    /// unrepresentable local echo disappear silently.
+    ///
+    /// Note this only decides whether the echo gets its own item; aggregations
+    /// (edits, reactions, poll responses…) are applied to their target item
+    /// regardless, exactly like their remote counterparts.
+    fn local_event_passes_filter(
+        &self,
+        sender: &UserId,
+        content: &AnyMessageLikeEventContent,
+    ) -> bool {
+        let Some(event) = synthetic_local_event(sender, content) else {
+            return true;
+        };
+
+        (self.settings.event_filter)(&event, &self.room_data_provider.room_version_rules())
+    }
+
     pub(super) async fn handle_local_event(
         &self,
         txn_id: OwnedTransactionId,
@@ -869,13 +893,27 @@ impl<P: RoomDataProvider> TimelineController<P> {
         send_handle: Option<SendHandle>,
     ) {
         let sender = self.room_data_provider.own_user_id().to_owned();
+
+        let passes_event_filter = self.local_event_passes_filter(&sender, &content);
+        if !passes_event_filter {
+            trace!("the local echo is filtered out by the timeline's event filter");
+        }
+
         let profile = self.room_data_provider.profile_from_user_id(&sender).await;
 
         let date_divider_mode = self.settings.date_divider_mode.clone();
 
         let mut state = self.state.write().await;
         state
-            .handle_local_event(sender, profile, date_divider_mode, txn_id, send_handle, content)
+            .handle_local_event(
+                sender,
+                profile,
+                date_divider_mode,
+                txn_id,
+                send_handle,
+                content,
+                passes_event_filter,
+            )
             .await;
     }
 
@@ -1338,6 +1376,10 @@ impl<P: RoomDataProvider> TimelineController<P> {
         txn_id: OwnedTransactionId,
         redacts: OwnedEventId,
     ) {
+        // The local echo of a redaction is always sent by us.
+        let own_user_id = self.room_data_provider.own_user_id().to_owned();
+        let own_profile = self.room_data_provider.profile_from_user_id(&own_user_id).await;
+
         let mut state = self.state.write().await;
         let mut tr = state.transaction();
 
@@ -1345,7 +1387,13 @@ impl<P: RoomDataProvider> TimelineController<P> {
 
         let aggregation = Aggregation::new(
             TimelineEventItemId::TransactionId(txn_id),
-            AggregationKind::Redaction { is_local: true },
+            AggregationKind::Redaction {
+                is_local: true,
+                redacted: RedactedMessage {
+                    redacted_by: Some(own_user_id),
+                    redacted_by_profile: TimelineDetails::from_initial_value(own_profile),
+                },
+            },
         );
 
         tr.meta.aggregations.add(target.clone(), aggregation.clone());
@@ -2013,4 +2061,26 @@ async fn fetch_replied_to_event<P: RoomDataProvider>(
     };
 
     Ok(res)
+}
+
+/// Builds a synthetic [`AnySyncTimelineEvent`] representing a local echo, so
+/// the same code paths that reason about remote events can reason about local
+/// ones too.
+///
+/// The event ID and the timestamp are placeholders: a local echo has no event
+/// ID yet, and its timestamp is only known once the server echoes it back.
+/// Returns `None` if the content can't be represented as a timeline event.
+fn synthetic_local_event(
+    sender: &UserId,
+    content: &AnyMessageLikeEventContent,
+) -> Option<AnySyncTimelineEvent> {
+    let event = serde_json::json!({
+        "type": content.event_type().to_string(),
+        "content": serde_json::to_value(content).ok()?,
+        "event_id": "$local-echo",
+        "sender": sender,
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+    });
+
+    Raw::<AnySyncTimelineEvent>::from_json_string(event.to_string()).ok()?.deserialize().ok()
 }

@@ -111,7 +111,17 @@ impl Builder {
                                     replacement,
                                     replacement_encryption_info.map(|e| &(**e)),
                                 ) {
-                                    Ok(_) => edit.clone(),
+                                    Ok(_) => {
+                                        let mut edit = edit.clone();
+
+                                        // The edit provides the content to display, but it must
+                                        // not act as a recency signal: editing a message is not
+                                        // a new message, and must not bump the room in the room
+                                        // list. Keep the timestamp of the edited event.
+                                        edit.timestamp = event.timestamp();
+
+                                        edit
+                                    }
                                     Err(e) => {
                                         debug!(
                                         "Skipping an edit of a latest event due to the replacement event being invalid: {e}"
@@ -2288,6 +2298,26 @@ mod builder_tests {
             // We get `event_id_1` because it edits `event_id_0` which is a candidate.
             Builder::new_remote(&room_event_cache, LatestEventValue::None, user_id, None).await => with body = "* goodbye"
         );
+
+        // The edited content is displayed, but the value keeps the timestamp of the
+        // event that was edited: an edit must not bump the room in the room list.
+        let events = room_event_cache.events().await.unwrap();
+        let timestamp_of = |wanted: &EventId| {
+            events
+                .iter()
+                .find(|event| event.event_id().as_deref() == Some(wanted))
+                .expect("the event is in the event cache")
+                .timestamp()
+        };
+        let original_timestamp = timestamp_of(event_id_0);
+        // Sanity check: the edit really is more recent than what it edits.
+        assert!(original_timestamp < timestamp_of(event_id_1));
+
+        let value = Builder::new_remote(&room_event_cache, LatestEventValue::None, user_id, None)
+            .await
+            .unwrap();
+
+        assert_eq!(value.timestamp(), original_timestamp);
     }
 
     #[async_test]

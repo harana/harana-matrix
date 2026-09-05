@@ -55,7 +55,8 @@ use tracing::{error, info, trace, warn};
 use super::{ObservableItemsTransaction, rfind_event_by_item_id};
 use crate::timeline::{
     BeaconInfo, EventTimelineItem, LiveLocationState, MsgLikeContent, MsgLikeKind, PollState,
-    ReactionInfo, ReactionStatus, TimelineEventItemId, TimelineItem, TimelineItemContent,
+    ReactionInfo, ReactionStatus, RedactedMessage, TimelineEventItemId, TimelineItem,
+    TimelineItemContent,
     event_item::beacon_info_matches,
 };
 
@@ -131,6 +132,9 @@ pub(crate) enum AggregationKind {
         /// Local echoes of redactions are applied reversibly whereas remote
         /// echoes of redactions are applied irreversibly.
         is_local: bool,
+
+        /// Who sent the redaction, and what we know of their profile.
+        redacted: RedactedMessage,
     },
 
     /// An event has been edited.
@@ -262,7 +266,7 @@ impl Aggregation {
                 }
             }
 
-            AggregationKind::Redaction { is_local } => {
+            AggregationKind::Redaction { is_local, redacted } => {
                 let is_local_redacted =
                     event.content().is_redacted() && event.unredacted_item.is_some();
                 let is_remote_redacted =
@@ -270,7 +274,7 @@ impl Aggregation {
                 if *is_local && is_local_redacted || !*is_local && is_remote_redacted {
                     ApplyAggregationResult::LeftItemIntact
                 } else {
-                    let new_item = event.redact(&rules.redaction, *is_local);
+                    let new_item = event.redact(&rules.redaction, *is_local, redacted.clone());
                     *event = Cow::Owned(new_item);
                     ApplyAggregationResult::UpdatedItem
                 }
@@ -395,7 +399,7 @@ impl Aggregation {
                 ApplyAggregationResult::Error(AggregationError::CantUndoPollEnd)
             }
 
-            AggregationKind::Redaction { is_local } => {
+            AggregationKind::Redaction { is_local, .. } => {
                 if *is_local {
                     if event.unredacted_item.is_some() {
                         // Unapply local redaction.
@@ -782,7 +786,7 @@ impl Aggregations {
                     // Nothing particular to do.
                 }
 
-                AggregationKind::Redaction { is_local } => {
+                AggregationKind::Redaction { is_local, .. } => {
                     // Mark the redaction as being remote and apply it (irreversibly).
                     *is_local = false;
 

@@ -22,10 +22,13 @@ use ruma::{
     events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
     owned_event_id,
 };
-use stream_assert::assert_next_matches;
+use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;
-use crate::timeline::{VirtualTimelineItem, traits::RoomDataProvider as _};
+use crate::timeline::{
+    DateDividerMode, VirtualTimelineItem, controller::TimelineSettings,
+    tests::TestTimelineBuilder, traits::RoomDataProvider as _,
+};
 
 #[async_test]
 async fn test_date_divider() {
@@ -228,4 +231,32 @@ async fn test_update_read_marker() {
     assert!(marker.is_read_marker());
 
     assert!(stream.next().now_or_never().is_none());
+}
+
+#[async_test]
+async fn test_no_date_dividers() {
+    let timeline = TestTimelineBuilder::new()
+        .settings(TimelineSettings {
+            date_divider_mode: DateDividerMode::None,
+            ..Default::default()
+        })
+        .build()
+        .await;
+    let mut stream = timeline.subscribe().await;
+
+    let f = &timeline.factory;
+
+    timeline.handle_live_event(f.text_msg("first day").sender(*ALICE)).await;
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    item.as_event().unwrap();
+
+    // Advance one day: a `Daily` timeline would insert a date divider here.
+    f.set_next_ts(24 * 60 * 60 * 1000);
+    timeline.handle_live_event(f.text_msg("second day").sender(*ALICE)).await;
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    item.as_event().unwrap();
+
+    // No virtual item was ever emitted.
+    assert_pending!(stream);
+    assert!(timeline.controller.items().await.iter().all(|item| !item.is_date_divider()));
 }

@@ -174,12 +174,15 @@ impl TryFrom<TimelineFocus> for matrix_sdk_ui::timeline::TimelineFocus {
     }
 }
 
-/// Changes how date dividers get inserted, either in between each day or in
-/// between each month
+/// Changes how date dividers get inserted: in between each day, in between
+/// each month, or not at all.
 #[derive(uniffi::Enum)]
 pub enum DateDividerMode {
     Daily,
     Monthly,
+    /// Never insert a date divider, for timelines that don't render them, e.g.
+    /// a media swipe-through gallery.
+    None,
 }
 
 impl From<DateDividerMode> for matrix_sdk_ui::timeline::DateDividerMode {
@@ -187,6 +190,7 @@ impl From<DateDividerMode> for matrix_sdk_ui::timeline::DateDividerMode {
         match value {
             DateDividerMode::Daily => Self::Daily,
             DateDividerMode::Monthly => Self::Monthly,
+            DateDividerMode::None => Self::None,
         }
     }
 }

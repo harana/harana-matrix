@@ -46,7 +46,8 @@ pub use self::{
         AnyOtherStateEventContentChange, BeaconInfo, EmbeddedEvent, EncryptedMessage,
         InReplyToDetails, LiveLocationState, MemberProfileChange, MembershipChange, Message,
         MsgLikeContent, MsgLikeKind, OtherMessageLike, OtherState, PollResult, PollState,
-        RoomMembershipChange, RoomPinnedEventsChange, Sticker, ThreadSummary, TimelineItemContent,
+        RedactedMessage, RoomMembershipChange, RoomPinnedEventsChange, Sticker, ThreadSummary,
+        TimelineItemContent,
     },
     local::{EventSendState, MediaUploadProgress},
 };
@@ -445,11 +446,10 @@ impl EventTimelineItem {
             false
         } else if self.content.is_message() {
             true
-        } else if self.content().as_live_location_state().is_some() {
-            // Live location sharing session (MSC3489) events are state events, not always
-            // displayed in a timeline, so can't be replied to.
-            false
         } else {
+            // Note: live location sharing session (MSC3489) events are state events, but
+            // other clients let users reply to them, just like they do for static
+            // location messages, so we allow it too.
             self.latest_json().is_some()
         }
     }
@@ -547,13 +547,18 @@ impl EventTimelineItem {
     }
 
     /// Create a clone of the current item, with content that's been redacted.
-    pub(super) fn redact(&self, rules: &RedactionRules, is_local: bool) -> Self {
+    pub(super) fn redact(
+        &self,
+        rules: &RedactionRules,
+        is_local: bool,
+        redacted: RedactedMessage,
+    ) -> Self {
         let unredacted_item = is_local.then(|| UnredactedEventTimelineItem {
             content: self.content.clone(),
             original_json: self.original_json().cloned(),
             latest_edit_json: self.latest_edit_json().cloned(),
         });
-        let content = self.content.redact(rules);
+        let content = self.content.redact(rules, redacted);
         let kind = match &self.kind {
             EventTimelineItemKind::Local(l) => EventTimelineItemKind::Local(l.clone()),
             EventTimelineItemKind::Remote(r) => EventTimelineItemKind::Remote(r.redact()),
@@ -655,7 +660,7 @@ impl EventTimelineItem {
                 },
                 MsgLikeKind::Sticker(_)
                 | MsgLikeKind::Poll(_)
-                | MsgLikeKind::Redacted
+                | MsgLikeKind::Redacted(_)
                 | MsgLikeKind::UnableToDecrypt(_)
                 | MsgLikeKind::Other(_)
                 | MsgLikeKind::LiveLocation(_) => None,
@@ -1063,8 +1068,14 @@ mod tests {
     }
 
     #[test]
-    fn cannot_reply_to_live_location_events() {
+    fn can_reply_to_live_location_events() {
         let item = remote_item(live_location_content(), Some(sample_raw_event()));
+        assert!(item.can_be_replied_to());
+    }
+
+    #[test]
+    fn cannot_reply_to_live_location_events_with_no_json() {
+        let item = remote_item(live_location_content(), None);
         assert!(!item.can_be_replied_to());
     }
 

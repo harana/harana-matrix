@@ -908,7 +908,7 @@ mod tests {
         // The redacted root is surfaced as a redacted message.
         assert!(matches!(
             items[0].root_event.content,
-            Some(TimelineItemContent::MsgLike(MsgLikeContent { kind: MsgLikeKind::Redacted, .. }))
+            Some(TimelineItemContent::MsgLike(MsgLikeContent { kind: MsgLikeKind::Redacted(_), .. }))
         ));
 
         // The plaintext latest reply is surfaced as a regular message.
