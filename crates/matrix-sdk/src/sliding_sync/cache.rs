@@ -4,9 +4,9 @@
 //! same cache. It helps to define what it sometimes called a “cold start”, or a
 //!  “fast start”.
 
-use matrix_sdk_base::{StateStore, StoreError};
 #[cfg(feature = "e2e-encryption")]
 use matrix_sdk_base::to_device_token;
+use matrix_sdk_base::{StateStore, StoreError};
 use matrix_sdk_common::timer;
 use ruma::UserId;
 use tracing::{trace, warn};

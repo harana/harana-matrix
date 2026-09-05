@@ -1990,9 +1990,7 @@ mod tests {
                 olm_machine
                     .store()
                     .save_changes(Changes {
-                        next_batch_token: Some(matrix_sdk_base::to_device_token::tag(
-                            &since_token,
-                        )),
+                        next_batch_token: Some(matrix_sdk_base::to_device_token::tag(&since_token)),
                         ..Default::default()
                     })
                     .await
@@ -2050,11 +2048,11 @@ mod tests {
                         AnyOutgoingRequest::KeysUpload(_) => AnyIncomingResponse::KeysUpload(
                             &ruma_response_from_json(&json!({ "one_time_key_counts": {} })),
                         ),
-                        AnyOutgoingRequest::KeysQuery(_) => AnyIncomingResponse::KeysQuery(
-                            &ruma_response_from_json(&json!({
+                        AnyOutgoingRequest::KeysQuery(_) => {
+                            AnyIncomingResponse::KeysQuery(&ruma_response_from_json(&json!({
                                 "device_keys": { alice: {}, me: {} }
-                            })),
-                        ),
+                            })))
+                        }
                         other => panic!("unexpected outgoing request: {other:?}"),
                     };
 

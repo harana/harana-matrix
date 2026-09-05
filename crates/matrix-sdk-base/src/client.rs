@@ -37,7 +37,6 @@ use matrix_sdk_crypto::{
 use ruma::DeviceId;
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::room::history_visibility::HistoryVisibility;
-use ruma::events::room::member::MembershipState;
 use ruma::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::{self as api, sync::sync_events::v5},
@@ -45,7 +44,7 @@ use ruma::{
         StateEvent, StateEventType,
         ignored_user_list::IgnoredUserListEventContent,
         push_rules::{PushRulesEvent, PushRulesEventContent},
-        room::member::SyncRoomMemberEvent,
+        room::member::{MembershipState, SyncRoomMemberEvent},
     },
     push::Ruleset,
     time::Instant,

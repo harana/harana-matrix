@@ -411,10 +411,8 @@ impl VerificationMachine {
 
             let content = pending_request.content.borrow();
 
-            let Some(device_data) = self
-                .store
-                .get_device(&pending_request.sender, content.from_device())
-                .await?
+            let Some(device_data) =
+                self.store.get_device(&pending_request.sender, content.from_device()).await?
             else {
                 still_pending.push(pending_request.clone());
                 continue;

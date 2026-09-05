@@ -19,10 +19,7 @@ use std::{
     fmt::{self, Debug},
     future::{Future, ready},
     pin::Pin,
-    sync::{
-        Arc, Mutex as StdMutex, RwLock as StdRwLock, Weak,
-        atomic::AtomicBool,
-    },
+    sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock, Weak, atomic::AtomicBool},
     time::Duration,
 };
 

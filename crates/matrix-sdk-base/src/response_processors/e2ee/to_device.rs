@@ -47,9 +47,7 @@ pub async fn from_msc4186(
         // Tag the token, so that the sliding sync code can tell it apart from a sync
         // v2 `next_batch` that an older version of the SDK may have left in the same
         // slot of the crypto store.
-        to_device
-            .as_ref()
-            .map(|to_device| crate::to_device_token::tag(&to_device.next_batch)),
+        to_device.as_ref().map(|to_device| crate::to_device_token::tag(&to_device.next_batch)),
         decryption_settings,
         true,
     )

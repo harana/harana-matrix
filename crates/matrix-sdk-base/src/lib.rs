@@ -41,9 +41,9 @@ pub mod sliding_sync;
 
 pub mod store;
 pub mod sync;
-pub mod to_device_token;
 #[cfg(any(test, feature = "testing"))]
 mod test_utils;
+pub mod to_device_token;
 mod utils;
 
 pub use client::DmRoomDefinition;

@@ -26,8 +26,6 @@
 
 use std::{pin::pin, sync::Arc, time::Duration};
 
-use ruma::time::Instant;
-
 use eyeball::{SharedObservable, Subscriber};
 use futures_util::{
     StreamExt as _,
@@ -40,6 +38,7 @@ use matrix_sdk::{
     executor::{JoinHandle, spawn},
     sleep::sleep,
 };
+use ruma::time::Instant;
 use thiserror::Error;
 use tokio::sync::{
     Mutex as AsyncMutex, OwnedMutexGuard,

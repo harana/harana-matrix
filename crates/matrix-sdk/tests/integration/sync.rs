@@ -2762,9 +2762,8 @@ async fn test_state_event_handlers_are_called_once_per_event() {
     // previous sync, so a state event that is part of the timeline shows up in both
     // `state_after` and `timeline`.
     let f = EventFactory::new().room(room_id).sender(sender);
-    let make_name_event = || {
-        f.room_name("Room name").event_id(event_id!("$name_event:example.org"))
-    };
+    let make_name_event =
+        || f.room_name("Room name").event_id(event_id!("$name_event:example.org"));
 
     server
         .mock_sync()
@@ -2797,9 +2796,8 @@ async fn test_member_counts_are_known_after_syncing_members() {
 
     // The sync carries no `m.room.summary`, which is what a server sends for a room
     // whose member counts didn't change.
-    let room = server
-        .sync_room(&client, AnyRoomBuilder::Joined(JoinedRoomBuilder::new(room_id)))
-        .await;
+    let room =
+        server.sync_room(&client, AnyRoomBuilder::Joined(JoinedRoomBuilder::new(room_id))).await;
 
     assert_eq!(room.active_members_count(), 0);
 
