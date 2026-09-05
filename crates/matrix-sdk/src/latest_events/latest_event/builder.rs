@@ -2305,7 +2305,7 @@ mod builder_tests {
         let timestamp_of = |wanted: &EventId| {
             events
                 .iter()
-                .find(|event| event.event_id().as_deref() == Some(wanted))
+                .find(|event| event.event_id() == Some(wanted))
                 .expect("the event is in the event cache")
                 .timestamp()
         };

@@ -1229,6 +1229,26 @@ async fn get_forwarder_info<P: RoomDataProvider>(
     (forwarder, forwarder_profile.flatten())
 }
 
+/// Whether `event` is the `m.room.member` event with which its sender joined
+/// the room.
+///
+/// A membership event that only changes the sender's profile isn't a join:
+/// the sender was already a member before it.
+fn is_join_event(event: &AnySyncTimelineEvent) -> bool {
+    let AnySyncTimelineEvent::State(AnySyncStateEvent::RoomMember(SyncStateEvent::Original(ev))) =
+        event
+    else {
+        return false;
+    };
+
+    matches!(
+        ev.membership_change(),
+        MembershipChange::Joined
+            | MembershipChange::InvitationAccepted
+            | MembershipChange::KnockAccepted
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -1408,24 +1428,4 @@ mod tests {
             TimelineUniqueId(timeline_id),
         )
     }
-}
-
-/// Whether `event` is the `m.room.member` event with which its sender joined
-/// the room.
-///
-/// A membership event that only changes the sender's profile isn't a join:
-/// the sender was already a member before it.
-fn is_join_event(event: &AnySyncTimelineEvent) -> bool {
-    let AnySyncTimelineEvent::State(AnySyncStateEvent::RoomMember(SyncStateEvent::Original(ev))) =
-        event
-    else {
-        return false;
-    };
-
-    matches!(
-        ev.membership_change(),
-        MembershipChange::Joined
-            | MembershipChange::InvitationAccepted
-            | MembershipChange::KnockAccepted
-    )
 }
