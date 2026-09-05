@@ -456,6 +456,29 @@ impl CrossSigningResetAuthType {
     }
 }
 
+/// What happened when we tried to bootstrap a cross-signing identity.
+///
+/// Returned by [`Encryption::bootstrap_cross_signing_if_needed_with_outcome`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrossSigningBootstrapOutcome {
+    /// A cross-signing identity was created and published to the homeserver.
+    Created,
+
+    /// The account already had a cross-signing identity, so nothing was done.
+    AlreadyPresent,
+
+    /// The homeserver wants user-interactive authentication before it accepts
+    /// the cross-signing keys.
+    ///
+    /// Collect the authentication data from the user and call the method again
+    /// with it.
+    AuthenticationRequired,
+
+    /// Cross-signing is not available, because this client has no crypto
+    /// machine, e.g. it is not logged in.
+    Unavailable,
+}
+
 /// OAuth 2.0 specific information about the required authentication for the
 /// upload of cross-signing keys.
 #[derive(Debug, Clone, Deserialize)]
@@ -1594,6 +1617,50 @@ impl Encryption {
     ///     }
     /// }
     /// # anyhow::Ok(()) };
+    /// Bootstrap cross-signing for this account if it does not have a
+    /// cross-signing identity yet, reporting what happened.
+    ///
+    /// Unlike [`Encryption::bootstrap_cross_signing_if_needed`], the caller can
+    /// tell an identity that was just created from one that already existed,
+    /// and a homeserver which wants user-interactive authentication from a
+    /// hard failure. No private key material is returned, and an existing
+    /// identity is never reset.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth_data` - The authentication data to send with the upload of the
+    ///   cross-signing keys, if the homeserver asked for it in a previous call.
+    pub async fn bootstrap_cross_signing_if_needed_with_outcome(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<CrossSigningBootstrapOutcome> {
+        let user_id = {
+            let olm_machine = self.client.olm_machine().await;
+            let Some(olm_machine) = olm_machine.as_ref() else {
+                return Ok(CrossSigningBootstrapOutcome::Unavailable);
+            };
+
+            olm_machine.user_id().to_owned()
+        };
+
+        self.ensure_initial_key_query().await?;
+
+        if self.get_user_identity(&user_id).await?.is_some() {
+            return Ok(CrossSigningBootstrapOutcome::AlreadyPresent);
+        }
+
+        match self.bootstrap_cross_signing(auth_data).await {
+            Ok(()) => Ok(CrossSigningBootstrapOutcome::Created),
+            Err(error) => {
+                if error.as_uiaa_response().is_some() {
+                    Ok(CrossSigningBootstrapOutcome::AuthenticationRequired)
+                } else {
+                    Err(error)
+                }
+            }
+        }
+    }
+
     pub async fn bootstrap_cross_signing_if_needed(
         &self,
         auth_data: Option<AuthData>,

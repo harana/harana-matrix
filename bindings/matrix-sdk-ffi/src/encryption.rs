@@ -596,6 +596,32 @@ impl Encryption {
         self.inner.curve25519_key().await.map(|k| k.to_base64())
     }
 
+    /// Create and publish a cross-signing identity for this account, unless it
+    /// already has one.
+    ///
+    /// A client which authenticates first and offers a security setup step
+    /// afterwards needs to trigger this explicitly, rather than relying on it
+    /// happening while the client is built.
+    ///
+    /// An existing identity is never reset, and no private key material is
+    /// returned; use `IdentityResetHandle` if you do want to reset the
+    /// identity.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth_data` - The authentication data to send along with the keys, if
+    ///   a previous call reported that the homeserver requires it.
+    pub async fn bootstrap_cross_signing(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<CrossSigningBootstrapOutcome, ClientError> {
+        self.inner
+            .bootstrap_cross_signing_if_needed_with_outcome(auth_data.map(Into::into))
+            .await
+            .map(Into::into)
+            .map_err(ClientError::from_err)
+    }
+
     pub fn backup_state_listener(&self, listener: Box<dyn BackupStateListener>) -> Arc<TaskHandle> {
         let mut stream = self.inner.backups().state_stream();
 
@@ -1084,6 +1110,35 @@ impl IdentityResetHandle {
 
     pub async fn cancel(&self) {
         self.inner.cancel().await;
+    }
+}
+
+/// What happened when we tried to bootstrap a cross-signing identity.
+#[derive(uniffi::Enum)]
+pub enum CrossSigningBootstrapOutcome {
+    /// A cross-signing identity was created and published to the homeserver.
+    Created,
+    /// The account already had a cross-signing identity, so nothing was done.
+    AlreadyPresent,
+    /// The homeserver wants user-interactive authentication before it accepts
+    /// the cross-signing keys. Collect it from the user and call the method
+    /// again with it.
+    AuthenticationRequired,
+    /// Cross-signing is not available, because this client has no crypto
+    /// machine.
+    Unavailable,
+}
+
+impl From<matrix_sdk::encryption::CrossSigningBootstrapOutcome> for CrossSigningBootstrapOutcome {
+    fn from(value: matrix_sdk::encryption::CrossSigningBootstrapOutcome) -> Self {
+        use matrix_sdk::encryption::CrossSigningBootstrapOutcome::*;
+
+        match value {
+            Created => Self::Created,
+            AlreadyPresent => Self::AlreadyPresent,
+            AuthenticationRequired => Self::AuthenticationRequired,
+            Unavailable => Self::Unavailable,
+        }
     }
 }
 
