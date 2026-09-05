@@ -20,13 +20,15 @@ use matrix_sdk::{
     ComposerDraft as SdkComposerDraft, ComposerDraftType as SdkComposerDraftType,
     DraftAttachment as SdkDraftAttachment, DraftAttachmentContent, DraftThumbnail, EncryptionState,
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
-    RoomMemberships, RoomState, SuccessorRoom as SdkSuccessorRoom,
+    RoomMembersUpdate as SdkRoomMembersUpdate, RoomMemberships, RoomState,
+    SuccessorRoom as SdkSuccessorRoom,
     deserialized_responses::{
         RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent,
     },
     encryption::LocalTrust,
     room::{
-        Room as SdkRoom, RoomMemberRole, edit::EditedContent, power_levels::RoomPowerLevelChanges,
+        Room as SdkRoom, RoomMemberRole, RoomMemberSortOrder as SdkRoomMemberSortOrder,
+        edit::EditedContent, power_levels::RoomPowerLevelChanges,
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
@@ -360,6 +362,73 @@ impl Room {
         Ok(Arc::new(RoomMembersIterator::new(
             self.inner.members_no_sync(RoomMemberships::empty()).await?,
         )))
+    }
+
+    /// Get one page of the members of this room, filtered and sorted.
+    ///
+    /// Only `limit` members are handed across this boundary, whatever the size
+    /// of the room, and the returned page also carries how many members match
+    /// the query in total. Members are read from the local store; set
+    /// `sync_first` to fetch the member list from the homeserver first when it
+    /// may be incomplete.
+    ///
+    /// See `Room::subscribe_to_member_updates` to know when to ask again.
+    pub async fn paginated_members(
+        &self,
+        query: RoomMemberListQuery,
+        offset: u32,
+        limit: u32,
+    ) -> Result<RoomMemberListPage, ClientError> {
+        let mut request = self.inner.member_list().sort_by(query.sort.into());
+
+        if !query.sync_first {
+            request = request.no_sync();
+        }
+
+        if let Some(memberships) = query.memberships {
+            request = request.memberships(memberships.into());
+        }
+
+        if let Some(search_term) = query.search_term {
+            request = request.search(search_term);
+        }
+
+        if let Some(min_power_level) = query.min_power_level {
+            request = request.min_power_level(min_power_level);
+        }
+
+        let page = request.page(offset as usize, limit as usize).await?;
+
+        Ok(RoomMemberListPage {
+            members: page
+                .members
+                .into_iter()
+                .map(|member| member.try_into())
+                .collect::<Result<Vec<_>, _>>()?,
+            total: page.total as u32,
+        })
+    }
+
+    /// Subscribe to the member list of this room.
+    ///
+    /// The listener is called every time members join, leave or change their
+    /// profile, so a member list built with `Room::paginated_members` knows
+    /// when to ask again.
+    ///
+    /// Use the returned [`TaskHandle`] to cancel the subscription.
+    pub fn subscribe_to_member_updates(
+        self: Arc<Self>,
+        listener: Box<dyn RoomMemberUpdatesListener>,
+    ) -> Arc<TaskHandle> {
+        let updates = self.inner.subscribe_to_member_updates();
+
+        Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
+            pin_mut!(updates);
+
+            while let Some(update) = updates.next().await {
+                listener.call(update.into());
+            }
+        })))
     }
 
     /// Get the user IDs of the joined and invited members, without the service
@@ -1572,6 +1641,124 @@ pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait MembershipListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, membership: Membership);
+}
+
+#[matrix_sdk_ffi_macros::export(callback_interface)]
+pub trait RoomMemberUpdatesListener: SyncOutsideWasm + SendOutsideWasm {
+    fn call(&self, update: RoomMemberUpdate);
+}
+
+/// What changed in the member list of a room.
+#[derive(uniffi::Enum)]
+pub enum RoomMemberUpdate {
+    /// The whole member list was reloaded, so anything shown from it is stale.
+    FullReload,
+    /// These members changed.
+    Partial { user_ids: Vec<String> },
+}
+
+impl From<SdkRoomMembersUpdate> for RoomMemberUpdate {
+    fn from(value: SdkRoomMembersUpdate) -> Self {
+        match value {
+            SdkRoomMembersUpdate::FullReload => Self::FullReload,
+            SdkRoomMembersUpdate::Partial(user_ids) => Self::Partial {
+                user_ids: user_ids.into_iter().map(String::from).collect(),
+            },
+        }
+    }
+}
+
+/// Which members of a room to return, in what order. See
+/// `Room::paginated_members`.
+#[derive(uniffi::Record)]
+pub struct RoomMemberListQuery {
+    /// Only keep the members with one of these memberships. `None` keeps all
+    /// of them.
+    #[uniffi(default = None)]
+    pub memberships: Option<RoomMembershipFilter>,
+    /// Only keep the members whose display name or user ID contains this term,
+    /// case-insensitively.
+    #[uniffi(default = None)]
+    pub search_term: Option<String>,
+    /// Only keep the members whose power level is at least this high. This is
+    /// what showing the administrators of a room separately needs.
+    #[uniffi(default = None)]
+    pub min_power_level: Option<i64>,
+    /// How to order the members.
+    pub sort: RoomMemberSortOrder,
+    /// Fetch the member list from the homeserver first, in case the local one
+    /// is incomplete.
+    #[uniffi(default = true)]
+    pub sync_first: bool,
+}
+
+/// How to order the members of a room. See `RoomMemberListQuery`.
+#[derive(uniffi::Enum)]
+pub enum RoomMemberSortOrder {
+    /// By display name, case-insensitively, and by user ID between members
+    /// that share one.
+    Name,
+    /// By power level, highest first, and by name between members that share
+    /// one.
+    PowerLevelThenName,
+}
+
+impl From<RoomMemberSortOrder> for SdkRoomMemberSortOrder {
+    fn from(value: RoomMemberSortOrder) -> Self {
+        match value {
+            RoomMemberSortOrder::Name => Self::Name,
+            RoomMemberSortOrder::PowerLevelThenName => Self::PowerLevelThenName,
+        }
+    }
+}
+
+/// Which memberships to keep. Empty keeps all of them.
+#[derive(uniffi::Record)]
+pub struct RoomMembershipFilter {
+    #[uniffi(default = false)]
+    pub join: bool,
+    #[uniffi(default = false)]
+    pub invite: bool,
+    #[uniffi(default = false)]
+    pub knock: bool,
+    #[uniffi(default = false)]
+    pub leave: bool,
+    #[uniffi(default = false)]
+    pub ban: bool,
+}
+
+impl From<RoomMembershipFilter> for RoomMemberships {
+    fn from(value: RoomMembershipFilter) -> Self {
+        let mut memberships = RoomMemberships::empty();
+
+        if value.join {
+            memberships |= RoomMemberships::JOIN;
+        }
+        if value.invite {
+            memberships |= RoomMemberships::INVITE;
+        }
+        if value.knock {
+            memberships |= RoomMemberships::KNOCK;
+        }
+        if value.leave {
+            memberships |= RoomMemberships::LEAVE;
+        }
+        if value.ban {
+            memberships |= RoomMemberships::BAN;
+        }
+
+        memberships
+    }
+}
+
+/// One page of the member list of a room. See `Room::paginated_members`.
+#[derive(uniffi::Record)]
+pub struct RoomMemberListPage {
+    /// The members in this page.
+    pub members: Vec<RoomMember>,
+    /// How many members match the query in total, ignoring the bounds of this
+    /// page.
+    pub total: u32,
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]

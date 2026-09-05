@@ -1,20 +1,21 @@
 use std::{collections::BTreeMap, iter, ops::Not, time::Duration};
 
 use assert_matches2::{assert_let, assert_matches};
+use futures_util::{FutureExt, StreamExt, pin_mut};
 use js_int::uint;
 use matrix_sdk::{
     RoomDisplayName, RoomMemberships,
     config::{SyncSettings, SyncToken},
-    room::RoomMember,
+    room::{RoomMember, RoomMemberSortOrder},
     test_utils::mocks::{AnyRoomBuilder, MatrixMockServer},
 };
-use matrix_sdk_base::DmRoomDefinition;
+use matrix_sdk_base::{DmRoomDefinition, RoomMembersUpdate};
 use matrix_sdk_test::{
     BOB, DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
     bulk_room_members, event_factory::EventFactory, sync_state_event, test_json,
 };
 use ruma::{
-    event_id,
+    RoomVersionId, event_id, int,
     events::{
         AnyGlobalAccountDataEvent, AnySyncStateEvent, AnySyncTimelineEvent, StateEventType,
         direct::DirectUserIdentifier,
@@ -27,6 +28,7 @@ use ruma::{
     mxc_uri, owned_room_alias_id, room_id, room_version_id, serde::Raw, user_id,
 };
 use serde_json::json;
+use stream_assert::assert_pending;
 use tokio::{task::spawn, time::sleep};
 use wiremock::{
     Mock, ResponseTemplate,
@@ -113,6 +115,136 @@ async fn test_banned_member_has_no_profile() {
     // The other member is unaffected.
     let member = room.get_member_no_sync(admin).await.unwrap().expect("the member is known");
     assert_eq!(member.display_name(), Some("Admin"));
+}
+
+#[async_test]
+async fn test_member_list_filters_sorts_and_paginates() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let admin = user_id!("@admin:localhost");
+    let alice = user_id!("@alice:localhost");
+    let bob = user_id!("@bob:localhost");
+    let carol = user_id!("@carol:localhost");
+    let dave = user_id!("@dave:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(admin).create(admin, RoomVersionId::V11))
+                .add_state_event(f().sender(admin).member(admin).display_name("Zoe the admin"))
+                .add_state_event(f().sender(alice).member(alice).display_name("alice"))
+                .add_state_event(f().sender(bob).member(bob).display_name("Bob"))
+                .add_state_event(f().sender(admin).member(carol).invited(carol).display_name(
+                    "Carol",
+                ))
+                .add_state_event(f().sender(admin).member(dave).banned(dave))
+                .add_state_event(f().sender(admin).power_levels(
+                    &mut BTreeMap::from([(admin.to_owned(), int!(100))]),
+                )),
+        )
+        .await;
+
+    // Sorted by name, case-insensitively, across every membership.
+    let all = room.member_list().no_sync().all().await.unwrap();
+    assert_eq!(
+        all.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["alice", "Bob", "Carol", "dave", "Zoe the admin"]
+    );
+
+    // Filtered by membership.
+    let joined = room
+        .member_list()
+        .no_sync()
+        .memberships(RoomMemberships::JOIN)
+        .all()
+        .await
+        .unwrap();
+    assert_eq!(
+        joined.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["alice", "Bob", "Zoe the admin"]
+    );
+
+    // Sorted by power level first: the admin comes before everyone else despite
+    // their name sorting last.
+    let by_power_level = room
+        .member_list()
+        .no_sync()
+        .memberships(RoomMemberships::JOIN)
+        .sort_by(RoomMemberSortOrder::PowerLevelThenName)
+        .all()
+        .await
+        .unwrap();
+    assert_eq!(
+        by_power_level.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Zoe the admin", "alice", "Bob"]
+    );
+
+    // Searching matches the display name or the user ID, case-insensitively.
+    let searched = room.member_list().no_sync().search("BO").all().await.unwrap();
+    assert_eq!(
+        searched.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Bob"]
+    );
+    let searched = room.member_list().no_sync().search("@carol").all().await.unwrap();
+    assert_eq!(
+        searched.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Carol"]
+    );
+    // An empty search term is not a filter.
+    assert_eq!(room.member_list().no_sync().search("   ").count().await.unwrap(), 5);
+
+    // Filtering on power level is what showing the admins separately needs.
+    let admins = room.member_list().no_sync().min_power_level(100).all().await.unwrap();
+    assert_eq!(
+        admins.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Zoe the admin"]
+    );
+
+    // Pagination reports the total, so a view knows how far it can scroll.
+    let page = room.member_list().no_sync().page(1, 2).await.unwrap();
+    assert_eq!(page.total, 5);
+    assert_eq!(
+        page.members.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Bob", "Carol"]
+    );
+
+    // Scrolling past the end is an empty page, not an error.
+    let page = room.member_list().no_sync().page(50, 2).await.unwrap();
+    assert_eq!(page.total, 5);
+    assert!(page.members.is_empty());
+}
+
+#[async_test]
+async fn test_subscribe_to_member_updates() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let alice = user_id!("@alice:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server.sync_room(&client, JoinedRoomBuilder::new(room_id)).await;
+
+    let updates = room.subscribe_to_member_updates();
+    pin_mut!(updates);
+    assert_pending!(updates);
+
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(alice).member(alice).display_name("Alice")),
+        )
+        .await;
+
+    assert_let!(
+        Some(RoomMembersUpdate::Partial(user_ids)) = updates.next().now_or_never().flatten()
+    );
+    assert!(user_ids.contains(alice));
 }
 
 #[async_test]

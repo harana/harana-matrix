@@ -159,6 +159,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use self::futures::{SendAttachment, SendMessageLikeEvent, SendRawMessageLikeEvent};
 pub use self::{
     member::{RoomMember, RoomMemberRole},
+    member_list::{RoomMemberListPage, RoomMemberListQuery, RoomMemberSortOrder},
     messages::{
         EventWithContextResponse, IncludeRelations, ListThreadsOptions, Messages, MessagesOptions,
         Relations, RelationsOptions, ThreadRoots,
@@ -194,6 +195,7 @@ use crate::{
 pub mod edit;
 pub mod futures;
 pub mod identity_status_changes;
+mod member_list;
 /// Contains code related to requests to join a room.
 pub mod knock_requests;
 mod member;
