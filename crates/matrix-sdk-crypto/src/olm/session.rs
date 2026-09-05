@@ -18,7 +18,7 @@ use ruma::{SecondsSinceUnixEpoch, serde::Raw};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
-use tracing::{Span, debug};
+use tracing::{Span, debug, warn};
 use vodozemac::{
     Curve25519PublicKey,
     olm::{DecryptionError, OlmMessage, Session as InnerSession, SessionConfig, SessionPickle},
@@ -57,6 +57,12 @@ pub struct Session {
     pub creation_time: SecondsSinceUnixEpoch,
     /// When the session was last used
     pub last_use_time: SecondsSinceUnixEpoch,
+    /// When the session last decrypted a message successfully, if it ever did.
+    ///
+    /// The spec recommends picking the session that most recently decrypted a
+    /// message when we have several to choose from, see
+    /// [the spec](https://spec.matrix.org/v1.16/client-server-api/#recovering-from-undecryptable-messages).
+    pub last_decryption_time: Option<SecondsSinceUnixEpoch>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -87,7 +93,9 @@ impl Session {
 
         let plaintext = String::from_utf8_lossy(&plaintext).to_string();
 
-        self.last_use_time = SecondsSinceUnixEpoch::now();
+        let now = SecondsSinceUnixEpoch::now();
+        self.last_use_time = now;
+        self.last_decryption_time = Some(now);
 
         Ok(plaintext)
     }
@@ -275,6 +283,7 @@ impl Session {
             created_using_fallback_key: self.created_using_fallback_key,
             creation_time: self.creation_time,
             last_use_time: self.last_use_time,
+            last_decryption_time: self.last_decryption_time,
         }
     }
 
@@ -302,15 +311,56 @@ impl Session {
         let session: vodozemac::olm::Session = pickle.pickle.into();
         let session_id = session.session_id();
 
+        // The timestamps come from whoever produced the pickle, which may be another
+        // implementation writing to the same store. A bogus value (a timestamp in
+        // milliseconds rather than in seconds, say) would make this session look like
+        // the freshest one we have and get it picked for every outgoing message, so
+        // clamp anything that claims to be in the future.
+        let now = SecondsSinceUnixEpoch::now();
+        let creation_time =
+            clamp_timestamp(pickle.creation_time, now, "creation_time", &session_id);
+        let last_use_time =
+            clamp_timestamp(pickle.last_use_time, now, "last_use_time", &session_id);
+        let last_decryption_time = pickle
+            .last_decryption_time
+            .map(|time| clamp_timestamp(time, now, "last_decryption_time", &session_id));
+
         Ok(Session {
             inner: Arc::new(Mutex::new(session)),
             session_id: session_id.into(),
             created_using_fallback_key: pickle.created_using_fallback_key,
             sender_key: pickle.sender_key,
             our_device_keys,
-            creation_time: pickle.creation_time,
-            last_use_time: pickle.last_use_time,
+            creation_time,
+            last_use_time,
+            last_decryption_time,
         })
+    }
+}
+
+/// Clamp a timestamp read out of a [`PickledSession`] to `now` if it lies in
+/// the future.
+///
+/// Olm session timestamps are only ever used to order sessions against each
+/// other, so a value we cannot have produced ourselves is replaced by the
+/// current time rather than rejected: that keeps the session usable while
+/// stopping it from sorting ahead of every legitimate session forever.
+fn clamp_timestamp(
+    timestamp: SecondsSinceUnixEpoch,
+    now: SecondsSinceUnixEpoch,
+    field: &str,
+    session_id: &str,
+) -> SecondsSinceUnixEpoch {
+    if timestamp > now {
+        warn!(
+            session_id,
+            field,
+            timestamp = ?timestamp,
+            "Olm session pickle contains a timestamp in the future, clamping it to the current time"
+        );
+        now
+    } else {
+        timestamp
     }
 }
 
@@ -338,6 +388,13 @@ pub struct PickledSession {
     pub creation_time: SecondsSinceUnixEpoch,
     /// The Unix timestamp when the session was last used.
     pub last_use_time: SecondsSinceUnixEpoch,
+    /// The Unix timestamp when the session last decrypted a message
+    /// successfully.
+    ///
+    /// `None` for sessions pickled before this field existed, and for sessions
+    /// that never decrypted anything.
+    #[serde(default)]
+    pub last_decryption_time: Option<SecondsSinceUnixEpoch>,
 }
 
 #[cfg(test)]
@@ -356,6 +413,103 @@ mod tests {
             room::encrypted::ToDeviceEncryptedEventContent,
         },
     };
+
+    #[async_test]
+    async fn test_pickle_timestamps_in_the_future_are_clamped() {
+        use ruma::{SecondsSinceUnixEpoch, UInt};
+
+        use crate::olm::PickledSession;
+
+        // Given a session pickle whose timestamps are in milliseconds rather than in
+        // seconds, so they land far in the future,
+        let alice =
+            Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICEDEVICE"));
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEVICE"));
+
+        bob.generate_one_time_keys(1);
+        let one_time_key = *bob.one_time_keys().values().next().unwrap();
+        let session = alice
+            .create_outbound_session_helper(
+                SessionConfig::version_1(),
+                bob.identity_keys().curve25519,
+                one_time_key,
+                false,
+                alice.device_keys(),
+            )
+            .unwrap();
+
+        let now = SecondsSinceUnixEpoch::now();
+        let in_the_future = SecondsSinceUnixEpoch(UInt::new(u64::from(now.get()) * 1000).unwrap());
+
+        let pickle = PickledSession {
+            last_decryption_time: Some(in_the_future),
+            creation_time: in_the_future,
+            last_use_time: in_the_future,
+            ..session.pickle().await
+        };
+
+        // When we unpickle it,
+        let session = super::Session::from_pickle(alice.device_keys(), pickle).unwrap();
+
+        // Then the timestamps have been clamped to the present, so this session can't
+        // sort ahead of every other session forever.
+        assert!(session.creation_time <= SecondsSinceUnixEpoch::now());
+        assert!(session.last_use_time <= SecondsSinceUnixEpoch::now());
+        assert!(session.last_decryption_time.unwrap() <= SecondsSinceUnixEpoch::now());
+    }
+
+    #[async_test]
+    async fn test_decryption_records_the_decryption_time() {
+        use ruma::events::dummy::ToDeviceDummyEventContent;
+
+        // Given a session pair,
+        let alice =
+            Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICEDEVICE"));
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEVICE"));
+
+        bob.generate_one_time_keys(1);
+        let one_time_key = *bob.one_time_keys().values().next().unwrap();
+        let mut alice_session = alice
+            .create_outbound_session_helper(
+                SessionConfig::version_1(),
+                bob.identity_keys().curve25519,
+                one_time_key,
+                false,
+                alice.device_keys(),
+            )
+            .unwrap();
+
+        // Alice has not decrypted anything on this session yet.
+        assert!(alice_session.last_decryption_time.is_none());
+
+        let alice_device = DeviceData::from_account(&alice);
+        let message = alice_session
+            .encrypt(&alice_device, "m.dummy", ToDeviceDummyEventContent::new(), None)
+            .await
+            .unwrap()
+            .deserialize()
+            .unwrap();
+
+        // Encrypting doesn't count as decrypting.
+        assert!(alice_session.last_decryption_time.is_none());
+
+        assert_let!(ToDeviceEncryptedEventContent::OlmV1Curve25519AesSha2(content) = message);
+        let OlmMessage::PreKey(prekey) = content.ciphertext else {
+            panic!("Wrong Olm message type");
+        };
+
+        // When Bob decrypts the pre-key message that established the session,
+        let result = bob
+            .create_inbound_session(
+                alice_device.curve25519_key().unwrap(),
+                bob.device_keys(),
+                &prekey,
+            )
+            .unwrap();
+
+        // Then his side of the session knows when it last decrypted something.
+        assert!(result.session.last_decryption_time.is_some());
+    }
 
     #[async_test]
     async fn test_encryption_and_decryption() {

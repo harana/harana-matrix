@@ -58,6 +58,7 @@ use crate::{
         },
         requests::{OutgoingVerificationRequest, ToDeviceRequest},
     },
+    utilities::new_message_id,
     verification::VerificationMachine,
 };
 
@@ -740,8 +741,13 @@ impl DeviceData {
         }
     }
 
-    /// Find and return the most recently created Olm [`Session`] we are sharing
-    /// with this device.
+    /// Find and return the Olm [`Session`] we should use to talk to this
+    /// device.
+    ///
+    /// The spec tells us to prefer the session that most recently decrypted a
+    /// message from the other side, since that is the session the other side
+    /// has demonstrably got, falling back to the most recently created session
+    /// when none of ours has decrypted anything yet.
     pub(crate) async fn get_most_recent_session(
         &self,
         store: &CryptoStoreWrapper,
@@ -749,7 +755,7 @@ impl DeviceData {
         if let Some(sender_key) = self.curve25519_key() {
             if let Some(sessions) = store.get_sessions(&sender_key.to_base64()).await? {
                 let mut sessions = sessions.lock().await;
-                sessions.sort_by_key(|s| s.creation_time);
+                sessions.sort_by_key(|s| (s.last_decryption_time, s.creation_time));
 
                 Ok(sessions.last().cloned())
             } else {
@@ -877,10 +883,7 @@ impl DeviceData {
         event_type: &str,
         content: impl Serialize,
     ) -> OlmResult<(Session, Raw<ToDeviceEncryptedEventContent>, String)> {
-        #[cfg(not(target_family = "wasm"))]
-        let message_id = ulid::Ulid::generate().to_string();
-        #[cfg(target_family = "wasm")]
-        let message_id = ruma::TransactionId::new().to_string();
+        let message_id = new_message_id();
 
         tracing::Span::current().record("message_id", &message_id);
 

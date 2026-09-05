@@ -359,6 +359,13 @@ pub struct Account {
     /// from a `AccountPickle` that didn't use time-based fallback key
     /// rotation.
     fallback_creation_timestamp: Option<MilliSecondsSinceUnixEpoch>,
+    /// Has this account been modified since it was last written to the store?
+    ///
+    /// Persisting the account is expensive (it re-pickles the whole
+    /// `vodozemac` account, and on IndexedDB that is a transaction per sync),
+    /// and most passes over a sync response don't change it at all, so we only
+    /// write it back when one of the mutating methods below says we should.
+    dirty: bool,
 }
 
 impl Deref for Account {
@@ -448,6 +455,8 @@ impl Account {
             shared: false,
             uploaded_signed_key_count: 0,
             fallback_creation_timestamp: None,
+            // A brand new account has never been written to the store.
+            dirty: true,
         }
     }
 
@@ -490,7 +499,10 @@ impl Account {
     ///
     /// * `new_count` - The new count that was reported by the server.
     pub fn update_uploaded_key_count(&mut self, new_count: u64) {
-        self.uploaded_signed_key_count = new_count;
+        if self.uploaded_signed_key_count != new_count {
+            self.uploaded_signed_key_count = new_count;
+            self.dirty = true;
+        }
     }
 
     /// Get the currently known uploaded key count.
@@ -508,7 +520,10 @@ impl Account {
     /// Messages shouldn't be encrypted with the session before it has been
     /// shared.
     pub fn mark_as_shared(&mut self) {
-        self.shared = true;
+        if !self.shared {
+            self.shared = true;
+            self.dirty = true;
+        }
     }
 
     /// Get the one-time keys of the account.
@@ -520,6 +535,7 @@ impl Account {
 
     /// Generate count number of one-time keys.
     pub fn generate_one_time_keys(&mut self, count: usize) -> OneTimeKeyGenerationResult {
+        self.dirty = true;
         self.inner.generate_one_time_keys(count)
     }
 
@@ -617,6 +633,8 @@ impl Account {
 
         debug!(
             count = key_count,
+            uploaded_one_time_keys = count,
+            max_one_time_keys = max_keys,
             discarded_keys = ?result.removed,
             created_keys = ?result.created,
             "Generated new one-time keys"
@@ -635,6 +653,7 @@ impl Account {
         if self.inner.fallback_key().is_empty() && self.fallback_key_expired() {
             let removed_fallback_key = self.inner.generate_fallback_key();
             self.fallback_creation_timestamp = Some(MilliSecondsSinceUnixEpoch::now());
+            self.dirty = true;
 
             debug!(
                 ?removed_fallback_key,
@@ -700,6 +719,7 @@ impl Account {
 
     /// Mark the current set of one-time keys as being published.
     pub fn mark_keys_as_published(&mut self) {
+        self.dirty = true;
         self.inner.mark_keys_as_published();
     }
 
@@ -806,6 +826,7 @@ impl Account {
             shared: pickle.shared,
             uploaded_signed_key_count: pickle.uploaded_signed_key_count,
             fallback_creation_timestamp: pickle.fallback_key_creation_timestamp,
+            dirty: false,
         })
     }
 
@@ -999,6 +1020,7 @@ impl Account {
             created_using_fallback_key: fallback_used,
             creation_time: now,
             last_use_time: now,
+            last_decryption_time: None,
         })
     }
 
@@ -1119,11 +1141,29 @@ impl Account {
         #[cfg(feature = "experimental-algorithms")]
         let config = SessionConfig::version_2();
 
+        let unpublished_before = self.one_time_keys().len();
         let result = self.inner.create_inbound_session(config, their_identity_key, message)?;
+        // The one-time key the sender claimed has been consumed, so the pickled account
+        // has changed and needs to be written back.
+        self.dirty = true;
         let now = SecondsSinceUnixEpoch::now();
         let session_id = result.session.session_id();
 
         debug!(session=?result.session, "Decrypted an Olm message from a new Olm session");
+
+        // Creating an inbound session consumes the one-time key the sender claimed, and
+        // possibly trims the oldest unpublished keys to stay under the limit. Reports
+        // of "no one-time keys left" are hard to chase without a record of
+        // that, so log it.
+        let unpublished_after = self.one_time_keys().len();
+        debug!(
+            consumed_unpublished_one_time_keys =
+                unpublished_before.saturating_sub(unpublished_after),
+            unpublished_one_time_keys = unpublished_after,
+            uploaded_one_time_keys = self.uploaded_key_count(),
+            max_one_time_keys = self.max_one_time_keys(),
+            "Consumed a one-time key to create an inbound Olm session"
+        );
 
         let session = Session {
             inner: Arc::new(Mutex::new(result.session)),
@@ -1133,6 +1173,9 @@ impl Account {
             created_using_fallback_key: false,
             creation_time: now,
             last_use_time: now,
+            // The pre-key message that created this session decrypted successfully, which is
+            // exactly the signal this field records.
+            last_decryption_time: Some(now),
         };
 
         let plaintext = String::from_utf8_lossy(&result.plaintext).to_string();
@@ -1308,7 +1351,12 @@ impl Account {
         }
         self.mark_as_shared();
 
-        debug!("Marking one-time keys as published");
+        debug!(
+            published_one_time_keys = self.one_time_keys().len(),
+            uploaded_one_time_keys = self.uploaded_key_count(),
+            max_one_time_keys = self.max_one_time_keys(),
+            "Marking one-time keys as published"
+        );
         // First mark the current keys as published, as updating the key counts might
         // generate some new keys if we're still below the limit.
         self.mark_keys_as_published();
@@ -1841,6 +1889,11 @@ impl Account {
         // `vodozemac::Account` isn't really cloneable, but... Don't tell anyone.
         Self::from_pickle(self.pickle()).unwrap()
     }
+
+    /// Has this account been modified since it was last persisted?
+    pub(crate) fn dirty(&self) -> bool {
+        self.dirty
+    }
 }
 
 impl PartialEq for Account {
@@ -2206,5 +2259,34 @@ mod tests {
             session.shared_history(),
             "The shared history flag should have been set when we created the new session"
         );
+    }
+
+    #[test]
+    fn test_account_dirty_flag_tracks_real_changes() {
+        // A brand new account has never been persisted.
+        let mut account = Account::with_device_id(user_id!("@alice:localhost"), device_id!("DEV"));
+        assert!(account.dirty(), "A new account has to be written to the store");
+        account.mark_as_shared();
+
+        // Round-tripping through the store leaves it clean.
+        let mut account = Account::from_pickle(account.pickle()).unwrap();
+        assert!(!account.dirty(), "An account restored from the store matches the store");
+
+        // Reading it doesn't dirty it.
+        let _ = account.one_time_keys();
+        let _ = account.identity_keys();
+        assert!(!account.dirty());
+
+        // Neither does setting a field to the value it already holds, which is what a
+        // sync response that repeats the same one-time key count does.
+        let count = account.uploaded_key_count();
+        account.update_uploaded_key_count(count);
+        account.mark_as_shared();
+        account.mark_as_shared();
+        assert!(!account.dirty(), "A no-op update must not force a store write");
+
+        // An actual change does dirty it.
+        account.update_uploaded_key_count(count + 1);
+        assert!(account.dirty());
     }
 }

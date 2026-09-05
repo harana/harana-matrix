@@ -175,7 +175,40 @@ impl RoomKeyWithheldContent {
             RoomKeyWithheldContent::Unknown(_) => None,
         }
     }
+
+    /// Set the `org.matrix.msgid` of this to-device message.
+    ///
+    /// Every other to-device message we send carries one, which is what lets a
+    /// message be followed from the sender's logs to the receiver's; withheld
+    /// messages used to be the exception.
+    pub fn set_message_id(&mut self, message_id: String) {
+        let message_id = Value::String(message_id);
+
+        match self {
+            RoomKeyWithheldContent::MegolmV1AesSha2(c) => c.set_message_id(message_id),
+            #[cfg(feature = "experimental-algorithms")]
+            RoomKeyWithheldContent::MegolmV2AesSha2(c) => c.set_message_id(message_id),
+            RoomKeyWithheldContent::Unknown(c) => {
+                c.other.insert(MESSAGE_ID_FIELD.to_owned(), message_id);
+            }
+        }
+    }
+
+    /// Get the `org.matrix.msgid` of this to-device message, if it has one.
+    pub fn message_id(&self) -> Option<&str> {
+        let other = match self {
+            RoomKeyWithheldContent::MegolmV1AesSha2(c) => c.other(),
+            #[cfg(feature = "experimental-algorithms")]
+            RoomKeyWithheldContent::MegolmV2AesSha2(c) => c.other(),
+            RoomKeyWithheldContent::Unknown(c) => &c.other,
+        };
+
+        other.get(MESSAGE_ID_FIELD).and_then(Value::as_str)
+    }
 }
+
+/// The name of the field carrying a to-device message's ID.
+const MESSAGE_ID_FIELD: &str = "org.matrix.msgid";
 
 impl EventType for RoomKeyWithheldContent {
     const EVENT_TYPE: &'static str = "m.room_key.withheld";
@@ -252,6 +285,32 @@ impl CommonWithheldCodeContent {
 }
 
 impl MegolmV1AesSha2WithheldContent {
+    /// The extra top-level fields of this content.
+    fn other(&self) -> &BTreeMap<String, Value> {
+        match self {
+            Self::BlackListed(content)
+            | Self::Unverified(content)
+            | Self::Unauthorised(content)
+            | Self::Unavailable(content)
+            | Self::HistoryNotShared(content) => &content.other,
+            Self::NoOlm(content) => &content.other,
+        }
+    }
+
+    /// Set an extra top-level field on this content.
+    fn set_message_id(&mut self, message_id: Value) {
+        let other = match self {
+            Self::BlackListed(content)
+            | Self::Unverified(content)
+            | Self::Unauthorised(content)
+            | Self::Unavailable(content)
+            | Self::HistoryNotShared(content) => &mut content.other,
+            Self::NoOlm(content) => &mut content.other,
+        };
+
+        other.insert(MESSAGE_ID_FIELD.to_owned(), message_id);
+    }
+
     /// Get the session ID for this content, if available.
     pub fn session_id(&self) -> Option<&str> {
         match self {

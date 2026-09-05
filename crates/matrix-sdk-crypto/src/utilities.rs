@@ -20,6 +20,22 @@ use time::{
     format_description::well_known::{Iso8601, iso8601},
 };
 
+/// Mint a fresh ID for an outgoing to-device message, to be stored under
+/// `org.matrix.msgid`.
+///
+/// The ID lets a single to-device message be followed from the sender's logs
+/// to the receiver's, so every to-device message we generate should carry one.
+pub(crate) fn new_message_id() -> String {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        ulid::Ulid::generate().to_string()
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        ruma::TransactionId::new().to_string()
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn json_convert<T, U>(value: &T) -> serde_json::Result<U>
 where

@@ -463,7 +463,18 @@ impl StoreTransaction {
 
     /// Commits all dirty fields to the store, and maintains the cache so it
     /// reflects the current state of the database.
-    pub async fn commit(self) -> Result<()> {
+    pub async fn commit(mut self) -> Result<()> {
+        // `account()` takes the account out of the cache whether or not the caller ends
+        // up modifying it, so an untouched account has to be handed back here. Skipping
+        // the write in that case matters: `process_sync_changes` runs several times per
+        // sync and re-pickling the account each time is expensive, especially on
+        // IndexedDB.
+        if self.changes.account.as_ref().is_some_and(|account| !account.dirty())
+            && let Some(account) = self.changes.account.take()
+        {
+            *self.cache.account.lock().await = Some(account);
+        }
+
         if self.changes.is_empty() {
             return Ok(());
         }
@@ -473,7 +484,9 @@ impl StoreTransaction {
 
         self.store.save_pending_changes(self.changes).await?;
 
-        // Make the cache coherent with the database.
+        // Make the cache coherent with the database. `deep_clone` goes through a
+        // pickle, so the clone starts out clean, which is what we want now that it
+        // matches the database.
         if let Some(account) = account {
             *self.cache.account.lock().await = Some(account);
         }
