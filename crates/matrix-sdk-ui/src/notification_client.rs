@@ -309,7 +309,7 @@ impl NotificationClient {
             }
         };
 
-        let encryption_sync = EncryptionSyncService::new(
+        let encryption_sync = EncryptionSyncService::new_for_notifications(
             self.client.clone(),
             Some((Duration::from_secs(3), Duration::from_secs(4))),
         )

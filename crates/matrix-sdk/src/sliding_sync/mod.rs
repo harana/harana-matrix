@@ -88,6 +88,19 @@ pub(super) struct SlidingSyncInner {
     /// throughout this file.
     share_pos: bool,
 
+    /// Should this sliding sync instance mark all tracked users' device lists
+    /// as dirty when it starts a new session (i.e. when it sends a request
+    /// with no `pos`)?
+    ///
+    /// This is what keeps device lists correct for the long-running sync of an
+    /// application, but it is wrong for short-lived syncs that run once per
+    /// push notification and share the crypto store with that application:
+    /// they would trigger a `/keys/query` for every tracked user, every time.
+    ///
+    /// Note: in non-cfg(e2e-encryption) builds, it's unused. We keep it even
+    /// so, to avoid sparkling cfg statements everywhere throughout this file.
+    mark_tracked_users_dirty_on_new_session: bool,
+
     /// Position markers.
     ///
     /// The `pos` marker represents a progression when exchanging requests and
@@ -554,7 +567,10 @@ impl SlidingSync {
         // device lists updates that happened between the previous request and the new
         // “initial” request.
         #[cfg(feature = "e2e-encryption")]
-        if pos.is_none() && self.is_e2ee_enabled() {
+        if pos.is_none()
+            && self.is_e2ee_enabled()
+            && self.inner.mark_tracked_users_dirty_on_new_session
+        {
             info!("Marking all tracked users as dirty");
 
             let olm_machine = self.inner.client.olm_machine().await;
@@ -1970,6 +1986,77 @@ mod tests {
             assert_eq!(to_device.enabled, Some(true));
             assert_eq!(to_device.since, Some(since_token));
         }
+    }
+
+    // … unless the sliding sync instance opted out of it, which short-lived syncs
+    // sharing a crypto store with the application's own sync do: they would
+    // otherwise trigger a `/keys/query` for every tracked user, every time they
+    // run.
+    #[async_test]
+    #[cfg(feature = "e2e-encryption")]
+    async fn test_no_pos_without_marking_tracked_users_dirty() -> anyhow::Result<()> {
+        use matrix_sdk_base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
+        use matrix_sdk_test::ruma_response_from_json;
+        use ruma::user_id;
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let alice = user_id!("@alice:localhost");
+        let me = user_id!("@example:localhost");
+
+        // Track a user, and flush all the pending requests, so that nothing is dirty
+        // anymore.
+        {
+            let olm_machine = client.olm_machine().await;
+            let olm_machine = olm_machine.as_ref().unwrap();
+
+            olm_machine.update_tracked_users([alice]).await?;
+
+            loop {
+                let outgoing_requests = olm_machine.outgoing_requests().await?;
+
+                if outgoing_requests.is_empty() {
+                    break;
+                }
+
+                for request in outgoing_requests {
+                    let response = match request.request() {
+                        AnyOutgoingRequest::KeysUpload(_) => AnyIncomingResponse::KeysUpload(
+                            &ruma_response_from_json(&json!({ "one_time_key_counts": {} })),
+                        ),
+                        AnyOutgoingRequest::KeysQuery(_) => AnyIncomingResponse::KeysQuery(
+                            &ruma_response_from_json(&json!({
+                                "device_keys": { alice: {}, me: {} }
+                            })),
+                        ),
+                        other => panic!("unexpected outgoing request: {other:?}"),
+                    };
+
+                    olm_machine.mark_request_as_sent(request.request_id(), response).await?;
+                }
+            }
+        }
+
+        let sync = client
+            .sliding_sync("test-slidingsync")?
+            .add_list(SlidingSyncList::builder("new_list"))
+            .with_e2ee_extension(assign!(http::request::E2EE::default(), { enabled: Some(true)}))
+            .without_marking_tracked_users_dirty()
+            .build()
+            .await?;
+
+        // First request: no `pos`, and still no `/keys/query` to send.
+        let (_request, _, _) = sync.generate_sync_request().await?;
+
+        {
+            let olm_machine = client.olm_machine().await;
+            let olm_machine = olm_machine.as_ref().unwrap();
+
+            assert!(olm_machine.outgoing_requests().await?.is_empty());
+        }
+
+        Ok(())
     }
 
     // With MSC4186, with the `e2ee` extension enabled, if a request has no `pos`,

@@ -33,6 +33,7 @@ pub struct SlidingSyncBuilder {
     network_timeout: Duration,
     #[cfg(feature = "e2e-encryption")]
     share_pos: bool,
+    mark_tracked_users_dirty_on_new_session: bool,
 }
 
 impl SlidingSyncBuilder {
@@ -55,6 +56,7 @@ impl SlidingSyncBuilder {
                 network_timeout: Duration::from_secs(30),
                 #[cfg(feature = "e2e-encryption")]
                 share_pos: false,
+                mark_tracked_users_dirty_on_new_session: true,
             })
         }
     }
@@ -250,6 +252,27 @@ impl SlidingSyncBuilder {
         self
     }
 
+    /// Don't mark all tracked users' device lists as dirty when this sliding
+    /// sync starts a new session.
+    ///
+    /// A sliding sync request with no `pos` gets no device list updates back
+    /// from the server ([MSC4186]), so by default the device list cache is
+    /// invalidated whenever a new session starts, to avoid missing an update
+    /// that happened in between.
+    ///
+    /// That's the right behaviour for the long-running sync of an application,
+    /// but not for a short-lived sync that runs once per push notification and
+    /// shares its crypto store with that application: it would trigger a
+    /// `/keys/query` for every tracked user, on every single notification,
+    /// while the application's own sync is the one actually responsible for
+    /// keeping the device lists up to date.
+    ///
+    /// [MSC4186]: https://github.com/matrix-org/matrix-spec-proposals/pull/4186
+    pub fn without_marking_tracked_users_dirty(mut self) -> Self {
+        self.mark_tracked_users_dirty_on_new_session = false;
+        self
+    }
+
     /// Build the Sliding Sync.
     #[allow(clippy::unused_async)] // Async is only used if the e2e-encryption feature is enabled.
     pub async fn build(self) -> Result<SlidingSync> {
@@ -300,6 +323,7 @@ impl SlidingSyncBuilder {
 
             position: Arc::new(AsyncMutex::new(SlidingSyncPositionMarkers { pos })),
 
+            mark_tracked_users_dirty_on_new_session: self.mark_tracked_users_dirty_on_new_session,
             room_subscriptions: StdRwLock::new(
                 self.room_subscriptions
                     .into_iter()
