@@ -217,7 +217,8 @@ jobs:
       - name: Test
         run: |
           cargo nextest run --workspace \
-            --exclude matrix-sdk-integration-testing --features testing
+            --exclude matrix-sdk-integration-testing \
+            --features testing,matrix-sdk/sqlite
 
       - name: Test documentation
         run: |

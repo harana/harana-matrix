@@ -295,7 +295,10 @@ impl OAuth {
     ///
     /// This is a workaround to bypass some checks that require an HTTPS URL,
     /// but we can only mock HTTP URLs.
+    // Its callers are tests that need a persistent store, so whether it is used
+    // depends on the enabled features.
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn insecure_rewrite_https_to_http(mut self) -> Self {
         self.http_client.insecure_rewrite_https_to_http = true;
         self

@@ -19,7 +19,6 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 default = [
     "e2e-encryption",
     "automatic-room-key-forwarding",
-    "sqlite",
     "reqwest-transport",
     "rustls-aws-lc-rs",
     "tokio-runtime",
@@ -87,7 +86,7 @@ experimental-send-custom-to-device = ["e2e-encryption", "matrix-sdk-base/experim
 experimental-encrypted-state-events = [
     "e2e-encryption",
     "matrix-sdk-base/experimental-encrypted-state-events",
-    "matrix-sdk-sqlite/experimental-encrypted-state-events",
+    "matrix-sdk-sqlite?/experimental-encrypted-state-events",
     "matrix-sdk-test?/experimental-encrypted-state-events",
 ]
 

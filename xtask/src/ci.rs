@@ -249,8 +249,12 @@ fn check_typos() -> Result<()> {
 
 fn check_clippy() -> Result<()> {
     let sh = sh();
-    cmd!(sh, "rustup run {NIGHTLY} cargo clippy --all-targets --features testing -- -D warnings")
-        .run()?;
+    cmd!(
+        sh,
+        "rustup run {NIGHTLY} cargo clippy --all-targets
+            --features testing,matrix-sdk/sqlite -- -D warnings"
+    )
+    .run()?;
 
     cmd!(
         sh,

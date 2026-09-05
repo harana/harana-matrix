@@ -22,11 +22,14 @@ use ruma::{
     serde::Raw,
     user_id,
 };
+#[cfg(feature = "sqlite")]
 use tempfile::tempdir;
 
 /// Helper struct to collect test data together.
 struct Test {
     matrix_mock_server: MatrixMockServer,
+    /// Only read by the tests that need a persistent store.
+    #[cfg_attr(not(feature = "sqlite"), allow(dead_code))]
     alice: Client,
     bob: Client,
     bob_room: matrix_sdk::Room,
