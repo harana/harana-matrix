@@ -18,7 +18,7 @@ pub mod pagination;
 mod state;
 mod updates;
 
-use std::{fmt, sync::Arc};
+use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use matrix_sdk_base::{
     event_cache::Event,
@@ -147,6 +147,26 @@ impl ThreadEventCache {
         }
 
         Ok(cache)
+    }
+
+    /// Remove every event sent by one of the given users, from memory and from
+    /// the store, and notify the observers of this cache.
+    pub(in super::super) async fn remove_events_sent_by(
+        &self,
+        senders: &BTreeSet<OwnedUserId>,
+    ) -> Result<()> {
+        let mut state = self.inner.state.write().await?;
+
+        let timeline_event_diffs = state.remove_events_sent_by(senders).await?;
+
+        if !timeline_event_diffs.is_empty() {
+            state.update_sender.send(
+                TimelineVectorDiffs { diffs: timeline_event_diffs, origin: EventsOrigin::Cache },
+                Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
+            );
+        }
+
+        Ok(())
     }
 
     /// Get the room ID for this room.
@@ -1423,5 +1443,75 @@ mod timed_tests {
             .collect::<Vec<_>>();
         assert_eq!(events3.len(), 1);
         assert_eq!(events3[0].event_id(), Some(event_id_1));
+    }
+    #[async_test]
+    async fn test_remove_events_sent_by() {
+        use std::collections::BTreeSet;
+
+        use matrix_sdk_test::BOB;
+
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let thread_root = event_id!("$thread_root");
+        let f = EventFactory::new().room(room_id);
+
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder
+                    .with_threading_support(ThreadingSupport::Enabled { with_subscriptions: false })
+            })
+            .build()
+            .await;
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+
+        let (thread_event_cache, _drop_handles) =
+            event_cache.thread(room_id, thread_root).await.unwrap();
+        let (events, mut subscriber) = thread_event_cache.subscribe().await.unwrap();
+        assert!(events.is_empty());
+
+        // Two replies in the thread: one from Alice, one from Bob.
+        thread_event_cache
+            .handle_joined_room_update(
+                JoinedRoomUpdate {
+                    timeline: Timeline {
+                        limited: false,
+                        prev_batch: None,
+                        events: vec![
+                            f.text_msg("hey")
+                                .sender(*ALICE)
+                                .in_thread(thread_root, thread_root)
+                                .event_id(event_id!("$ev0"))
+                                .into_event(),
+                            f.text_msg("buy my coin")
+                                .sender(*BOB)
+                                .in_thread(thread_root, event_id!("$ev0"))
+                                .event_id(event_id!("$ev1"))
+                                .into_event(),
+                        ],
+                    },
+                    ..Default::default()
+                },
+                &[],
+            )
+            .await
+            .unwrap();
+
+        assert_let_timeout!(Ok(TimelineVectorDiffs { diffs, .. }) = subscriber.recv());
+        assert_let!(VectorDiff::Append { values } = diffs.last().unwrap());
+        assert_eq!(values.len(), 2);
+
+        // Bob's reply is removed, Alice's is kept.
+        thread_event_cache.remove_events_sent_by(&BTreeSet::from([BOB.to_owned()])).await.unwrap();
+
+        assert_let_timeout!(Ok(TimelineVectorDiffs { diffs, .. }) = subscriber.recv());
+        assert_eq!(diffs.len(), 1);
+        assert_let!(VectorDiff::Remove { index: 1 } = &diffs[0]);
+
+        let (events, _) = thread_event_cache.subscribe().await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_id(), Some(event_id!("$ev0")));
     }
 }

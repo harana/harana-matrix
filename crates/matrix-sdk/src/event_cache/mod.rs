@@ -28,7 +28,7 @@
 #![forbid(missing_docs)]
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fmt,
     num::NonZeroUsize,
     ops::Deref,
@@ -42,7 +42,7 @@ use matrix_sdk_base::{
     sync::RoomUpdates,
     task_monitor::BackgroundTaskHandle,
 };
-use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
+use ruma::{EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId};
 use tokio::sync::{
     OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock,
     broadcast::{Receiver, Sender, channel},
@@ -673,6 +673,43 @@ impl EventCacheInner {
 
         // Then, we can clear and reload the states for all the rooms.
         self.state.clear_and_reload(&caches_for_all_rooms, None).await?;
+
+        Ok(())
+    }
+
+    /// Handle a change of the ignored user list.
+    ///
+    /// The events sent by the ignored users are removed from the caches that
+    /// are loaded; the events of the other users are kept, so that the room
+    /// list keeps its ordering, and so that unignoring a user restores what
+    /// their messages hid.
+    ///
+    /// Every loaded room is then asked to recompute what it derives from its
+    /// events, since a message of a user who has just been unignored can become
+    /// a room's latest event again.
+    ///
+    /// Note the caches that aren't loaded are left alone: the events of an
+    /// ignored user are filtered out when computing a latest event, and the
+    /// server doesn't serve them anymore anyway.
+    async fn handle_ignore_user_list_change(
+        &self,
+        ignored_users: &BTreeSet<OwnedUserId>,
+    ) -> Result<()> {
+        let caches_for_all_rooms = self.by_room.read().await;
+
+        for (room_id, caches) in caches_for_all_rooms.iter() {
+            if !ignored_users.is_empty() {
+                caches.room().remove_events_sent_by(ignored_users).await?;
+
+                for thread in caches.loaded_threads().await.iter() {
+                    thread.remove_events_sent_by(ignored_users).await?;
+                }
+            }
+
+            let _ = self
+                .generic_update_sender
+                .send(RoomEventCacheGenericUpdate { room_id: room_id.clone() });
+        }
 
         Ok(())
     }

@@ -47,7 +47,7 @@ use crate::timeline::{
 pub(in crate::timeline) async fn pinned_events_task(
     pinned_events_cache: PinnedEventsCache,
     timeline_controller: TimelineController,
-    mut pinned_events_recv: Receiver<TimelineVectorDiffs>,
+    mut pinned_events_recv: Subscriber<TimelineVectorDiffs>,
 ) {
     loop {
         trace!("Waiting for an event.");
