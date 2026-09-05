@@ -359,6 +359,15 @@ pub struct Account {
     /// from a `AccountPickle` that didn't use time-based fallback key
     /// rotation.
     fallback_creation_timestamp: Option<MilliSecondsSinceUnixEpoch>,
+    /// Has this account been modified since it was last read from, or written
+    /// to, the store?
+    ///
+    /// Taking an `Account` out for update does not mean it will be changed, and
+    /// pickling and writing it back is expensive - noticeably so on IndexedDB,
+    /// and `process_sync_changes` does it several times per sync. This flag
+    /// lets the store transaction skip the write when nothing moved. It is
+    /// deliberately not part of the pickle. See issue #70.
+    dirty: bool,
 }
 
 impl Deref for Account {
@@ -448,6 +457,7 @@ impl Account {
             shared: false,
             uploaded_signed_key_count: 0,
             fallback_creation_timestamp: None,
+            dirty: false,
         }
     }
 
@@ -484,13 +494,27 @@ impl Account {
         &self.static_data
     }
 
+    /// Has this account changed since it was last read from, or written to,
+    /// the store?
+    pub(crate) fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Record that this account needs to be written back to the store.
+    fn mark_as_dirty(&mut self) {
+        self.dirty = true;
+    }
+
     /// Update the uploaded key count.
     ///
     /// # Arguments
     ///
     /// * `new_count` - The new count that was reported by the server.
     pub fn update_uploaded_key_count(&mut self, new_count: u64) {
-        self.uploaded_signed_key_count = new_count;
+        if self.uploaded_signed_key_count != new_count {
+            self.uploaded_signed_key_count = new_count;
+            self.mark_as_dirty();
+        }
     }
 
     /// Get the currently known uploaded key count.
@@ -508,7 +532,10 @@ impl Account {
     /// Messages shouldn't be encrypted with the session before it has been
     /// shared.
     pub fn mark_as_shared(&mut self) {
-        self.shared = true;
+        if !self.shared {
+            self.shared = true;
+            self.mark_as_dirty();
+        }
     }
 
     /// Get the one-time keys of the account.
@@ -521,6 +548,10 @@ impl Account {
     /// Generate count number of one-time keys.
     pub fn generate_one_time_keys(&mut self, count: usize) -> OneTimeKeyGenerationResult {
         let result = self.inner.generate_one_time_keys(count);
+
+        if !result.created.is_empty() || !result.removed.is_empty() {
+            self.mark_as_dirty();
+        }
 
         if result.removed.is_empty() {
             debug!(
@@ -653,6 +684,7 @@ impl Account {
         if self.inner.fallback_key().is_empty() && self.fallback_key_expired() {
             let removed_fallback_key = self.inner.generate_fallback_key();
             self.fallback_creation_timestamp = Some(MilliSecondsSinceUnixEpoch::now());
+            self.mark_as_dirty();
 
             debug!(
                 ?removed_fallback_key,
@@ -718,6 +750,11 @@ impl Account {
 
     /// Mark the current set of one-time keys as being published.
     pub fn mark_keys_as_published(&mut self) {
+        // Nothing changes if there was nothing waiting to be published.
+        if !self.inner.one_time_keys().is_empty() || !self.inner.fallback_key().is_empty() {
+            self.mark_as_dirty();
+        }
+
         self.inner.mark_keys_as_published();
     }
 
@@ -824,6 +861,7 @@ impl Account {
             shared: pickle.shared,
             uploaded_signed_key_count: pickle.uploaded_signed_key_count,
             fallback_creation_timestamp: pickle.fallback_key_creation_timestamp,
+            dirty: false,
         })
     }
 
@@ -1138,6 +1176,8 @@ impl Account {
         let config = SessionConfig::version_2();
 
         let result = self.inner.create_inbound_session(config, their_identity_key, message)?;
+        // The one-time key the sender used is gone now.
+        self.mark_as_dirty();
         let now = SecondsSinceUnixEpoch::now();
         let session_id = result.session.session_id();
 
@@ -2000,6 +2040,39 @@ mod tests {
 
     fn device_id() -> &'static DeviceId {
         device_id!("DEVICEID")
+    }
+
+    #[test]
+    fn test_dirty_flag_tracks_real_changes() {
+        // A freshly unpickled account has nothing outstanding.
+        let mut account =
+            Account::with_device_id(user_id!("@alice:localhost"), device_id!("DEVICEID"))
+                .deep_clone();
+        assert!(!account.is_dirty());
+
+        // Reading does not dirty it.
+        let count = account.uploaded_key_count();
+        let _ = account.one_time_keys();
+        assert!(!account.is_dirty());
+
+        // Neither does writing the same value back.
+        account.update_uploaded_key_count(count);
+        assert!(!account.is_dirty());
+
+        // Marking an already-shared account as shared is a no-op too.
+        account.mark_as_shared();
+        assert!(account.is_dirty());
+        let mut account = account.deep_clone();
+        assert!(account.shared());
+        account.mark_as_shared();
+        assert!(!account.is_dirty());
+
+        // Generating keys is a real change.
+        account.generate_one_time_keys(1);
+        assert!(account.is_dirty());
+
+        // And the flag does not survive a round trip through the store.
+        assert!(!account.deep_clone().is_dirty());
     }
 
     #[test]
