@@ -78,7 +78,9 @@ use ruma::{
         path_builder::PathBuilder,
     },
     assign,
-    events::{beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier},
+    events::{
+        StateEventType, beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier,
+    },
     presence::PresenceState,
     push::Ruleset,
     time::Instant,
@@ -1502,6 +1504,36 @@ impl Client {
     /// `room_id` - The unique id of the room that should be fetched.
     pub fn get_room(&self, room_id: &RoomId) -> Option<Room> {
         self.base_client().get_room(room_id).map(|room| Room::new(self.clone(), room))
+    }
+
+    /// Find every known room whose state holds an event with exactly the given
+    /// type and state key.
+    ///
+    /// This is the query behind a fail-closed retry: a client that writes an
+    /// idempotency marker as a state event when it creates a room can, after a
+    /// timeout, tell the three cases apart by the length of the returned list.
+    /// Zero means the room was never created, so it is safe to create it; one
+    /// means it was created, so the marker identifies it; more than one means
+    /// duplicates exist and the situation needs resolving rather than another
+    /// blind retry.
+    ///
+    /// Only rooms the client knows about are searched, so a room created by a
+    /// request whose response was lost is only found once a sync has brought it
+    /// in.
+    pub async fn rooms_with_state_event(
+        &self,
+        event_type: StateEventType,
+        state_key: &str,
+    ) -> Result<Vec<Room>> {
+        let mut rooms = Vec::new();
+
+        for room in self.rooms() {
+            if room.get_state_event(event_type.clone(), state_key).await?.is_some() {
+                rooms.push(room);
+            }
+        }
+
+        Ok(rooms)
     }
 
     /// Gets the preview of a room, whether the current user has joined it or
@@ -4119,12 +4151,15 @@ pub(crate) mod tests {
         },
         assign,
         events::{
+            AnySyncStateEvent,
             ignored_user_list::IgnoredUserListEventContent,
             media_preview_config::{InviteAvatars, MediaPreviewConfigEventContent, MediaPreviews},
         },
         owned_device_id, owned_room_id, owned_user_id,
         presence::PresenceState,
-        room_alias_id, room_id, user_id,
+        room_alias_id, room_id,
+        serde::Raw,
+        user_id,
     };
     use serde_json::json;
     use stream_assert::{assert_next_matches, assert_pending};
@@ -5193,6 +5228,61 @@ pub(crate) mod tests {
         timeout(Duration::from_secs(1), client.await_room_remote_echo(room.room_id()))
             .await
             .unwrap_err();
+    }
+
+    #[async_test]
+    async fn test_rooms_with_state_event() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let marker_type = "org.example.creation_marker";
+        let marker_key = "abcdef";
+        let marker = |room_id: &RoomId| -> Raw<AnySyncStateEvent> {
+            Raw::new(&json!({
+                "type": marker_type,
+                "state_key": marker_key,
+                "content": { "hello": "world" },
+                "event_id": format!("$marker_{}", room_id.as_str().replace(['!', ':', '.'], "_")),
+                "sender": "@example:localhost",
+                "origin_server_ts": 0u64,
+            }))
+            .unwrap()
+            .cast_unchecked()
+        };
+
+        // No room carries the marker yet: creating the room is safe.
+        assert!(
+            client
+                .rooms_with_state_event(marker_type.into(), marker_key)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        let first = room_id!("!first:localhost");
+        server
+            .sync_room(&client, JoinedRoomBuilder::new(first).add_state_event(marker(first)))
+            .await;
+
+        // Exactly one room carries it: this is the room that was created.
+        let rooms = client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap();
+        assert_eq!(rooms.len(), 1);
+        assert_eq!(rooms[0].room_id(), first);
+
+        // A retry created a duplicate: the caller can see the ambiguity instead of
+        // being handed a false certainty.
+        let second = room_id!("!second:localhost");
+        server
+            .sync_room(&client, JoinedRoomBuilder::new(second).add_state_event(marker(second)))
+            .await;
+
+        let rooms = client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap();
+        assert_eq!(rooms.len(), 2);
+
+        // The state key is part of the match.
+        assert!(
+            client.rooms_with_state_event(marker_type.into(), "other").await.unwrap().is_empty()
+        );
     }
 
     #[async_test]

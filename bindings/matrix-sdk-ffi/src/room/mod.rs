@@ -21,7 +21,9 @@ use matrix_sdk::{
     DraftAttachment as SdkDraftAttachment, DraftAttachmentContent, DraftThumbnail, EncryptionState,
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
     RoomMemberships, RoomState, SuccessorRoom as SdkSuccessorRoom,
-    deserialized_responses::TimelineEvent as SdkTimelineEvent,
+    deserialized_responses::{
+        RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent,
+    },
     encryption::LocalTrust,
     room::{
         Room as SdkRoom, RoomMemberRole, edit::EditedContent, power_levels::RoomPowerLevelChanges,
@@ -519,6 +521,34 @@ impl Room {
             self.inner.send_state_event_raw(&event_type, &state_key, content_json).await?;
 
         Ok(response.event_id.to_string())
+    }
+
+    /// Get the state event of this room with exactly the given type and state
+    /// key, as a JSON string.
+    ///
+    /// Returns `None` when the room has no such event, which for an exact
+    /// `(type, state key)` pair is the only other possibility: a room holds at
+    /// most one state event per pair. To tell apart zero, one and several
+    /// *rooms* carrying an event, see `Client::rooms_with_state_event`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state event (e.g. `"m.room.name"` or a
+    ///   custom type).
+    ///
+    /// * `state_key` - The state key of the event. This is often an empty
+    ///   string.
+    pub async fn state_event(
+        &self,
+        event_type: String,
+        state_key: String,
+    ) -> Result<Option<String>, ClientError> {
+        let event = self.inner.get_state_event(event_type.into(), &state_key).await?;
+
+        Ok(event.map(|event| match event {
+            RawAnySyncOrStrippedState::Sync(raw) => raw.json().get().to_owned(),
+            RawAnySyncOrStrippedState::Stripped(raw) => raw.json().get().to_owned(),
+        }))
     }
 
     /// Redacts an event from the room.

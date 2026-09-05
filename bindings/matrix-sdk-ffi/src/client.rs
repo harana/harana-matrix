@@ -1464,6 +1464,34 @@ impl Client {
         Ok(String::from(response.room_id()))
     }
 
+    /// Find every known room whose state holds an event with exactly the given
+    /// type and state key.
+    ///
+    /// This is the query behind a fail-closed retry of a room creation. A
+    /// client that writes an idempotency marker through
+    /// `CreateRoomParameters::initial_state` can tell the three cases apart by
+    /// the length of the returned list after a timeout: empty means the room
+    /// was never created and creating it is safe, one means it was created and
+    /// this is it, more than one means duplicates exist and need resolving
+    /// rather than another blind retry.
+    ///
+    /// Only rooms the client knows about are searched, so a room created by a
+    /// request whose response was lost only shows up once a sync has brought
+    /// it in.
+    pub async fn rooms_with_state_event(
+        &self,
+        event_type: String,
+        state_key: String,
+    ) -> Result<Vec<Arc<Room>>, ClientError> {
+        Ok(self
+            .inner
+            .rooms_with_state_event(event_type.into(), &state_key)
+            .await?
+            .into_iter()
+            .map(|room| Arc::new(Room::new(room, self.utd_hook_manager.get().cloned())))
+            .collect())
+    }
+
     /// Get the content of the event of the given type out of the account data
     /// store.
     ///
@@ -2904,6 +2932,55 @@ pub struct CreateRoomParameters {
     pub canonical_alias: Option<String>,
     #[uniffi(default = false)]
     pub is_space: bool,
+    /// Extra state events to set on the room at creation time.
+    ///
+    /// The homeserver applies them as part of the same `/createRoom` request,
+    /// so a room is never created without them. That is what makes creating a
+    /// room idempotent: a marker state event written here identifies the room
+    /// afterwards, even if the response to the request was lost. See
+    /// `Client::rooms_with_state_event`.
+    ///
+    /// These are added after the events the other parameters imply, so an entry
+    /// with the same type and state key as one of them wins.
+    #[uniffi(default = None)]
+    pub initial_state: Option<Vec<InitialStateEventParameters>>,
+}
+
+/// A state event to set on a room at creation time. See
+/// `CreateRoomParameters::initial_state`.
+#[derive(uniffi::Record)]
+pub struct InitialStateEventParameters {
+    /// The type of the state event, e.g. `"m.room.encryption"` or a custom
+    /// type.
+    pub event_type: String,
+    /// The state key of the event. This is often an empty string.
+    #[uniffi(default = "")]
+    pub state_key: String,
+    /// The content of the event, encoded as a JSON string.
+    pub content: String,
+}
+
+impl TryFrom<InitialStateEventParameters> for Raw<AnyInitialStateEvent> {
+    type Error = ClientError;
+
+    fn try_from(value: InitialStateEventParameters) -> Result<Self, Self::Error> {
+        let content: serde_json::Value =
+            serde_json::from_str(&value.content).map_err(|error| ClientError::Generic {
+                // Deliberately without the content itself: it can hold anything.
+                msg: format!(
+                    "Failed to parse the content of the initial `{}` state event as JSON",
+                    value.event_type
+                ),
+                details: Some(format!("{error:?}")),
+            })?;
+
+        Ok(Raw::new(&serde_json::json!({
+            "type": value.event_type,
+            "state_key": value.state_key,
+            "content": content,
+        }))?
+        .cast_unchecked())
+    }
 }
 
 impl TryFrom<CreateRoomParameters> for create_room::v3::Request {
@@ -2954,6 +3031,12 @@ impl TryFrom<CreateRoomParameters> for create_room::v3::Request {
             let content =
                 RoomHistoryVisibilityEventContent::new(history_visibility_override.try_into()?);
             initial_state.push(InitialStateEvent::with_empty_state_key(content).to_raw_any());
+        }
+
+        // Last, so that a caller-provided event wins over the one a dedicated
+        // parameter implies.
+        for event in value.initial_state.unwrap_or_default() {
+            initial_state.push(event.try_into()?);
         }
 
         request.initial_state = initial_state;
