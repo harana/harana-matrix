@@ -30,7 +30,7 @@ use tracing::{error, trace, warn};
 use zeroize::Zeroize;
 
 use crate::{
-    OpenStoreError, RuntimeConfig, Secret,
+    OpenStoreError, RuntimeConfig, Secret, Synchronous,
     connection::Connection as SqliteAsyncConn,
     error::{Error, Result},
     sync_wrapper::InteractError,
@@ -150,7 +150,8 @@ pub(crate) trait SqliteAsyncConnExt {
     /// It is possible to call these methods individually though. This
     /// `apply_runtime_config` method allows to automate this process.
     async fn apply_runtime_config(&self, runtime_config: RuntimeConfig) -> Result<()> {
-        let RuntimeConfig { optimize, cache_size, journal_size_limit } = runtime_config;
+        let RuntimeConfig { optimize, cache_size, journal_size_limit, synchronous } =
+            runtime_config;
 
         if optimize {
             self.optimize().await?;
@@ -158,6 +159,7 @@ pub(crate) trait SqliteAsyncConnExt {
 
         self.cache_size(cache_size).await?;
         self.journal_size_limit(journal_size_limit).await?;
+        self.synchronous(synchronous).await?;
 
         Ok(())
     }
@@ -209,6 +211,17 @@ pub(crate) trait SqliteAsyncConnExt {
     /// [`PRAGMA journal_size_limit`]: https://www.sqlite.org/pragma.html#pragma_journal_size_limit
     async fn journal_size_limit(&self, limit: u32) -> Result<()> {
         self.execute_batch(format!("PRAGMA journal_size_limit = {limit};")).await?;
+        Ok(())
+    }
+
+    /// Define how aggressively SQLite flushes data to disk.
+    ///
+    /// See [`PRAGMA synchronous`] to learn more.
+    ///
+    /// [`PRAGMA synchronous`]: https://www.sqlite.org/pragma.html#pragma_synchronous
+    async fn synchronous(&self, synchronous: Synchronous) -> Result<()> {
+        self.execute_batch(format!("PRAGMA synchronous = {};", synchronous.as_pragma_str()))
+            .await?;
         Ok(())
     }
 
