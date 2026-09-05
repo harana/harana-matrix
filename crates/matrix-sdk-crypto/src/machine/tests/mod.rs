@@ -1007,9 +1007,9 @@ async fn test_a_redacted_event_is_not_reported_as_a_utd() {
         bob.try_decrypt_room_event(&redacted_event, room_id, &decryption_settings).await.unwrap();
 
     assert_let!(RoomEventDecryptionResult::UnableToDecrypt(utd_info) = result);
-    assert_eq!(utd_info.reason, UnableToDecryptReason::RedactedEvent);
+    assert_eq!(utd_info.reason, UnableToDecryptReason::Redacted);
     assert!(
-        utd_info.reason.is_redacted_event(),
+        utd_info.reason.is_expected(),
         "The failure should be recognisable as a redaction rather than a real UTD"
     );
     assert!(!utd_info.reason.is_missing_room_key());

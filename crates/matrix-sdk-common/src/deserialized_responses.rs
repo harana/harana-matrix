@@ -1219,13 +1219,6 @@ pub enum UnableToDecryptReason {
     /// `TrustRequirement`.
     SenderIdentityNotTrusted(VerificationLevel),
 
-    /// The event was redacted before we got a chance to decrypt it, so the
-    /// ciphertext is gone and there is nothing left to decrypt.
-    ///
-    /// This is not a real decryption failure: the event is simply not there
-    /// any more, so it should not be counted towards UTD metrics.
-    RedactedEvent,
-
     /// The event was not shown because it reuses the Megolm message index of an
     /// event we have already decrypted: somebody re-sent a ciphertext the room
     /// had already seen.
@@ -1256,13 +1249,6 @@ impl UnableToDecryptReason {
             self,
             Self::MissingMegolmSession { withheld_code: None } | Self::UnknownMegolmMessageIndex
         )
-    }
-
-    /// Returns true if the event was not decrypted because it had already been
-    /// redacted, in which case there is nothing to wait for and nothing to
-    /// report as a UTD.
-    pub fn is_redacted_event(&self) -> bool {
-        matches!(self, Self::RedactedEvent)
     }
 }
 

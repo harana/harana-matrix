@@ -479,7 +479,7 @@ impl StoreTransaction {
         // the write in that case matters: `process_sync_changes` runs several times per
         // sync and re-pickling the account each time is expensive, especially on
         // IndexedDB.
-        if self.changes.account.as_ref().is_some_and(|account| !account.dirty())
+        if self.changes.account.as_ref().is_some_and(|account| !account.is_dirty())
             && let Some(account) = self.changes.account.take()
         {
             *self.cache.account.lock().await = Some(account);

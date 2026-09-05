@@ -949,10 +949,10 @@ mod tests {
         let (mut older, mut newer) = (sessions.remove(0), sessions.remove(0));
 
         older.creation_time = SecondsSinceUnixEpoch(uint!(100));
-        older.last_successful_decryption_time = Some(SecondsSinceUnixEpoch(uint!(200)));
+        older.last_decryption_time = Some(SecondsSinceUnixEpoch(uint!(200)));
 
         newer.creation_time = SecondsSinceUnixEpoch(uint!(300));
-        newer.last_successful_decryption_time = None;
+        newer.last_decryption_time = None;
 
         let older_session_id = older.session_id().to_owned();
         manager.store.save_sessions(&[older, newer]).await.unwrap();

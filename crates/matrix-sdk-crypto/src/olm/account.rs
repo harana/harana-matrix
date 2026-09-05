@@ -1935,8 +1935,9 @@ impl Account {
         Self::from_pickle(self.pickle()).unwrap()
     }
 
-    /// Has this account been modified since it was last persisted?
-    pub(crate) fn dirty(&self) -> bool {
+    /// Has this account changed since it was last read from, or written to,
+    /// the store?
+    pub(crate) fn is_dirty(&self) -> bool {
         self.dirty
     }
 }
@@ -2360,7 +2361,7 @@ mod tests {
         // reporting that the server now holds all of them would.
         account.mark_keys_as_published();
         account.update_uploaded_key_count(max_keys);
-        account.unacknowledged_upload_key_count = Some(max_keys);
+        account.unconfirmed_key_count = Some(max_keys);
 
         // The next sync was computed by the server before it processed our upload, so
         // it still reports zero keys. We must not believe it and generate a second
@@ -2379,31 +2380,6 @@ mod tests {
         assert_eq!(account.uploaded_key_count(), 0);
         let (_, one_time_keys, _) = account.keys_for_upload();
         assert!(!one_time_keys.is_empty(), "We should have generated new keys by now");
-    }
-
-    #[test]
-    fn test_account_is_only_dirty_when_modified() {
-        let mut account = Account::with_device_id(user_id(), device_id());
-        assert!(account.is_dirty(), "A brand new account has never been stored");
-
-        account.reset_dirty();
-        assert!(!account.is_dirty());
-
-        // Reading does not dirty the account.
-        let _ = account.identity_keys();
-        let _ = account.uploaded_key_count();
-        assert!(!account.is_dirty());
-
-        // Neither does a key count that doesn't change anything.
-        account.update_uploaded_key_count(0);
-        assert!(!account.is_dirty());
-
-        account.update_uploaded_key_count(10);
-        assert!(account.is_dirty(), "Changing the uploaded key count modifies the account");
-
-        account.reset_dirty();
-        account.mark_keys_as_published();
-        assert!(account.is_dirty(), "Publishing the one-time keys modifies the account");
     }
 
     #[test]

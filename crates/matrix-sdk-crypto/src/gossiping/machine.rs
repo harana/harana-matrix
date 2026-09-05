@@ -452,9 +452,17 @@ impl GossipMachine {
 
                     match self.share_secret(&device, content, secret_name).await {
                         Ok(s) => {
-                            // The device now has the secret. Drop any request for it that
-                            // is still waiting for an Olm session, so that establishing
-                            // one doesn't make us send the same secret a second time.
+                            // The device now has the secret. Remember that we answered
+                            // this request, and drop any request for it that is still
+                            // waiting for an Olm session, so that neither a redelivered
+                            // copy nor a newly established session makes us send the
+                            // same secret a second time.
+                            self.inner.served_secret_requests.write().insert(
+                                device.user_id().to_owned(),
+                                device.device_id().to_owned(),
+                                event.content.request_id.to_owned(),
+                            );
+
                             self.inner.wait_queue.remove_secret_requests(
                                 device.user_id(),
                                 device.device_id(),
