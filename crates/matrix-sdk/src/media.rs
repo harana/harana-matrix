@@ -502,8 +502,10 @@ impl Media {
     ///     }
     /// });
     ///
-    /// let content =
-    ///     client.media().get_media_content_with_progress(&request, true, progress).await?;
+    /// let content = client
+    ///     .media()
+    ///     .get_media_content_with_progress(&request, true, progress)
+    ///     .await?;
     /// # anyhow::Ok(()) };
     /// ```
     pub async fn get_media_content_with_progress(
