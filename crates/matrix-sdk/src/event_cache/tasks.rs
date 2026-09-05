@@ -20,10 +20,10 @@ use std::{
 
 use eyeball::Subscriber;
 use matrix_sdk_base::{
-    linked_chunk::OwnedLinkedChunkId, serde_helpers::extract_thread_root_from_content,
-    sync::RoomUpdates,
+    event_cache::Event, linked_chunk::OwnedLinkedChunkId,
+    serde_helpers::extract_thread_root_from_content, sync::RoomUpdates,
 };
-use ruma::{OwnedEventId, OwnedTransactionId, RoomId};
+use ruma::{EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId};
 use tokio::{
     select,
     sync::{
@@ -39,6 +39,7 @@ use super::{
     RoomEventCacheLinkedChunkUpdate,
 };
 use crate::{
+    Client,
     client::WeakClient,
     send_queue::{LocalEchoContent, RoomSendQueueUpdate, SendQueueUpdate},
 };
@@ -418,6 +419,7 @@ async fn handle_thread_subscriber_linked_chunk_update(
         return true;
     };
 
+    let room_id = room_id.clone();
     let thread_root = thread_root.clone();
 
     let mut new_events = up.events().peekable();
@@ -450,13 +452,28 @@ async fn handle_thread_subscriber_linked_chunk_update(
         return true;
     };
 
+    let Some(own_user_id) = client.user_id().map(ToOwned::to_owned) else {
+        trace!("Client is not logged in, nothing to subscribe");
+        return true;
+    };
+
+    // Whether the thread was started by the current user; then any answer in it is
+    // an answer to one of their messages.
+    let own_thread_root = is_sent_by(&client, &room_id, &thread_root, &own_user_id).await;
+
     let mut subscribe_up_to = None;
 
-    // Find if there's an event that would trigger a mention for the current
-    // user, iterating from the end of the new events towards the oldest, so we can
-    // find the most recent event to subscribe to.
+    // Find if there's an event that would trigger a mention for the current user,
+    // or that answers one of their messages, iterating from the end of the new
+    // events towards the oldest, so we can find the most recent event to subscribe
+    // to.
     for ev in new_events.rev() {
-        if push_context.for_event(ev.raw()).await.into_iter().any(|action| action.should_notify()) {
+        let is_mention =
+            push_context.for_event(ev.raw()).await.into_iter().any(|action| action.should_notify());
+
+        if is_mention
+            || answers_our_own_message(&client, &room_id, &own_user_id, own_thread_root, &ev).await
+        {
             let Some(event_id) = ev.event_id() else {
                 // Shouldn't happen.
                 continue;
@@ -478,6 +495,97 @@ async fn handle_thread_subscriber_linked_chunk_update(
     }
 
     true
+}
+
+/// Whether the event with the given ID, as known by the event cache, was sent
+/// by `user_id`.
+async fn is_sent_by(
+    client: &Client,
+    room_id: &RoomId,
+    event_id: &EventId,
+    user_id: &UserId,
+) -> bool {
+    let Ok((room_cache, _drop_handles)) = client.event_cache().room(room_id).await else {
+        return false;
+    };
+
+    match room_cache.find_event(event_id).await {
+        Ok(Some(event)) => sender_of(&event).as_deref() == Some(user_id),
+        Ok(None) => false,
+        Err(err) => {
+            warn!(%event_id, "Failed to look up an event in the event cache: {err}");
+            false
+        }
+    }
+}
+
+/// The sender of an event, if it can be read from its JSON.
+fn sender_of(event: &Event) -> Option<OwnedUserId> {
+    event.raw().get_field::<OwnedUserId>("sender").ok().flatten()
+}
+
+/// Whether an in-thread event answers a message the current user sent.
+///
+/// That is the case when the event is an explicit reply to one of their events,
+/// or when it lands in a thread they started. Their own events don't count:
+/// sending in a thread already subscribes them to it, through the send queue.
+async fn answers_our_own_message(
+    client: &Client,
+    room_id: &RoomId,
+    own_user_id: &UserId,
+    own_thread_root: bool,
+    event: &Event,
+) -> bool {
+    if sender_of(event).as_deref() == Some(own_user_id) {
+        return false;
+    }
+
+    if own_thread_root {
+        return true;
+    }
+
+    let Some(replied_to) = explicit_reply_target(event) else {
+        return false;
+    };
+
+    is_sent_by(client, room_id, &replied_to, own_user_id).await
+}
+
+/// The event an event explicitly replies to, if any.
+///
+/// An in-thread event carries an `m.in_reply_to` even when it isn't a reply: it
+/// points at the latest event of the thread, as a fallback for clients that
+/// don't understand threads. Those are marked with `is_falling_back`, and don't
+/// count as answering anybody.
+fn explicit_reply_target(event: &Event) -> Option<OwnedEventId> {
+    #[derive(serde::Deserialize)]
+    struct EventDetails {
+        content: ContentDetails,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct ContentDetails {
+        #[serde(rename = "m.relates_to")]
+        relates_to: Option<RelatesToDetails>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct RelatesToDetails {
+        #[serde(default)]
+        is_falling_back: bool,
+        #[serde(rename = "m.in_reply_to")]
+        in_reply_to: Option<InReplyToDetails>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct InReplyToDetails {
+        event_id: OwnedEventId,
+    }
+
+    let details = event.raw().deserialize_as_unchecked::<EventDetails>().ok()?;
+    let relates_to = details.content.relates_to?;
+
+    if relates_to.is_falling_back { None } else { Some(relates_to.in_reply_to?.event_id) }
 }
 
 /// Takes an [`Event`] and passes it to the [`RoomIndex`] of the
