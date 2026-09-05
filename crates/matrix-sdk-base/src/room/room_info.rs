@@ -204,6 +204,15 @@ pub struct BaseRoomInfo {
     pub(crate) retention: Option<MinimalStateEvent<RoomRetentionEventContent>>,
     /// The `m.room.tombstone` event content of this room.
     pub(crate) tombstone: Option<MinimalStateEvent<PossiblyRedactedRoomTombstoneEventContent>>,
+    /// The sender of the `m.room.tombstone` event of this room.
+    ///
+    /// Their server is the one that certainly knows the successor room, which
+    /// makes it the best `via` candidate when following the tombstone. See
+    /// [`Room::successor_room`].
+    ///
+    /// [`Room::successor_room`]: crate::Room::successor_room
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tombstone_sender: Option<OwnedUserId>,
     /// The topic of this room.
     pub(crate) topic: Option<MinimalStateEvent<PossiblyRedactedRoomTopicEventContent>>,
     /// All minimal state events that containing one or more running matrixRTC
@@ -407,9 +416,12 @@ impl BaseRoomInfo {
                     as_variant!(any_event, AnyPossiblyRedactedStateEventContent::RoomTombstone)
                 }) {
                     self.tombstone = Some(event);
+                    self.tombstone_sender =
+                        raw_event.raw.get_field::<OwnedUserId>("sender").ok().flatten();
                     true
                 } else {
                     // Remove the previous content if the new content is unknown.
+                    self.tombstone_sender = None;
                     self.tombstone.take().is_some()
                 }
             }
@@ -574,6 +586,7 @@ impl Default for BaseRoomInfo {
             name: None,
             retention: None,
             tombstone: None,
+            tombstone_sender: None,
             topic: None,
             rtc_member_events: BTreeMap::new(),
             is_marked_unread: false,

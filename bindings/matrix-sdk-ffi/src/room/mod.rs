@@ -2010,11 +2010,23 @@ pub struct SuccessorRoom {
 
     /// The message explaining why the room has been tombstoned.
     pub reason: Option<String>,
+
+    /// Candidate servers to pass as `via` when previewing or joining the
+    /// replacement room.
+    ///
+    /// A room ID is not routable on its own, so without these a user whose own
+    /// server has never seen the replacement room cannot follow the tombstone.
+    /// This is a best-effort hint and may be empty.
+    pub via: Vec<String>,
 }
 
 impl From<SdkSuccessorRoom> for SuccessorRoom {
     fn from(value: SdkSuccessorRoom) -> Self {
-        Self { room_id: value.room_id.to_string(), reason: value.reason }
+        Self {
+            room_id: value.room_id.to_string(),
+            reason: value.reason,
+            via: value.via.into_iter().map(|server| server.to_string()).collect(),
+        }
     }
 }
 
@@ -2030,11 +2042,18 @@ impl From<SdkSuccessorRoom> for SuccessorRoom {
 pub struct PredecessorRoom {
     /// The ID of the replacement room.
     pub room_id: String,
+
+    /// Candidate servers to pass as `via` when previewing or joining the old
+    /// room. See [`SuccessorRoom::via`].
+    pub via: Vec<String>,
 }
 
 impl From<SdkPredecessorRoom> for PredecessorRoom {
     fn from(value: SdkPredecessorRoom) -> Self {
-        Self { room_id: value.room_id.to_string() }
+        Self {
+            room_id: value.room_id.to_string(),
+            via: value.via.into_iter().map(|server| server.to_string()).collect(),
+        }
     }
 }
 

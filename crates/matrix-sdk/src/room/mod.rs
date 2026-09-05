@@ -186,6 +186,7 @@ use crate::{
         power_levels::{RoomPowerLevelChanges, RoomPowerLevelsExt},
         privacy_settings::RoomPrivacySettings,
     },
+    room_preview::RoomPreview,
     sync::RoomUpdate,
     utils::{IntoRawMessageLikeEventContent, IntoRawStateEventContent},
 };
@@ -1048,6 +1049,49 @@ impl Room {
                 Ok(())
             })
             .await
+    }
+
+    /// Join the successor of this room, i.e. the room that replaced it when it
+    /// was tombstoned.
+    ///
+    /// The candidate servers of [`SuccessorRoom::via`] are passed along as
+    /// `via` parameters, which is what lets a user whose own server has never
+    /// seen the successor room follow the tombstone.
+    ///
+    /// Returns `None` if this room has not been tombstoned, or if its
+    /// `m.room.tombstone` event carries no replacement room.
+    pub async fn join_successor_room(&self) -> Result<Option<Room>> {
+        let Some(successor_room) = self.successor_room() else {
+            return Ok(None);
+        };
+
+        self.client
+            .join_room_by_id_or_alias(
+                (*successor_room.room_id).into(),
+                &successor_room.via,
+            )
+            .await
+            .map(Some)
+    }
+
+    /// Preview the successor of this room, i.e. the room that replaced it when
+    /// it was tombstoned.
+    ///
+    /// As for [`Room::join_successor_room`], the candidate servers of
+    /// [`SuccessorRoom::via`] are passed along, so the preview works from a
+    /// server that has never seen the successor room.
+    ///
+    /// Returns `None` if this room has not been tombstoned, or if its
+    /// `m.room.tombstone` event carries no replacement room.
+    pub async fn successor_room_preview(&self) -> Result<Option<RoomPreview>> {
+        let Some(successor_room) = self.successor_room() else {
+            return Ok(None);
+        };
+
+        self.client
+            .get_room_preview((*successor_room.room_id).into(), successor_room.via)
+            .await
+            .map(Some)
     }
 
     /// Request to update the encryption state for this room.
