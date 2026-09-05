@@ -19,7 +19,9 @@
 //! well.
 
 use futures_util::future::join_all;
-use matrix_sdk_base::{RawStateEventWithKeys, RoomHeroWithProfile, RoomInfo, RoomState};
+use matrix_sdk_base::{
+    RawStateEventWithKeys, RoomHeroWithProfile, RoomInfo, RoomInfoNotableUpdateReasons, RoomState,
+};
 use ruma::{
     OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedServerName, RoomId, RoomOrAliasId, ServerName,
     api::client::{membership::joined_members, state::get_state_events},
@@ -132,6 +134,42 @@ impl RoomPreview {
             Some(room.state()),
             display_name,
         )
+    }
+
+    /// Save the parts of this preview the store models onto the local room, if
+    /// the client knows that room.
+    ///
+    /// This is what makes a preview fetched from the server improve the local
+    /// data, so that the next locally answered preview of the same room is
+    /// closer to the truth. Only the fields the store holds are written: the
+    /// name, the topic, the avatar and the member counts. The join rule is
+    /// deliberately left alone, because the summary carries it in a reduced
+    /// form that cannot round-trip through an `m.room.join_rules` content.
+    pub(crate) async fn save_to_local_room(&self, client: &Client) {
+        let Some(room) = client.get_room(&self.room_id) else {
+            return;
+        };
+
+        let result = room
+            .update_and_save_room_info(|mut room_info| {
+                room_info.update_name(self.name.clone());
+                room_info.update_topic(self.topic.clone());
+                room_info.update_avatar(self.avatar_url.clone());
+                room_info.update_joined_member_count(self.num_joined_members);
+
+                if let Some(num_active_members) = self.num_active_members {
+                    room_info.update_invited_member_count(
+                        num_active_members.saturating_sub(self.num_joined_members),
+                    );
+                }
+
+                (room_info, RoomInfoNotableUpdateReasons::NONE)
+            })
+            .await;
+
+        if let Err(error) = result {
+            warn!(room_id = ?self.room_id, "Failed to save the room preview locally: {error}");
+        }
     }
 
     #[instrument(skip(client))]

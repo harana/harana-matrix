@@ -1475,8 +1475,46 @@ impl Client {
     }
 
     pub async fn create_room(&self, request: CreateRoomParameters) -> Result<String, ClientError> {
-        let response = self.inner.create_room(request.try_into()?).await?;
+        // A space also needs the power levels that keep ordinary members from posting
+        // into it, which `Client::create_space` fills in.
+        let is_space = request.is_space;
+        let request = request.try_into()?;
+
+        let response = if is_space {
+            self.inner.create_space(request).await?
+        } else {
+            self.inner.create_room(request).await?
+        };
+
         Ok(String::from(response.room_id()))
+    }
+
+    /// Find every known room whose state holds an event with exactly the given
+    /// type and state key.
+    ///
+    /// This is the query behind a fail-closed retry of a room creation. A
+    /// client that writes an idempotency marker through
+    /// `CreateRoomParameters::initial_state` can tell the three cases apart by
+    /// the length of the returned list after a timeout: empty means the room
+    /// was never created and creating it is safe, one means it was created and
+    /// this is it, more than one means duplicates exist and need resolving
+    /// rather than another blind retry.
+    ///
+    /// Only rooms the client knows about are searched, so a room created by a
+    /// request whose response was lost only shows up once a sync has brought
+    /// it in.
+    pub async fn rooms_with_state_event(
+        &self,
+        event_type: String,
+        state_key: String,
+    ) -> Result<Vec<Arc<Room>>, ClientError> {
+        Ok(self
+            .inner
+            .rooms_with_state_event(event_type.into(), &state_key)
+            .await?
+            .into_iter()
+            .map(|room| Arc::new(Room::new(room, self.utd_hook_manager.get().cloned())))
+            .collect())
     }
 
     /// Get the content of the event of the given type out of the account data
@@ -2028,6 +2066,36 @@ impl Client {
         let room_id: &RoomId = &room_id;
 
         let room_preview = self.inner.get_room_preview(room_id.into(), via_servers).await?;
+
+        Ok(Arc::new(RoomPreview::new(self.inner.clone(), room_preview)))
+    }
+
+    /// Given a room id, get the preview of a room from local data when the
+    /// room is already known, without waiting on the server.
+    ///
+    /// Unlike [`Client::get_room_preview_from_room_id`], this returns
+    /// immediately for a room the client knows about, and refreshes that data
+    /// from the server in the background so the next call is more accurate.
+    /// The local data of an invited or knocked room can be out of date, its
+    /// join rule in particular, so prefer the accurate variant when that
+    /// matters more than showing something straight away.
+    pub async fn get_room_preview_from_room_id_local_first(
+        &self,
+        room_id: String,
+        via_servers: Vec<String>,
+    ) -> Result<Arc<RoomPreview>, ClientError> {
+        let room_id = RoomId::parse(&room_id).context("room_id is not a valid room id")?;
+
+        let via_servers = via_servers
+            .into_iter()
+            .map(ServerName::parse)
+            .collect::<Result<Vec<_>, _>>()
+            .context("at least one `via` server name is invalid")?;
+
+        let room_id: &RoomId = &room_id;
+
+        let (room_preview, _refresh) =
+            self.inner.get_room_preview_local_first(room_id.into(), via_servers).await?;
 
         Ok(Arc::new(RoomPreview::new(self.inner.clone(), room_preview)))
     }
@@ -2889,6 +2957,55 @@ pub struct CreateRoomParameters {
     pub canonical_alias: Option<String>,
     #[uniffi(default = false)]
     pub is_space: bool,
+    /// Extra state events to set on the room at creation time.
+    ///
+    /// The homeserver applies them as part of the same `/createRoom` request,
+    /// so a room is never created without them. That is what makes creating a
+    /// room idempotent: a marker state event written here identifies the room
+    /// afterwards, even if the response to the request was lost. See
+    /// `Client::rooms_with_state_event`.
+    ///
+    /// These are added after the events the other parameters imply, so an entry
+    /// with the same type and state key as one of them wins.
+    #[uniffi(default = None)]
+    pub initial_state: Option<Vec<InitialStateEventParameters>>,
+}
+
+/// A state event to set on a room at creation time. See
+/// `CreateRoomParameters::initial_state`.
+#[derive(uniffi::Record)]
+pub struct InitialStateEventParameters {
+    /// The type of the state event, e.g. `"m.room.encryption"` or a custom
+    /// type.
+    pub event_type: String,
+    /// The state key of the event. This is often an empty string.
+    #[uniffi(default = "")]
+    pub state_key: String,
+    /// The content of the event, encoded as a JSON string.
+    pub content: String,
+}
+
+impl TryFrom<InitialStateEventParameters> for Raw<AnyInitialStateEvent> {
+    type Error = ClientError;
+
+    fn try_from(value: InitialStateEventParameters) -> Result<Self, Self::Error> {
+        let content: serde_json::Value =
+            serde_json::from_str(&value.content).map_err(|error| ClientError::Generic {
+                // Deliberately without the content itself: it can hold anything.
+                msg: format!(
+                    "Failed to parse the content of the initial `{}` state event as JSON",
+                    value.event_type
+                ),
+                details: Some(format!("{error:?}")),
+            })?;
+
+        Ok(Raw::new(&serde_json::json!({
+            "type": value.event_type,
+            "state_key": value.state_key,
+            "content": content,
+        }))?
+        .cast_unchecked())
+    }
 }
 
 impl TryFrom<CreateRoomParameters> for create_room::v3::Request {
@@ -2939,6 +3056,12 @@ impl TryFrom<CreateRoomParameters> for create_room::v3::Request {
             let content =
                 RoomHistoryVisibilityEventContent::new(history_visibility_override.try_into()?);
             initial_state.push(InitialStateEvent::with_empty_state_key(content).to_raw_any());
+        }
+
+        // Last, so that a caller-provided event wins over the one a dedicated
+        // parameter implies.
+        for event in value.initial_state.unwrap_or_default() {
+            initial_state.push(event.try_into()?);
         }
 
         request.initial_state = initial_state;
@@ -3551,12 +3674,17 @@ mod tests {
         ServerName,
         api::client::room::{Visibility, create_room},
         authentication::TokenType,
-        events::StateEventType,
+        events::{AnyInitialStateEvent, StateEventType},
         room::RoomType,
+        serde::Raw,
     };
 
     use crate::{
-        client::{CreateRoomParameters, JoinRule, OpenIdToken, RoomPreset, RoomVisibility},
+        ClientError,
+        client::{
+            CreateRoomParameters, InitialStateEventParameters, JoinRule, OpenIdToken, RoomPreset,
+            RoomVisibility,
+        },
         room::RoomHistoryVisibility,
     };
 
@@ -3576,6 +3704,11 @@ mod tests {
             history_visibility_override: Some(RoomHistoryVisibility::Shared),
             canonical_alias: Some("#a-room:example.com".to_owned()),
             is_space: true,
+            initial_state: Some(vec![InitialStateEventParameters {
+                event_type: "org.example.marker".to_owned(),
+                state_key: "abcdef".to_owned(),
+                content: r#"{"hello":"world"}"#.to_owned(),
+            }]),
         };
 
         let request: create_room::v3::Request =
@@ -3599,6 +3732,11 @@ mod tests {
             initial_state.iter().any(|e| e.event_type() == StateEventType::RoomHistoryVisibility)
         );
         assert_eq!(request.room_alias_name, Some("#a-room:example.com".to_owned()));
+        // The caller's own initial state events are passed through as they are.
+        assert!(initial_state.iter().any(|e| {
+            e.event_type() == StateEventType::from("org.example.marker")
+                && e.state_key() == "abcdef"
+        }));
 
         let room_type = request
             .creation_content
@@ -3607,6 +3745,41 @@ mod tests {
             .expect("Creation content can't be deserialized")
             .room_type;
         assert_eq!(room_type, Some(RoomType::Space));
+    }
+
+    #[test]
+    fn test_initial_state_event_parameters_mapping() {
+        let event: Raw<AnyInitialStateEvent> = InitialStateEventParameters {
+            event_type: "org.example.marker".to_owned(),
+            state_key: "abcdef".to_owned(),
+            content: r#"{"hello":"world"}"#.to_owned(),
+        }
+        .try_into()
+        .expect("valid JSON content should convert");
+
+        let json = event.json().get();
+        assert!(json.contains("org.example.marker"), "{json}");
+        assert!(json.contains("abcdef"), "{json}");
+        assert!(json.contains("world"), "{json}");
+    }
+
+    #[test]
+    fn test_initial_state_event_parameters_reject_invalid_json_without_leaking_it() {
+        let error = Raw::<AnyInitialStateEvent>::try_from(InitialStateEventParameters {
+            event_type: "org.example.marker".to_owned(),
+            state_key: String::new(),
+            content: "this is not json: hunter2".to_owned(),
+        })
+        .expect_err("invalid JSON content should be rejected");
+
+        let ClientError::Generic { msg, .. } = error else {
+            panic!("expected a generic error");
+        };
+
+        // The message names the event type so a caller can tell which entry was
+        // wrong, but never the content itself: it can hold anything.
+        assert!(msg.contains("org.example.marker"), "{msg}");
+        assert!(!msg.contains("hunter2"), "the content must not reach the message: {msg}");
     }
 
     #[test]

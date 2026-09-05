@@ -41,7 +41,11 @@ use matrix_sdk_base::{
     sync::{Notification, RoomUpdates},
     task_monitor::TaskMonitor,
 };
-use matrix_sdk_common::{cross_process_lock::CrossProcessLockConfig, ttl::TtlValue};
+use matrix_sdk_common::{
+    cross_process_lock::CrossProcessLockConfig,
+    executor::{JoinHandle, spawn},
+    ttl::TtlValue,
+};
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::{InitialStateEvent, room::encryption::RoomEncryptionEventContent};
 use ruma::{
@@ -62,7 +66,7 @@ use ruma::{
             membership::{join_room_by_id, join_room_by_id_or_alias},
             presence::set_presence as set_presence_status,
             retention::get_retention_configuration,
-            room::create_room,
+            room::create_room::{self, RoomPowerLevelsContentOverride, v3::CreationContent},
             rtc::{RtcTransport, transports},
             session::login::v3::DiscoveryInfo,
             sync::sync_events,
@@ -74,9 +78,14 @@ use ruma::{
         path_builder::PathBuilder,
     },
     assign,
-    events::{beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier},
+    events::{
+        StateEventType, beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier,
+    },
+    int,
     presence::PresenceState,
     push::Ruleset,
+    room::RoomType,
+    serde::Raw,
     time::Instant,
 };
 use serde::de::DeserializeOwned;
@@ -1510,8 +1519,47 @@ impl Client {
         self.base_client().get_room(room_id).map(|room| Room::new(self.clone(), room))
     }
 
+    /// Find every known room whose state holds an event with exactly the given
+    /// type and state key.
+    ///
+    /// This is the query behind a fail-closed retry: a client that writes an
+    /// idempotency marker as a state event when it creates a room can, after a
+    /// timeout, tell the three cases apart by the length of the returned list.
+    /// Zero means the room was never created, so it is safe to create it; one
+    /// means it was created, so the marker identifies it; more than one means
+    /// duplicates exist and the situation needs resolving rather than another
+    /// blind retry.
+    ///
+    /// Only rooms the client knows about are searched, so a room created by a
+    /// request whose response was lost is only found once a sync has brought it
+    /// in.
+    pub async fn rooms_with_state_event(
+        &self,
+        event_type: StateEventType,
+        state_key: &str,
+    ) -> Result<Vec<Room>> {
+        let mut rooms = Vec::new();
+
+        for room in self.rooms() {
+            if room.get_state_event(event_type.clone(), state_key).await?.is_some() {
+                rooms.push(room);
+            }
+        }
+
+        Ok(rooms)
+    }
+
     /// Gets the preview of a room, whether the current user has joined it or
     /// not.
+    ///
+    /// This waits on the server whenever the local data cannot be trusted, so
+    /// the preview it returns is as accurate as the SDK can make it. Use
+    /// [`Client::get_room_preview_local_first`] when showing something right
+    /// away matters more than that.
+    ///
+    /// Whatever the server answers is saved onto the local room, when the
+    /// client knows that room, so the next preview answered from local data is
+    /// closer to the truth.
     pub async fn get_room_preview(
         &self,
         room_or_alias_id: &RoomOrAliasId,
@@ -1536,7 +1584,67 @@ impl Client {
             }
         }
 
-        RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await
+        let preview = RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await?;
+        preview.save_to_local_room(self).await;
+
+        Ok(preview)
+    }
+
+    /// Gets the preview of a room, answering from local data when the client
+    /// already knows the room.
+    ///
+    /// Unlike [`Client::get_room_preview`], this doesn't wait on the server for
+    /// a room the client knows about, so a preview that can be shown
+    /// immediately is shown immediately. It still asks the server, in the
+    /// background, and saves the answer onto the local room, so the next call
+    /// is more accurate; the returned [`JoinHandle`] resolves when that
+    /// refresh is done, and can be ignored.
+    ///
+    /// The local data of an invited or knocked room can be out of date: no
+    /// updates are received for such a room after the invite or the knock, so
+    /// an important field such as the join rule may have changed since. Prefer
+    /// [`Client::get_room_preview`] when accuracy matters more than latency.
+    ///
+    /// For a room the client doesn't know, this is exactly
+    /// [`Client::get_room_preview`], and no handle is returned.
+    pub async fn get_room_preview_local_first(
+        &self,
+        room_or_alias_id: &RoomOrAliasId,
+        via: Vec<OwnedServerName>,
+    ) -> Result<(RoomPreview, Option<JoinHandle<()>>)> {
+        let room_id = match <&RoomId>::try_from(room_or_alias_id) {
+            Ok(room_id) => room_id.to_owned(),
+            Err(alias) => self.resolve_room_alias(alias).await?.room_id,
+        };
+
+        let Some(room) = self.get_room(&room_id) else {
+            return Ok((self.get_room_preview(room_or_alias_id, via).await?, None));
+        };
+
+        let preview = RoomPreview::from_known_room(&room).await;
+
+        // A joined or banned room is already up to date through sync, there is
+        // nothing to refresh.
+        if matches!(room.state(), RoomState::Joined | RoomState::Banned) {
+            return Ok((preview, None));
+        }
+
+        let handle = spawn({
+            let client = self.clone();
+            let room_or_alias_id = room_or_alias_id.to_owned();
+
+            async move {
+                match RoomPreview::from_remote_room(&client, room_id, &room_or_alias_id, via).await
+                {
+                    Ok(preview) => preview.save_to_local_room(&client).await,
+                    Err(error) => {
+                        warn!("Failed to refresh the preview of {room_or_alias_id}: {error}")
+                    }
+                }
+            }
+        });
+
+        Ok((preview, Some(handle)))
     }
 
     /// Resolve a room alias to a room id and a list of servers which know
@@ -1953,7 +2061,14 @@ impl Client {
     pub async fn create_room(&self, request: create_room::v3::Request) -> Result<Room> {
         let invite = request.invite.clone();
         let is_direct_room = request.is_direct;
-        let response = self.send(request).await?;
+        // `/createRoom` has no transaction ID, so it is not idempotent: a retry
+        // creates another room. The server answers with a 5xx error when, for
+        // instance, it fails to invite a user that doesn't exist, and the default
+        // retry policy treats every 5xx as transient. Retrying would leave a trail of
+        // empty rooms behind and still fail in the end, so let the error through
+        // instead.
+        let response =
+            self.send(request).with_request_config(self.request_config().disable_retry()).await?;
 
         let base_room = self.base_client().get_or_create_room(&response.room_id, RoomState::Joined);
 
@@ -1969,6 +2084,66 @@ impl Client {
         }
 
         Ok(joined_room)
+    }
+
+    /// Create a space.
+    ///
+    /// A space is a room whose type is `m.space`. Its timeline is not meant to
+    /// be written to, but the specification leaves enforcing that to whoever
+    /// creates the space, so this raises `events_default` to 100 to stop
+    /// ordinary members from posting into it.
+    ///
+    /// Everything else works as in [`Client::create_room`]. The request is only
+    /// filled in where the caller left it empty:
+    ///
+    /// - the room type of the creation content is set to `m.space` unless the
+    ///   creation content already names one;
+    /// - the power level override is set unless the caller provided one, in
+    ///   which case it is used verbatim and it is up to the caller to keep
+    ///   ordinary members from posting.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use matrix_sdk::{
+    ///     Client,
+    ///     ruma::{
+    ///         api::client::room::create_room::v3::Request as CreateRoomRequest, assign,
+    ///     },
+    /// };
+    /// # use url::Url;
+    /// #
+    /// # async {
+    /// # let homeserver = Url::parse("http://example.com")?;
+    /// # let client = Client::new(homeserver).await?;
+    /// let request = assign!(CreateRoomRequest::new(), {
+    ///     name: Some("My space".to_owned()),
+    /// });
+    /// let space = client.create_space(request).await?;
+    /// assert!(space.is_space());
+    /// # anyhow::Ok(()) };
+    /// ```
+    pub async fn create_space(&self, mut request: create_room::v3::Request) -> Result<Room> {
+        let mut creation_content = match &request.creation_content {
+            Some(raw) => raw.deserialize_as_unchecked::<CreationContent>()?,
+            None => CreationContent::new(),
+        };
+
+        if creation_content.room_type.is_none() {
+            creation_content.room_type = Some(RoomType::Space);
+        }
+
+        request.creation_content = Some(Raw::new(&creation_content)?);
+
+        if request.power_level_content_override.is_none() {
+            let mut power_levels = RoomPowerLevelsContentOverride::new();
+            // Nobody but the creator can post into the space room itself.
+            power_levels.events_default = Some(int!(100));
+
+            request.power_level_content_override = Some(Raw::new(&power_levels)?);
+        }
+
+        self.create_room(request).await
     }
 
     /// Create a DM room.
@@ -4088,16 +4263,24 @@ pub(crate) mod tests {
         RoomId, ServerName, UserId,
         api::{
             FeatureFlag, MatrixVersion,
-            client::{room::create_room::v3::Request as CreateRoomRequest, rtc::RtcTransport},
+            client::{
+                room::create_room::{
+                    RoomPowerLevelsContentOverride, v3::Request as CreateRoomRequest,
+                },
+                rtc::RtcTransport,
+            },
         },
         assign,
         events::{
+            AnySyncStateEvent,
             ignored_user_list::IgnoredUserListEventContent,
             media_preview_config::{InviteAvatars, MediaPreviewConfigEventContent, MediaPreviews},
         },
-        owned_device_id, owned_room_id, owned_user_id,
+        int, owned_device_id, owned_room_id, owned_user_id,
         presence::PresenceState,
-        room_alias_id, room_id, user_id,
+        room_alias_id, room_id,
+        serde::Raw,
+        user_id,
     };
     use serde_json::json;
     use stream_assert::{assert_next_matches, assert_pending};
@@ -5166,6 +5349,132 @@ pub(crate) mod tests {
         timeout(Duration::from_secs(1), client.await_room_remote_echo(room.room_id()))
             .await
             .unwrap_err();
+    }
+
+    #[async_test]
+    async fn test_create_space() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // A space is a room of type `m.space` whose timeline ordinary members cannot
+        // write to.
+        server
+            .mock_create_room()
+            .body_matches_partial_json(json!({
+                "creation_content": { "type": "m.space" },
+                "power_level_content_override": { "events_default": 100 },
+            }))
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        client.create_space(CreateRoomRequest::new()).await.unwrap();
+    }
+
+    #[async_test]
+    async fn test_create_space_does_not_override_what_the_caller_set() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // The caller took over the power levels, so they are used verbatim, and the
+        // creation content already names a room type, so it is left alone.
+        server
+            .mock_create_room()
+            .body_matches_partial_json(json!({
+                "creation_content": { "type": "org.example.custom" },
+                "power_level_content_override": { "events_default": 50 },
+            }))
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        let mut power_levels = RoomPowerLevelsContentOverride::new();
+        power_levels.events_default = Some(int!(50));
+
+        let request = assign!(CreateRoomRequest::new(), {
+            creation_content: Some(
+                Raw::new(&json!({ "type": "org.example.custom" })).unwrap().cast_unchecked(),
+            ),
+            power_level_content_override: Some(Raw::new(&power_levels).unwrap()),
+        });
+
+        client.create_space(request).await.unwrap();
+    }
+
+    #[async_test]
+    async fn test_rooms_with_state_event() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let marker_type = "org.example.creation_marker";
+        let marker_key = "abcdef";
+        let marker = |room_id: &RoomId| -> Raw<AnySyncStateEvent> {
+            Raw::new(&json!({
+                "type": marker_type,
+                "state_key": marker_key,
+                "content": { "hello": "world" },
+                "event_id": format!("$marker_{}", room_id.as_str().replace(['!', ':', '.'], "_")),
+                "sender": "@example:localhost",
+                "origin_server_ts": 0u64,
+            }))
+            .unwrap()
+            .cast_unchecked()
+        };
+
+        // No room carries the marker yet: creating the room is safe.
+        assert!(
+            client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap().is_empty()
+        );
+
+        let first = room_id!("!first:localhost");
+        server
+            .sync_room(&client, JoinedRoomBuilder::new(first).add_state_event(marker(first)))
+            .await;
+
+        // Exactly one room carries it: this is the room that was created.
+        let rooms = client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap();
+        assert_eq!(rooms.len(), 1);
+        assert_eq!(rooms[0].room_id(), first);
+
+        // A retry created a duplicate: the caller can see the ambiguity instead of
+        // being handed a false certainty.
+        let second = room_id!("!second:localhost");
+        server
+            .sync_room(&client, JoinedRoomBuilder::new(second).add_state_event(marker(second)))
+            .await;
+
+        let rooms = client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap();
+        assert_eq!(rooms.len(), 2);
+
+        // The state key is part of the match.
+        assert!(
+            client.rooms_with_state_event(marker_type.into(), "other").await.unwrap().is_empty()
+        );
+    }
+
+    #[async_test]
+    async fn test_create_room_is_not_retried() {
+        let server = MatrixMockServer::new().await;
+        // Retries are disabled in the mock client by default; turn them back on, this
+        // is exactly what the test is about.
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().retry_limit(3)))
+            .build()
+            .await;
+
+        // `/createRoom` has no transaction ID, so a retry creates another room. The
+        // server answers with a 5xx error when, for instance, it fails to invite a
+        // user that doesn't exist; retrying would leave a trail of empty rooms
+        // behind, so the request must be sent exactly once.
+        server.mock_create_room().error500().expect(1).mount().await;
+
+        client
+            .create_room(CreateRoomRequest::new())
+            .await
+            .expect_err("creating the room should have failed");
     }
 
     #[async_test]
