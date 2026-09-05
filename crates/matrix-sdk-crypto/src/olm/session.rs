@@ -462,7 +462,7 @@ mod tests {
         };
 
         // When we unpickle it,
-        let session = super::Session::from_pickle(alice.device_keys(), pickle).unwrap();
+        let session = Session::from_pickle(alice.device_keys(), pickle).unwrap();
 
         // Then the timestamps have been clamped to the present, so this session can't
         // sort ahead of every other session forever.
@@ -526,46 +526,6 @@ mod tests {
 
         // Then his side of the session knows when it last decrypted something.
         assert!(result.session.last_decryption_time.is_some());
-    }
-
-    #[async_test]
-    async fn test_pickle_timestamps_in_the_future_are_clamped() {
-        let alice =
-            Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICEDEVICE"));
-        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEVICE"));
-
-        bob.generate_one_time_keys(1);
-        let one_time_key = *bob.one_time_keys().values().next().unwrap();
-        let sender_key = bob.identity_keys().curve25519;
-        let session = alice
-            .create_outbound_session_helper(
-                SessionConfig::version_1(),
-                sender_key,
-                one_time_key,
-                false,
-                alice.device_keys(),
-            )
-            .unwrap();
-
-        // Given a pickle whose timestamps are recorded in milliseconds rather than
-        // seconds, so they are far in the future
-        let mut pickle = session.pickle().await;
-        let bogus = SecondsSinceUnixEpoch(UInt::new_saturating(
-            u64::from(SecondsSinceUnixEpoch::now().get()) * 1000,
-        ));
-        pickle.creation_time = bogus;
-        pickle.last_use_time = bogus;
-        pickle.last_successful_decryption_time = Some(bogus);
-
-        // When we restore the session
-        let session = Session::from_pickle(alice.device_keys(), pickle).unwrap();
-
-        // Then the timestamps are clamped to now, so this session cannot outrank an
-        // honest one
-        let now = SecondsSinceUnixEpoch::now();
-        assert!(session.creation_time <= now);
-        assert!(session.last_use_time <= now);
-        assert!(session.last_successful_decryption_time.unwrap() <= now);
     }
 
     #[async_test]

@@ -153,6 +153,14 @@ pub enum MegolmError {
     /// unless the `unsigned.redacted_because` field is checked first.
     #[error("the event was redacted before it could be decrypted")]
     RedactedEvent,
+
+    /// The event reuses the Megolm message index of an event we have already
+    /// decrypted, so it is a replay of that event rather than a new message.
+    #[error("the event replays the Megolm message index of the event {original_event_id}")]
+    ReplayedMessageIndex {
+        /// The event which originally used this message index.
+        original_event_id: OwnedEventId,
+    },
 }
 
 /// Decryption failed because of a mismatch between the identity keys of the

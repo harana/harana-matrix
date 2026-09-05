@@ -278,6 +278,9 @@ pub struct OlmMachineInner {
     /// and the collision reproduces on every retry. Handing back the same
     /// request keeps that from happening.
     outgoing_keys_upload_request: StdRwLock<Option<(OwnedTransactionId, UploadKeysRequest)>>,
+    /// Record of the Megolm message indices we have already decrypted, used to
+    /// detect an event which replays a ciphertext we have seen before.
+    replay_protection: ReplayProtection,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -414,6 +417,7 @@ impl OlmMachine {
             identity_manager,
             backup_machine,
             outgoing_keys_upload_request: Default::default(),
+            replay_protection: Default::default(),
         });
 
         Self { inner }
