@@ -1,4 +1,4 @@
-use std::fs::create_dir_all;
+use std::{env, fs::create_dir_all, path::Path};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Subcommand, ValueEnum};
@@ -81,12 +81,51 @@ impl KotlinArgs {
     }
 }
 
+/// The environment variables an Android NDK installation is usually pointed at
+/// with, in the order the NDK's own tooling looks at them.
+const NDK_ENV_VARS: &[&str] = &["ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "ANDROID_NDK"];
+
+/// Locates the Android NDK the build should use.
+///
+/// `cargo ndk` derives the whole toolchain from it, `CC` and `AR` included.
+/// Without those, a dependency that compiles C code (`libsqlite3-sys` building
+/// the bundled SQLite, for one) fails with a confusing "no C compiler found"
+/// error even when the linker is set in the Cargo configuration, so check for
+/// it up front and say what to set.
+fn ndk_path() -> Result<String> {
+    for name in NDK_ENV_VARS {
+        let Ok(path) = env::var(name) else { continue };
+
+        if !Path::new(&path).is_dir() {
+            return Err(format!(
+                "{name} is set to `{path}`, which is not a directory. Point it at an \
+                 Android NDK installation."
+            )
+            .into());
+        }
+
+        return Ok(path);
+    }
+
+    Err(format!(
+        "No Android NDK found. Set one of {} to your NDK installation, for instance \
+         `export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/<version>`. The whole toolchain, \
+         the C compiler and archiver a bundled SQLite build needs among it, is derived \
+         from it.",
+        NDK_ENV_VARS.join(", ")
+    )
+    .into())
+}
+
 fn build_android_library(
     profile: &str,
     only_target: Option<String>,
     src_dir: &Utf8Path,
     package: Package,
 ) -> Result<()> {
+    let ndk_path = ndk_path()?;
+    println!("-- Using the Android NDK at {ndk_path}");
+
     let package_values = package.values();
     let package_name = package_values.name;
     let package_features = package_values.features;
@@ -171,7 +210,14 @@ fn build_for_android_target(
         sh,
         "cargo ndk --target {target} -o {dest_dir} build --profile {profile} --package {package_name} --features {features}"
     )
-    .run()?;
+    .run()
+    .map_err(|error| {
+        format!(
+            "Building for {target} failed: {error}\n\nThis build needs `cargo ndk`, which \
+             derives the toolchain from the NDK. Install it with `cargo install cargo-ndk` \
+             and add the target with `rustup target add {target}`."
+        )
+    })?;
 
     // The builtin dev profile has its files stored under target/debug, all
     // other targets have matching directory names
