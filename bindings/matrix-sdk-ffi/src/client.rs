@@ -73,7 +73,7 @@ use matrix_sdk_ui::{
         NotificationProcessSetup as MatrixNotificationProcessSetup,
     },
     spaces::SpaceService as UISpaceService,
-    unable_to_decrypt_hook::{DEFAULT_LATE_DECRYPTION_GRACE_PERIOD, UtdHookManager},
+    unable_to_decrypt_hook::UtdHookManager,
 };
 use mime::Mime;
 use oauth2::Scope;

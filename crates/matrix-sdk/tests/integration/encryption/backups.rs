@@ -1487,8 +1487,7 @@ async fn test_a_backed_up_room_key_we_cannot_read_is_reported() -> TestResult {
     // swallowed and the message staying stuck as a UTD with no explanation
     assert_matches!(
         error,
-        matrix_sdk::Error::UnreadableBackedUpRoomKeys { count, session_id: reported } => {
-            assert_eq!(count, 1);
+        matrix_sdk::Error::CorruptBackupRoomKey { session_id: reported } => {
             assert_eq!(reported, session_id);
         }
     );

@@ -30,7 +30,6 @@ use matrix_sdk::{
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
-use matrix_sdk_base::RoomInfoNotableUpdateReasons;
 use matrix_sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use matrix_sdk_ui::{
     timeline::{RoomExt, TimelineBuilder, default_event_filter},
@@ -2715,6 +2714,8 @@ mod tests {
     /// store, as raw JSON in both directions.
     #[tokio::test]
     async fn test_room_account_data_is_written_and_read_back() {
+        use matrix_sdk::ruma::events::RoomAccountDataEventType;
+
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
 
@@ -2769,6 +2770,8 @@ mod tests {
     /// Content that isn't JSON is rejected before it reaches the homeserver.
     #[tokio::test]
     async fn test_setting_account_data_to_invalid_json_is_an_error() {
+        use matrix_sdk::ruma::events::RoomAccountDataEventType;
+
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
 

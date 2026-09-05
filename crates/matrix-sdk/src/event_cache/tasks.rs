@@ -39,7 +39,7 @@ use super::{
     RoomEventCacheLinkedChunkUpdate,
 };
 use crate::{
-    Client, Room,
+    Client,
     client::WeakClient,
     send_queue::{LocalEchoContent, RoomSendQueueUpdate, SendQueueUpdate},
 };

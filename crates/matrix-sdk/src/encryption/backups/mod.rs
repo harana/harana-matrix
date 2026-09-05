@@ -1836,6 +1836,8 @@ mod test {
 
         wait_for_steady_state.await.expect("We should be able to wait for the steady state");
 
+        task.await.unwrap();
+
         // Once we are done waiting, the delay is back to what it was.
         let current_duration =
             { client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned() };

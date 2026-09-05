@@ -30,7 +30,7 @@ use zeroize::Zeroize;
 use crate::{
     client::Client,
     error::ClientError,
-    ruma::{AuthData, UiaaChallenge},
+    ruma::AuthData,
     runtime::get_runtime_handle,
     task_handle::TaskHandle,
 };
@@ -787,7 +787,9 @@ impl Encryption {
             return Ok(CrossSigningBootstrapResult::AlreadyPresent);
         }
 
-        match self.inner.bootstrap_cross_signing(auth_data.map(Into::into)).await {
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        match self.inner.bootstrap_cross_signing(auth_data).await {
             Ok(()) => Ok(CrossSigningBootstrapResult::Created),
             Err(error) => {
                 if error.as_uiaa_response().is_some() {
