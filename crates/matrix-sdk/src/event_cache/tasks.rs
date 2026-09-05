@@ -160,6 +160,25 @@ pub(super) async fn auto_shrink_linked_chunk_task(
                 }
             }
 
+            AutoShrinkMessage::PinnedEvents { room_id } => {
+                let ControlFlow::Continue(caches) = all_caches(inner.as_ref(), &room_id).await
+                else {
+                    continue;
+                };
+
+                let Some(cache) = caches.loaded_pinned_events() else {
+                    // The cache is gone already, nothing to unload.
+                    continue;
+                };
+
+                if let Err(err) = cache.unload_if_no_subscribers().await {
+                    warn!(%room_id, ?err, "Failed to unload the pinned events cache");
+                }
+
+                // Unloading doesn't produce any diff for anyone: nobody is listening.
+                continue;
+            }
+
             AutoShrinkMessage::Thread { room_id, thread_id } => {
                 let ControlFlow::Continue(caches) = all_caches(inner.as_ref(), &room_id).await
                 else {
