@@ -427,6 +427,50 @@ async fn test_keys_query() {
     assert_eq!(device.device_id(), alice_device_id);
 }
 
+/// Regression test for issue #128: `set_local_trust` used to write back the
+/// whole in-memory `DeviceData`, reverting any field that had changed in the
+/// store in the meantime.
+#[async_test]
+async fn test_set_local_trust_does_not_revert_concurrent_device_changes() {
+    let (machine, _) = get_prepared_machine_test_helper(user_id(), false).await;
+    let alice_id = user_id!("@alice:example.org");
+    let alice_device_id: &DeviceId = device_id!("JLAFKJWSCS");
+
+    machine
+        .receive_keys_query_response(&TransactionId::new(), &keys_query_response())
+        .await
+        .unwrap();
+
+    // Given a `Device` we grabbed a while ago...
+    let device = machine.store().get_device(alice_id, alice_device_id).await.unwrap().unwrap();
+    assert!(!device.was_withheld_code_sent());
+
+    // ... and a change to the same device that landed in the store afterwards.
+    // Round-trip through serde so that this is a genuinely separate object, the way
+    // it would be with a real, serialising store.
+    let stored: DeviceData = json_convert(
+        &machine.store().get_device_data(alice_id, alice_device_id).await.unwrap().unwrap(),
+    )
+    .unwrap();
+    stored.mark_withheld_code_as_sent();
+    machine
+        .store()
+        .save_changes(Changes {
+            devices: DeviceChanges { changed: vec![stored], ..Default::default() },
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    // ... when we set the local trust through our stale handle...
+    device.set_local_trust(LocalTrust::Verified).await.unwrap();
+
+    // ... then the trust is recorded, and the concurrent change survives.
+    let stored = machine.store().get_device_data(alice_id, alice_device_id).await.unwrap().unwrap();
+    assert_eq!(stored.local_trust_state(), LocalTrust::Verified);
+    assert!(stored.was_withheld_code_sent());
+}
+
 #[async_test]
 async fn test_late_keys_query_response_updates_own_device() {
     // Inspired by a bug report[1], even though it looks like the client behaved

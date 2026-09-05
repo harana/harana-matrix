@@ -1735,6 +1735,22 @@ impl Client {
     /// Similar to [`Client::restore_session_with`], with
     /// [`RoomLoadSettings::default()`].
     ///
+    /// # Store persistence
+    ///
+    /// Restoring a session only restores the session: it does not bring back
+    /// the state and crypto stores that went with it. Those live in the store
+    /// the [`ClientBuilder`] was pointed at, and they have to be persisted
+    /// separately, at the same path and with the same passphrase or key as
+    /// before. A session restored against a fresh store looks like it worked,
+    /// but the device has no keys, so encrypted messages arrive undecryptable
+    /// and other devices see a new, unverified device.
+    ///
+    /// See the `persist_session` example in the repository for a full
+    /// login-then-restore cycle; `ClientBuilder::sqlite_store` is the usual
+    /// way of pointing a client at a persistent store.
+    ///
+    /// [`ClientBuilder`]: crate::ClientBuilder
+    ///
     /// # Panics
     ///
     /// Panics if a session was already restored or logged in.
@@ -1748,7 +1764,8 @@ impl Client {
     /// [`RoomLoadSettings`].
     ///
     /// See the documentation of the corresponding authentication API's
-    /// `restore_session` method for more information.
+    /// `restore_session` method for more information, and
+    /// [`Client::restore_session`] for the store persistence this assumes.
     ///
     /// # Panics
     ///

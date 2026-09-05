@@ -48,7 +48,7 @@ use ruma::{
     profile::UserProfile,
     serde::Raw,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -2101,6 +2101,84 @@ pub trait StateStoreExt: StateStore {
         state_key: &UserId,
     ) -> Result<Option<RawMemberEvent>, Self::Error> {
         self.get_state_event_static_for_key(room_id, state_key).await
+    }
+
+    /// Get a deserialized value from the custom store.
+    ///
+    /// Like [`StateStore::get_custom_value`], but deserializes the stored
+    /// bytes as JSON, so callers keeping structured data in the store do not
+    /// have to hand-roll the serialization.
+    ///
+    /// Returns `None` if there is nothing stored under `key`.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to fetch data for.
+    async fn get_serialized_custom_value<T>(&self, key: &[u8]) -> Result<Option<T>, Self::Error>
+    where
+        T: DeserializeOwned + Send,
+    {
+        let Some(bytes) = self.get_custom_value(key).await? else { return Ok(None) };
+        Ok(Some(serde_json::from_slice(&bytes)?))
+    }
+
+    /// Put a serializable value into the custom store, returning the value
+    /// previously stored under the same key.
+    ///
+    /// The previous value is deserialized with the same type, so a key whose
+    /// stored shape has changed will fail to read back. Use
+    /// [`StateStoreExt::set_serialized_custom_value_no_read`] when the previous
+    /// value is not needed.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to insert data into.
+    ///
+    /// * `value` - The value to insert.
+    async fn set_serialized_custom_value<T>(
+        &self,
+        key: &[u8],
+        value: &T,
+    ) -> Result<Option<T>, Self::Error>
+    where
+        T: Serialize + DeserializeOwned + Send + Sync,
+    {
+        let previous = self.set_custom_value(key, serde_json::to_vec(value)?).await?;
+
+        previous.map(|bytes| serde_json::from_slice(&bytes)).transpose().map_err(Into::into)
+    }
+
+    /// Put a serializable value into the custom store without reading back
+    /// what was there before.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to insert data into.
+    ///
+    /// * `value` - The value to insert.
+    async fn set_serialized_custom_value_no_read<T>(
+        &self,
+        key: &[u8],
+        value: &T,
+    ) -> Result<(), Self::Error>
+    where
+        T: Serialize + Send + Sync,
+    {
+        self.set_custom_value_no_read(key, serde_json::to_vec(value)?).await
+    }
+
+    /// Remove a value from the custom store, returning the deserialized value
+    /// if there was one.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to remove data from.
+    async fn remove_serialized_custom_value<T>(&self, key: &[u8]) -> Result<Option<T>, Self::Error>
+    where
+        T: DeserializeOwned + Send,
+    {
+        let Some(bytes) = self.remove_custom_value(key).await? else { return Ok(None) };
+        Ok(Some(serde_json::from_slice(&bytes)?))
     }
 }
 

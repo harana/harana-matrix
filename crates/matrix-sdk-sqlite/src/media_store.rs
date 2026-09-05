@@ -36,7 +36,7 @@ use matrix_sdk_base::{
 use ruma::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
 use rusqlite::{OptionalExtension, params_from_iter};
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use crate::{
     OpenStoreError, RuntimeConfig, SqliteStoreConfig,

@@ -46,7 +46,7 @@ use rusqlite::{
     OptionalExtension, ToSql, Transaction, TransactionBehavior, params, params_from_iter,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::{
     OpenStoreError, RuntimeConfig, SqliteStoreConfig,

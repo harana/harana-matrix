@@ -274,6 +274,40 @@ impl SenderData {
         Self::UnknownDevice { legacy_session: true, owner_check_failed: false }
     }
 
+    /// Whether this `SenderData` carries the legacy flag.
+    ///
+    /// The flag is only meaningful for the two states that can be reached
+    /// without knowing who the sender is, so it is always `false` for the
+    /// other states.
+    pub fn legacy_session(&self) -> bool {
+        match self {
+            Self::UnknownDevice { legacy_session, .. }
+            | Self::DeviceInfo { legacy_session, .. } => *legacy_session,
+            Self::VerificationViolation(_)
+            | Self::SenderUnverified(_)
+            | Self::SenderVerified(_) => false,
+        }
+    }
+
+    /// Return a copy of this `SenderData` with the legacy flag set to
+    /// `legacy_session`.
+    ///
+    /// States that do not carry the flag are returned unchanged: once we know
+    /// who the sender is, we no longer need to fall back on the legacy
+    /// behaviour.
+    #[must_use]
+    pub fn with_legacy_session(self, legacy_session: bool) -> Self {
+        match self {
+            Self::UnknownDevice { owner_check_failed, .. } => {
+                Self::UnknownDevice { legacy_session, owner_check_failed }
+            }
+            Self::DeviceInfo { device_keys, .. } => {
+                Self::DeviceInfo { device_keys, legacy_session }
+            }
+            other => other,
+        }
+    }
+
     /// Create a [`SenderData`] representing the current verification state of
     /// the given device.
     ///

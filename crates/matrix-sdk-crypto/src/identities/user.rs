@@ -518,13 +518,11 @@ impl OtherUserIdentity {
             "Withdrawing verification status and pinning current identity"
         );
         self.inner.withdraw_verification();
-        let to_save = UserIdentityData::Other(self.inner.clone());
-        let changes = Changes {
-            identities: IdentityChanges { changed: vec![to_save], ..Default::default() },
-            ..Default::default()
-        };
-        self.verification_machine.store.inner().save_changes(changes).await?;
-        Ok(())
+
+        let Some(to_save) = self.identity_to_update().await? else { return Ok(()) };
+        to_save.withdraw_verification();
+
+        self.save_identity(to_save).await
     }
 
     /// Test helper that marks that an identity has been previously verified and

@@ -480,6 +480,25 @@ impl OAuthCrossSigningResetInfo {
     }
 }
 
+/// Is this the error Synapse returns when we upload a one-time key it already
+/// has?
+///
+/// Returns the server's error message when it is, so that the keys can be
+/// pulled out of it for reporting.
+fn duplicate_one_time_key_message(error: &Error) -> Option<&str> {
+    let error = error.as_client_api_error()?;
+
+    if error.status_code != 400 {
+        return None;
+    }
+
+    let ErrorBody::Standard(StandardErrorBody { message, .. }) = &error.body else {
+        return None;
+    };
+
+    message.starts_with("One time key").then_some(message.as_str())
+}
+
 /// A struct that helps to parse the custom error message Synapse posts if a
 /// duplicate one-time key is uploaded.
 #[derive(Clone, Debug)]
@@ -765,6 +784,48 @@ impl Client {
         Ok(())
     }
 
+    /// Report that the server rejected a one-time key we had already uploaded.
+    ///
+    /// Reported at most once per session store: the condition does not clear up
+    /// on its own, and there is no point filling the logs with it.
+    async fn report_duplicate_one_time_key(&self, message: &str) -> Result<()> {
+        let already_reported = self
+            .state_store()
+            .get_kv_data(StateStoreDataKey::OneTimeKeyAlreadyUploaded)
+            .await?
+            .is_some();
+
+        if already_reported {
+            return Ok(());
+        }
+
+        let error_message = DuplicateOneTimeKeyErrorMessage::from_str(message);
+
+        if let Ok(message) = &error_message {
+            error!(
+                sentry = true,
+                old_key = %message.old_key,
+                new_key = %message.new_key,
+                "Duplicate one-time keys have been uploaded"
+            );
+        } else {
+            error!(sentry = true, "Duplicate one-time keys have been uploaded");
+        }
+
+        self.state_store()
+            .set_kv_data(
+                StateStoreDataKey::OneTimeKeyAlreadyUploaded,
+                StateStoreDataValue::OneTimeKeyAlreadyUploaded,
+            )
+            .await?;
+
+        if let Err(e) = self.inner.duplicate_key_upload_error_sender.send(error_message.ok()) {
+            error!("Failed to dispatch duplicate key upload error notification: {}", e);
+        }
+
+        Ok(())
+    }
+
     async fn send_outgoing_request(&self, r: OutgoingRequest) -> Result<()> {
         use matrix_sdk_base::crypto::types::requests::AnyOutgoingRequest;
 
@@ -773,87 +834,31 @@ impl Client {
                 self.keys_query(r.request_id(), request.device_keys.clone()).await?;
             }
             AnyOutgoingRequest::KeysUpload(request) => {
-                let response = self.keys_upload(r.request_id(), request).await;
+                if let Err(error) = self.keys_upload(r.request_id(), request).await {
+                    let duplicate_key_message = duplicate_one_time_key_message(&error);
 
-                // A duplicate one-time key is a permanent failure: the server already has
-                // that key and will reject this request every time. Retrying it forever
-                // just hammers the homeserver and blocks every other outgoing request
-                // behind it, so the request is marked as sent below and the affected keys
-                // are dropped locally so fresh ones get generated.
-                let mut is_terminal = false;
+                    let Some(duplicate_key_message) = duplicate_key_message else {
+                        return Err(error);
+                    };
 
-                if let Err(e) = &response {
-                    match e.as_client_api_error() {
-                        Some(e) if e.status_code == 400 => {
-                            if let ErrorBody::Standard(StandardErrorBody { message, .. }) = &e.body
-                            {
-                                // This is one of the nastiest errors we can have. The server
-                                // telling us that we already have a one-time key uploaded means
-                                // that we forgot about some of our one-time keys. This will lead to
-                                // UTDs.
-                                {
-                                    let already_reported = self
-                                        .state_store()
-                                        .get_kv_data(StateStoreDataKey::OneTimeKeyAlreadyUploaded)
-                                        .await?
-                                        .is_some();
+                    // This is one of the nastiest errors we can have. The server telling
+                    // us that we already have a one-time key uploaded means that we
+                    // forgot about some of our one-time keys. This will lead to UTDs.
+                    self.report_duplicate_one_time_key(duplicate_key_message).await?;
 
-                                    if message.starts_with("One time key") {
-                                        is_terminal = true;
-                                    }
-
-                                    if message.starts_with("One time key") && !already_reported {
-                                        let error_message =
-                                            DuplicateOneTimeKeyErrorMessage::from_str(message);
-
-                                        if let Ok(message) = &error_message {
-                                            error!(
-                                                sentry = true,
-                                                old_key = %message.old_key,
-                                                new_key = %message.new_key,
-                                                "Duplicate one-time keys have been uploaded"
-                                            );
-                                        } else {
-                                            error!(
-                                                sentry = true,
-                                                "Duplicate one-time keys have been uploaded"
-                                            );
-                                        }
-
-                                        self.state_store()
-                                            .set_kv_data(
-                                                StateStoreDataKey::OneTimeKeyAlreadyUploaded,
-                                                StateStoreDataValue::OneTimeKeyAlreadyUploaded,
-                                            )
-                                            .await?;
-
-                                        if let Err(e) = self
-                                            .inner
-                                            .duplicate_key_upload_error_sender
-                                            .send(error_message.ok())
-                                        {
-                                            error!(
-                                                "Failed to dispatch duplicate key upload error notification: {}",
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-
-                    if is_terminal {
-                        // Tell the `OlmMachine` the request is done with. It marks the
-                        // keys we tried to upload as published, which drops them from the
-                        // account so the next round generates keys the server hasn't seen.
-                        let response = upload_keys::v3::Response::new(Default::default());
-
-                        self.mark_request_as_sent(r.request_id(), &response).await?;
-                    } else {
-                        response?;
-                    }
+                    // The server is not going to change its mind: the same request will
+                    // be rejected the same way for as long as we keep sending it, and
+                    // the crypto machine keeps handing it back to us until it is marked
+                    // as sent. That loop used to run forever, blocking everything behind
+                    // it - cross-signing bootstrap included. Mark the request as sent
+                    // with an empty response instead: the keys we were holding are
+                    // dropped, and fresh ones are generated for the next upload.
+                    // See issues #191 and #259.
+                    self.mark_request_as_sent(
+                        r.request_id(),
+                        &upload_keys::v3::Response::new(BTreeMap::new()),
+                    )
+                    .await?;
                 }
             }
             AnyOutgoingRequest::ToDeviceRequest(request) => {
@@ -2323,7 +2328,7 @@ mod tests {
         str::FromStr,
         sync::{
             Arc,
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
         },
     };
 
@@ -2339,7 +2344,7 @@ mod tests {
     use serde_json::json;
     use wiremock::{
         Mock, MockServer, Request, ResponseTemplate,
-        matchers::{header, method, path_regex},
+        matchers::{header, method, path, path_regex},
     };
 
     #[cfg(feature = "sqlite")]
@@ -2770,6 +2775,58 @@ mod tests {
             .expect("We should be able to deserialize the UiaaInfo");
         OAuthCrossSigningResetInfo::from_auth_info(&auth_info)
             .expect("We should be able to fetch the cross-signing reset info from the auth info");
+    }
+
+    /// Regression test for issues #191 and #259: a keys upload the server
+    /// keeps rejecting with "One time key ... already exists" used to be
+    /// retried forever, because the request was never marked as sent.
+    #[async_test]
+    async fn test_a_rejected_duplicate_one_time_key_upload_is_not_retried_forever() {
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let upload_attempts = Arc::new(AtomicUsize::new(0));
+
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/keys/upload"))
+            .respond_with({
+                let upload_attempts = upload_attempts.clone();
+                move |_: &Request| {
+                    upload_attempts.fetch_add(1, Ordering::SeqCst);
+
+                    ResponseTemplate::new(400).set_body_json(json!({
+                        "errcode": "M_UNKNOWN",
+                        "error": "One time key signed_curve25519:AAAAAAAAAAA already exists.",
+                    }))
+                }
+            })
+            .mount(&server)
+            .await;
+
+        // Sending the outgoing requests must not fail, even though the server
+        // rejects the upload...
+        client
+            .encryption()
+            .client
+            .send_outgoing_requests()
+            .await
+            .expect("A rejected keys upload should not fail the whole request round");
+
+        let first_round = upload_attempts.load(Ordering::SeqCst);
+        assert!(first_round > 0, "the client should have tried to upload its keys");
+
+        // ... and the machine must have moved on: the very same request is not
+        // handed back to us to be sent again.
+        let outgoing =
+            client.olm_machine().await.as_ref().unwrap().outgoing_requests().await.unwrap();
+
+        assert!(
+            !outgoing.iter().any(|request| matches!(
+                request.request(),
+                matrix_sdk_base::crypto::types::requests::AnyOutgoingRequest::KeysUpload(_)
+            )),
+            "the rejected keys upload should have been marked as sent",
+        );
     }
 
     #[test]

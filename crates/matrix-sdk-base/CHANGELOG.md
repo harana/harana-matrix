@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Added
+
+- Add `StateStoreExt::get_serialized_custom_value`,
+  `set_serialized_custom_value`, `set_serialized_custom_value_no_read` and
+  `remove_serialized_custom_value`, so structured data can be kept in the
+  custom-value store without hand-rolling serialization.
+  ([#16](https://github.com/harana/harana-matrix/issues/16))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 ### Added

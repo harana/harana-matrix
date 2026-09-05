@@ -489,6 +489,16 @@ impl StoreTransaction {
             return Ok(());
         }
 
+        // Asking for the account moves it out of the cache for the lifetime of the
+        // transaction, so it ends up here whether or not anything touched it. Pickling
+        // and writing it back regardless is expensive - `process_sync_changes` opens
+        // several transactions per sync - so put an untouched account straight back
+        // into the cache instead. See issue #70.
+        if self.changes.account.as_ref().is_some_and(|account| !account.is_dirty()) {
+            *self.cache.account.lock().await = self.changes.account.take();
+            return Ok(());
+        }
+
         // Save changes in the database.
         let account = self.changes.account.as_ref().map(|acc| acc.deep_clone());
 
@@ -2047,6 +2057,49 @@ mod tests {
             },
         },
     };
+
+    /// Regression test for issue #70: a transaction that only reads the
+    /// account used to write it back anyway.
+    #[async_test]
+    async fn test_transaction_only_writes_a_changed_account() {
+        let machine = OlmMachine::new(user_id!("@alice:localhost"), device_id!("DEVICEID")).await;
+        let store = machine.store();
+
+        // A transaction that only looks at the account leaves it clean...
+        store
+            .with_transaction(async |tr| {
+                let account = tr.account().await?;
+                assert!(!account.is_dirty());
+                let _ = account.uploaded_key_count();
+                assert!(!account.is_dirty());
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // ... and the account is back in the cache afterwards, either way.
+        store
+            .with_transaction(async |tr| {
+                let account = tr.account().await?;
+                assert!(!account.is_dirty());
+
+                // Changing something marks it for writing.
+                account.generate_one_time_keys(1);
+                assert!(account.is_dirty());
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // The committed account was written and read back clean.
+        store
+            .with_transaction(async |tr| {
+                assert!(!tr.account().await?.is_dirty());
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
 
     #[async_test]
     async fn test_merge_received_group_session() {

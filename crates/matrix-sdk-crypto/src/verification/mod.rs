@@ -118,6 +118,16 @@ pub fn format_emojis(emojis: [Emoji; 7]) -> String {
 }
 
 impl VerificationStore {
+    /// Get the device with the given ids straight from the store, without
+    /// filtering out our own device.
+    pub async fn get_device_data(
+        &self,
+        user_id: &UserId,
+        device_id: &DeviceId,
+    ) -> Result<Option<DeviceData>, CryptoStoreError> {
+        self.inner.get_device(user_id, device_id).await
+    }
+
     pub async fn get_device(
         &self,
         user_id: &UserId,
