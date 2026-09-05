@@ -148,16 +148,42 @@ impl Room {
 
     /// Returns the number of members who have joined or been invited to the
     /// room.
+    ///
+    /// # When is this known?
+    ///
+    /// This reads a cached count, it never hits the store or the network. The
+    /// count comes from either:
+    ///
+    /// - the room summary of a sync response, which servers only send when the
+    ///   counts changed, so a room that hasn't changed size since the client
+    ///   first saw it may never have been given one; or
+    /// - the complete member list of the room, once it has been fetched, e.g.
+    ///   by [`Room::members()`].
+    ///
+    /// Until one of those has happened — which is typically *not* yet the case
+    /// inside an event handler for the first sync that mentions the room — this
+    /// returns `0`. Call [`Room::members()`] (or, in the main SDK,
+    /// `Room::sync_members()`) first if you need a count you can rely on.
+    ///
+    /// [`Room::members()`]: Self::members
     pub fn active_members_count(&self) -> u64 {
         self.info.read().active_members_count()
     }
 
     /// Returns the number of members who have been invited to the room.
+    ///
+    /// See [`Room::active_members_count()`] for when this count is known.
+    ///
+    /// [`Room::active_members_count()`]: Self::active_members_count
     pub fn invited_members_count(&self) -> u64 {
         self.info.read().invited_members_count()
     }
 
     /// Returns the number of members who have joined the room.
+    ///
+    /// See [`Room::active_members_count()`] for when this count is known.
+    ///
+    /// [`Room::active_members_count()`]: Self::active_members_count
     pub fn joined_members_count(&self) -> u64 {
         self.info.read().joined_members_count()
     }

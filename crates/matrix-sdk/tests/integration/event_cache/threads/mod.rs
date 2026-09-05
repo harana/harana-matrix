@@ -443,6 +443,99 @@ async fn test_auto_subscribe_thread_via_sync() {
 }
 
 #[async_test]
+async fn test_auto_subscribe_when_someone_answers_our_message_in_a_thread() {
+    let server = MatrixMockServer::new().await;
+
+    let thread_root = event_id!("$thread_root");
+
+    let client = server
+        .client_builder()
+        .no_server_versions()
+        .on_builder(|builder| {
+            builder.with_threading_support(ThreadingSupport::Enabled { with_subscriptions: true })
+        })
+        .build()
+        .await;
+
+    server.mock_versions().with_thread_subscriptions().ok().mount().await;
+
+    let event_cache = client.event_cache();
+    event_cache.subscribe().unwrap();
+
+    let room_id = room_id!("!omelette:fromage.fr");
+    let room = server.sync_joined_room(&client, room_id).await;
+
+    let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+    let (initial_events, mut subscriber) = room_event_cache.subscribe().await.unwrap();
+    assert!(initial_events.is_empty());
+    assert!(subscriber.is_empty());
+
+    let own_user_id = client.user_id().unwrap().to_owned();
+    let f = EventFactory::new().room(room_id).sender(*ALICE);
+    let member = f.member(&own_user_id).sender(&own_user_id);
+
+    // Only an intentional mention causes a notification, so nothing here is a
+    // mention: the subscription can only come from the reply.
+    let mut push_rules = Ruleset::default();
+    push_rules.override_.insert(ConditionalPushRule::is_user_mention(&own_user_id));
+
+    server
+        .mock_sync()
+        .ok_and_run(&client, |sync_builder| {
+            sync_builder.add_joined_room(JoinedRoomBuilder::new(room_id).add_state_event(member));
+            sync_builder.add_global_account_data(f.push_rules(push_rules));
+        })
+        .await;
+
+    assert_let_timeout!(Ok(RoomEventCacheUpdate::UpdateMembers { .. }) = subscriber.recv());
+
+    // A thread started by somebody else, in which we sent a message…
+    let our_message_id = event_id!("$our_message");
+    let our_message: Raw<AnySyncTimelineEvent> = f
+        .text_msg("what about the omelette?")
+        .sender(&own_user_id)
+        .in_thread(thread_root, thread_root)
+        .event_id(our_message_id)
+        .into();
+
+    // … and somebody answering it, without mentioning us.
+    let answer_id = event_id!("$answer");
+    let answer: Raw<AnySyncTimelineEvent> = f
+        .text_msg("it's in the fridge")
+        .in_thread_reply(thread_root, our_message_id)
+        .event_id(answer_id)
+        .into();
+
+    // We get subscribed to the thread, up to the answer.
+    server
+        .mock_room_put_thread_subscription()
+        .match_automatic_event_id(answer_id)
+        .match_thread_id(thread_root.to_owned())
+        .ok()
+        .mock_once()
+        .mount()
+        .await;
+
+    let mut thread_subscriber_updates = client.event_cache().subscribe_thread_subscriber_updates();
+
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_timeline_bulk(vec![our_message, answer]),
+        )
+        .await;
+
+    assert_let_timeout!(
+        Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { .. })) =
+            subscriber.recv()
+    );
+    assert_let_timeout!(Ok(()) = thread_subscriber_updates.recv());
+
+    // The actual check is the `mock_once` call above!
+}
+
+#[async_test]
 async fn test_dont_auto_subscribe_on_already_subscribed_thread() {
     let mut s = thread_subscription_test_setup().await;
 
