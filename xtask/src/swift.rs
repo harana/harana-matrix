@@ -18,6 +18,7 @@ pub struct SwiftArgs {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::enum_variant_names)]
 enum SwiftCommand {
     /// Builds the SDK for Swift as a static lib.
     BuildLibrary,
