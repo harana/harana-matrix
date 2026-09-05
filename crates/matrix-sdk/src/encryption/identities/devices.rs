@@ -39,6 +39,12 @@ pub struct DeviceUpdates {
     pub new: BTreeMap<OwnedUserId, BTreeMap<OwnedDeviceId, Device>>,
     /// The list of changed devices.
     pub changed: BTreeMap<OwnedUserId, BTreeMap<OwnedDeviceId, Device>>,
+    /// The list of devices that have been removed.
+    ///
+    /// The device is no longer known to the homeserver: it has been logged out
+    /// or deleted. The [`Device`] here is the last state we knew about it, so
+    /// consumers can tell *which* device disappeared.
+    pub deleted: BTreeMap<OwnedUserId, BTreeMap<OwnedDeviceId, Device>>,
 }
 
 impl DeviceUpdates {
@@ -63,8 +69,9 @@ impl DeviceUpdates {
 
         let new = updates.new.into_iter().map(map_devices).collect();
         let changed = updates.changed.into_iter().map(map_devices).collect();
+        let deleted = updates.deleted.into_iter().map(map_devices).collect();
 
-        DeviceUpdates { new, changed }
+        DeviceUpdates { new, changed, deleted }
     }
 }
 

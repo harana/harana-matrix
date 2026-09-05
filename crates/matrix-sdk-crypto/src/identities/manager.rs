@@ -2036,6 +2036,34 @@ pub(crate) mod tests {
     }
 
     #[async_test]
+    async fn test_devices_stream_reports_deleted_devices() {
+        let manager = manager_test_helper(user_id(), device_id()).await;
+
+        // First, learn about the user's devices.
+        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
+        manager.receive_keys_query_response(&request_id, &own_key_query()).await.unwrap();
+
+        let stream = manager.store.devices_stream();
+        pin_mut!(stream);
+
+        // Then, the server stops reporting them: they have been logged out.
+        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
+        let response = ruma_response_from_json(&json!({
+            "device_keys": { user_id().as_str(): {} },
+        }));
+        manager.receive_keys_query_response(&request_id, &response).await.unwrap();
+
+        let update = assert_ready!(stream);
+        let deleted = update.deleted.get(user_id()).expect("the user should have deleted devices");
+        // Our own device is deliberately never reported as deleted, but the other one
+        // in the key query response is.
+        assert!(
+            deleted.contains_key(device_id!("LVWOVGOXME")),
+            "the update should name the device that disappeared"
+        );
+    }
+
+    #[async_test]
     async fn test_identities_stream() {
         let manager = manager_test_helper(user_id(), device_id()).await;
         let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);

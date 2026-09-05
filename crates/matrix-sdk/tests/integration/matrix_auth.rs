@@ -46,6 +46,49 @@ async fn test_restore_session() {
 }
 
 #[async_test]
+async fn test_login_honours_the_request_config() {
+    // The server rate-limits every login attempt.
+    async fn rate_limited_server() -> (Client, MockServer) {
+        let (client, server) = no_retry_test_client_with_server().await;
+
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/login"))
+            .respond_with(ResponseTemplate::new(429).set_body_json(json!({
+                "errcode": "M_LIMIT_EXCEEDED",
+                "error": "Too many requests",
+                "retry_after_ms": 1,
+            })))
+            .up_to_n_times(5)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/login"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::LOGIN))
+            .mount(&server)
+            .await;
+
+        (client, server)
+    }
+
+    // The default configuration gives up before the server stops rate-limiting.
+    let (client, _server) = rate_limited_server().await;
+    client.matrix_auth().login_username("example", "wordpass").send().await.unwrap_err();
+    assert!(!client.matrix_auth().logged_in());
+
+    // A configuration with a higher retry limit waits the rate limit out.
+    let (client, _server) = rate_limited_server().await;
+    client
+        .matrix_auth()
+        .login_username("example", "wordpass")
+        .request_config(RequestConfig::new().retry_limit(10))
+        .send()
+        .await
+        .unwrap();
+    assert!(client.matrix_auth().logged_in());
+}
+
+#[async_test]
 async fn test_login() {
     let (client, server) = no_retry_test_client_with_server().await;
     let homeserver = Url::parse(&server.uri()).unwrap();
