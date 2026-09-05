@@ -23,7 +23,7 @@ use std::{
 use async_trait::async_trait;
 use itertools::Itertools;
 use matrix_sdk_store_encryption::{
-    CodecError, EncryptableValue, StoreCipherBackend, StoreCodec, StoreCodecExt as _,
+    CodecError, CodecKind, EncryptableValue, StoreCipherBackend, StoreCodec, StoreCodecExt as _,
 };
 use ruma::{OwnedEventId, OwnedRoomId, serde::Raw, time::SystemTime};
 use rusqlite::{OptionalExtension, Params, Row, Statement, Transaction, limits::Limit};
@@ -772,11 +772,30 @@ pub(crate) trait EncryptableStore {
     fn deserialize_json<T: DeserializeOwned>(&self, data: &[u8]) -> Result<T> {
         let decoded = self.decode_value(data)?;
         let codec = self.json_codec();
+
+        // Keep `serde_path_to_error` on top of whichever deserializer we use,
+        // so a malformed stored value still says which field of which type
+        // failed to parse.
+        if codec.kind() == CodecKind::Json {
+            // The default codec deserializes straight from `serde_json`, with
+            // no `erased_serde` in between. That erasure costs a virtual call
+            // per serde operation rather than per value, which is far too much
+            // to pay on a path that reads every row of a restored session.
+            let mut deserializer = serde_json::Deserializer::from_slice(&decoded);
+
+            return match serde_path_to_error::deserialize::<_, T>(&mut deserializer) {
+                Ok(value) => Ok(value),
+
+                Err(err) => {
+                    report_deserialization_failure::<T>(&decoded, &err.path().to_string(), &err);
+
+                    Err(CodecError::new(codec.name(), err.into_inner()).into())
+                }
+            };
+        }
+
         let mut deserialized = None;
 
-        // Deserialize through the codec, but keep `serde_path_to_error` on top
-        // of it, so a malformed stored value still says which field of which
-        // type failed to parse.
         codec.with_deserializer(&decoded, &mut |deserializer| {
             match serde_path_to_error::deserialize::<_, T>(deserializer) {
                 Ok(value) => {
@@ -784,32 +803,7 @@ pub(crate) trait EncryptableStore {
                 }
 
                 Err(err) => {
-                    let raw_json: Option<Raw<serde_json::Value>> =
-                        serde_json::from_slice(&decoded).ok();
-
-                    let target_type = std::any::type_name::<T>();
-                    let serde_path = err.path().to_string();
-
-                    error!(
-                        sentry = true,
-                        %err,
-                        "Failed to deserialize {target_type} in a store: {serde_path}",
-                    );
-
-                    if let Some(raw) = raw_json {
-                        if let Some(room_id) =
-                            raw.get_field::<OwnedRoomId>("room_id").ok().flatten()
-                        {
-                            warn!("Found a room id in the source data to deserialize: {room_id}");
-                        }
-                        if let Some(event_id) =
-                            raw.get_field::<OwnedEventId>("event_id").ok().flatten()
-                        {
-                            warn!(
-                                "Found an event id in the source data to deserialize: {event_id}"
-                            );
-                        }
-                    }
+                    report_deserialization_failure::<T>(&decoded, &err.path().to_string(), &err);
 
                     deserialized =
                         Some(Err(CodecError::new(codec.name(), err.into_inner()).into()));
@@ -820,6 +814,27 @@ pub(crate) trait EncryptableStore {
         })?;
 
         deserialized.expect("a `StoreCodec` must call the visitor it is handed")
+    }
+}
+
+/// Report a stored value we could not parse, naming the type and the path
+/// within it that failed, plus any room or event id still recoverable from the
+/// raw bytes.
+fn report_deserialization_failure<T>(decoded: &[u8], serde_path: &str, err: &dyn fmt::Display) {
+    let target_type = std::any::type_name::<T>();
+
+    error!(sentry = true, %err, "Failed to deserialize {target_type} in a store: {serde_path}");
+
+    let Some(raw) = serde_json::from_slice::<Raw<serde_json::Value>>(decoded).ok() else {
+        return;
+    };
+
+    if let Some(room_id) = raw.get_field::<OwnedRoomId>("room_id").ok().flatten() {
+        warn!("Found a room id in the source data to deserialize: {room_id}");
+    }
+
+    if let Some(event_id) = raw.get_field::<OwnedEventId>("event_id").ok().flatten() {
+        warn!("Found an event id in the source data to deserialize: {event_id}");
     }
 }
 

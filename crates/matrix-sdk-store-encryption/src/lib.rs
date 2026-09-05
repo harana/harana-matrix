@@ -31,7 +31,7 @@ use chacha20poly1305::{
     Key as ChachaKey, KeyInit, XChaCha20Poly1305, XNonce,
     aead::{Aead, Error as EncryptionError},
 };
-pub use codec::{CodecError, JsonCodec, MessagePackCodec, StoreCodec, StoreCodecExt};
+pub use codec::{CodecError, CodecKind, JsonCodec, MessagePackCodec, StoreCodec, StoreCodecExt};
 use hkdf::Hkdf;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
