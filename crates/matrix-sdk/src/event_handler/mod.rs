@@ -60,10 +60,10 @@ use matrix_sdk_base::{
 };
 use matrix_sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use pin_project_lite::pin_project;
-use ruma::{OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
+use ruma::{EventId, OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::value::RawValue as RawJsonValue;
-use tracing::{debug, error, field::debug, instrument, warn};
+use tracing::{debug, error, field::debug, instrument, trace, warn};
 
 use self::maps::EventHandlerMaps;
 use crate::{Client, Room};
@@ -354,13 +354,19 @@ impl Client {
         events: &[Raw<T>],
     ) -> serde_json::Result<()> {
         #[derive(Deserialize)]
-        struct ExtractType<'a> {
+        struct ExtractDetails<'a> {
             #[serde(borrow, rename = "type")]
             event_type: Cow<'a, str>,
+            // Account data, presence and ephemeral events don't have one.
+            event_id: Option<OwnedEventId>,
         }
 
         for raw_event in events {
-            let event_type = raw_event.deserialize_as_unchecked::<ExtractType<'_>>()?.event_type;
+            let ExtractDetails { event_type, event_id } =
+                raw_event.deserialize_as_unchecked::<ExtractDetails<'_>>()?;
+
+            trace_received_event(kind, room, &event_type, event_id.as_deref());
+
             self.call_event_handlers(room, raw_event.json(), kind, &event_type, None, &[]).await;
         }
 
@@ -385,6 +391,9 @@ impl Client {
                 other => (&other.to_raw(), None),
             };
             let event_type = raw_event.deserialize_as_unchecked::<ExtractType<'_>>()?.event_type;
+
+            trace_received_event(HandlerKind::ToDevice, None, &event_type, None);
+
             self.call_event_handlers(
                 None,
                 raw_event.json(),
@@ -479,6 +488,9 @@ impl Client {
                 item.raw().deserialize_as_unchecked()?;
 
             let redacted = unsigned.and_then(|u| u.redacted_because).is_some();
+
+            trace_received_event(HandlerKind::Timeline, room, &event_type, event_id.as_deref());
+
             let (handler_kind_g, handler_kind_r) = match state_key {
                 Some(_) => (HandlerKind::State, HandlerKind::state_redacted(redacted)),
                 None => (HandlerKind::MessageLike, HandlerKind::message_like_redacted(redacted)),
@@ -578,6 +590,26 @@ impl Client {
             while let Some(()) = futures.next().await {}
         }
     }
+}
+
+/// Log an event the SDK received in a sync response.
+///
+/// One line per event, at `TRACE` on the `matrix_sdk::event_handler` target, so
+/// that it can be turned on to see what a sync actually delivered without
+/// flooding normal logs.
+fn trace_received_event(
+    kind: HandlerKind,
+    room: Option<&Room>,
+    event_type: &str,
+    event_id: Option<&EventId>,
+) {
+    trace!(
+        ?kind,
+        event_type,
+        event_id = event_id.map(debug),
+        room_id = room.map(|room| debug(room.room_id())),
+        "Received an event",
+    );
 }
 
 /// A guard type that removes an event handler when it drops (goes out of
