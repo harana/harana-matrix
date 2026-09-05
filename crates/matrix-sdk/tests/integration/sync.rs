@@ -30,7 +30,7 @@ use ruma::{
             guest_access::{GuestAccess, RoomGuestAccessEventContent},
             history_visibility::{HistoryVisibility, RoomHistoryVisibilityEventContent},
             join_rules::RoomJoinRulesEventContent,
-            member::RoomMemberEvent,
+            member::{MembershipState, RoomMemberEvent},
             name::RoomNameEventContent,
             pinned_events::RoomPinnedEventsEventContent,
             power_levels::RoomPowerLevelsEventContent,
@@ -2783,4 +2783,42 @@ async fn test_state_event_handlers_are_called_once_per_event() {
     assert_eq!(state_calls.load(Ordering::SeqCst), 1);
     // … and the timeline handler still sees the timeline event.
     assert_eq!(timeline_calls.load(Ordering::SeqCst), 1);
+}
+
+#[async_test]
+async fn test_member_counts_are_known_after_syncing_members() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!r0:example.org");
+    let alice = user_id!("@alice:example.org");
+    let bob = user_id!("@bob:example.org");
+    let carol = user_id!("@carol:example.org");
+
+    // The sync carries no `m.room.summary`, which is what a server sends for a room
+    // whose member counts didn't change.
+    let room = server
+        .sync_room(&client, AnyRoomBuilder::Joined(JoinedRoomBuilder::new(room_id)))
+        .await;
+
+    assert_eq!(room.active_members_count(), 0);
+
+    let f = EventFactory::new().room(room_id);
+    server
+        .mock_get_members()
+        .ok(vec![
+            f.member(alice).into_raw(),
+            f.member(bob).into_raw(),
+            f.member(carol).membership(MembershipState::Invite).into_raw(),
+        ])
+        .mock_once()
+        .mount()
+        .await;
+
+    room.sync_members().await.unwrap();
+
+    // The full member list is authoritative, so the counts now match it.
+    assert_eq!(room.joined_members_count(), 2);
+    assert_eq!(room.invited_members_count(), 1);
+    assert_eq!(room.active_members_count(), 3);
 }
