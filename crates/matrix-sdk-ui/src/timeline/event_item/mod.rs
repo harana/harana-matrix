@@ -20,8 +20,9 @@ use std::{
 use as_variant::as_variant;
 use indexmap::IndexMap;
 use matrix_sdk::{
-    Error, Room,
+    Error, Room, TransmissionProgress,
     deserialized_responses::{EncryptionInfo, ShieldState},
+    media::{MediaEventContent, MediaFormat},
     send_queue::{SendHandle, SendReactionHandle},
 };
 use matrix_sdk_base::deserialized_responses::ShieldStateCode;
@@ -30,7 +31,7 @@ use ruma::profile::{CallProfileField, StatusProfileField};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedTransactionId,
     OwnedUserId, TransactionId, UserId,
-    events::{AnySyncTimelineEvent, receipt::Receipt, room::message::MessageType},
+    events::{AnySyncTimelineEvent, receipt::Receipt, room::MediaSource, room::message::MessageType},
     room_version_rules::RedactionRules,
     serde::Raw,
 };
@@ -96,6 +97,11 @@ pub struct EventTimelineItem {
     ///
     /// May be false when we don't know about the room encryption status yet.
     pub(super) is_room_encrypted: bool,
+    /// How far along the download of this event's media is, while
+    /// [`Timeline::download_media`] is fetching it.
+    ///
+    /// [`Timeline::download_media`]: crate::timeline::Timeline::download_media
+    pub(super) media_download_progress: Option<TransmissionProgress>,
 }
 
 #[derive(Clone, Debug)]
@@ -174,6 +180,65 @@ impl EventTimelineItem {
             unredacted_item: None,
             kind,
             is_room_encrypted,
+            media_download_progress: None,
+        }
+    }
+
+    /// How far along the download of this event's media is.
+    ///
+    /// This is `Some` only while [`Timeline::download_media`] is downloading
+    /// the media of this event, so a client can show per-message download
+    /// status; it goes back to `None` once the transfer ends, successfully or
+    /// not. `total` is what the server said the body's length is; a response
+    /// without a `Content-Length` has no known total, so `total` tracks
+    /// `current` until the download ends.
+    ///
+    /// Media served from the media cache never reports progress: there is no
+    /// transfer to watch.
+    ///
+    /// [`Timeline::download_media`]: crate::timeline::Timeline::download_media
+    pub fn media_download_progress(&self) -> Option<&TransmissionProgress> {
+        self.media_download_progress.as_ref()
+    }
+
+    /// Clone the current event item, and update its media download progress.
+    pub(super) fn with_media_download_progress(
+        &self,
+        media_download_progress: Option<TransmissionProgress>,
+    ) -> Self {
+        Self { media_download_progress, ..self.clone() }
+    }
+
+    /// The media source this event's media would be downloaded from, in the
+    /// given format.
+    ///
+    /// Returns `None` for an event that carries no media, or that carries no
+    /// media in that format.
+    pub(super) fn media_source(&self, format: &MediaFormat) -> Option<MediaSource> {
+        fn pick(content: &impl MediaEventContent, format: &MediaFormat) -> Option<MediaSource> {
+            match format {
+                MediaFormat::File => content.source(),
+                // A thumbnail the sender uploaded is its own media, and is
+                // fetched as a file; without one, the server is asked to
+                // thumbnail the file itself.
+                MediaFormat::Thumbnail(_) => {
+                    content.thumbnail_source().or_else(|| content.source())
+                }
+            }
+        }
+
+        match &self.content.as_msglike()?.kind {
+            MsgLikeKind::Message(message) => match message.msgtype() {
+                MessageType::Image(content) => pick(content, format),
+                MessageType::Video(content) => pick(content, format),
+                MessageType::Audio(content) => pick(content, format),
+                MessageType::File(content) => pick(content, format),
+                _ => None,
+            },
+
+            MsgLikeKind::Sticker(sticker) => pick(sticker.content(), format),
+
+            _ => None,
         }
     }
 
@@ -568,6 +633,7 @@ impl EventTimelineItem {
             unredacted_item,
             kind,
             is_room_encrypted: self.is_room_encrypted,
+            media_download_progress: self.media_download_progress,
         }
     }
 
@@ -596,6 +662,7 @@ impl EventTimelineItem {
             unredacted_item: None,
             kind,
             is_room_encrypted: self.is_room_encrypted,
+            media_download_progress: self.media_download_progress,
         }
     }
 

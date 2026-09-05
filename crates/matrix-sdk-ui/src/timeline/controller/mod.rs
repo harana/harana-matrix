@@ -25,6 +25,7 @@ use eyeball_im_util::vector::{FilterMap, VectorObserverExt};
 use futures_core::Stream;
 use imbl::{HashSet, Vector};
 use matrix_sdk::{
+    TransmissionProgress,
     deserialized_responses::TimelineEvent,
     event_cache::{
         DecryptionRetryRequest, EventCache, EventFocusedCache, PaginationStatus, PinnedEventsCache,
@@ -877,6 +878,28 @@ impl<P: RoomDataProvider> TimelineController<P> {
         state
             .handle_local_event(sender, profile, date_divider_mode, txn_id, send_handle, content)
             .await;
+    }
+
+    /// Set how far along the download of an event's media is, so subscribers
+    /// of the timeline see per-message download status.
+    ///
+    /// Passing `None` clears it, which is what happens once the transfer ends.
+    /// A missing item is not an error: the event may have been redacted, or
+    /// paginated out, while its media was downloading.
+    pub(super) async fn update_media_download_progress(
+        &self,
+        item_id: &TimelineEventItemId,
+        progress: Option<TransmissionProgress>,
+    ) {
+        let mut state = self.state.write().await;
+
+        let Some((position, item)) = rfind_event_by_item_id(&state.items, item_id) else {
+            trace!("Timeline item not found, can't update media download progress");
+            return;
+        };
+
+        let new_item = item.with_media_download_progress(progress);
+        state.items.replace(position, new_item);
     }
 
     /// Update the send state of a local event represented by a transaction ID.
