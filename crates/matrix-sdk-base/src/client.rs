@@ -975,14 +975,16 @@ impl BaseClient {
             // they exist.
 
             match member.membership() {
-                MembershipState::Join => joined_member_count += 1,
-                MembershipState::Invite => invited_member_count += 1,
-                _ => (),
-            }
+                MembershipState::Join => {
+                    joined_member_count = joined_member_count.saturating_add(1);
 
-            #[cfg(feature = "e2e-encryption")]
-            match member.membership() {
-                MembershipState::Join | MembershipState::Invite => {
+                    #[cfg(feature = "e2e-encryption")]
+                    user_ids.insert(member.state_key().to_owned());
+                }
+                MembershipState::Invite => {
+                    invited_member_count = invited_member_count.saturating_add(1);
+
+                    #[cfg(feature = "e2e-encryption")]
                     user_ids.insert(member.state_key().to_owned());
                 }
                 _ => (),
@@ -1019,14 +1021,16 @@ impl BaseClient {
             let Ok(member) = raw_event.deserialize() else { continue };
 
             match member.membership() {
-                MembershipState::Join => joined_member_count += 1,
-                MembershipState::Invite => invited_member_count += 1,
-                _ => (),
-            }
+                MembershipState::Join => {
+                    joined_member_count = joined_member_count.saturating_add(1);
 
-            #[cfg(feature = "e2e-encryption")]
-            match member.membership() {
-                MembershipState::Join | MembershipState::Invite => {
+                    #[cfg(feature = "e2e-encryption")]
+                    user_ids.insert(member.user_id().to_owned());
+                }
+                MembershipState::Invite => {
+                    invited_member_count = invited_member_count.saturating_add(1);
+
+                    #[cfg(feature = "e2e-encryption")]
                     user_ids.insert(member.user_id().to_owned());
                 }
                 _ => (),
@@ -1055,11 +1059,13 @@ impl BaseClient {
         {
             let mut room_info = room.clone_info();
             room_info.mark_members_synced();
-            // The summary of a room whose members are lazily loaded may never have been
-            // sent by the server, leaving the counts at zero while the store holds the
-            // whole member list. Now that we have that list, the counts can be exact.
-            room_info.update_joined_member_count(joined_member_count);
-            room_info.update_invited_member_count(invited_member_count);
+            // We have the complete member list of the room, which is more reliable than
+            // the room summary: servers only send one when the counts changed, so a room
+            // we never got a summary for would otherwise keep reporting zero members.
+            room_info.update_member_counts_from_full_member_list(
+                joined_member_count,
+                invited_member_count,
+            );
             context.state_changes.add_room(room_info);
 
             processors::changes::save_and_apply(

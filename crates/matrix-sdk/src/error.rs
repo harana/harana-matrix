@@ -270,6 +270,18 @@ pub enum Error {
     #[error("Local cache doesn't contain all necessary data to perform the action.")]
     InsufficientData,
 
+    /// A sync was requested while another one is already running for this
+    /// client.
+    ///
+    /// Running several syncs concurrently on the same [`Client`] is not
+    /// supported: syncs would be dropped, and an older response could
+    /// overwrite the state built from a newer one. Stop the running sync
+    /// before starting another one.
+    ///
+    /// [`Client`]: crate::Client
+    #[error("a sync is already running for this client")]
+    ConcurrentSync,
+
     /// Attempting to restore a session after the olm-machine has already been
     /// set up fails
     #[cfg(feature = "e2e-encryption")]

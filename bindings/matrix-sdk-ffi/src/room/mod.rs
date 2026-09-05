@@ -213,7 +213,7 @@ impl Room {
         self: Arc<Self>,
         listener: Box<dyn MembershipListener>,
     ) -> Arc<TaskHandle> {
-        let states = self.inner.subscribe_state();
+        let states = self.inner.subscribe_to_state();
 
         Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
             pin_mut!(states);

@@ -942,7 +942,16 @@ impl OlmMachine {
         request_id: &TransactionId,
         response: &KeysQueryResponse,
     ) -> OlmResult<(DeviceChanges, IdentityChanges)> {
-        self.inner.identity_manager.receive_keys_query_response(request_id, response).await
+        let changes =
+            self.inner.identity_manager.receive_keys_query_response(request_id, response).await?;
+
+        // We now know about devices we didn't know about before; a verification
+        // request that arrived from one of them, before or in the same sync response
+        // as the device list update, was put aside instead of being dropped. Now is
+        // the time to handle it.
+        self.inner.verification_machine.retry_pending_requests().await?;
+
+        Ok(changes)
     }
 
     /// Get a request to upload E2EE keys to the server.

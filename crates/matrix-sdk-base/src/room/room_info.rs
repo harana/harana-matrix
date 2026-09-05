@@ -999,6 +999,25 @@ impl RoomInfo {
         changed
     }
 
+    /// Update the member counts from a complete member list, as returned by
+    /// the `/members` endpoint.
+    ///
+    /// Servers only send `m.room.summary` in a sync response when the counts
+    /// changed, so a room the client has never seen a summary for reports zero
+    /// members. A full member list is authoritative, so use it when we have
+    /// one.
+    pub(crate) fn update_member_counts_from_full_member_list(
+        &mut self,
+        joined_member_count: u64,
+        invited_member_count: u64,
+    ) {
+        self.summary.joined_member_count = joined_member_count;
+        self.summary.invited_member_count = invited_member_count;
+        // The computed count of active service members is derived from these, so it
+        // needs to be recomputed.
+        self.summary.active_service_members = None;
+    }
+
     /// Updates the joined member count.
     pub fn update_joined_member_count(&mut self, count: u64) {
         self.summary.joined_member_count = count;

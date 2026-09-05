@@ -51,7 +51,7 @@ impl Room {
     ///
     /// Returns true if no members are missing, false otherwise.
     pub fn are_members_synced(&self) -> bool {
-        self.info.read().are_members_synced()
+        self.info.read().members_synced
     }
 
     /// Mark this Room as holding all member information.
@@ -149,34 +149,41 @@ impl Room {
     /// Returns the number of members who have joined or been invited to the
     /// room.
     ///
-    /// This is a cached count, not a count of the member events in the store.
-    /// It is filled in from the room summary of a sync, which a server sends
-    /// only when it changes, and recomputed exactly whenever the full member
-    /// list is fetched, which [`Room::sync_members`] does. Until either has
-    /// happened it is `0`, even for a room whose members are otherwise known,
-    /// so a caller that needs an exact count right away should sync the members
-    /// first, or count [`Room::members`] instead.
+    /// # When is this known?
     ///
-    /// [`Room::sync_members`]: crate::Room::sync_members
-    /// [`Room::members`]: Self::members
+    /// This reads a cached count, it never hits the store or the network. The
+    /// count comes from either:
+    ///
+    /// - the room summary of a sync response, which servers only send when the
+    ///   counts changed, so a room that hasn't changed size since the client
+    ///   first saw it may never have been given one; or
+    /// - the complete member list of the room, once it has been fetched, e.g.
+    ///   by [`Room::members()`].
+    ///
+    /// Until one of those has happened — which is typically *not* yet the case
+    /// inside an event handler for the first sync that mentions the room — this
+    /// returns `0`. Call [`Room::members()`] (or, in the main SDK,
+    /// `Room::sync_members()`) first if you need a count you can rely on.
+    ///
+    /// [`Room::members()`]: Self::members
     pub fn active_members_count(&self) -> u64 {
         self.info.read().active_members_count()
     }
 
     /// Returns the number of members who have been invited to the room.
     ///
-    /// See [`Room::active_members_count`] for when this count is filled in.
+    /// See [`Room::active_members_count()`] for when this count is known.
     ///
-    /// [`Room::active_members_count`]: Self::active_members_count
+    /// [`Room::active_members_count()`]: Self::active_members_count
     pub fn invited_members_count(&self) -> u64 {
         self.info.read().invited_members_count()
     }
 
     /// Returns the number of members who have joined the room.
     ///
-    /// See [`Room::active_members_count`] for when this count is filled in.
+    /// See [`Room::active_members_count()`] for when this count is known.
     ///
-    /// [`Room::active_members_count`]: Self::active_members_count
+    /// [`Room::active_members_count()`]: Self::active_members_count
     pub fn joined_members_count(&self) -> u64 {
         self.info.read().joined_members_count()
     }

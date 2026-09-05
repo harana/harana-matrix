@@ -30,7 +30,10 @@ use ruma::events::room::encrypted::{EncryptedEventScheme, OriginalSyncRoomEncryp
 #[cfg(feature = "experimental-encrypted-state-events")]
 use ruma::serde::JsonCastable;
 use ruma::{OwnedEventId, OwnedRoomId, serde::Raw};
-use tokio::sync::{Mutex, mpsc};
+use tokio::{
+    select,
+    sync::{Mutex, mpsc},
+};
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
@@ -49,8 +52,94 @@ pub(crate) struct ClientTasks {
     pub(crate) upload_room_keys: Option<BackupUploadingTask>,
     pub(crate) download_room_keys: Option<BackupDownloadTask>,
     pub(crate) update_recovery_state_after_backup: Option<JoinHandle<()>>,
+    pub(crate) update_recovery_state: Option<RecoveryStateUpdateTask>,
     pub(crate) receive_historic_room_key_bundles: Option<BundleReceiverTask>,
     pub(crate) setup_e2ee: Option<JoinHandle<()>>,
+}
+
+/// A task that recomputes the [`RecoveryState`] whenever something that could
+/// have changed it is observed.
+///
+/// Recomputing the state runs `/account_data` requests, so it must not happen
+/// inline in an event handler: those run on the sync task, and a slow server
+/// response would hold up sync progress.
+///
+/// Updates are single-flighted: while a recomputation is in flight, a new
+/// trigger cancels it and starts over rather than running a second one
+/// concurrently, since the in-flight one is about to be outdated anyway.
+///
+/// [`RecoveryState`]: crate::encryption::recovery::RecoveryState
+pub(crate) struct RecoveryStateUpdateTask {
+    sender: mpsc::UnboundedSender<()>,
+    #[allow(dead_code)]
+    join_handle: JoinHandle<()>,
+}
+
+impl Drop for RecoveryStateUpdateTask {
+    fn drop(&mut self) {
+        #[cfg(not(target_family = "wasm"))]
+        self.join_handle.abort();
+    }
+}
+
+impl RecoveryStateUpdateTask {
+    pub(crate) fn new(client: WeakClient) -> Self {
+        let (sender, receiver) = mpsc::unbounded_channel();
+
+        let join_handle = spawn(async move {
+            Self::listen(client, receiver).await;
+        });
+
+        Self { sender, join_handle }
+    }
+
+    /// Ask for the recovery state to be recomputed.
+    ///
+    /// Returns immediately: the work happens in the background task.
+    pub(crate) fn trigger_update(&self) {
+        let _ = self.sender.send(());
+    }
+
+    async fn listen(client: WeakClient, mut receiver: mpsc::UnboundedReceiver<()>) {
+        while receiver.recv().await.is_some() {
+            loop {
+                // Coalesce the triggers that piled up while we were busy: one
+                // recomputation covers all of them.
+                while receiver.try_recv().is_ok() {}
+
+                let Some(client) = client.get() else {
+                    trace!("Client got dropped, shutting down the task");
+                    return;
+                };
+
+                let recovery = client.encryption().recovery();
+                let update = recovery.update_recovery_state_no_fail();
+                pin_mut!(update);
+
+                let restart = select! {
+                    biased;
+
+                    // Something changed while we were asking the server: what we're
+                    // computing is already outdated, so drop it and start over rather
+                    // than run a second request concurrently.
+                    trigger = receiver.recv() => {
+                        if trigger.is_none() {
+                            // The client is gone.
+                            return;
+                        }
+
+                        true
+                    }
+
+                    () = &mut update => false,
+                };
+
+                if !restart {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 pub(crate) struct BackupUploadingTask {
