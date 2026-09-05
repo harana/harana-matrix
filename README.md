@@ -1,7 +1,5 @@
 <h1 align="center">harana-matrix</h1>
 
-## Background
-
 This is a higher velocity fork of [matrix-rusk-sdk](https://github.com/matrix-org/matrix-rust-sdk).
 
 That means that we add features, merge PRs, fix bugs, update dependencies etc at a rapid pace and rely exclusively on automated testing and Claude / Codex to maintain some semblance of quality. We will port features/issues from the official SDK on an ongoing basis but may choose to use our implementation if it makes sense.
