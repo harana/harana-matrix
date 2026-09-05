@@ -2017,6 +2017,36 @@ impl Client {
         Ok(Arc::new(RoomPreview::new(self.inner.clone(), room_preview)))
     }
 
+    /// Given a room id, get the preview of a room from local data when the
+    /// room is already known, without waiting on the server.
+    ///
+    /// Unlike [`Client::get_room_preview_from_room_id`], this returns
+    /// immediately for a room the client knows about, and refreshes that data
+    /// from the server in the background so the next call is more accurate.
+    /// The local data of an invited or knocked room can be out of date, its
+    /// join rule in particular, so prefer the accurate variant when that
+    /// matters more than showing something straight away.
+    pub async fn get_room_preview_from_room_id_local_first(
+        &self,
+        room_id: String,
+        via_servers: Vec<String>,
+    ) -> Result<Arc<RoomPreview>, ClientError> {
+        let room_id = RoomId::parse(&room_id).context("room_id is not a valid room id")?;
+
+        let via_servers = via_servers
+            .into_iter()
+            .map(ServerName::parse)
+            .collect::<Result<Vec<_>, _>>()
+            .context("at least one `via` server name is invalid")?;
+
+        let room_id: &RoomId = &room_id;
+
+        let (room_preview, _refresh) =
+            self.inner.get_room_preview_local_first(room_id.into(), via_servers).await?;
+
+        Ok(Arc::new(RoomPreview::new(self.inner.clone(), room_preview)))
+    }
+
     /// Given a room alias, get the preview of a room, to interact with it.
     pub async fn get_room_preview_from_room_alias(
         &self,

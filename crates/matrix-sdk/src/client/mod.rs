@@ -41,7 +41,11 @@ use matrix_sdk_base::{
     sync::{Notification, RoomUpdates},
     task_monitor::TaskMonitor,
 };
-use matrix_sdk_common::{cross_process_lock::CrossProcessLockConfig, ttl::TtlValue};
+use matrix_sdk_common::{
+    cross_process_lock::CrossProcessLockConfig,
+    executor::{JoinHandle, spawn},
+    ttl::TtlValue,
+};
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::{InitialStateEvent, room::encryption::RoomEncryptionEventContent};
 use ruma::{
@@ -1502,6 +1506,15 @@ impl Client {
 
     /// Gets the preview of a room, whether the current user has joined it or
     /// not.
+    ///
+    /// This waits on the server whenever the local data cannot be trusted, so
+    /// the preview it returns is as accurate as the SDK can make it. Use
+    /// [`Client::get_room_preview_local_first`] when showing something right
+    /// away matters more than that.
+    ///
+    /// Whatever the server answers is saved onto the local room, when the
+    /// client knows that room, so the next preview answered from local data is
+    /// closer to the truth.
     pub async fn get_room_preview(
         &self,
         room_or_alias_id: &RoomOrAliasId,
@@ -1526,7 +1539,68 @@ impl Client {
             }
         }
 
-        RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await
+        let preview =
+            RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await?;
+        preview.save_to_local_room(self).await;
+
+        Ok(preview)
+    }
+
+    /// Gets the preview of a room, answering from local data when the client
+    /// already knows the room.
+    ///
+    /// Unlike [`Client::get_room_preview`], this doesn't wait on the server for
+    /// a room the client knows about, so a preview that can be shown
+    /// immediately is shown immediately. It still asks the server, in the
+    /// background, and saves the answer onto the local room, so the next call
+    /// is more accurate; the returned [`JoinHandle`] resolves when that
+    /// refresh is done, and can be ignored.
+    ///
+    /// The local data of an invited or knocked room can be out of date: no
+    /// updates are received for such a room after the invite or the knock, so
+    /// an important field such as the join rule may have changed since. Prefer
+    /// [`Client::get_room_preview`] when accuracy matters more than latency.
+    ///
+    /// For a room the client doesn't know, this is exactly
+    /// [`Client::get_room_preview`], and no handle is returned.
+    pub async fn get_room_preview_local_first(
+        &self,
+        room_or_alias_id: &RoomOrAliasId,
+        via: Vec<OwnedServerName>,
+    ) -> Result<(RoomPreview, Option<JoinHandle<()>>)> {
+        let room_id = match <&RoomId>::try_from(room_or_alias_id) {
+            Ok(room_id) => room_id.to_owned(),
+            Err(alias) => self.resolve_room_alias(alias).await?.room_id,
+        };
+
+        let Some(room) = self.get_room(&room_id) else {
+            return Ok((self.get_room_preview(room_or_alias_id, via).await?, None));
+        };
+
+        let preview = RoomPreview::from_known_room(&room).await;
+
+        // A joined or banned room is already up to date through sync, there is
+        // nothing to refresh.
+        if matches!(room.state(), RoomState::Joined | RoomState::Banned) {
+            return Ok((preview, None));
+        }
+
+        let handle = spawn({
+            let client = self.clone();
+            let room_or_alias_id = room_or_alias_id.to_owned();
+
+            async move {
+                match RoomPreview::from_remote_room(&client, room_id, &room_or_alias_id, via).await
+                {
+                    Ok(preview) => preview.save_to_local_room(&client).await,
+                    Err(error) => {
+                        warn!("Failed to refresh the preview of {room_or_alias_id}: {error}")
+                    }
+                }
+            }
+        });
+
+        Ok((preview, Some(handle)))
     }
 
     /// Resolve a room alias to a room id and a list of servers which know

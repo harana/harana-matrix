@@ -987,13 +987,54 @@ impl RoomInfo {
     }
 
     /// Updates the joined member count.
-    pub(crate) fn update_joined_member_count(&mut self, count: u64) {
+    pub fn update_joined_member_count(&mut self, count: u64) {
         self.summary.joined_member_count = count;
     }
 
     /// Updates the invited member count.
-    pub(crate) fn update_invited_member_count(&mut self, count: u64) {
+    pub fn update_invited_member_count(&mut self, count: u64) {
         self.summary.invited_member_count = count;
+    }
+
+    /// Update the room name.
+    ///
+    /// As for [`RoomInfo::update_avatar`], this stores a name that did not
+    /// come from an `m.room.name` event, so the stored event has no event ID.
+    ///
+    /// The cached display name is dropped, since it is computed from the name;
+    /// it is recomputed on the next call to [`Room::display_name`].
+    ///
+    /// [`Room::display_name`]: crate::Room::display_name
+    pub fn update_name(&mut self, name: Option<String>) {
+        if self.name() != name.as_deref() {
+            self.cached_display_name = None;
+        }
+
+        self.base_info.name = name.map(|name| {
+            // The content types of a possibly redacted event are non-exhaustive and have
+            // no constructor, so this goes through their only public constructor: serde.
+            let content = serde_json::from_value::<PossiblyRedactedRoomNameEventContent>(
+                serde_json::json!({ "name": name }),
+            )
+            .expect("a room name is always valid `m.room.name` content");
+
+            MinimalStateEvent { content, event_id: None }
+        });
+    }
+
+    /// Update the room topic.
+    ///
+    /// As for [`RoomInfo::update_avatar`], this stores a topic that did not
+    /// come from an `m.room.topic` event, so the stored event has no event ID.
+    pub fn update_topic(&mut self, topic: Option<String>) {
+        self.base_info.topic = topic.map(|topic| {
+            let content = serde_json::from_value::<PossiblyRedactedRoomTopicEventContent>(
+                serde_json::json!({ "topic": topic }),
+            )
+            .expect("a room topic is always valid `m.room.topic` content");
+
+            MinimalStateEvent { content, event_id: None }
+        });
     }
 
     /// Updates the room heroes.
