@@ -2511,88 +2511,6 @@ mod builder_tests {
     }
 
     #[async_test]
-    async fn test_remote_ignores_events_from_ignored_users() {
-        let room_id = room_id!("!r0");
-        let user_id = user_id!("@mnt_io:matrix.org");
-        let ignored_user_id = user_id!("@spammer:matrix.org");
-        let event_factory = EventFactory::new().room(room_id);
-
-        let server = MatrixMockServer::new().await;
-        let client = server.client_builder().build().await;
-
-        // Prelude.
-        {
-            // Create the room.
-            client.base_client().get_or_create_room(room_id, RoomState::Joined);
-
-            // Initialise the event cache store.
-            client
-                .event_cache_store()
-                .lock()
-                .await
-                .expect("Could not acquire the event cache lock")
-                .as_clean()
-                .expect("Could not acquire a clean event cache lock")
-                .handle_linked_chunk_updates(
-                    LinkedChunkId::Room(room_id),
-                    vec![
-                        Update::NewItemsChunk {
-                            previous: None,
-                            new: ChunkIdentifier::new(0),
-                            next: None,
-                        },
-                        Update::PushItems {
-                            at: Position::new(ChunkIdentifier::new(0), 0),
-                            items: vec![
-                                event_factory
-                                    .text_msg("hello")
-                                    .sender(user_id)
-                                    .event_id(event_id!("$ev0"))
-                                    .into(),
-                                event_factory
-                                    .text_msg("buy my stuff")
-                                    .sender(ignored_user_id)
-                                    .event_id(event_id!("$ev1"))
-                                    .into(),
-                            ],
-                        },
-                    ],
-                )
-                .await
-                .unwrap();
-        }
-
-        let event_cache = client.event_cache();
-        event_cache.subscribe().unwrap();
-
-        let (room_event_cache, _) = event_cache.room(room_id).await.unwrap();
-
-        // Nobody is ignored: the newest event is the candidate.
-        assert_remote_value_matches_room_message_with_body!(
-            Builder::new_remote(
-                &room_event_cache,
-                LatestEventValue::None,
-                user_id,
-                None,
-                &BTreeSet::new()
-            )
-            .await => with body = "buy my stuff"
-        );
-
-        // The sender of the newest event is ignored: it is not a candidate anymore.
-        assert_remote_value_matches_room_message_with_body!(
-            Builder::new_remote(
-                &room_event_cache,
-                LatestEventValue::None,
-                user_id,
-                None,
-                &BTreeSet::from([ignored_user_id.to_owned()])
-            )
-            .await => with body = "hello"
-        );
-    }
-
-    #[async_test]
     async fn test_remote_edit() {
         let room_id = room_id!("!r0");
         let user_id = user_id!("@mnt_io:matrix.org");
@@ -2746,10 +2664,10 @@ mod builder_tests {
 
         let value = Builder::new_remote(
             &room_event_cache,
+            None,
             LatestEventValue::None,
             user_id,
             None,
-            &BTreeSet::new(),
         )
         .await
         .expect("a latest event value");
@@ -3466,7 +3384,6 @@ mod builder_tests {
                     previous_value,
                     user_id,
                     None,
-                    &BTreeSet::new(),
                 )
                 .await,
                 None
@@ -3568,7 +3485,6 @@ mod builder_tests {
                     previous_value,
                     user_id,
                     None,
-                    &BTreeSet::new(),
                 )
                 .await,
                 Some(LatestEventValue::None)
@@ -3798,7 +3714,6 @@ mod builder_tests {
                     previous_value,
                     user_id,
                     None,
-                    &BTreeSet::new(),
                 )
                 .await,
                 None
@@ -4166,7 +4081,6 @@ mod builder_tests {
                     previous_value,
                     user_id,
                     None,
-                    &BTreeSet::new(),
                 )
                 .await,
                 None
@@ -4242,7 +4156,6 @@ mod builder_tests {
                 LatestEventValue::None,
                 user_id,
                 None,
-                &BTreeSet::new(),
             )
             .await
             => with body = "hello"
@@ -4321,7 +4234,6 @@ mod builder_tests {
                     LatestEventValue::None,
                     user_id,
                     None,
-                    &BTreeSet::new(),
                 )
                 .await,
                 LatestEventValue::LocalIsSending => with body = "hello"
@@ -4344,7 +4256,6 @@ mod builder_tests {
                 previous_value,
                 user_id,
                 None,
-                &BTreeSet::new(),
             )
             .await
             => with body = "hello"
@@ -4418,7 +4329,6 @@ mod builder_tests {
                 LatestEventValue::None,
                 user_id,
                 None,
-                &BTreeSet::new(),
             )
             .await
             => with body = "hello"
@@ -4454,7 +4364,6 @@ mod builder_tests {
                     previous_value,
                     user_id,
                     None,
-                    &BTreeSet::new(),
                 )
                 .await,
                 None
