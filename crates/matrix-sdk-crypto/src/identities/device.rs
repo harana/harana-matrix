@@ -411,6 +411,11 @@ impl Device {
     /// This won't affect any cross signing trust state, this only sets a flag
     /// marking to have the given trust state.
     ///
+    /// Setting [`LocalTrust::BlackListed`] additionally stops the device from
+    /// receiving any room key we share from then on, tells it why with an
+    /// `m.blacklisted` withheld message, and rotates the current room key; see
+    /// that variant's documentation.
+    ///
     /// # Arguments
     ///
     /// * `trust_state` - The new trust state that should be set for the device.
@@ -624,12 +629,36 @@ impl UserDevices {
 }
 
 /// The local trust state of a device.
+///
+/// This is trust we assign to a device ourselves, on this device only: it is
+/// never uploaded to the homeserver and never shared with our other devices.
+/// It is set with [`Device::set_local_trust()`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum LocalTrust {
     /// The device has been verified and is trusted.
     Verified = 0,
-    /// The device been blacklisted from communicating.
+    /// The device has been blocked from receiving anything we send.
+    ///
+    /// This is a supported feature, not a leftover: a client offers it so a
+    /// user can shut a device they don't trust out of their encrypted
+    /// conversations without waiting for it to be signed out.
+    ///
+    /// Marking a device this way has three effects, all of them handled by the
+    /// SDK:
+    ///
+    /// * the device is left out of the recipients of every room key we share
+    ///   from then on, whichever [`CollectStrategy`] is in use;
+    /// * it is sent an `m.room_key.withheld` message with the `m.blacklisted`
+    ///   code, so the other side can tell its user why messages don't decrypt
+    ///   rather than showing an unexplained failure;
+    /// * the current room key is rotated, so the device can't keep reading new
+    ///   messages with a key it already has.
+    ///
+    /// The block is undone by setting any other [`LocalTrust`]; the room key
+    /// is not rotated back, so the device only sees messages sent after that.
+    ///
+    /// [`CollectStrategy`]: crate::CollectStrategy
     BlackListed = 1,
     /// The trust state of the device is being ignored.
     Ignored = 2,
@@ -714,9 +743,11 @@ impl DeviceData {
         self.local_trust_state() == LocalTrust::Verified
     }
 
-    /// Is the device locally marked as blacklisted.
+    /// Is the device locally marked as blocked?
     ///
-    /// Blacklisted devices won't receive any group sessions.
+    /// A blocked device is left out of every room key we share and is told why
+    /// with an `m.blacklisted` withheld message. See
+    /// [`LocalTrust::BlackListed`] for what setting this does.
     pub fn is_blacklisted(&self) -> bool {
         self.local_trust_state() == LocalTrust::BlackListed
     }

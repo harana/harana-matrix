@@ -268,6 +268,16 @@ pub struct OlmMachineInner {
     identity_manager: IdentityManager,
     /// A state machine that handles creating room key backups.
     backup_machine: BackupMachine,
+    /// The `/keys/upload` request we have handed out and that hasn't been
+    /// marked as sent yet.
+    ///
+    /// A client that polls [`OlmMachine::outgoing_requests()`] again before
+    /// marking the previous upload as sent used to get a second request
+    /// carrying the same one-time keys under a new ID. Sending both makes the
+    /// homeserver reject the second one with a 400 for a key it already has,
+    /// and the collision reproduces on every retry. Handing back the same
+    /// request keeps that from happening.
+    outgoing_keys_upload_request: StdRwLock<Option<(OwnedTransactionId, UploadKeysRequest)>>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -403,6 +413,7 @@ impl OlmMachine {
             key_request_machine,
             identity_manager,
             backup_machine,
+            outgoing_keys_upload_request: Default::default(),
         });
 
         Self { inner }
@@ -652,13 +663,29 @@ impl OlmMachine {
         let mut requests = Vec::new();
 
         {
-            let store_cache = self.inner.store.cache().await?;
-            let account = store_cache.account().await?;
-            if let Some(r) = self.keys_for_upload(&account).await.map(|r| OutgoingRequest {
-                request_id: TransactionId::new(),
-                request: Arc::new(r.into()),
-            }) {
-                requests.push(r);
+            let outstanding = self.inner.outgoing_keys_upload_request.read().clone();
+
+            let upload = if let Some((request_id, request)) = outstanding {
+                // We already handed this request out and it hasn't been marked as sent.
+                // Give back the very same one rather than minting a new ID for the same
+                // keys.
+                Some(OutgoingRequest { request_id, request: Arc::new(request.into()) })
+            } else {
+                let store_cache = self.inner.store.cache().await?;
+                let account = store_cache.account().await?;
+
+                self.keys_for_upload(&account).await.map(|request| {
+                    let request_id = TransactionId::new();
+
+                    *self.inner.outgoing_keys_upload_request.write() =
+                        Some((request_id.clone(), request.clone()));
+
+                    OutgoingRequest { request_id, request: Arc::new(request.into()) }
+                })
+            };
+
+            if let Some(upload) = upload {
+                requests.push(upload);
             }
         }
 
@@ -729,6 +756,16 @@ impl OlmMachine {
     ) -> OlmResult<()> {
         match response.into() {
             AnyIncomingResponse::KeysUpload(response) => {
+                // The keys in this request are accounted for now, so the next poll may
+                // build a fresh request.
+                {
+                    let mut outstanding = self.inner.outgoing_keys_upload_request.write();
+
+                    if outstanding.as_ref().is_some_and(|(id, _)| id == request_id) {
+                        *outstanding = None;
+                    }
+                }
+
                 Box::pin(self.receive_keys_upload_response(response)).await?;
             }
             AnyIncomingResponse::KeysQuery(response) => {
