@@ -430,6 +430,14 @@ impl<'a> IntoFuture for SendRawStateEvent<'a> {
 
             let mut state_key = state_key.to_owned();
 
+            // What the room state actually becomes, and so what gets stored once the send
+            // succeeds, whether or not the event goes out encrypted.
+            let plaintext = (
+                ruma::events::StateEventType::from(event_type),
+                state_key.clone(),
+                content.clone(),
+            );
+
             if Self::should_encrypt(room, event_type) {
                 use tracing::debug;
 
@@ -466,6 +474,10 @@ impl<'a> IntoFuture for SendRawStateEvent<'a> {
 
             Span::current().record("event_id", tracing::field::debug(&response.event_id));
             info!("Sent event in room");
+
+            let (event_type, state_key, content) = plaintext;
+            room.store_sent_state_event(&response.event_id, &event_type, &state_key, &content)
+                .await;
 
             Ok(response)
         };
@@ -522,8 +534,6 @@ impl<'a> IntoFuture for SendStateEvent<'a> {
     }
 }
 
-/// Ensures the room is ready for encrypted events to be sent.
-#[cfg(feature = "e2e-encryption")]
 /// Whether `event_type`/`content` is part of the in-room key verification
 /// framework.
 #[cfg(feature = "e2e-encryption")]
@@ -611,6 +621,8 @@ fn is_unsigned_device_problem(error: &crate::Error) -> bool {
     )
 }
 
+/// Ensures the room is ready for encrypted events to be sent.
+#[cfg(feature = "e2e-encryption")]
 async fn ensure_room_encryption_ready(room: &Room) -> Result<()> {
     if !room.are_members_synced() {
         room.sync_members().await?;

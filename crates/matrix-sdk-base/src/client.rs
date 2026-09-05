@@ -41,12 +41,13 @@ use ruma::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::{self as api, sync::sync_events::v5},
     events::{
-        StateEvent, StateEventType,
+        AnySyncStateEvent, StateEvent, StateEventType,
         ignored_user_list::IgnoredUserListEventContent,
         push_rules::{PushRulesEvent, PushRulesEventContent},
         room::member::SyncRoomMemberEvent,
     },
     push::Ruleset,
+    serde::Raw,
     time::Instant,
 };
 use tokio::sync::{Mutex, broadcast};
@@ -73,6 +74,7 @@ use crate::{
         ambiguity_map::{AmbiguityCache, is_member_active},
     },
     sync::{RoomUpdates, SyncResponse},
+    utils::RawStateEventWithKeys,
 };
 
 /// A no (network) IO client implementation.
@@ -986,6 +988,70 @@ impl BaseClient {
                 tracing::warn!("Error discarding room key: {e:?}");
             }
         }
+
+        Ok(())
+    }
+
+    /// Store a state event that we have just sent successfully.
+    ///
+    /// A send only returns the event ID the server assigned to the event; the
+    /// event itself only reaches the store once the sync echoes it back. Until
+    /// then, reading the state we have just written gives the previous value,
+    /// and every consumer has to work around that gap on its own. Applying the
+    /// event here closes it: the guarantee is that a successfully sent state
+    /// event is readable as soon as the send returns.
+    ///
+    /// `event` is the *plaintext* event, even when it was sent encrypted, and
+    /// the same data the sync will bring back, so the echo deduplicates
+    /// naturally.
+    ///
+    /// `m.room.member` events are left out: they also feed the ambiguity cache
+    /// and the profile store, which the sync maintains and this shortcut
+    /// doesn't.
+    pub async fn receive_sent_state_event(
+        &self,
+        room_id: &RoomId,
+        event: Raw<AnySyncStateEvent>,
+    ) -> Result<()> {
+        let Some(room) = self.state_store.room(room_id) else {
+            // The room is unknown to us: leave early.
+            return Ok(());
+        };
+
+        let Some(mut raw_event) = RawStateEventWithKeys::try_from_raw_state_event(event) else {
+            return Ok(());
+        };
+
+        if raw_event.event_type == StateEventType::RoomMember {
+            return Ok(());
+        }
+
+        let mut context = Context::default();
+        let mut room_info = room.clone_info();
+
+        room_info.handle_state_event(&mut raw_event);
+
+        context
+            .state_changes
+            .state
+            .entry(room_id.to_owned())
+            .or_default()
+            .entry(raw_event.event_type)
+            .or_default()
+            .insert(raw_event.state_key, raw_event.raw);
+
+        context.state_changes.add_room(room_info);
+
+        let state_store_guard = self.state_store_lock().lock().await;
+
+        processors::changes::save_and_apply(
+            context,
+            &self.state_store,
+            &state_store_guard,
+            &self.ignore_user_list_changes,
+            None,
+        )
+        .await?;
 
         Ok(())
     }

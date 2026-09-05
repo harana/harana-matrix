@@ -63,8 +63,6 @@ use mime::Mime;
 use reply::Reply;
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::AnySyncMessageLikeEvent;
-#[cfg(feature = "experimental-encrypted-state-events")]
-use ruma::events::AnySyncStateEvent;
 #[cfg(feature = "unstable-msc4274")]
 use ruma::events::room::message::GalleryItemType;
 #[cfg(feature = "e2e-encryption")]
@@ -72,8 +70,9 @@ use ruma::events::{
     AnySyncTimelineEvent, SyncMessageLikeEvent, room::encrypted::OriginalSyncRoomEncryptedEvent,
 };
 use ruma::{
-    EventId, Int, MatrixToUri, MatrixUri, MxcUri, OwnedEventId, OwnedRoomId, OwnedServerName,
-    OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt, UserId,
+    EventId, Int, MatrixToUri, MatrixUri, MilliSecondsSinceUnixEpoch, MxcUri, OwnedEventId,
+    OwnedRoomId, OwnedServerName, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt,
+    UserId,
     api::{
         client::{
             config::{set_global_account_data, set_room_account_data},
@@ -105,11 +104,11 @@ use ruma::{
     },
     assign,
     events::{
-        AnyRoomAccountDataEvent, AnyRoomAccountDataEventContent, AnyTimelineEvent, EmptyStateKey,
-        Mentions, MessageLikeEventContent, OriginalSyncStateEvent, RedactContent,
-        RedactedStateEventContent, RoomAccountDataEvent, RoomAccountDataEventContent,
-        RoomAccountDataEventType, StateEventContent, StateEventType, StaticEventContent,
-        StaticStateEventContent, SyncStateEvent,
+        AnyRoomAccountDataEvent, AnyRoomAccountDataEventContent, AnyStateEventContent,
+        AnySyncStateEvent, AnyTimelineEvent, EmptyStateKey, Mentions, MessageLikeEventContent,
+        OriginalSyncStateEvent, RedactContent, RedactedStateEventContent, RoomAccountDataEvent,
+        RoomAccountDataEventContent, RoomAccountDataEventType, StateEventContent, StateEventType,
+        StaticEventContent, StaticStateEventContent, SyncStateEvent,
         beacon::BeaconEventContent,
         beacon_info::BeaconInfoEventContent,
         direct::DirectEventContent,
@@ -2422,6 +2421,48 @@ impl Room {
             .await
     }
 
+    /// Store a state event we have just sent successfully, so it can be read
+    /// back before the sync echoes it.
+    ///
+    /// `content` must be the plaintext content, even when the event was sent
+    /// encrypted: this is the state the room is now in, and the sync will
+    /// bring back the very same thing.
+    ///
+    /// Failing to store it isn't fatal - the sync brings the event in
+    /// eventually - so this only logs.
+    pub(crate) async fn store_sent_state_event(
+        &self,
+        event_id: &EventId,
+        event_type: &StateEventType,
+        state_key: &str,
+        content: &Raw<AnyStateEventContent>,
+    ) {
+        let Some(sender) = self.client.user_id() else { return };
+
+        let json = serde_json::json!({
+            "type": event_type,
+            "state_key": state_key,
+            "content": content,
+            "event_id": event_id,
+            "sender": sender,
+            "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+        });
+
+        let event = match Raw::<AnySyncStateEvent>::from_json_string(json.to_string()) {
+            Ok(event) => event,
+            Err(error) => {
+                warn!("couldn't build the state event we just sent: {error}");
+                return;
+            }
+        };
+
+        if let Err(error) =
+            self.client.base_client().receive_sent_state_event(self.room_id(), event).await
+        {
+            warn!("couldn't store the state event we just sent: {error}");
+        }
+    }
+
     /// Share a group session for a room.
     ///
     /// # Panics
@@ -3201,7 +3242,12 @@ impl Room {
         self.ensure_room_joined()?;
         let request =
             send_state_event::v3::Request::new(self.room_id().to_owned(), state_key, &content)?;
+        let (event_type, state_key, body) =
+            (request.event_type.clone(), request.state_key.clone(), request.body.clone());
         let response = self.client.send(request).await?;
+
+        self.store_sent_state_event(&response.event_id, &event_type, &state_key, &body).await;
+
         Ok(response)
     }
 
@@ -3311,14 +3357,19 @@ impl Room {
     ) -> Result<send_state_event::v3::Response> {
         self.ensure_room_joined()?;
 
+        let content = content.into_raw_state_event_content();
         let request = send_state_event::v3::Request::new_raw(
             self.room_id().to_owned(),
             event_type.into(),
             state_key.to_owned(),
-            content.into_raw_state_event_content(),
+            content.clone(),
         );
+        let event_type = request.event_type.clone();
+        let response = self.client.send(request).await?;
 
-        Ok(self.client.send(request).await?)
+        self.store_sent_state_event(&response.event_id, &event_type, state_key, &content).await;
+
+        Ok(response)
     }
 
     /// Send a raw room state event to the homeserver.

@@ -705,6 +705,38 @@ async fn test_room_state_event_send() {
 }
 
 #[async_test]
+async fn test_sent_state_event_is_readable_right_away() {
+    use assert_matches2::assert_let;
+    use matrix_sdk::{
+        deserialized_responses::SyncOrStrippedState,
+        ruma::events::room::topic::RoomTopicEventContent, test_utils::mocks::MatrixMockServer,
+    };
+
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    let room = server.sync_joined_room(&client, &DEFAULT_TEST_ROOM_ID).await;
+
+    assert_eq!(room.topic(), None);
+
+    server.mock_room_send_state().ok(event_id!("$topic")).mock_once().mount().await;
+
+    room.send_state_event(RoomTopicEventContent::new("the new topic".to_owned())).await.unwrap();
+
+    // No sync happened in between: the state we just wrote is readable anyway.
+    assert_eq!(room.topic().as_deref(), Some("the new topic"));
+
+    let stored = room
+        .get_state_event_static::<RoomTopicEventContent>()
+        .await
+        .unwrap()
+        .expect("the topic event we just sent is in the store")
+        .deserialize()
+        .unwrap();
+    assert_let!(SyncOrStrippedState::Sync(stored) = stored);
+    assert_eq!(stored.as_original().unwrap().content.topic, "the new topic");
+}
+
+#[async_test]
 async fn test_room_message_send() {
     let (client, server) = logged_in_client_with_server().await;
 
