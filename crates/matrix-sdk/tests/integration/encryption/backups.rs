@@ -575,7 +575,8 @@ async fn test_steady_state_waiting() -> TestResult {
 
     let backups = client.encryption().backups();
 
-    let wait_for_steady_state = backups.wait_for_steady_state();
+    let wait_for_steady_state = backups.wait_for_upload();
+    backups.trigger_upload();
 
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
@@ -960,7 +961,8 @@ async fn test_steady_state_waiting_errors() -> TestResult {
     )
     .await;
 
-    let wait_for_steady_state = backups.wait_for_steady_state();
+    let wait_for_steady_state = backups.wait_for_upload();
+    backups.trigger_upload();
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
     backups.trigger_upload();
@@ -1426,6 +1428,70 @@ async fn test_enable_from_secret_storage_and_manual_download() -> TestResult {
     } else {
         panic!("Failed to get an update about room keys being imported from the backup")
     }
+
+    server.verify().await;
+    Ok(())
+}
+
+#[async_test]
+async fn test_a_backed_up_room_key_we_cannot_read_is_reported() -> TestResult {
+    let room_id = room_id!("!DovneieKSTkdHKpIXy:morpheus.localhost");
+    let session_id = "D5SdVi/nyxdkl97K6EZrpb5N6GcF3YzmvE9EegkVDns";
+
+    let session = matrix_session_example2();
+    let (builder, server) = test_client_builder_with_server().await;
+    let encryption_settings = EncryptionSettings {
+        backup_download_strategy: BackupDownloadStrategy::Manual,
+        ..Default::default()
+    };
+    let client = builder
+        .request_config(RequestConfig::new().disable_retry())
+        .with_encryption_settings(encryption_settings)
+        .build()
+        .await?;
+
+    client.restore_session(session).await?;
+    init_client_secret_storage_and_backup(&client, &server).await;
+
+    // Given the backup holds a room key which we cannot decrypt: here the MAC does
+    // not match, as it would for a corrupt entry or one encrypted for a different
+    // backup
+    Mock::given(method("GET"))
+        .and(path(format!(
+            "/_matrix/client/r0/room_keys/keys/{room_id}/D5SdVi%2Fnyxdkl97K6EZrpb5N6GcF3YzmvE9EegkVDns"
+        )))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "first_message_index": 0,
+            "forwarded_count": 0,
+            "is_verified": true,
+            "session_data": {
+                "ciphertext": "JSPY1qaa8QwuurezB8l2QsK+wcwXJ6Rm3gA5AHQYrJCK1wnbIexJMx6vKFklpobTFiV6",
+                "ephemeral": "Kv+mvdiIk4gvrocQWM5kdr5FzyFLgwJ4o6WL/r1EC0s",
+                "mac": "AAAAAAAAAAA"
+            }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    // When we download it
+    let error = client
+        .encryption()
+        .backups()
+        .download_room_key(room_id, session_id)
+        .await
+        .expect_err("A room key we cannot read should not be reported as a successful download");
+
+    // Then we are told that the key is unreadable, rather than the failure being
+    // swallowed and the message staying stuck as a UTD with no explanation
+    assert_matches!(
+        error,
+        matrix_sdk::Error::UnreadableBackedUpRoomKeys { count, session_id: reported } => {
+            assert_eq!(count, 1);
+            assert_eq!(reported, session_id);
+        }
+    );
 
     server.verify().await;
     Ok(())

@@ -500,7 +500,11 @@ impl StoreTransaction {
         }
 
         // Save changes in the database.
-        let account = self.changes.account.as_ref().map(|acc| acc.deep_clone());
+        let account = self.changes.account.as_ref().map(|acc| {
+            let mut account = acc.deep_clone();
+            account.reset_dirty();
+            account
+        });
 
         self.store.save_pending_changes(self.changes).await?;
 

@@ -14,7 +14,7 @@
 
 //! Named futures for the backup support.
 
-use std::{future::IntoFuture, time::Duration};
+use std::{future::IntoFuture, pin::Pin, time::Duration};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -53,8 +53,7 @@ pub enum SteadyStateError {
     Lagged,
 }
 
-/// Named future for the [`Backups::wait_for_steady_state()`] method.
-#[derive(Debug)]
+/// Named future for the [`Backups::wait_for_upload()`] method.
 pub struct WaitForSteadyState<'a> {
     pub(super) backups: &'a Backups,
     pub(super) progress: ChannelObservable<UploadState>,
@@ -167,8 +166,6 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
                 }
 
                 ret
-            } else {
-                Err(SteadyStateError::BackupDisabled)
             };
 
             if let Some(old_delay) = old_delay {

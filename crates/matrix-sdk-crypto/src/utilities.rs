@@ -80,6 +80,22 @@ pub fn timestamp_to_iso8601(ts: MilliSecondsSinceUnixEpoch) -> Option<String> {
     Some(dt.format(&Iso8601::<ISO8601_WITH_MILLIS>).unwrap())
 }
 
+/// Generate a new, unique ID for a to-device message.
+///
+/// The ID ends up in the `org.matrix.msgid` field of the to-device message
+/// content, and lets a message be traced from sender to recipient in the logs
+/// of both sides.
+pub(crate) fn new_to_device_message_id() -> String {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        ulid::Ulid::generate().to_string()
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        ruma::TransactionId::new().to_string()
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use ruma::{MilliSecondsSinceUnixEpoch, UInt};

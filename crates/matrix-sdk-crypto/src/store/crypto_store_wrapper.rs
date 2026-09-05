@@ -120,6 +120,24 @@ impl CryptoStoreWrapper {
         }
     }
 
+    /// Get the encryption settings for the given room.
+    ///
+    /// The settings are cached in memory, so that the common case of asking
+    /// for them repeatedly does not hit the store every time.
+    pub(crate) async fn get_room_settings(
+        &self,
+        room_id: &RoomId,
+    ) -> store::Result<Option<RoomSettings>> {
+        if let Some(settings) = self.room_settings.read().get(room_id) {
+            return Ok(settings.clone());
+        }
+
+        let settings = self.store.get_room_settings(room_id).await?;
+        self.room_settings.write().insert(room_id.to_owned(), settings.clone());
+
+        Ok(settings)
+    }
+
     /// Save the set of changes to the store.
     ///
     /// Also responsible for sending updates to the broadcast streams such as

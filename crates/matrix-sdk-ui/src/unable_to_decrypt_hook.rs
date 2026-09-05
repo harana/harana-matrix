@@ -36,6 +36,10 @@ use ruma::{
 use tokio::sync::{Mutex as AsyncMutex, MutexGuard};
 use tracing::{error, trace};
 
+/// The late-decryption grace period used by other Matrix clients: a UTD that
+/// gets decrypted within this period of being observed is not reported.
+pub const DEFAULT_LATE_DECRYPTION_GRACE_PERIOD: Duration = Duration::from_secs(4);
+
 /// A generic interface which methods get called whenever we observe a
 /// unable-to-decrypt (UTD) event.
 pub trait UnableToDecryptHook: std::fmt::Debug + SendOutsideWasm + SyncOutsideWasm {

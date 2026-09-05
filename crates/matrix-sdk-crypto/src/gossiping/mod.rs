@@ -15,7 +15,7 @@
 mod machine;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
 
@@ -425,5 +425,100 @@ impl WaitQueue {
                     .collect()
             })
             .unwrap_or_default()
+    }
+}
+
+/// A bounded record of the secret requests we have already answered, so that a
+/// request we see twice does not make us send the secret twice.
+#[derive(Debug, Default)]
+pub(crate) struct ServedSecretRequests {
+    served: BTreeSet<(OwnedUserId, OwnedDeviceId, OwnedTransactionId)>,
+    /// The entries in insertion order, so the oldest can be dropped.
+    insertion_order: VecDeque<(OwnedUserId, OwnedDeviceId, OwnedTransactionId)>,
+}
+
+impl ServedSecretRequests {
+    /// How many answered requests we remember. Secret requests only come from
+    /// our own devices, so this is generous.
+    const MAX_ENTRIES: usize = 500;
+
+    /// Have we already answered this request?
+    pub(crate) fn contains(
+        &self,
+        user_id: &UserId,
+        device_id: &DeviceId,
+        request_id: &TransactionId,
+    ) -> bool {
+        self.served.contains(&(
+            user_id.to_owned(),
+            device_id.to_owned(),
+            request_id.to_owned(),
+        ))
+    }
+
+    /// Record that we have answered this request.
+    pub(crate) fn insert(
+        &mut self,
+        user_id: OwnedUserId,
+        device_id: OwnedDeviceId,
+        request_id: OwnedTransactionId,
+    ) {
+        let entry = (user_id, device_id, request_id);
+
+        if self.served.insert(entry.clone()) {
+            if self.insertion_order.len() >= Self::MAX_ENTRIES
+                && let Some(oldest) = self.insertion_order.pop_front()
+            {
+                self.served.remove(&oldest);
+            }
+
+            self.insertion_order.push_back(entry);
+        }
+    }
+}
+
+#[cfg(test)]
+mod served_secret_requests_tests {
+    use ruma::{device_id, user_id};
+
+    use super::{OwnedTransactionId, ServedSecretRequests};
+
+    #[test]
+    fn test_a_request_is_only_served_once() {
+        let mut served = ServedSecretRequests::default();
+        let user_id = user_id!("@alice:localhost");
+        let device_id = device_id!("DEVICEID");
+        let request_id: OwnedTransactionId = "request-1".into();
+
+        assert!(!served.contains(user_id, device_id, &request_id));
+
+        served.insert(user_id.to_owned(), device_id.to_owned(), request_id.clone());
+        assert!(served.contains(user_id, device_id, &request_id));
+
+        // A different request from the same device is still served: a device which
+        // asks again with a new request ID gets an answer.
+        let other_request_id: OwnedTransactionId = "request-2".into();
+        assert!(!served.contains(user_id, device_id, &other_request_id));
+
+        // So is the same request ID from another device.
+        assert!(!served.contains(user_id, device_id!("OTHERDEVICE"), &request_id));
+    }
+
+    #[test]
+    fn test_the_record_is_bounded() {
+        let mut served = ServedSecretRequests::default();
+        let user_id = user_id!("@alice:localhost");
+        let device_id = device_id!("DEVICEID");
+
+        for index in 0..ServedSecretRequests::MAX_ENTRIES + 10 {
+            served.insert(
+                user_id.to_owned(),
+                device_id.to_owned(),
+                OwnedTransactionId::from(format!("request-{index}")),
+            );
+        }
+
+        assert_eq!(served.served.len(), ServedSecretRequests::MAX_ENTRIES);
+        assert_eq!(served.insertion_order.len(), ServedSecretRequests::MAX_ENTRIES);
     }
 }

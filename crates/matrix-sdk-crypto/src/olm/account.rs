@@ -759,6 +759,7 @@ impl Account {
     pub fn mark_keys_as_published(&mut self) {
         self.dirty = true;
         self.inner.mark_keys_as_published();
+        self.dirty = true;
     }
 
     /// Sign the given string using the accounts signing key.
@@ -2059,6 +2060,7 @@ mod tests {
         DeviceId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OneTimeKeyId, UserId, device_id,
         events::room::history_visibility::HistoryVisibility, room_id, user_id,
     };
+    use ruma::uint;
     use serde_json::json;
 
     use super::Account;
@@ -2353,6 +2355,61 @@ mod tests {
 
         assert_ne!(one_time_key_ids, fourth_one_time_key_ids);
         Ok(())
+    }
+
+    #[test]
+    fn test_stale_one_time_key_count_after_upload_is_ignored() {
+        let mut account = Account::with_device_id(user_id(), device_id());
+        let max_keys = account.max_one_time_keys() as u64;
+
+        // Publish our initial batch of one-time keys, as a `/keys/upload` response
+        // reporting that the server now holds all of them would.
+        account.mark_keys_as_published();
+        account.update_uploaded_key_count(max_keys);
+        account.unacknowledged_upload_key_count = Some(max_keys);
+
+        // The next sync was computed by the server before it processed our upload, so
+        // it still reports zero keys. We must not believe it and generate a second
+        // batch.
+        let counts = BTreeMap::from([(OneTimeKeyAlgorithm::SignedCurve25519, uint!(0))]);
+        account.update_key_counts(&counts, None, false);
+
+        assert_eq!(account.uploaded_key_count(), max_keys);
+        let (_, one_time_keys, _) = account.keys_for_upload();
+        assert!(one_time_keys.is_empty(), "We should not have generated a second batch of keys");
+
+        // A later sync which still reports zero keys is authoritative: by then the
+        // keys really have been claimed.
+        account.update_key_counts(&counts, None, false);
+
+        assert_eq!(account.uploaded_key_count(), 0);
+        let (_, one_time_keys, _) = account.keys_for_upload();
+        assert!(!one_time_keys.is_empty(), "We should have generated new keys by now");
+    }
+
+    #[test]
+    fn test_account_is_only_dirty_when_modified() {
+        let mut account = Account::with_device_id(user_id(), device_id());
+        assert!(account.is_dirty(), "A brand new account has never been stored");
+
+        account.reset_dirty();
+        assert!(!account.is_dirty());
+
+        // Reading does not dirty the account.
+        let _ = account.identity_keys();
+        let _ = account.uploaded_key_count();
+        assert!(!account.is_dirty());
+
+        // Neither does a key count that doesn't change anything.
+        account.update_uploaded_key_count(0);
+        assert!(!account.is_dirty());
+
+        account.update_uploaded_key_count(10);
+        assert!(account.is_dirty(), "Changing the uploaded key count modifies the account");
+
+        account.reset_dirty();
+        account.mark_keys_as_published();
+        assert!(account.is_dirty(), "Publishing the one-time keys modifies the account");
     }
 
     #[test]

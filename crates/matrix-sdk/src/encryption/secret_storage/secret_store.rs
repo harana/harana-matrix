@@ -14,7 +14,9 @@
 
 use std::fmt;
 
-use matrix_sdk_base::crypto::{CrossSigningKeyExport, secret_storage::SecretStorageKey};
+use matrix_sdk_base::crypto::{
+    CrossSigningKeyExport, CrossSigningStatus, secret_storage::SecretStorageKey,
+};
 use ruma::{
     events::{
         GlobalAccountDataEventType, secret::request::SecretName,
@@ -432,6 +434,14 @@ impl SecretStore {
         let (request_id, request) = olm_machine.query_keys_for_users([olm_machine.user_id()]);
         self.client.keys_query(&request_id, request.device_keys).await?;
 
+        // Remember which keys the secret store actually held, so that we can tell
+        // apart a key which was not there from one which we failed to import.
+        let exported = ExportedCrossSigningKeys {
+            master_key: export.master_key.is_some(),
+            self_signing_key: export.self_signing_key.is_some(),
+            user_signing_key: export.user_signing_key.is_some(),
+        };
+
         // Let's now try to import our private cross-signing keys.
         let status = olm_machine
             .import_cross_signing_keys(export)
@@ -486,6 +496,18 @@ impl SecretStore {
 
         self.maybe_enable_backups().await?;
 
+        // A key which was in the secret store but is not in the store now was rejected,
+        // most likely because its private part does not match the public part the
+        // homeserver has. Recovery has not done what the user asked for, so say so
+        // instead of leaving them to retry the same recovery key forever.
+        let missing = exported.missing_from(&status);
+
+        if !missing.is_empty() {
+            error!(?missing, "Some cross-signing keys could not be imported from the secret store");
+
+            return Err(SecretStorageError::IncompleteCrossSigningImport { keys: missing });
+        }
+
         Ok(())
     }
 
@@ -525,8 +547,95 @@ impl SecretStore {
     }
 }
 
+/// Which cross-signing keys the secret store held, so that a key which was
+/// never there can be told apart from one we failed to import.
+#[derive(Debug, Clone, Copy)]
+struct ExportedCrossSigningKeys {
+    master_key: bool,
+    self_signing_key: bool,
+    user_signing_key: bool,
+}
+
+impl ExportedCrossSigningKeys {
+    /// The keys the secret store held but which are not in the crypto store
+    /// after the import.
+    fn missing_from(self, status: &CrossSigningStatus) -> Vec<SecretName> {
+        [
+            (SecretName::CrossSigningMasterKey, self.master_key, status.has_master),
+            (SecretName::CrossSigningSelfSigningKey, self.self_signing_key, status.has_self_signing),
+            (SecretName::CrossSigningUserSigningKey, self.user_signing_key, status.has_user_signing),
+        ]
+        .into_iter()
+        .filter_map(|(name, was_exported, was_imported)| {
+            (was_exported && !was_imported).then_some(name)
+        })
+        .collect()
+    }
+}
+
 impl fmt::Debug for SecretStore {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SecretStore").field("key", &self.key).finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use matrix_sdk_base::crypto::CrossSigningStatus;
+    use ruma::events::secret::request::SecretName;
+
+    use super::ExportedCrossSigningKeys;
+
+    fn status(has_master: bool, has_self_signing: bool, has_user_signing: bool) -> CrossSigningStatus {
+        CrossSigningStatus { has_master, has_self_signing, has_user_signing }
+    }
+
+    #[test]
+    fn test_a_full_import_leaves_nothing_missing() {
+        let exported = ExportedCrossSigningKeys {
+            master_key: true,
+            self_signing_key: true,
+            user_signing_key: true,
+        };
+
+        assert!(exported.missing_from(&status(true, true, true)).is_empty());
+    }
+
+    #[test]
+    fn test_a_key_the_store_never_held_is_not_missing() {
+        // The secret store only had the master key, and that is the only one which
+        // was imported: nothing went wrong, so nothing is reported.
+        let exported = ExportedCrossSigningKeys {
+            master_key: true,
+            self_signing_key: false,
+            user_signing_key: false,
+        };
+
+        assert!(exported.missing_from(&status(true, false, false)).is_empty());
+    }
+
+    #[test]
+    fn test_a_rejected_key_is_missing() {
+        // All three keys were in the secret store, but the user-signing key was not
+        // imported, e.g. because its private part does not match our identity.
+        let exported = ExportedCrossSigningKeys {
+            master_key: true,
+            self_signing_key: true,
+            user_signing_key: true,
+        };
+
+        assert_eq!(
+            exported.missing_from(&status(true, true, false)),
+            vec![SecretName::CrossSigningUserSigningKey]
+        );
+
+        assert_eq!(
+            exported.missing_from(&status(false, false, false)),
+            vec![
+                SecretName::CrossSigningMasterKey,
+                SecretName::CrossSigningSelfSigningKey,
+                SecretName::CrossSigningUserSigningKey,
+            ]
+        );
     }
 }

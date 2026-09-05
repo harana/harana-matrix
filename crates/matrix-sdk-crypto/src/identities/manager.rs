@@ -2587,6 +2587,51 @@ pub(crate) mod tests {
     }
 
     #[async_test]
+    async fn test_pinning_a_stale_identity_does_not_revert_newer_keys() {
+        use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
+
+        let machine = common_verified_identity_changes_machine_setup().await;
+
+        // Given an identity we have read out of the store
+        let keys_query = DataSet::bob_keys_query_response_signed();
+        machine.mark_request_as_sent(&TransactionId::new(), &keys_query).await.unwrap();
+
+        let stale_identity =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        let old_master_key = stale_identity.master_key().to_owned();
+
+        // And a new set of cross-signing keys for that user which landed in the store
+        // after we read it
+        let keys_query = DataSet::bob_keys_query_response_rotated();
+        machine.mark_request_as_sent(&TransactionId::new(), &keys_query).await.unwrap();
+
+        let rotated_master_key = machine
+            .get_identity(DataSet::bob_id(), None)
+            .await
+            .unwrap()
+            .unwrap()
+            .other()
+            .unwrap()
+            .master_key()
+            .to_owned();
+        assert_ne!(old_master_key, rotated_master_key, "The identity should have been rotated");
+
+        // When we pin the stale copy of the identity
+        stale_identity.pin_current_master_key().await.unwrap();
+
+        // Then the newer keys are still the ones in the store: pinning must not write
+        // the copy we were holding back over them
+        let stored =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+
+        assert_eq!(
+            stored.master_key(),
+            &rotated_master_key,
+            "Pinning a stale identity must not revert the newer cross-signing keys"
+        );
+    }
+
+    #[async_test]
     async fn test_manager_verified_identity_changes_setup_on_updated_identities() {
         use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
 

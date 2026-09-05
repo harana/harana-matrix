@@ -192,8 +192,13 @@ impl Backups {
     /// Disable and delete the currently active backup only if previously
     /// enabled before, otherwise an error will be returned.
     ///
+    /// If we have no backup key locally but the server holds a backup version,
+    /// that version is deleted as well: a backup that can no longer be read
+    /// still has to be removable.
+    ///
     /// For a more aggressive variant see [`Backups::disable_and_delete`] which
-    /// will delete the remote backup without checking the local state.
+    /// will delete every remote backup version without checking the local
+    /// state.
     ///
     /// # Examples
     ///
@@ -232,6 +237,19 @@ impl Backups {
                 olm_machine.backup_machine().disable_backup().await?;
 
                 info!("Backup successfully disabled and deleted");
+
+                Ok(())
+            } else if let Some(response) = self.get_current_version().await? {
+                // We have no backup key locally, e.g. because the recovery key was lost,
+                // but the server still holds a backup. Deleting it is the whole point of
+                // this call, so do that rather than refusing.
+                Span::current().record("version", &response.version);
+                info!("Deleting a backup which only exists on the server");
+
+                self.delete_backup_from_server(response.version).await?;
+                olm_machine.backup_machine().disable_backup().await?;
+
+                info!("Server-side backup successfully deleted");
 
                 Ok(())
             } else {
@@ -351,6 +369,11 @@ impl Backups {
     ///
     /// # anyhow::Ok(()) };
     /// ```
+    #[deprecated(
+        since = "0.18.0",
+        note = "this both triggers an upload and waits for it; use `Backups::trigger_upload` \
+                and `Backups::wait_for_upload` instead"
+    )]
     pub fn wait_for_steady_state(&self) -> WaitForSteadyState<'_> {
         let progress = self.client.inner.e2ee.backup_state.upload_progress.clone();
 
@@ -678,6 +701,18 @@ impl Backups {
                     room_key,
                 ));
             }
+        }
+
+        // If every key we got back was unreadable, the caller is otherwise left
+        // believing the download worked while the messages stay undecryptable. That is
+        // different from the key not being in the backup at all, so say which it is.
+        if decrypted_room_keys.is_empty()
+            && let Some(session_id) = unreadable_session_ids.first().cloned()
+        {
+            return Err(Error::UnreadableBackedUpRoomKeys {
+                count: unreadable_session_ids.len(),
+                session_id,
+            });
         }
 
         let result = olm_machine
@@ -1667,6 +1702,88 @@ mod test {
         assert!(!exists, "But now there is no backup");
     }
 
+    #[cfg(not(target_family = "wasm"))] // wasm32 has no time for that
+    #[async_test]
+    async fn test_the_done_of_an_earlier_upload_does_not_end_the_wait() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        server.mock_add_room_keys_version().ok().expect(1).mount().await;
+        client.encryption().backups().create().await.expect("We should be able to create a backup");
+
+        // Given room keys which have not been backed up yet
+        {
+            let machine = client.olm_machine().await;
+            machine
+                .as_ref()
+                .unwrap()
+                .store()
+                .import_exported_room_keys(vec![room_key()], |_, _| {})
+                .await
+                .expect("We should be able to import a room key");
+        }
+
+        // And an upload which finished before we started waiting
+        client.inner.e2ee.backup_state.upload_progress.set(UploadState::Done);
+
+        let backups = client.encryption().backups();
+        let wait_for_upload = backups.wait_for_upload();
+
+        // When we wait for the room keys to be uploaded, without triggering an upload
+        let result =
+            matrix_sdk_common::timeout::timeout(
+                async { wait_for_upload.await },
+                Duration::from_millis(300),
+            )
+            .await;
+
+        // Then the stale `Done` does not end the wait: those keys are still not backed
+        // up. (A real upload attempt failing is fine, that is not the stale `Done`.)
+        if let Ok(result) = result {
+            assert!(
+                result.is_err(),
+                "The wait should not have succeeded on an upload which finished before it started"
+            );
+        }
+    }
+
+    #[async_test]
+    async fn test_disable_deletes_a_backup_which_only_exists_on_the_server() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().logged_in_with_oauth().build().await;
+        let backups = client.encryption().backups();
+
+        // Given a backup which exists on the server while we hold no backup key, as
+        // happens when the recovery key was lost
+        assert!(!backups.are_enabled().await, "We should have no local backup key");
+
+        server.mock_room_keys_version().exists().expect(1).mount().await;
+        let delete = server.mock_delete_room_keys_version().ok().expect(1).mount_as_scoped().await;
+
+        // When we disable backups
+        backups.disable().await.expect("We should be able to delete a server-side backup");
+
+        // Then the server-side backup is deleted, rather than the call failing because
+        // backups are not enabled locally
+        drop(delete);
+    }
+
+    #[async_test]
+    async fn test_disable_reports_that_there_is_no_backup_at_all() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().logged_in_with_oauth().build().await;
+        let backups = client.encryption().backups();
+
+        // Given no backup locally and none on the server
+        server.mock_room_keys_version().none().expect(1).mount().await;
+
+        // When we disable backups
+        let error = backups.disable().await.expect_err("There is no backup to disable");
+
+        // Then we are told there is nothing to disable
+        assert_matches!(error, Error::BackupNotEnabled);
+    }
+
     #[async_test]
     async fn test_waiting_for_steady_state_resets_the_delay() {
         let server = MatrixMockServer::new().await;
@@ -1687,9 +1804,16 @@ mod test {
             { client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned() };
 
         let wait_for_steady_state =
-            backups.wait_for_steady_state().with_delay(Duration::from_nanos(100));
+            backups.wait_for_upload().with_delay(Duration::from_nanos(100));
 
-        let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
+        // The delay is overridden right away, so that it also applies to an upload
+        // which is triggered before the future is awaited.
+        {
+            let current_delay =
+                client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned();
+            assert_eq!(current_delay, Duration::from_nanos(100));
+            assert_ne!(current_delay, old_duration);
+        }
 
         // Waiting only observes now, so the upload has to be asked for explicitly. The
         // delay above is already in effect at this point.
@@ -1727,8 +1851,8 @@ mod test {
         });
 
         wait_for_steady_state.await.expect("We should be able to wait for the steady state");
-        task.await.unwrap();
 
+        // Once we are done waiting, the delay is back to what it was.
         let current_duration =
             { client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned() };
 

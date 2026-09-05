@@ -625,6 +625,32 @@ impl Encryption {
         self.inner.curve25519_key().await.map(|k| k.to_base64())
     }
 
+    /// Create and publish a cross-signing identity for this account, unless it
+    /// already has one.
+    ///
+    /// A client which authenticates first and offers a security setup step
+    /// afterwards needs to trigger this explicitly, rather than relying on it
+    /// happening while the client is built.
+    ///
+    /// An existing identity is never reset, and no private key material is
+    /// returned; use `IdentityResetHandle` if you do want to reset the
+    /// identity.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth_data` - The authentication data to send along with the keys, if
+    ///   a previous call reported that the homeserver requires it.
+    pub async fn bootstrap_cross_signing(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<CrossSigningBootstrapOutcome, ClientError> {
+        self.inner
+            .bootstrap_cross_signing_if_needed_with_outcome(auth_data.map(Into::into))
+            .await
+            .map(Into::into)
+            .map_err(ClientError::from_err)
+    }
+
     pub fn backup_state_listener(&self, listener: Box<dyn BackupStateListener>) -> Arc<TaskHandle> {
         let mut stream = self.inner.backups().state_stream();
 
@@ -696,7 +722,9 @@ impl Encryption {
         progress_listener: Option<Box<dyn BackupSteadyStateListener>>,
     ) -> Result<(), SteadyStateError> {
         let backups = self.inner.backups();
-        let wait_for_steady_state = backups.wait_for_steady_state();
+        let wait_for_steady_state = backups.wait_for_upload();
+
+        backups.trigger_upload();
 
         let task = if let Some(listener) = progress_listener {
             let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
