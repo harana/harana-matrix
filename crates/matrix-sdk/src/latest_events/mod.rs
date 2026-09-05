@@ -332,6 +332,14 @@ impl RegisteredRooms {
                     // create and insert it.
                     if room_latest_event.has_thread(thread_id).not() {
                         room_latest_event.create_and_insert_latest_event_for_thread(thread_id);
+
+                        // A thread's `LatestEventValue` isn't restored from the `RoomInfo` like
+                        // the room's one is: it starts as `None`. Ask for a computation right
+                        // away, so subscribers don't have to wait for the next event cache
+                        // update to see a value.
+                        let _ = self.latest_event_queue_sender.send(
+                            LatestEventQueueUpdate::EventCache { room_id: room_id.to_owned() },
+                        );
                     }
                 }
 
@@ -1309,6 +1317,83 @@ mod tests {
         );
 
         assert_pending!(latest_event_stream);
+    }
+
+    #[async_test]
+    async fn test_latest_event_value_for_a_thread() {
+        let room_id = owned_room_id!("!r0");
+        let user_id = user_id!("@mnt_io:matrix.org");
+        let event_factory = EventFactory::new().sender(user_id).room(&room_id);
+
+        let thread_root_id = event_id!("$thread_root");
+        let in_thread_id = event_id!("$in_thread");
+        let main_timeline_id = event_id!("$main_timeline");
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // Create the room.
+        client.base_client().get_or_create_room(&room_id, RoomState::Joined);
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        let latest_events = client.latest_events().await;
+
+        // Subscribe to the latest event values for the room, and for one of its
+        // threads.
+        let mut room_stream =
+            latest_events.listen_and_subscribe_to_room(&room_id).await.unwrap().unwrap();
+        let mut thread_stream = latest_events
+            .listen_and_subscribe_to_thread(&room_id, thread_root_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_pending!(room_stream);
+        assert_pending!(thread_stream);
+
+        // Receive a thread root, an in-thread reply, and then a main-timeline message
+        // that is more recent than both.
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(&room_id)
+                    .add_timeline_event(
+                        event_factory.text_msg("what do you think?").event_id(thread_root_id),
+                    )
+                    .add_timeline_event(
+                        event_factory
+                            .text_msg("I think it's a great idea")
+                            .in_thread(thread_root_id, thread_root_id)
+                            .event_id(in_thread_id),
+                    )
+                    .add_timeline_event(
+                        event_factory.text_msg("anyways, lunch?").event_id(main_timeline_id),
+                    ),
+            )
+            .await;
+
+        // The room's latest event is the most recent event of the room, whichever
+        // thread it is in.
+        assert_matches!(
+            room_stream.next().await,
+            Some(LatestEventValue::Remote(value)) => {
+                assert_eq!(value.event_id().as_deref(), Some(main_timeline_id));
+            }
+        );
+
+        // The thread's latest event is the most recent event of *that thread*, not of
+        // the room.
+        assert_matches!(
+            thread_stream.next().await,
+            Some(LatestEventValue::Remote(value)) => {
+                assert_eq!(value.event_id().as_deref(), Some(in_thread_id));
+            }
+        );
+
+        assert_pending!(room_stream);
+        assert_pending!(thread_stream);
     }
 
     #[async_test]
