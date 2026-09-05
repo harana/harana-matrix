@@ -21,7 +21,7 @@ use matrix_sdk::{
     DraftAttachment as SdkDraftAttachment, DraftAttachmentContent, DraftThumbnail, EncryptionState,
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
     RoomMemberships, RoomState, SuccessorRoom as SdkSuccessorRoom,
-    deserialized_responses::TimelineEvent as SdkTimelineEvent,
+    deserialized_responses::{RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent},
     encryption::LocalTrust,
     room::{
         Room as SdkRoom, RoomMemberRole, edit::EditedContent, power_levels::RoomPowerLevelChanges,
@@ -47,6 +47,7 @@ use ruma::{
             join_rules::JoinRule as RumaJoinRule, message::RoomMessageEventContentWithoutRelation,
         },
     },
+    serde::Raw,
 };
 use tracing::error;
 
@@ -497,6 +498,70 @@ impl Room {
             self.inner.send_state_event_raw(&event_type, &state_key, content_json).await?;
 
         Ok(response.event_id.to_string())
+    }
+
+    /// Get a state event of the given type out of this room's state.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state event to read (e.g.
+    ///   `"m.room.name"` or a custom type).
+    ///
+    /// * `state_key` - The state key of the event to read. This is often an
+    ///   empty string.
+    ///
+    /// Returns the event encoded as a JSON string, or `None` if this room's
+    /// state holds no such event.
+    pub async fn get_state_event(
+        &self,
+        event_type: String,
+        state_key: String,
+    ) -> Result<Option<String>, ClientError> {
+        let event = self.inner.get_state_event(event_type.into(), &state_key).await?;
+        Ok(event.map(state_event_json))
+    }
+
+    /// Get all the state events of the given type out of this room's state.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state events to read (e.g.
+    ///   `"m.room.member"` or a custom type).
+    ///
+    /// Returns the events encoded as JSON strings, in no particular order.
+    pub async fn get_state_events(&self, event_type: String) -> Result<Vec<String>, ClientError> {
+        let events = self.inner.get_state_events(event_type.into()).await?;
+        Ok(events.into_iter().map(state_event_json).collect())
+    }
+
+    /// Get the content of the room account data event of the given type.
+    ///
+    /// This reads from the store, it does not hit the homeserver.
+    ///
+    /// Returns the event encoded as a JSON string, or `None` if this room has
+    /// no account data of that type.
+    pub async fn account_data(&self, event_type: String) -> Result<Option<String>, ClientError> {
+        let event = self.inner.account_data(event_type.into()).await?;
+        Ok(event.map(|event| event.json().get().to_owned()))
+    }
+
+    /// Set the room account data of the given type.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the account data to set (e.g.
+    ///   `"m.fully_read"` or a custom type).
+    ///
+    /// * `content` - The content of the account data event, encoded as a JSON
+    ///   string.
+    pub async fn set_account_data(
+        &self,
+        event_type: String,
+        content: String,
+    ) -> Result<(), ClientError> {
+        let raw_content = Raw::from_json_string(content)?;
+        self.inner.set_account_data_raw(event_type.into(), raw_content).await?;
+        Ok(())
     }
 
     /// Redacts an event from the room.
@@ -2179,5 +2244,15 @@ mod tests {
         std::thread::spawn(move || drop(ffi_room))
             .join()
             .expect("Room::drop panicked on a non-tokio thread");
+    }
+}
+
+/// Returns the raw JSON of a state event, whichever shape the store holds it
+/// in. Events of a room in invited state are stripped, and carry neither an
+/// event ID nor a timestamp.
+fn state_event_json(event: RawAnySyncOrStrippedState) -> String {
+    match event {
+        RawAnySyncOrStrippedState::Sync(event) => event.json().get().to_owned(),
+        RawAnySyncOrStrippedState::Stripped(event) => event.json().get().to_owned(),
     }
 }
