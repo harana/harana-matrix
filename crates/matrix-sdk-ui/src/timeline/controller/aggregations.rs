@@ -851,24 +851,27 @@ impl Aggregations {
 /// The ordering key of a remote edit, used to pick the most recent one out of
 /// several edits of the same event.
 ///
-/// [MSC2676] orders replacements by `origin_server_ts`, breaking ties on the
-/// lexicographically largest event id. That is the primary ordering here. When
-/// the edit's JSON isn't available (a bundled edit whose raw event we didn't
-/// keep, for instance), we fall back to the position of the event carrying the
-/// edit in the timeline, which reflects the order the server gave us.
+/// The list of all remote events is in topological order, so where the event
+/// carrying an edit lands in it says which of two edits the server considers
+/// the more recent, whether it came from a sync or from a back-pagination. That
+/// is the primary ordering here, and an edit whose position is known always
+/// wins over one whose isn't.
 ///
-/// A key with a timestamp always sorts above a key without one, so an edit we
-/// can order per the spec wins over one we can only guess at.
+/// A position isn't always known: a bundled edit whose own event isn't in the
+/// loaded window is ordered by its `origin_server_ts`, breaking ties on the
+/// largest event id, which is how [MSC2676] orders replacements.
 ///
 /// [MSC2676]: https://github.com/matrix-org/matrix-spec-proposals/pull/2676
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct RemoteEditOrder {
-    /// The edit's `origin_server_ts` and event id, when its JSON is available.
-    timestamp_and_id: Option<(MilliSecondsSinceUnixEpoch, OwnedEventId)>,
-
     /// The position of the event carrying the edit in the list of all remote
     /// events, when it is loaded.
+    ///
+    /// Ordered first: `None` sorts below any `Some`, so a positioned edit wins.
     position: Option<usize>,
+
+    /// The edit's `origin_server_ts` and event id, when its JSON is available.
+    timestamp_and_id: Option<(MilliSecondsSinceUnixEpoch, OwnedEventId)>,
 }
 
 impl RemoteEditOrder {
@@ -882,17 +885,15 @@ impl RemoteEditOrder {
         event_id: &OwnedEventId,
         items: &ObservableItemsTransaction<'_>,
     ) -> Self {
+        let position =
+            items.position_by_event_id(edit.bundled_item_owner.as_ref().unwrap_or(event_id));
+
         let timestamp_and_id = edit.edit_json.as_ref().and_then(|json| {
             let deserialized = json.deserialize().ok()?;
             Some((deserialized.origin_server_ts(), deserialized.event_id().to_owned()))
         });
 
-        // The position of the timeline event owning the edit: either the bundled item
-        // owner if this was a bundled edit, or the edit event itself.
-        let position =
-            items.position_by_event_id(edit.bundled_item_owner.as_ref().unwrap_or(event_id));
-
-        Self { timestamp_and_id, position }
+        Self { position, timestamp_and_id }
     }
 }
 
