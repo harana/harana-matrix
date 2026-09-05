@@ -21,7 +21,9 @@ use ruma::{
     events::{
         AnyToDeviceEvent, AnyToDeviceEventContent, ToDeviceEvent,
         key::verification::{
-            VerificationMethod, request::ToDeviceKeyVerificationRequestEventContent,
+            VerificationMethod,
+            ready::{KeyVerificationReadyEventContent, ToDeviceKeyVerificationReadyEventContent},
+            request::ToDeviceKeyVerificationRequestEventContent,
         },
         room::message::KeyVerificationRequestEventContent,
     },
@@ -34,7 +36,9 @@ use tracing::{Span, debug, info, instrument, trace, warn};
 use super::{
     FlowId, Verification, VerificationResult, VerificationStore,
     cache::{RequestInfo, VerificationCache},
-    event_enums::{AnyEvent, AnyVerificationContent, OutgoingContent, RequestContent},
+    event_enums::{
+        AnyEvent, AnyVerificationContent, OutgoingContent, ReadyContent, RequestContent,
+    },
     requests::VerificationRequest,
     sas::Sas,
 };
@@ -47,41 +51,82 @@ use crate::{
     },
 };
 
-/// A verification request received for a device we don't know about yet.
+/// A verification event received for a device we don't know about yet.
 ///
 /// See [`VerificationMachine::pending_requests`].
 #[derive(Clone, Debug)]
 struct PendingRequest {
     sender: OwnedUserId,
     flow_id: FlowId,
-    content: OwnedRequestContent,
+    content: OwnedPendingContent,
     timestamp: MilliSecondsSinceUnixEpoch,
 }
 
-/// An owned version of [`RequestContent`], so that a verification request can
-/// be kept around until the sending device is known.
+impl PendingRequest {
+    fn from_device(&self) -> &DeviceId {
+        self.content.from_device()
+    }
+}
+
+/// An owned version of the verification contents that need the sending device
+/// to be known, so that one can be kept around until the device list catches
+/// up.
 ///
 /// [`RequestContent`]: super::event_enums::RequestContent
 #[derive(Clone, Debug)]
-enum OwnedRequestContent {
-    ToDevice(ToDeviceKeyVerificationRequestEventContent),
-    Room(KeyVerificationRequestEventContent),
+enum OwnedPendingContent {
+    /// An `m.key.verification.request`, i.e. somebody wants to verify with us.
+    RequestToDevice(ToDeviceKeyVerificationRequestEventContent),
+    /// An in-room `m.key.verification.request`.
+    RequestRoom(KeyVerificationRequestEventContent),
+    /// An `m.key.verification.ready`, i.e. the other side accepted a request we
+    /// sent.
+    ReadyToDevice(ToDeviceKeyVerificationReadyEventContent),
+    /// An in-room `m.key.verification.ready`.
+    ReadyRoom(KeyVerificationReadyEventContent),
 }
 
-impl OwnedRequestContent {
-    fn borrow(&self) -> RequestContent<'_> {
+impl OwnedPendingContent {
+    fn from_device(&self) -> &DeviceId {
         match self {
-            Self::ToDevice(content) => RequestContent::ToDevice(content),
-            Self::Room(content) => RequestContent::Room(content),
+            Self::RequestToDevice(content) => &content.from_device,
+            Self::RequestRoom(content) => &content.from_device,
+            Self::ReadyToDevice(content) => &content.from_device,
+            Self::ReadyRoom(content) => &content.from_device,
+        }
+    }
+
+    fn as_request(&self) -> Option<RequestContent<'_>> {
+        match self {
+            Self::RequestToDevice(content) => Some(RequestContent::ToDevice(content)),
+            Self::RequestRoom(content) => Some(RequestContent::Room(content)),
+            Self::ReadyToDevice(_) | Self::ReadyRoom(_) => None,
+        }
+    }
+
+    fn as_ready(&self) -> Option<ReadyContent<'_>> {
+        match self {
+            Self::ReadyToDevice(content) => Some(ReadyContent::ToDevice(content)),
+            Self::ReadyRoom(content) => Some(ReadyContent::Room(content)),
+            Self::RequestToDevice(_) | Self::RequestRoom(_) => None,
         }
     }
 }
 
-impl From<&RequestContent<'_>> for OwnedRequestContent {
+impl From<&RequestContent<'_>> for OwnedPendingContent {
     fn from(value: &RequestContent<'_>) -> Self {
         match value {
-            RequestContent::ToDevice(content) => Self::ToDevice((*content).clone()),
-            RequestContent::Room(content) => Self::Room((*content).clone()),
+            RequestContent::ToDevice(content) => Self::RequestToDevice((*content).clone()),
+            RequestContent::Room(content) => Self::RequestRoom((*content).clone()),
+        }
+    }
+}
+
+impl From<&ReadyContent<'_>> for OwnedPendingContent {
+    fn from(value: &ReadyContent<'_>) -> Self {
+        match value {
+            ReadyContent::ToDevice(content) => Self::ReadyToDevice((*content).clone()),
+            ReadyContent::Room(content) => Self::ReadyRoom((*content).clone()),
         }
     }
 }
@@ -409,10 +454,10 @@ impl VerificationMachine {
                 continue;
             }
 
-            let content = pending_request.content.borrow();
-
-            let Some(device_data) =
-                self.store.get_device(&pending_request.sender, content.from_device()).await?
+            let Some(device_data) = self
+                .store
+                .get_device(&pending_request.sender, pending_request.from_device())
+                .await?
             else {
                 still_pending.push(pending_request.clone());
                 continue;
@@ -420,20 +465,33 @@ impl VerificationMachine {
 
             info!(
                 sender = ?pending_request.sender,
-                from_device = content.from_device().as_str(),
-                "The device list caught up with a verification request we had put aside",
+                from_device = pending_request.from_device().as_str(),
+                "The device list caught up with a verification event we had put aside",
             );
 
-            let request = VerificationRequest::from_request(
-                self.verifications.clone(),
-                self.store.clone(),
-                &pending_request.sender,
-                pending_request.flow_id.clone(),
-                &content,
-                device_data,
-            );
+            if let Some(content) = pending_request.content.as_request() {
+                let request = VerificationRequest::from_request(
+                    self.verifications.clone(),
+                    self.store.clone(),
+                    &pending_request.sender,
+                    pending_request.flow_id.clone(),
+                    &content,
+                    device_data,
+                );
 
-            self.insert_request(request);
+                self.insert_request(request);
+            } else if let Some(content) = pending_request.content.as_ready() {
+                let Some(request) =
+                    self.get_request(&pending_request.sender, pending_request.flow_id.as_str())
+                else {
+                    // The request went away while we were waiting; nothing to accept.
+                    continue;
+                };
+
+                if request.flow_id() == &pending_request.flow_id {
+                    request.receive_ready(&pending_request.sender, &content, device_data);
+                }
+            }
         }
 
         self.pending_requests.write().extend(still_pending);
@@ -569,7 +627,24 @@ impl VerificationMachine {
                     {
                         request.receive_ready(event.sender(), c, device_data);
                     } else {
-                        warn!("Could not retrieve the data for the accepting device, ignoring it");
+                        // We don't know the accepting device yet: the `/keys/query` that
+                        // would tell us about it is still in flight. Dropping the ready
+                        // here used to leave the request stuck in the `Created` state, so
+                        // a client that went on to call `start_sas()` or
+                        // `generate_qr_code()` got nothing back. Keep it and replay it
+                        // once the device list has caught up.
+                        debug!(
+                            from_device = c.from_device().as_str(),
+                            "Don't know the device that accepted the verification yet; \
+                             waiting for the device list to catch up"
+                        );
+
+                        self.remember_pending_request(PendingRequest {
+                            sender: event.sender().to_owned(),
+                            flow_id,
+                            content: c.into(),
+                            timestamp: MilliSecondsSinceUnixEpoch::now(),
+                        });
                     }
                 } else {
                     flow_id_mismatch();
@@ -817,6 +892,73 @@ mod tests {
 
         // … and the request we had put aside is picked up instead of being lost.
         assert!(machine.get_request(carol.user_id(), flow_id.as_str()).is_some());
+    }
+
+    #[async_test]
+    async fn test_verification_ready_from_an_unknown_device_is_retried() {
+        use ruma::{
+            device_id,
+            events::{
+                ToDeviceEvent,
+                key::verification::{
+                    VerificationMethod, ready::ToDeviceKeyVerificationReadyEventContent,
+                },
+            },
+            user_id,
+        };
+
+        use crate::{
+            DeviceData,
+            store::types::{Changes, DeviceChanges},
+            types::events::ToDeviceEvents,
+        };
+
+        let (machine, _bob_store) = verification_machine().await;
+
+        // Given a verification request we sent to another user,
+        let carol_id = user_id!("@carol:example.org");
+        let carol = Account::with_device_id(carol_id, device_id!("CAROLDEV"));
+        let carol_device = DeviceData::from_account(&carol);
+
+        let (request, _) = machine.request_to_device_verification(
+            carol_id,
+            vec![carol.device_id().to_owned()],
+            Some(vec![VerificationMethod::SasV1]),
+        );
+        let flow_id = request.flow_id().as_str().to_owned();
+
+        assert!(!request.is_ready());
+
+        // When Carol accepts it from a device we don't know about yet,
+        let content = ToDeviceKeyVerificationReadyEventContent::new(
+            carol.device_id().to_owned(),
+            vec![VerificationMethod::SasV1],
+            flow_id.as_str().into(),
+        );
+        let event =
+            ToDeviceEvents::KeyVerificationReady(ToDeviceEvent::new(carol_id.to_owned(), content));
+
+        machine.receive_any_event(&event).await.unwrap();
+
+        // Then the request is not ready yet, because we can't attribute the acceptance
+        // to a device.
+        assert!(!request.is_ready());
+
+        // But once the `/keys/query` answer lands,
+        machine
+            .store
+            .inner
+            .save_changes(Changes {
+                devices: DeviceChanges { new: vec![carol_device], ..Default::default() },
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        machine.retry_pending_requests().await.unwrap();
+
+        // … the acceptance we had put aside is applied instead of being lost.
+        assert!(request.is_ready());
     }
 
     #[async_test]
