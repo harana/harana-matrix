@@ -43,7 +43,7 @@ use ruma::{
     api::client::receipt::create_receipt::v3::ReceiptType as SendReceiptType,
     events::{
         AnyMessageLikeEventContent, AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent,
-        AnySyncTimelineEvent, MessageLikeEventType,
+        AnySyncTimelineEvent, MessageLikeEventContent as _, MessageLikeEventType,
         poll::unstable_start::UnstablePollStartEventContent,
         reaction::ReactionEventContent,
         receipt::{Receipt, ReceiptThread, ReceiptType},
@@ -246,6 +246,58 @@ pub(super) struct TimelineSettings {
 
     /// Should the timeline items be grouped by day or month?
     pub(super) date_divider_mode: DateDividerMode,
+}
+
+impl TimelineSettings {
+    /// Whether a local echo carrying `content` may become a timeline item of
+    /// its own.
+    ///
+    /// Local echoes go through the same [`Self::event_filter`] as remote
+    /// events: a timeline that hides an event type must not start showing it
+    /// just because the event hasn't been sent yet.
+    ///
+    /// The filter takes a whole event, so the content is wrapped into the event
+    /// it is going to become. If that fails, the local echo is kept: dropping
+    /// an item we can't classify would be worse than showing it.
+    pub(super) fn allows_local_event(
+        &self,
+        content: &AnyMessageLikeEventContent,
+        sender: &UserId,
+        txn_id: &TransactionId,
+        rules: &RoomVersionRules,
+    ) -> bool {
+        let Some(event) = local_echo_as_sync_event(content, sender, txn_id) else {
+            return true;
+        };
+
+        (self.event_filter)(&event, rules)
+    }
+}
+
+/// Build the [`AnySyncTimelineEvent`] a local echo is going to become once it
+/// has been sent, so it can be run through the timeline's event filter.
+///
+/// The event ID is a placeholder: a local echo doesn't have one yet, and no
+/// filter condition looks at it.
+fn local_echo_as_sync_event(
+    content: &AnyMessageLikeEventContent,
+    sender: &UserId,
+    txn_id: &TransactionId,
+) -> Option<AnySyncTimelineEvent> {
+    // A transaction ID may contain a colon, which would make the event ID be
+    // validated as a room-version-1 identifier, and fail.
+    let event_id =
+        EventId::parse(format!("$local-echo-{}", txn_id.as_str().replace(':', "-"))).ok()?;
+
+    let json = serde_json::json!({
+        "type": content.event_type(),
+        "content": content,
+        "event_id": event_id,
+        "sender": sender,
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+    });
+
+    Raw::<AnySyncTimelineEvent>::from_json_string(json.to_string()).ok()?.deserialize().ok()
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -872,10 +924,24 @@ impl<P: RoomDataProvider> TimelineController<P> {
         let profile = self.room_data_provider.profile_from_user_id(&sender).await;
 
         let date_divider_mode = self.settings.date_divider_mode.clone();
+        let allowed_by_filter = self.settings.allows_local_event(
+            &content,
+            &sender,
+            &txn_id,
+            &self.room_data_provider.room_version_rules(),
+        );
 
         let mut state = self.state.write().await;
         state
-            .handle_local_event(sender, profile, date_divider_mode, txn_id, send_handle, content)
+            .handle_local_event(
+                sender,
+                profile,
+                date_divider_mode,
+                txn_id,
+                send_handle,
+                content,
+                allowed_by_filter,
+            )
             .await;
     }
 
