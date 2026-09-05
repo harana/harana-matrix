@@ -4033,6 +4033,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "matrix-sdk-store-codec"
+version = "0.18.0"
+dependencies = [
+ "arrayvec",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tracing",
+]
+
+[[package]]
 name = "matrix-sdk-store-encryption"
 version = "0.18.0"
 dependencies = [
