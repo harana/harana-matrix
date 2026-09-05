@@ -485,6 +485,9 @@ async fn test_steady_state_waiting() -> TestResult {
 
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
+    // Waiting only observes the upload task, so ask it to run.
+    backups.trigger_upload();
+
     wait_for_steady_state
         .await
         .expect("The waiting for the steady state should return successfully");
@@ -839,6 +842,7 @@ async fn test_steady_state_waiting_errors() -> TestResult {
     setup_backups(&client, &server).await;
     let backups = client.encryption().backups();
 
+    backups.trigger_upload();
     let result = backups.wait_for_steady_state().await;
 
     assert_matches!(
@@ -860,6 +864,8 @@ async fn test_steady_state_waiting_errors() -> TestResult {
 
     let wait_for_steady_state = backups.wait_for_steady_state();
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
+
+    backups.trigger_upload();
 
     let task = spawn(async move {
         let mut counter = 0;
