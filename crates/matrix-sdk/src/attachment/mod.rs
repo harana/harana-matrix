@@ -572,3 +572,102 @@ pub struct GalleryItemInfo {
     /// The thumbnail.
     pub thumbnail: Option<Thumbnail>,
 }
+
+#[cfg(all(test, feature = "image-proc"))]
+mod tests {
+    use assert_matches2::assert_let;
+    use image::{ImageFormat, Rgba, RgbaImage};
+    use ruma::uint;
+
+    use super::{AttachmentInfo, BaseImageInfo, BaseVideoInfo, Thumbnail, add_blurhash};
+
+    fn solid_png(width: u32, height: u32) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        RgbaImage::from_pixel(width, height, Rgba([0, 128, 255, 255]))
+            .write_to(&mut out, ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
+    }
+
+    fn video_mp4() -> mime::Mime {
+        "video/mp4".parse().unwrap()
+    }
+
+    fn thumbnail() -> Thumbnail {
+        let data = solid_png(16, 16);
+
+        Thumbnail {
+            size: (data.len() as u32).into(),
+            data,
+            content_type: mime::IMAGE_PNG,
+            height: uint!(16),
+            width: uint!(16),
+        }
+    }
+
+    /// A video has no still image of its own to hash, so its thumbnail stands
+    /// in for it.
+    #[test]
+    fn test_video_is_hashed_from_its_thumbnail() {
+        let info = AttachmentInfo::Video(BaseVideoInfo::default());
+
+        let info = add_blurhash(&video_mp4(), b"not an image", Some(&thumbnail()), Some(info));
+
+        assert_let!(Some(AttachmentInfo::Video(video)) = info);
+        assert!(video.blurhash.is_some(), "the thumbnail should have been hashed");
+    }
+
+    /// With no thumbnail there is nothing to hash, and the SDK has no video
+    /// decoder to fall back on.
+    #[test]
+    fn test_video_without_a_thumbnail_has_no_blurhash() {
+        let info = AttachmentInfo::Video(BaseVideoInfo::default());
+
+        let info = add_blurhash(&video_mp4(), b"not an image", None, Some(info));
+
+        assert_let!(Some(AttachmentInfo::Video(video)) = info);
+        assert_eq!(video.blurhash, None);
+    }
+
+    /// A hash the caller already worked out is theirs, not ours to replace.
+    #[test]
+    fn test_an_existing_image_blurhash_is_kept() {
+        let info = AttachmentInfo::Image(BaseImageInfo {
+            blurhash: Some("caller's own hash".to_owned()),
+            ..Default::default()
+        });
+
+        let info = add_blurhash(&mime::IMAGE_PNG, &solid_png(32, 32), None, Some(info));
+
+        assert_let!(Some(AttachmentInfo::Image(image_info)) = info);
+        assert_eq!(image_info.blurhash.as_deref(), Some("caller's own hash"));
+    }
+
+    #[test]
+    fn test_an_existing_video_blurhash_is_kept() {
+        let info = AttachmentInfo::Video(BaseVideoInfo {
+            blurhash: Some("caller's own hash".to_owned()),
+            ..Default::default()
+        });
+
+        let info = add_blurhash(&video_mp4(), b"not an image", Some(&thumbnail()), Some(info));
+
+        assert_let!(Some(AttachmentInfo::Video(video)) = info);
+        assert_eq!(video.blurhash.as_deref(), Some("caller's own hash"));
+    }
+
+    /// An image with no info at all still gets one made for it; anything else
+    /// would mean inventing metadata the SDK knows nothing about.
+    #[test]
+    fn test_an_image_without_info_gets_one() {
+        let info = add_blurhash(&mime::IMAGE_PNG, &solid_png(32, 32), None, None);
+
+        assert_let!(Some(AttachmentInfo::Image(image_info)) = info);
+        assert!(image_info.blurhash.is_some());
+    }
+
+    #[test]
+    fn test_a_non_image_without_info_stays_without_one() {
+        assert!(add_blurhash(&video_mp4(), b"not an image", None, None).is_none());
+    }
+}
