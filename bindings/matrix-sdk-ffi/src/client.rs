@@ -3674,11 +3674,13 @@ mod tests {
         ServerName,
         api::client::room::{Visibility, create_room},
         authentication::TokenType,
-        events::StateEventType,
+        events::{AnyInitialStateEvent, StateEventType},
         room::RoomType,
+        serde::Raw,
     };
 
     use crate::{
+        ClientError,
         client::{
             CreateRoomParameters, InitialStateEventParameters, JoinRule, OpenIdToken, RoomPreset,
             RoomVisibility,
@@ -3743,6 +3745,41 @@ mod tests {
             .expect("Creation content can't be deserialized")
             .room_type;
         assert_eq!(room_type, Some(RoomType::Space));
+    }
+
+    #[test]
+    fn test_initial_state_event_parameters_mapping() {
+        let event: Raw<AnyInitialStateEvent> = InitialStateEventParameters {
+            event_type: "org.example.marker".to_owned(),
+            state_key: "abcdef".to_owned(),
+            content: r#"{"hello":"world"}"#.to_owned(),
+        }
+        .try_into()
+        .expect("valid JSON content should convert");
+
+        let json = event.json().get();
+        assert!(json.contains("org.example.marker"), "{json}");
+        assert!(json.contains("abcdef"), "{json}");
+        assert!(json.contains("world"), "{json}");
+    }
+
+    #[test]
+    fn test_initial_state_event_parameters_reject_invalid_json_without_leaking_it() {
+        let error = Raw::<AnyInitialStateEvent>::try_from(InitialStateEventParameters {
+            event_type: "org.example.marker".to_owned(),
+            state_key: String::new(),
+            content: "this is not json: hunter2".to_owned(),
+        })
+        .expect_err("invalid JSON content should be rejected");
+
+        let ClientError::Generic { msg, .. } = error else {
+            panic!("expected a generic error");
+        };
+
+        // The message names the event type so a caller can tell which entry was
+        // wrong, but never the content itself: it can hold anything.
+        assert!(msg.contains("org.example.marker"), "{msg}");
+        assert!(!msg.contains("hunter2"), "the content must not reach the message: {msg}");
     }
 
     #[test]

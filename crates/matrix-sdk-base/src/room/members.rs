@@ -646,18 +646,127 @@ pub fn normalize_power_level(power_level: Int, max_power_level: i64) -> Int {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "unstable-msc4426")]
     use matrix_sdk_common::ROOM_VERSION_RULES_FALLBACK;
-    #[cfg(feature = "unstable-msc4426")]
     use matrix_sdk_test::event_factory::EventFactory;
     use proptest::prelude::*;
     #[cfg(feature = "unstable-msc4426")]
-    use ruma::{
-        SecondsSinceUnixEpoch, events::room::power_levels::RoomPowerLevelsSource,
-        profile::ProfileFieldValue, user_id,
-    };
+    use ruma::{SecondsSinceUnixEpoch, profile::ProfileFieldValue};
+    use ruma::{events::room::power_levels::RoomPowerLevelsSource, mxc_uri, user_id};
 
     use super::*;
+
+    /// A `MemberRoomInfo` with nothing notable in it, for building a
+    /// `RoomMember` in isolation.
+    fn empty_room_info<'a>() -> MemberRoomInfo<'a> {
+        MemberRoomInfo {
+            power_levels: Arc::new(RoomPowerLevels::new(
+                RoomPowerLevelsSource::None,
+                &ROOM_VERSION_RULES_FALLBACK.authorization,
+                std::iter::empty::<OwnedUserId>(),
+            )),
+            max_power_level: 100,
+            users_display_names: HashMap::new(),
+            ignored_users: None,
+            service_members: None,
+        }
+    }
+
+    fn make_member(event: MemberEvent, room_info: &MemberRoomInfo<'_>) -> RoomMember {
+        RoomMember::from_parts(
+            event,
+            None,
+            #[cfg(feature = "unstable-msc4426")]
+            None,
+            None,
+            room_info,
+        )
+    }
+
+    #[test]
+    fn test_banned_member_has_no_profile() {
+        let admin = user_id!("@admin:example.org");
+        let spammer = user_id!("@spammer:example.org");
+        let avatar = mxc_uri!("mxc://example.org/spammer");
+        let room_info = empty_room_info();
+
+        // While they are joined, the member is shown with the profile they set.
+        let joined = make_member(
+            MemberEvent::Sync(
+                EventFactory::new()
+                    .sender(spammer)
+                    .member(spammer)
+                    .display_name("Spammer")
+                    .avatar_url(avatar)
+                    .into(),
+            ),
+            &room_info,
+        );
+        assert!(!joined.is_banned());
+        assert_eq!(joined.display_name(), Some("Spammer"));
+        assert_eq!(joined.avatar_url(), Some(avatar));
+        assert_eq!(joined.name(), "Spammer");
+
+        // A ban event commonly carries the profile the member had, because the
+        // server copies it in. A banned member must not be shown with it.
+        let banned_event = MemberEvent::Sync(
+            EventFactory::new()
+                .sender(admin)
+                .member(spammer)
+                .banned(spammer)
+                .display_name("Spammer")
+                .avatar_url(avatar)
+                .into(),
+        );
+        let banned = make_member(banned_event, &room_info);
+
+        assert!(banned.is_banned());
+        assert_eq!(banned.display_name(), None);
+        assert_eq!(banned.avatar_url(), None);
+        // The name falls back to the localpart rather than to nothing.
+        assert_eq!(banned.name(), "spammer");
+        // The raw event still carries it, for a caller that wants it.
+        assert_eq!(banned.event().displayname_value(), Some("Spammer"));
+    }
+
+    #[test]
+    fn test_only_a_ban_hides_the_profile() {
+        let admin = user_id!("@admin:example.org");
+        let user = user_id!("@user:example.org");
+        let room_info = empty_room_info();
+
+        // Leaving, being kicked, or being invited all keep the profile: the rule
+        // is about bans specifically.
+        for event in [
+            MemberEvent::Sync(
+                EventFactory::new().sender(user).member(user).display_name("User").leave().into(),
+            ),
+            MemberEvent::Sync(
+                EventFactory::new()
+                    .sender(admin)
+                    .member(user)
+                    .kicked(user)
+                    .display_name("User")
+                    .into(),
+            ),
+            MemberEvent::Sync(
+                EventFactory::new()
+                    .sender(admin)
+                    .member(user)
+                    .invited(user)
+                    .display_name("User")
+                    .into(),
+            ),
+        ] {
+            let member = make_member(event, &room_info);
+            assert!(!member.is_banned());
+            assert_eq!(
+                member.display_name(),
+                Some("User"),
+                "membership: {:?}",
+                member.membership()
+            );
+        }
+    }
 
     prop_compose! {
         fn arb_int()(id in any::<i64>()) -> Int {
@@ -709,17 +818,7 @@ mod tests {
     fn test_global_profile_fields() {
         let user_id = user_id!("@alice:example.org");
         let event = MemberEvent::Sync(EventFactory::new().sender(user_id).member(user_id).into());
-        let room_info = MemberRoomInfo {
-            power_levels: Arc::new(RoomPowerLevels::new(
-                RoomPowerLevelsSource::None,
-                &ROOM_VERSION_RULES_FALLBACK.authorization,
-                std::iter::empty::<OwnedUserId>(),
-            )),
-            max_power_level: 100,
-            users_display_names: HashMap::new(),
-            ignored_users: None,
-            service_members: None,
-        };
+        let room_info = empty_room_info();
 
         // Without a global profile, neither field is set.
         let member = RoomMember::from_parts(event.clone(), None, None, None, &room_info);

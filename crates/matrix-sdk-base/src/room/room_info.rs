@@ -2253,6 +2253,82 @@ mod tests {
     }
 
     #[async_test]
+    async fn test_update_name_and_topic() {
+        let (room, _state_store) = make_room_and_state_store(RoomState::Joined);
+
+        room.update_room_info(|mut info| {
+            info.update_name(Some("A room".to_owned()));
+            info.update_topic(Some("A topic".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+
+        let info = room.clone_info();
+        assert_eq!(info.name(), Some("A room"));
+        assert_eq!(info.topic(), Some("A topic"));
+
+        // Both can be cleared again.
+        room.update_room_info(|mut info| {
+            info.update_name(None);
+            info.update_topic(None);
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+
+        let info = room.clone_info();
+        assert_eq!(info.name(), None);
+        assert_eq!(info.topic(), None);
+    }
+
+    #[async_test]
+    async fn test_update_name_drops_the_cached_display_name_only_when_it_changes() {
+        let (room, _state_store) = make_room_and_state_store(RoomState::Joined);
+
+        // The display name is computed from the name, so a new name must not
+        // leave a stale computed one behind.
+        room.update_room_info(|mut info| {
+            info.update_name(Some("First".to_owned()));
+            info.cached_display_name = Some(RoomDisplayName::Named("First".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert!(room.clone_info().cached_display_name().is_some());
+
+        room.update_room_info(|mut info| {
+            info.update_name(Some("Second".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert_eq!(room.clone_info().cached_display_name(), None);
+
+        // Setting the same name again is not a change, so a cached value that is
+        // still correct is not thrown away.
+        room.update_room_info(|mut info| {
+            info.cached_display_name = Some(RoomDisplayName::Named("Second".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+
+        room.update_room_info(|mut info| {
+            info.update_name(Some("Second".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert_eq!(
+            room.clone_info().cached_display_name(),
+            Some(&RoomDisplayName::Named("Second".to_owned()))
+        );
+
+        // Clearing the name is a change too.
+        room.update_room_info(|mut info| {
+            info.update_name(None);
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert_eq!(room.clone_info().cached_display_name(), None);
+    }
+
+    #[async_test]
     async fn test_room_info_is_self_contained() {
         let (room, _state_store) = make_room_and_state_store(RoomState::Joined);
 

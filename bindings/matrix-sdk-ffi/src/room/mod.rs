@@ -2377,12 +2377,81 @@ impl TryFrom<SdkRoomSendQueueUpdate> for RoomSendQueueUpdate {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::time::Duration;
+    use std::{collections::BTreeSet, time::Duration};
 
-    use matrix_sdk::{ruma::room_id, test_utils::mocks::MatrixMockServer};
+    use matrix_sdk::{
+        ruma::{room_id, user_id},
+        test_utils::mocks::MatrixMockServer,
+    };
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn test_room_membership_filter_maps_to_room_memberships() {
+        // Nothing selected means no filtering, which is what
+        // `RoomMemberships::empty()` does.
+        let none = RoomMembershipFilter {
+            join: false,
+            invite: false,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(none), RoomMemberships::empty());
+
+        let joined = RoomMembershipFilter {
+            join: true,
+            invite: false,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(joined), RoomMemberships::JOIN);
+
+        // Several memberships combine rather than overwrite one another.
+        let active = RoomMembershipFilter {
+            join: true,
+            invite: true,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(active), RoomMemberships::JOIN | RoomMemberships::INVITE);
+
+        let all =
+            RoomMembershipFilter { join: true, invite: true, knock: true, leave: true, ban: true };
+        let all = RoomMemberships::from(all);
+        for membership in [
+            RoomMemberships::JOIN,
+            RoomMemberships::INVITE,
+            RoomMemberships::KNOCK,
+            RoomMemberships::LEAVE,
+            RoomMemberships::BAN,
+        ] {
+            assert!(all.contains(membership), "{membership:?} is missing");
+        }
+    }
+
+    #[test]
+    fn test_room_member_update_conversion() {
+        assert!(matches!(
+            RoomMemberUpdate::from(SdkRoomMembersUpdate::FullReload),
+            RoomMemberUpdate::FullReload
+        ));
+
+        let alice = user_id!("@alice:example.org");
+        let bob = user_id!("@bob:example.org");
+        let update =
+            SdkRoomMembersUpdate::Partial(BTreeSet::from([alice.to_owned(), bob.to_owned()]));
+
+        match RoomMemberUpdate::from(update) {
+            RoomMemberUpdate::Partial { user_ids } => {
+                assert_eq!(user_ids, vec![alice.to_string(), bob.to_string()]);
+            }
+            RoomMemberUpdate::FullReload => panic!("expected a partial update"),
+        }
+    }
 
     /// Dropping an FFI [`Room`] on a non-tokio thread must not panic.
     ///

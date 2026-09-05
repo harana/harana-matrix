@@ -824,6 +824,55 @@ mod tests {
     use crate::test_utils::logged_in_base_client;
 
     #[async_test]
+    async fn test_sync_member_writes_are_only_tracked_while_a_request_is_in_flight() {
+        let client = logged_in_base_client(None).await;
+        let alice = user_id!("@alice:example.org");
+        let bob = user_id!("@bob:example.org");
+        let room = client.get_or_create_room(room_id!("!room:example.org"), RoomState::Joined);
+
+        // Nothing is remembered while no `/members` request is out: the common
+        // case costs nothing.
+        room.record_sync_member_write(alice);
+        assert!(!room.sync_wrote_member_since_request(alice));
+
+        {
+            let _guard = room.start_members_request();
+
+            // Only the users a sync actually wrote are skipped, not every user.
+            assert!(!room.sync_wrote_member_since_request(alice));
+            room.record_sync_member_write(alice);
+            assert!(room.sync_wrote_member_since_request(alice));
+            assert!(!room.sync_wrote_member_since_request(bob));
+        }
+
+        // Once the request is done, the bookkeeping is dropped, so a later
+        // response is not held back by a sync that raced an earlier one.
+        assert!(!room.sync_wrote_member_since_request(alice));
+    }
+
+    #[async_test]
+    async fn test_sync_member_writes_are_tracked_until_the_last_request_finishes() {
+        let client = logged_in_base_client(None).await;
+        let alice = user_id!("@alice:example.org");
+        let room = client.get_or_create_room(room_id!("!room:example.org"), RoomState::Joined);
+
+        // Two `/members` requests can be in flight at once. The writes must stay
+        // tracked until the last of them is done, otherwise the second response
+        // would overwrite what a sync wrote while it was out.
+        let first = room.start_members_request();
+        let second = room.start_members_request();
+
+        room.record_sync_member_write(alice);
+        assert!(room.sync_wrote_member_since_request(alice));
+
+        drop(first);
+        assert!(room.sync_wrote_member_since_request(alice));
+
+        drop(second);
+        assert!(!room.sync_wrote_member_since_request(alice));
+    }
+
+    #[async_test]
     async fn test_room_heroes_filters_out_service_members() {
         let client = logged_in_base_client(None).await;
         let user_id = &client.session_meta().unwrap().user_id;

@@ -2582,6 +2582,79 @@ fn state_event_keys(raw_event: &Raw<AnySyncStateEvent>) -> Option<StateEventKeys
 }
 
 #[cfg(test)]
+mod unit_tests {
+    use assert_matches::assert_matches;
+    use ruma::serde::Raw;
+    use serde_json::json;
+
+    use super::state_event_keys;
+
+    #[test]
+    fn test_state_event_keys_ignores_the_content() {
+        // A homeserver accepts any content for any event type, so an event whose
+        // content doesn't match its type still has to be addressable by its keys.
+        // `m.space.child` with empty content, which removes a child from a space,
+        // is the case that used to take a whole `save_changes` down with it.
+        let raw = Raw::new(&json!({
+            "type": "m.space.child",
+            "state_key": "!child:localhost",
+            "content": {},
+            "sender": "@example:localhost",
+            "event_id": "$id",
+            "origin_server_ts": 0u64,
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert!(raw.deserialize().is_err(), "the content should not deserialize");
+        assert_matches!(state_event_keys(&raw), Some(keys) => {
+            assert_eq!(keys.event_type, "m.space.child");
+            assert_eq!(keys.state_key, "!child:localhost");
+        });
+    }
+
+    #[test]
+    fn test_state_event_keys_reads_an_ordinary_event() {
+        let raw = Raw::new(&json!({
+            "type": "m.room.name",
+            "state_key": "",
+            "content": { "name": "A room" },
+            "sender": "@example:localhost",
+            "event_id": "$id",
+            "origin_server_ts": 0u64,
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert_matches!(state_event_keys(&raw), Some(keys) => {
+            assert_eq!(keys.event_type, "m.room.name");
+            assert_eq!(keys.state_key, "");
+        });
+    }
+
+    #[test]
+    fn test_state_event_keys_needs_both_keys() {
+        // Without a type or a state key there is nothing to address the event by,
+        // so it is skipped rather than guessed at.
+        let no_state_key: Raw<_> = Raw::new(&json!({
+            "type": "m.room.name",
+            "content": {},
+        }))
+        .unwrap()
+        .cast_unchecked();
+        assert!(state_event_keys(&no_state_key).is_none());
+
+        let no_type: Raw<_> = Raw::new(&json!({
+            "state_key": "",
+            "content": {},
+        }))
+        .unwrap()
+        .cast_unchecked();
+        assert!(state_event_keys(&no_type).is_none());
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::sync::{
         LazyLock,

@@ -19,7 +19,7 @@
 //! [`Room::member_list`]: crate::Room::member_list
 
 use matrix_sdk_base::{RoomMembersUpdate, RoomMemberships};
-use ruma::events::room::power_levels::UserPowerLevel;
+use ruma::{UserId, events::room::power_levels::UserPowerLevel};
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 
 use super::{Room, RoomMember};
@@ -173,8 +173,11 @@ impl RoomMemberListQuery {
         Ok(members
             .into_iter()
             .filter(|member| {
-                self.search.as_ref().is_none_or(|term| matches_search(member, term))
-                    && self.min_power_level.is_none_or(|level| power_level_at_least(member, level))
+                self.search.as_ref().is_none_or(|term| {
+                    matches_search(member.display_name(), member.user_id(), term)
+                }) && self
+                    .min_power_level
+                    .is_none_or(|level| power_level_at_least(member.power_level(), level))
             })
             .collect())
     }
@@ -233,13 +236,21 @@ impl Room {
     }
 }
 
-fn matches_search(member: &RoomMember, term: &str) -> bool {
-    member.display_name().is_some_and(|name| name.to_lowercase().contains(term))
-        || member.user_id().as_str().to_lowercase().contains(term)
+/// Whether a member with this display name and user ID matches a search term.
+///
+/// The term is expected to be lowercased already; see
+/// [`RoomMemberListQuery::search`].
+fn matches_search(display_name: Option<&str>, user_id: &UserId, term: &str) -> bool {
+    display_name.is_some_and(|name| name.to_lowercase().contains(term))
+        || user_id.as_str().to_lowercase().contains(term)
 }
 
-fn power_level_at_least(member: &RoomMember, level: i64) -> bool {
-    match member.power_level() {
+/// Whether this power level is at least `level`.
+///
+/// An infinite power level, i.e. a room creator from room version 12 onwards,
+/// is above every finite one.
+fn power_level_at_least(power_level: UserPowerLevel, level: i64) -> bool {
+    match power_level {
         UserPowerLevel::Infinite => true,
         UserPowerLevel::Int(power_level) => i64::from(power_level) >= level,
         _ => false,
@@ -249,19 +260,26 @@ fn power_level_at_least(member: &RoomMember, level: i64) -> bool {
 fn sort_members(members: &mut [RoomMember], sort: RoomMemberSortOrder) {
     match sort {
         RoomMemberSortOrder::Name => {
-            members.sort_by(compare_by_name);
+            members.sort_by(|a, b| compare_names(a.name(), a.user_id(), b.name(), b.user_id()));
         }
         RoomMemberSortOrder::PowerLevelThenName => {
             members.sort_by(|a, b| {
                 compare_power_levels(b.power_level(), a.power_level())
-                    .then_with(|| compare_by_name(a, b))
+                    .then_with(|| compare_names(a.name(), a.user_id(), b.name(), b.user_id()))
             });
         }
     }
 }
 
-fn compare_by_name(a: &RoomMember, b: &RoomMember) -> std::cmp::Ordering {
-    a.name().to_lowercase().cmp(&b.name().to_lowercase()).then_with(|| a.user_id().cmp(b.user_id()))
+/// Order two members by name, case-insensitively, and by user ID between
+/// members that share one.
+fn compare_names(
+    a_name: &str,
+    a_user_id: &UserId,
+    b_name: &str,
+    b_user_id: &UserId,
+) -> std::cmp::Ordering {
+    a_name.to_lowercase().cmp(&b_name.to_lowercase()).then_with(|| a_user_id.cmp(b_user_id))
 }
 
 fn compare_power_levels(a: UserPowerLevel, b: UserPowerLevel) -> std::cmp::Ordering {
@@ -275,5 +293,88 @@ fn compare_power_levels(a: UserPowerLevel, b: UserPowerLevel) -> std::cmp::Order
         // `UserPowerLevel` is non-exhaustive; an unknown variant sorts with the
         // finite ones rather than above them.
         _ => Ordering::Equal,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cmp::Ordering;
+
+    use ruma::{events::room::power_levels::UserPowerLevel, int, user_id};
+
+    use super::{
+        RoomMemberSortOrder, compare_names, compare_power_levels, matches_search,
+        power_level_at_least,
+    };
+
+    #[test]
+    fn test_matches_search_looks_at_the_display_name_and_the_user_id() {
+        let alice = user_id!("@alice:example.org");
+
+        // The display name matches, case-insensitively.
+        assert!(matches_search(Some("Alice"), alice, "alice"));
+        assert!(matches_search(Some("Alice"), alice, "lic"));
+        // So does the user ID, which is what lets a search find a member who set
+        // no display name, or one whose name doesn't resemble their ID.
+        assert!(matches_search(Some("Wonderland"), alice, "@alice"));
+        assert!(matches_search(None, alice, "example.org"));
+
+        assert!(!matches_search(Some("Alice"), alice, "bob"));
+        assert!(!matches_search(None, alice, "bob"));
+    }
+
+    #[test]
+    fn test_power_level_at_least() {
+        assert!(power_level_at_least(UserPowerLevel::Int(int!(100)), 100));
+        assert!(power_level_at_least(UserPowerLevel::Int(int!(101)), 100));
+        assert!(!power_level_at_least(UserPowerLevel::Int(int!(99)), 100));
+
+        // A negative power level is below a zero threshold, and zero meets it.
+        assert!(power_level_at_least(UserPowerLevel::Int(int!(0)), 0));
+        assert!(!power_level_at_least(UserPowerLevel::Int(int!(-1)), 0));
+
+        // A room creator is above every threshold.
+        assert!(power_level_at_least(UserPowerLevel::Infinite, 100));
+        assert!(power_level_at_least(UserPowerLevel::Infinite, i64::MAX));
+    }
+
+    #[test]
+    fn test_compare_power_levels() {
+        let fifty = UserPowerLevel::Int(int!(50));
+        let hundred = UserPowerLevel::Int(int!(100));
+
+        assert_eq!(compare_power_levels(fifty, hundred), Ordering::Less);
+        assert_eq!(compare_power_levels(hundred, fifty), Ordering::Greater);
+        assert_eq!(compare_power_levels(fifty, fifty), Ordering::Equal);
+
+        // An infinite power level outranks any finite one, and ties with itself.
+        assert_eq!(compare_power_levels(UserPowerLevel::Infinite, hundred), Ordering::Greater);
+        assert_eq!(compare_power_levels(hundred, UserPowerLevel::Infinite), Ordering::Less);
+        assert_eq!(
+            compare_power_levels(UserPowerLevel::Infinite, UserPowerLevel::Infinite),
+            Ordering::Equal
+        );
+    }
+
+    #[test]
+    fn test_compare_names_is_case_insensitive_and_breaks_ties_by_user_id() {
+        let alice = user_id!("@alice:example.org");
+        let bob = user_id!("@bob:example.org");
+
+        // Lowercase names do not sort after uppercase ones, which is what a
+        // byte-wise comparison would do.
+        assert_eq!(compare_names("alice", alice, "Bob", bob), Ordering::Less);
+        assert_eq!(compare_names("Bob", bob, "alice", alice), Ordering::Greater);
+
+        // Members sharing a display name are ordered by user ID, so the order is
+        // total and stable rather than arbitrary.
+        assert_eq!(compare_names("Same", alice, "Same", bob), Ordering::Less);
+        assert_eq!(compare_names("Same", bob, "Same", alice), Ordering::Greater);
+        assert_eq!(compare_names("Same", alice, "Same", alice), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_default_sort_order_is_by_name() {
+        assert_eq!(RoomMemberSortOrder::default(), RoomMemberSortOrder::Name);
     }
 }
