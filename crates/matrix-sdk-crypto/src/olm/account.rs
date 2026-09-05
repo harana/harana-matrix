@@ -504,12 +504,6 @@ impl Account {
         &self.static_data
     }
 
-    /// Has this account changed since it was last read from, or written to,
-    /// the store?
-    pub(crate) fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-
     /// Update the uploaded key count.
     ///
     /// # Arguments

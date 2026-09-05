@@ -489,22 +489,8 @@ impl StoreTransaction {
             return Ok(());
         }
 
-        // Asking for the account moves it out of the cache for the lifetime of the
-        // transaction, so it ends up here whether or not anything touched it. Pickling
-        // and writing it back regardless is expensive - `process_sync_changes` opens
-        // several transactions per sync - so put an untouched account straight back
-        // into the cache instead. See issue #70.
-        if self.changes.account.as_ref().is_some_and(|account| !account.is_dirty()) {
-            *self.cache.account.lock().await = self.changes.account.take();
-            return Ok(());
-        }
-
         // Save changes in the database.
-        let account = self.changes.account.as_ref().map(|acc| {
-            let mut account = acc.deep_clone();
-            account.reset_dirty();
-            account
-        });
+        let account = self.changes.account.as_ref().map(|acc| acc.deep_clone());
 
         self.store.save_pending_changes(self.changes).await?;
 

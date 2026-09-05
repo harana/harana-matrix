@@ -72,7 +72,6 @@ macro_rules! construct_withheld_content {
                     $session_id,
                     $sender_key,
                     $from_device,
-                    message_id: None,
                     other: Default::default(),
                 };
 
@@ -85,7 +84,6 @@ macro_rules! construct_withheld_content {
                     NoOlmWithheldContent {
                         $sender_key,
                         $from_device,
-                        message_id: None,
                         other: Default::default(),
                     }
                     .into(),
@@ -168,36 +166,6 @@ impl RoomKeyWithheldContent {
             #[cfg(feature = "experimental-algorithms")]
             RoomKeyWithheldContent::MegolmV2AesSha2(c) => c.room_id(),
             RoomKeyWithheldContent::Unknown(_) => None,
-        }
-    }
-
-    /// Set the unique ID of the to-device message that will carry this
-    /// content, i.e. its `org.matrix.msgid`.
-    ///
-    /// This lets a withheld message be traced through the logs of the sender
-    /// and of the recipient, in the same way as the other to-device messages
-    /// we send.
-    pub fn set_message_id(&mut self, message_id: String) {
-        match self {
-            RoomKeyWithheldContent::MegolmV1AesSha2(c) => c.set_message_id(message_id),
-            #[cfg(feature = "experimental-algorithms")]
-            RoomKeyWithheldContent::MegolmV2AesSha2(c) => c.set_message_id(message_id),
-            RoomKeyWithheldContent::Unknown(c) => {
-                c.other.insert("org.matrix.msgid".to_owned(), Value::String(message_id));
-            }
-        }
-    }
-
-    /// Get the unique ID of the to-device message carrying this content, if
-    /// any.
-    pub fn message_id(&self) -> Option<&str> {
-        match self {
-            RoomKeyWithheldContent::MegolmV1AesSha2(c) => c.message_id(),
-            #[cfg(feature = "experimental-algorithms")]
-            RoomKeyWithheldContent::MegolmV2AesSha2(c) => c.message_id(),
-            RoomKeyWithheldContent::Unknown(c) => {
-                c.other.get("org.matrix.msgid").and_then(Value::as_str)
-            }
         }
     }
 
@@ -298,15 +266,6 @@ pub struct CommonWithheldCodeContent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from_device: Option<OwnedDeviceId>,
 
-    /// A unique ID for this to-device message, used to trace it through the
-    /// logs of the sender and the recipient.
-    #[serde(
-        default,
-        rename = "org.matrix.msgid",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub message_id: Option<String>,
-
     #[serde(flatten)]
     other: BTreeMap<String, Value>,
 }
@@ -324,7 +283,6 @@ impl CommonWithheldCodeContent {
             session_id,
             sender_key,
             from_device: Some(device_id),
-            message_id: None,
             other: Default::default(),
         }
     }
@@ -395,38 +353,6 @@ impl MegolmV1AesSha2WithheldContent {
         }
     }
 
-    /// Set the `org.matrix.msgid` of the to-device message carrying this
-    /// content.
-    pub fn set_message_id(&mut self, message_id: String) {
-        match self {
-            MegolmV1AesSha2WithheldContent::BlackListed(content)
-            | MegolmV1AesSha2WithheldContent::Unverified(content)
-            | MegolmV1AesSha2WithheldContent::Unauthorised(content)
-            | MegolmV1AesSha2WithheldContent::Unavailable(content)
-            | MegolmV1AesSha2WithheldContent::HistoryNotShared(content) => {
-                content.message_id = Some(message_id);
-            }
-            MegolmV1AesSha2WithheldContent::NoOlm(content) => {
-                content.message_id = Some(message_id);
-            }
-        }
-    }
-
-    /// Get the `org.matrix.msgid` of the to-device message carrying this
-    /// content, if any.
-    pub fn message_id(&self) -> Option<&str> {
-        match self {
-            MegolmV1AesSha2WithheldContent::BlackListed(content)
-            | MegolmV1AesSha2WithheldContent::Unverified(content)
-            | MegolmV1AesSha2WithheldContent::Unauthorised(content)
-            | MegolmV1AesSha2WithheldContent::Unavailable(content)
-            | MegolmV1AesSha2WithheldContent::HistoryNotShared(content) => {
-                content.message_id.as_deref()
-            }
-            MegolmV1AesSha2WithheldContent::NoOlm(content) => content.message_id.as_deref(),
-        }
-    }
-
     fn from_code_and_content(code: WithheldCode, content: CommonWithheldCodeContent) -> Self {
         let content = content.into();
 
@@ -454,15 +380,6 @@ pub struct NoOlmWithheldContent {
     /// MSC3735.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from_device: Option<OwnedDeviceId>,
-
-    /// A unique ID for this to-device message, used to trace it through the
-    /// logs of the sender and the recipient.
-    #[serde(
-        default,
-        rename = "org.matrix.msgid",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub message_id: Option<String>,
 
     #[serde(flatten)]
     other: BTreeMap<String, Value>,

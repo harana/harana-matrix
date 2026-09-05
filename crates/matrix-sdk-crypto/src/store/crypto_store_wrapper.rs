@@ -410,23 +410,6 @@ impl CryptoStoreWrapper {
         self.identity_update_lock.lock().await
     }
 
-    /// Get the encryption settings for a room, going through an in-memory
-    /// cache.
-    ///
-    /// The settings only ever change when we write them ourselves, which is
-    /// what keeps the cache correct.
-    pub async fn get_room_settings(&self, room_id: &RoomId) -> store::Result<Option<RoomSettings>> {
-        if let Some(settings) = self.room_settings.read().get(room_id) {
-            return Ok(settings.clone());
-        }
-
-        let settings = self.store.get_room_settings(room_id).await?;
-
-        self.room_settings.write().insert(room_id.to_owned(), settings.clone());
-
-        Ok(settings)
-    }
-
     /// Receive notifications of room keys being received as a [`Stream`].
     ///
     /// Each time a room key is updated in any way, an update will be sent to

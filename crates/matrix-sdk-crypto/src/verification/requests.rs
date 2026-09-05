@@ -301,31 +301,6 @@ impl VerificationRequest {
         self.other_device_data().map(|device_data| device_data.device_id().to_owned())
     }
 
-    /// The device data of the other device that is participating in this
-    /// verification.
-    ///
-    /// Remains available once the request is done, so a completion dialog can
-    /// name the device that was verified. `None` before the other side has
-    /// responded, once the request has been cancelled, or when another of our
-    /// own devices answered it.
-    pub fn other_device_data(&self) -> Option<DeviceData> {
-        match &*self.inner.read() {
-            InnerRequest::Requested(r) => Some(r.state.other_device_data.to_owned()),
-            InnerRequest::Ready(r) => Some(r.state.other_device_data.to_owned()),
-            InnerRequest::Transitioned(r) => Some(r.state.ready.other_device_data.to_owned()),
-            InnerRequest::Done(r) => r.state.other_device_data.to_owned(),
-            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
-                None
-            }
-            InnerRequest::Done(r) => {
-                r.state.other_device_data.as_ref().map(|d| d.device_id().to_owned())
-            }
-            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
-                None
-            }
-        }
-    }
-
     /// The data of the other device that participated in this verification, if
     /// we know it.
     ///
