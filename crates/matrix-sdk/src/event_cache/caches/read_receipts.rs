@@ -75,7 +75,9 @@
 //!   receipt in the spec),
 //! - an event which is referenced in the read receipt event content (either a
 //!   private or a public read receipt, of type unthreaded or main, to keep
-//!   maximal compatibility with thread-unaware clients),
+//!   maximal compatibility with thread-unaware clients; and also of type
+//!   thread, when threading support is disabled and in-thread events are thus
+//!   counted as part of the room),
 //! - a previously stashed read receipt we've received from a read receipt event
 //!   content, but for which we couldn't find the corresponding event. It's
 //!   possible that a read receipt is received before the corresponding event
@@ -325,7 +327,21 @@ impl<'cache> EventFilter for RoomReadReceiptEventFilter<'cache> {
     }
 
     fn receipt_thread_matches(&self, receipt_thread: &ReceiptThread) -> bool {
-        matches!(receipt_thread, ReceiptThread::Unthreaded | ReceiptThread::Main)
+        match receipt_thread {
+            ReceiptThread::Unthreaded | ReceiptThread::Main => true,
+
+            // Without threading support, in-thread events count towards this room's
+            // unread counts (see `Self::filter`), so the thread-scoped receipts sent by
+            // the other clients of this user must be honoured here too. Otherwise
+            // reading a thread somewhere else would leave this room's unread and
+            // mention counts stuck until the room is opened locally.
+            //
+            // With threading support, in-thread events are counted by the thread caches
+            // instead, and a thread receipt has no bearing on this room's counts.
+            ReceiptThread::Thread(_) => self.with_threading_support.not(),
+
+            _ => false,
+        }
     }
 
     async fn stored_receipt_event_for_user(
@@ -1266,6 +1282,88 @@ mod tests {
         );
         assert_eq!(receipt.unwrap(), event_id!("$2"));
         // And there are no pending receipts.
+        assert!(pending_receipts.is_empty());
+    }
+
+    #[test]
+    fn test_select_best_receipt_thread_receipt_without_threading_support() {
+        // Without threading support, in-thread events count towards the room's unread
+        // counts, so a thread-scoped receipt received from another client of the same
+        // user must be able to clear them.
+
+        let room_id = room_id!("!roomid:example.org");
+        let f = EventFactory::new().room(room_id).sender(*ALICE);
+        let own_user_id = user_id!("@not_alice:example.org");
+        let thread_root = event_id!("$1");
+
+        // Create a non-empty linked chunk, with no messages sent by the current user.
+        let mut linked_chunk = EventLinkedChunk::new();
+        linked_chunk.push_events(vec![
+            f.text_msg("Thread root").event_id(thread_root).into_event(),
+            f.text_msg("In-thread 1")
+                .in_thread(thread_root, thread_root)
+                .event_id(event_id!("$2"))
+                .into_event(),
+            f.text_msg("In-thread 2")
+                .in_thread(thread_root, event_id!("$2"))
+                .event_id(event_id!("$3"))
+                .into_event(),
+        ]);
+
+        // When there are no pending receipts,
+        let mut pending_receipts = RingBuffer::new(NonZeroUsize::new(16).unwrap());
+
+        // And a thread-scoped receipt event which points to $3,
+        let new_receipt_events = [f
+            .read_receipts()
+            .add(
+                event_id!("$3"),
+                own_user_id,
+                ReceiptType::Read,
+                ReceiptThread::Thread(thread_root.to_owned()),
+            )
+            .into_content()];
+
+        // And no active receipt,
+        let active_receipt = None;
+
+        let state_store = MemoryStore::new();
+
+        // Then the thread receipt is the new best receipt…
+        let event_filter = RoomReadReceiptEventFilter {
+            room_id,
+            with_threading_support: false,
+            state_store: &state_store,
+        };
+
+        let receipt = select_best_receipt(
+            own_user_id,
+            &linked_chunk,
+            &event_filter,
+            &mut pending_receipts,
+            &new_receipt_events,
+            active_receipt,
+        );
+        assert_eq!(receipt.unwrap(), event_id!("$3"));
+        assert!(pending_receipts.is_empty());
+
+        // …whereas with threading support, the in-thread events are counted by the
+        // thread cache instead, so the room ignores the thread receipt entirely.
+        let event_filter = RoomReadReceiptEventFilter {
+            room_id,
+            with_threading_support: true,
+            state_store: &state_store,
+        };
+
+        let receipt = select_best_receipt(
+            own_user_id,
+            &linked_chunk,
+            &event_filter,
+            &mut pending_receipts,
+            &new_receipt_events,
+            active_receipt,
+        );
+        assert!(receipt.is_none());
         assert!(pending_receipts.is_empty());
     }
 
