@@ -504,15 +504,9 @@ pub enum RoomListEntriesDynamicFilterKind {
     NonSpace,
     Space,
     NonLeft,
-    /// Negates the filters it contains: a room matches if and only if it does
-    /// **not** match all of `filters` (i.e. `Not { filters }` is the negation
-    /// of `All { filters }`).
-    ///
-    /// `filters` is a vector because uniffi has no support for directly
-    /// recursive enum variants (https://github.com/mozilla/uniffi-rs/issues/396);
-    /// the vector provides the required indirection. Pass a single filter for a
-    /// plain negation. An empty vector matches nothing, since `All` with no
-    /// filter matches everything.
+    // `Not` is the negation of `All`: a room matches when it does not match all
+    // of `filters`. A vector is used because uniffi has no support for directly
+    // recursive enum variants, see https://github.com/mozilla/uniffi-rs/issues/396.
     Not { filters: Vec<RoomListEntriesDynamicFilterKind> },
     Joined,
     ReadReceipts { expect: ReadReceiptsCategory },

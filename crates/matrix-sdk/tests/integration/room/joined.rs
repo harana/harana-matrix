@@ -636,8 +636,7 @@ async fn test_send_single_receipt_has_a_local_echo() {
 
     // Sending the receipt fails: the counts must be left untouched.
     {
-        let _guard =
-            server.mock_send_receipt(ReceiptType::Read).error500().mount_as_scoped().await;
+        let _guard = server.mock_send_receipt(ReceiptType::Read).error500().mount_as_scoped().await;
 
         room.send_single_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, event_id.clone())
             .await

@@ -429,7 +429,9 @@ impl Room {
                 }
 
                 match self.room_info().await {
-                    Ok(room_info) => listener.call(room_info, RoomInfoUpdateReason::from_reasons(update.reasons)),
+                    Ok(room_info) => {
+                        listener.call(room_info, RoomInfoUpdateReason::from_reasons(update.reasons))
+                    }
                     Err(e) => {
                         error!("Failed to compute new RoomInfo: {e}");
                     }

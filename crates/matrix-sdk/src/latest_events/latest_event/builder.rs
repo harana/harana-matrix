@@ -691,13 +691,6 @@ fn filter_continue_with_edit(edited_event_id: OwnedEventId) -> ControlFlow<(), F
     })
 }
 
-/// Filter a [`TimelineEvent`].
-///
-/// Be careful:
-///
-/// - `event` is the current event in the collection of events that is scanned.
-/// - `current_value_event_id` is the event ID of the current
-///   [`LatestEventValue`].
 /// Whether `event` has been sent by one of the `ignored_users`.
 pub(crate) fn is_sent_by_an_ignored_user(
     event: &TimelineEvent,
@@ -711,6 +704,13 @@ pub(crate) fn is_sent_by_an_ignored_user(
     event.sender().is_some_and(|sender| ignored_users.contains(&sender))
 }
 
+/// Filter a [`TimelineEvent`].
+///
+/// Be careful:
+///
+/// - `event` is the current event in the collection of events that is scanned.
+/// - `current_value_event_id` is the event ID of the current
+///   [`LatestEventValue`].
 pub fn filter_timeline_event(
     event: &TimelineEvent,
     current_value_event_id: Option<&OwnedEventId>,
@@ -1968,7 +1968,8 @@ mod builder_tests {
         //
         // No candidate is found, so it's just `None` here.
         assert_matches!(
-            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new()).await,
+            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new())
+                .await,
             None
         );
     }
@@ -2084,7 +2085,8 @@ mod builder_tests {
         //
         // No candidate is found, so it's just a `None` here.
         assert_matches!(
-            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new()).await,
+            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new())
+                .await,
             None
         );
     }
@@ -2141,7 +2143,8 @@ mod builder_tests {
         // `m.room.redaction` targeting our `current_value`, it MUST BE a
         // `Some(LatestEventValue::None)` to erase it.
         assert_matches!(
-            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new()).await,
+            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new())
+                .await,
             Some(LatestEventValue::None)
         );
     }
@@ -2268,7 +2271,8 @@ mod builder_tests {
 
         // The latest event has been erased!
         assert_matches!(
-            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new()).await,
+            Builder::new_remote(&room_event_cache, current_value, user_id, None, &BTreeSet::new())
+                .await,
             Some(LatestEventValue::None)
         );
     }
@@ -2486,9 +2490,15 @@ mod builder_tests {
 
         let (room_event_cache, _) = event_cache.room(room_id).await.unwrap();
 
-        let value = Builder::new_remote(&room_event_cache, LatestEventValue::None, user_id, None, &BTreeSet::new())
-            .await
-            .expect("a latest event value");
+        let value = Builder::new_remote(
+            &room_event_cache,
+            LatestEventValue::None,
+            user_id,
+            None,
+            &BTreeSet::new(),
+        )
+        .await
+        .expect("a latest event value");
 
         // The content is the edited one…
         assert_remote_value_matches_room_message_with_body!(Some(value.clone()) => with body = "* goodbye");
@@ -2851,9 +2861,15 @@ mod builder_tests {
 
         // We get no latest event value because no candidate event is known.
         assert!(
-            Builder::new_remote(&room_event_cache, LatestEventValue::None, user_id, None, &BTreeSet::new())
-                .await
-                .is_none()
+            Builder::new_remote(
+                &room_event_cache,
+                LatestEventValue::None,
+                user_id,
+                None,
+                &BTreeSet::new()
+            )
+            .await
+            .is_none()
         );
     }
 

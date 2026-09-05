@@ -697,8 +697,8 @@ fn local_room_message(body: &str) -> LocalLatestEventValue {
 mod tests {
     use std::{collections::HashMap, ops::Not, time::Duration};
 
-    use eyeball::SharedObservable;
     use assert_matches::assert_matches;
+    use eyeball::SharedObservable;
     use matrix_sdk_base::{
         RoomState,
         deserialized_responses::TimelineEventKind,

@@ -19,14 +19,11 @@ use std::{
 };
 
 use eyeball::Subscriber;
-
 use matrix_sdk_base::{
     event_cache::Event, linked_chunk::OwnedLinkedChunkId,
     serde_helpers::extract_thread_root_from_content, sync::RoomUpdates,
 };
 use ruma::{EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId};
-
-use crate::Room;
 use tokio::{
     select,
     sync::{
@@ -42,7 +39,7 @@ use super::{
     RoomEventCacheLinkedChunkUpdate,
 };
 use crate::{
-    Client,
+    Client, Room,
     client::WeakClient,
     send_queue::{LocalEchoContent, RoomSendQueueUpdate, SendQueueUpdate},
 };

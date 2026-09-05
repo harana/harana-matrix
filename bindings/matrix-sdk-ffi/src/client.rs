@@ -144,9 +144,7 @@ use crate::{
     },
     notification_settings::NotificationSettings,
     qr_code::{GrantLoginWithQrCodeHandler, LoginWithQrCodeHandler},
-    room::{
-        RoomHistoryVisibility, RoomInfoListener, RoomInfoUpdateReason, RoomSendQueueUpdate,
-    },
+    room::{RoomHistoryVisibility, RoomInfoListener, RoomInfoUpdateReason, RoomSendQueueUpdate},
     room_directory_search::RoomDirectorySearch,
     room_preview::RoomPreview,
     ruma::{
@@ -2384,7 +2382,10 @@ impl Client {
                     if let Some(room) = client.get_room(&room_id)
                         && let Ok(room_info) = RoomInfo::new(&room).await
                     {
-                        listener.call(room_info, RoomInfoUpdateReason::from_reasons(room_update.reasons));
+                        listener.call(
+                            room_info,
+                            RoomInfoUpdateReason::from_reasons(room_update.reasons),
+                        );
                     }
                 }
             }
