@@ -14,10 +14,7 @@
 
 mod builder;
 
-use std::{
-    collections::BTreeSet,
-    ops::{Deref, DerefMut, Not},
-};
+use std::ops::{Deref, DerefMut, Not};
 
 pub use builder::filter_timeline_event;
 pub(in crate::latest_events) use builder::ignored_users;

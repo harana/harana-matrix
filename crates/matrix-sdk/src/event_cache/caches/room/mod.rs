@@ -34,7 +34,7 @@ use ruma::{
     EventId, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId,
     events::{
         AnyRoomAccountDataEvent,
-        receipt::{ReceiptEventContent, ReceiptThread, ReceiptType},
+        receipt::{ReceiptEventContent, ReceiptThread, ReceiptType, Receipts, UserReceipts},
         relation::RelationType,
     },
     serde::Raw,

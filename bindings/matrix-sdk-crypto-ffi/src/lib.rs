@@ -31,7 +31,7 @@ pub use error::{
     CryptoStoreError, DecryptionError, KeyImportError, SecretImportError, SignatureError,
 };
 use js_int::UInt;
-pub use logger::{LogEvent, Logger, set_logger};
+pub use logger::{Logger, set_logger};
 pub use machine::{KeyRequestPair, OlmMachine, SignatureVerification};
 use matrix_sdk_common::deserialized_responses::{ShieldState as RustShieldState, ShieldStateCode};
 use matrix_sdk_crypto::{

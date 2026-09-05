@@ -14,7 +14,7 @@
 
 //! Named futures for the backup support.
 
-use std::{future::IntoFuture, pin::Pin, time::Duration};
+use std::{future::IntoFuture, time::Duration};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
