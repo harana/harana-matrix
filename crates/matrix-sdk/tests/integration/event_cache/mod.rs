@@ -201,12 +201,14 @@ async fn test_ignored_unignored() {
         assert_event_matches_msg(&events[0], "i don't like this dexter");
     }
 
-    // The other room has been cleared too.
+    // The other room has *not* been cleared: `dexter` has nothing to do with it, so
+    // it keeps its events, and thus its preview and its position in a room list.
     {
         let room = client.get_room(other_room_id).unwrap();
         let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
         let events = room_event_cache.events().await.unwrap();
-        assert!(events.is_empty());
+        assert_eq!(events.len(), 1);
+        assert_event_matches_msg(&events[0], "demat!");
     }
 
     // That's all, folks!

@@ -46,6 +46,7 @@ use matrix_sdk_base::{
         RawAnySyncOrStrippedState, RawSyncOrStrippedState, SyncOrStrippedState,
     },
     media::{MediaThumbnailSettings, store::IgnoreMediaRetentionPolicy},
+    read_receipts::ReadReceipts,
     serde_helpers::extract_relation,
     store::{StateStoreExt, ThreadSubscriptionStatus},
 };
@@ -2173,6 +2174,15 @@ impl Room {
                 // We will unset the unread flag if we send an unthreaded receipt.
                 let is_unthreaded = thread == ReceiptThread::Unthreaded;
 
+                // Give a local echo to the receipt: the unread counts of the room drop as
+                // soon as the request is issued, instead of when the server sends the
+                // receipt back through sync.
+                // The future is boxed to keep this (already large) future small enough
+                // for the stack.
+                let local_echo =
+                    Box::pin(self.apply_local_read_receipt(&receipt_type, &thread, &event_id))
+                        .await;
+
                 let mut request = create_receipt::v3::Request::new(
                     self.room_id().to_owned(),
                     receipt_type,
@@ -2180,7 +2190,14 @@ impl Room {
                 );
                 request.thread = thread;
 
-                self.client.send(request).await?;
+                if let Err(error) = self.client.send(request).await {
+                    // The receipt hasn't been sent: roll the local echo back.
+                    if let Some((room_event_cache, previous_read_receipts)) = local_echo {
+                        room_event_cache.restore_read_receipts(previous_read_receipts).await;
+                    }
+
+                    return Err(error.into());
+                }
 
                 if is_unthreaded {
                     self.set_unread_flag(false).await?;
@@ -2207,17 +2224,82 @@ impl Room {
         }
 
         let Receipts { fully_read, public_read_receipt, private_read_receipt } = receipts;
+
+        // Give a local echo to the receipts, see `Self::send_single_receipt`. Both
+        // receipts are unthreaded here, and the most recent one wins, so only the
+        // public one needs a local echo when it is present.
+        let local_echo = match (&public_read_receipt, &private_read_receipt) {
+            (Some(event_id), _) => {
+                self.apply_local_read_receipt(
+                    &create_receipt::v3::ReceiptType::Read,
+                    &ReceiptThread::Unthreaded,
+                    event_id,
+                )
+                .await
+            }
+            (None, Some(event_id)) => {
+                self.apply_local_read_receipt(
+                    &create_receipt::v3::ReceiptType::ReadPrivate,
+                    &ReceiptThread::Unthreaded,
+                    event_id,
+                )
+                .await
+            }
+            (None, None) => None,
+        };
+
         let request = assign!(set_read_marker::v3::Request::new(self.room_id().to_owned()), {
             fully_read,
             read_receipt: public_read_receipt,
             private_read_receipt,
         });
 
-        self.client.send(request).await?;
+        if let Err(error) = self.client.send(request).await {
+            // The receipts haven't been sent: roll the local echo back.
+            if let Some((room_event_cache, previous_read_receipts)) = local_echo {
+                room_event_cache.restore_read_receipts(previous_read_receipts).await;
+            }
+
+            return Err(error.into());
+        }
 
         self.set_unread_flag(false).await?;
 
         Ok(())
+    }
+
+    /// Apply a read receipt of the current user locally, before the request
+    /// that sends it to the server has been answered.
+    ///
+    /// It returns the room's event cache along with the read receipts the room
+    /// had before, if they changed, so that the caller can roll the local echo
+    /// back when the request fails.
+    async fn apply_local_read_receipt(
+        &self,
+        receipt_type: &create_receipt::v3::ReceiptType,
+        thread: &ReceiptThread,
+        event_id: &EventId,
+    ) -> Option<(RoomEventCache, ReadReceipts)> {
+        let receipt_type = match receipt_type {
+            create_receipt::v3::ReceiptType::Read => ReceiptType::Read,
+            create_receipt::v3::ReceiptType::ReadPrivate => ReceiptType::ReadPrivate,
+            // `m.fully_read` is a marker: it doesn't take part in the unread counts.
+            _ => return None,
+        };
+
+        // The local echo is best-effort: it is skipped when the event cache isn't
+        // available.
+        let (room_event_cache, _drop_handles) = self.event_cache().await.ok()?;
+
+        let previous_read_receipts = room_event_cache
+            .apply_local_read_receipt(receipt_type, thread.clone(), event_id.to_owned())
+            .await
+            .inspect_err(|error| {
+                warn!(?error, "Failed to apply a read receipt locally");
+            })
+            .ok()??;
+
+        Some((room_event_cache, previous_read_receipts))
     }
 
     /// Helper function to enable End-to-end encryption in this room.

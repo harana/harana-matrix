@@ -189,6 +189,9 @@ pub struct EventCacheDropHandles {
     /// Task that listens to room updates.
     _listen_updates_task: BackgroundTaskHandle,
 
+    /// Task that listens to updates to the user's ignored list.
+    _ignore_user_list_update_task: BackgroundTaskHandle,
+
     /// The task used to automatically shrink the linked chunks.
     _auto_shrink_linked_chunk_task: BackgroundTaskHandle,
 
@@ -310,6 +313,11 @@ impl EventCache {
                 client.subscribe_to_all_room_updates(),
             )).abort_on_drop();
 
+            let ignore_user_list_update_task = task_monitor.spawn_infinite_task("event_cache::ignore_user_list_update_task", tasks::ignore_user_list_update_task(
+                self.inner.clone(),
+                client.subscribe_to_ignore_user_list_changes(),
+            )).abort_on_drop();
+
             let (auto_shrink_sender, auto_shrink_receiver) = mpsc::channel(32);
 
             // Force-initialize the sender in the [`RoomEventCacheInner`].
@@ -374,6 +382,7 @@ impl EventCache {
 
             Arc::new(EventCacheDropHandles {
                 _listen_updates_task: listen_updates_task,
+                _ignore_user_list_update_task: ignore_user_list_update_task,
                 _auto_shrink_linked_chunk_task: auto_shrink_linked_chunk_task,
                 #[cfg(feature = "e2e-encryption")]
                 _redecryptor: redecryptor,
@@ -627,6 +636,20 @@ impl EventCacheInner {
 
         // Finally, we forget all the caches if any exists in memory.
         caches_for_all_rooms.remove(room_id);
+
+        Ok(())
+    }
+
+    /// Clears a single room's data, while keeping its cache alive so that its
+    /// subscribers keep receiving updates.
+    ///
+    /// Unlike [`Self::forget_room`], the room's cache isn't removed from
+    /// `by_room`.
+    async fn clear_room(&self, room_id: &RoomId) -> Result<()> {
+        // The constraints are the same as for `clear_all_rooms`. See this method to
+        // understand them.
+        let caches_for_all_rooms = self.by_room.write().await;
+        self.state.clear_and_reload(&caches_for_all_rooms, Some(room_id)).await?;
 
         Ok(())
     }

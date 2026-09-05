@@ -13,16 +13,20 @@
 // limitations under the License.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     ops::ControlFlow,
     sync::{Arc, Weak},
 };
+
+use eyeball::Subscriber;
 
 use matrix_sdk_base::{
     event_cache::Event, linked_chunk::OwnedLinkedChunkId,
     serde_helpers::extract_thread_root_from_content, sync::RoomUpdates,
 };
 use ruma::{EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId};
+
+use crate::Room;
 use tokio::{
     select,
     sync::{
@@ -31,7 +35,7 @@ use tokio::{
         mpsc,
     },
 };
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{Instrument as _, Span, debug, error, info, info_span, instrument, trace, warn};
 
 use super::{
     AutoShrinkMessage, Caches, CachesByRoom, EventCacheError, EventCacheInner,
@@ -88,6 +92,103 @@ pub(super) async fn room_updates_task(
             }
         }
     }
+}
+
+/// Listen to _ignore user list update changes_ to clear the rooms the newly
+/// ignored users take part in.
+///
+/// Only the rooms a newly ignored user is a member of are cleared: clearing
+/// every room would drop the cached events, and consequently the previews and
+/// the ordering, of rooms that have nothing to do with the ignored user.
+/// Unignoring somebody clears nothing, as their events are already gone.
+#[instrument(skip_all)]
+pub(super) async fn ignore_user_list_update_task(
+    inner: Arc<EventCacheInner>,
+    mut ignore_user_list_stream: Subscriber<Vec<String>>,
+) {
+    let span = info_span!(parent: Span::none(), "ignore_user_list_update_task");
+    span.follows_from(Span::current());
+
+    async move {
+        let Ok(client) = inner.client() else {
+            return;
+        };
+
+        let mut previously_ignored = client.base_client().ignored_users().await;
+
+        while let Some(ignored_users) = ignore_user_list_stream.next().await {
+            let ignored_users = ignored_users
+                .iter()
+                .filter_map(|user_id| UserId::parse(user_id).ok())
+                .collect::<BTreeSet<_>>();
+
+            let newly_ignored =
+                ignored_users.difference(&previously_ignored).cloned().collect::<Vec<_>>();
+            previously_ignored = ignored_users;
+
+            if newly_ignored.is_empty() {
+                // Somebody has been unignored: their events are already gone, there is
+                // nothing to clear.
+                continue;
+            }
+
+            info!(?newly_ignored, "Received an ignore user list change");
+
+            let Ok(client) = inner.client() else {
+                break;
+            };
+
+            for room in client.rooms() {
+                if !is_affected_by(&room, &newly_ignored, &inner).await {
+                    continue;
+                }
+
+                if let Err(err) = inner.clear_room(room.room_id()).await {
+                    error!(
+                        room_id = ?room.room_id(),
+                        "when clearing room storage after ignore user list change: {err}"
+                    );
+                }
+            }
+        }
+
+        info!("Ignore user list stream has closed");
+    }
+    .instrument(span)
+    .await;
+}
+
+/// Whether the events of `room` may contain events sent by one of the
+/// `ignored_users`, i.e. whether the room must be cleared after those users
+/// have been ignored.
+async fn is_affected_by(
+    room: &Room,
+    ignored_users: &[OwnedUserId],
+    inner: &Arc<EventCacheInner>,
+) -> bool {
+    // The cheapest signal: the user is a known member of the room.
+    for user_id in ignored_users {
+        if matches!(room.get_member_no_sync(user_id).await, Ok(Some(_))) {
+            return true;
+        }
+    }
+
+    // The member list may not have been synced (it is lazily loaded), so also look
+    // at the events the room has in memory. Rooms that aren't loaded aren't
+    // inspected: loading all of them to clear a couple would defeat the purpose.
+    let Some(room_event_cache) =
+        inner.by_room.read().await.get(room.room_id()).map(|caches| caches.room.clone())
+    else {
+        return false;
+    };
+
+    room_event_cache
+        .rfind_map_event_in_memory_by(|event| {
+            event.sender().filter(|sender| ignored_users.contains(sender)).map(|_| ())
+        })
+        .await
+        .unwrap_or_default()
+        .is_some()
 }
 
 /// Spawns the task that will listen to auto-shrink notifications.

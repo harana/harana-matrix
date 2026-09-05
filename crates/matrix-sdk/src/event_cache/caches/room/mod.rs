@@ -20,13 +20,22 @@ use std::{collections::BTreeMap, fmt, sync::Arc};
 
 use eyeball::SharedObservable;
 use matrix_sdk_base::{
+    RoomInfoNotableUpdateReasons,
     deserialized_responses::{AmbiguityChange, ThreadSummary},
     event_cache::Event,
+    read_receipts::ReadReceipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
 };
 use ruma::{
-    EventId, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId,
-    events::{AnyRoomAccountDataEvent, relation::RelationType},
+    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
+    RoomId,
+    events::{
+        AnyRoomAccountDataEvent,
+        receipt::{
+            Receipt, ReceiptEventContent, ReceiptThread, ReceiptType, Receipts, UserReceipts,
+        },
+        relation::RelationType,
+    },
     serde::Raw,
 };
 use tokio::sync::{Notify, mpsc};
@@ -94,6 +103,68 @@ impl RoomEventCache {
     /// Get the room ID for this [`RoomEventCache`].
     pub fn room_id(&self) -> &RoomId {
         &self.inner.room_id
+    }
+
+    /// Apply a read receipt of the current user locally, i.e. without waiting
+    /// for the server to send it back through sync.
+    ///
+    /// It gives a local echo to marking a room as read: the unread counts of
+    /// the room drop as soon as the request is issued, instead of when the
+    /// receipt comes back.
+    ///
+    /// It returns the [`ReadReceipts`] the room had before, if it has been
+    /// changed, so that the caller can hand it back to
+    /// [`Self::restore_read_receipts`] if the request fails.
+    pub async fn apply_local_read_receipt(
+        &self,
+        receipt_type: ReceiptType,
+        thread: ReceiptThread,
+        event_id: OwnedEventId,
+    ) -> Result<Option<ReadReceipts>> {
+        let Some(room) = self.inner.weak_room.get() else {
+            trace!("can't apply a local read receipt: client's closing");
+            return Ok(None);
+        };
+
+        let previous_read_receipts = room.read_receipts();
+
+        // Build the receipt event the server would send us back, and let the regular
+        // machinery compute the new unread counts out of it.
+        let mut receipt = Receipt::new(MilliSecondsSinceUnixEpoch::now());
+        receipt.thread = thread;
+
+        let receipt_event = ReceiptEventContent::from_iter([(
+            event_id,
+            Receipts::from_iter([(
+                receipt_type,
+                UserReceipts::from_iter([(self.inner.own_user_id.clone(), receipt)]),
+            )]),
+        )]);
+
+        self.inner.state.write().await?.update_read_receipts(&[receipt_event]).await?;
+
+        Ok((room.read_receipts() != previous_read_receipts).then_some(previous_read_receipts))
+    }
+
+    /// Restore the [`ReadReceipts`] returned by
+    /// [`Self::apply_local_read_receipt`], because the request that was
+    /// supposed to send the receipt failed.
+    pub async fn restore_read_receipts(&self, read_receipts: ReadReceipts) {
+        let Some(room) = self.inner.weak_room.get() else {
+            trace!("can't restore the read receipts: client's closing");
+            return;
+        };
+
+        let result = room
+            .update_and_save_room_info(|mut room_info| {
+                room_info.set_read_receipts(read_receipts);
+                (room_info, RoomInfoNotableUpdateReasons::READ_RECEIPT)
+            })
+            .await;
+
+        if let Err(error) = result {
+            warn!(room_id = ?room.room_id(), ?error, "Failed to restore the read receipts");
+        }
     }
 
     /// Get the owner of this [`RoomEventCache`].
