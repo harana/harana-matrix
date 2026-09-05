@@ -1943,7 +1943,14 @@ impl Client {
     pub async fn create_room(&self, request: create_room::v3::Request) -> Result<Room> {
         let invite = request.invite.clone();
         let is_direct_room = request.is_direct;
-        let response = self.send(request).await?;
+        // `/createRoom` has no transaction ID, so it is not idempotent: a retry
+        // creates another room. The server answers with a 5xx error when, for
+        // instance, it fails to invite a user that doesn't exist, and the default
+        // retry policy treats every 5xx as transient. Retrying would leave a trail of
+        // empty rooms behind and still fail in the end, so let the error through
+        // instead.
+        let response =
+            self.send(request).with_request_config(self.request_config().disable_retry()).await?;
 
         let base_room = self.base_client().get_or_create_room(&response.room_id, RoomState::Joined);
 
@@ -5112,6 +5119,29 @@ pub(crate) mod tests {
         timeout(Duration::from_secs(1), client.await_room_remote_echo(room.room_id()))
             .await
             .unwrap_err();
+    }
+
+    #[async_test]
+    async fn test_create_room_is_not_retried() {
+        let server = MatrixMockServer::new().await;
+        // Retries are disabled in the mock client by default; turn them back on, this
+        // is exactly what the test is about.
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().retry_limit(3)))
+            .build()
+            .await;
+
+        // `/createRoom` has no transaction ID, so a retry creates another room. The
+        // server answers with a 5xx error when, for instance, it fails to invite a
+        // user that doesn't exist; retrying would leave a trail of empty rooms
+        // behind, so the request must be sent exactly once.
+        server.mock_create_room().error500().expect(1).mount().await;
+
+        client
+            .create_room(CreateRoomRequest::new())
+            .await
+            .expect_err("creating the room should have failed");
     }
 
     #[async_test]
