@@ -16,8 +16,12 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_debug_implementations, missing_docs)]
 
-use std::ops::DerefMut;
+mod backend;
+mod codec;
 
+use std::{fmt, ops::DerefMut};
+
+pub use backend::{CreatedStoreCipher, StoreCipherBackend, StoreCipherProvider};
 use base64::{
     Engine, alphabet,
     engine::{GeneralPurpose, general_purpose},
@@ -27,6 +31,7 @@ use chacha20poly1305::{
     Key as ChachaKey, KeyInit, XChaCha20Poly1305, XNonce,
     aead::{Aead, Error as EncryptionError},
 };
+pub use codec::{CodecError, CodecKind, JsonCodec, MessagePackCodec, StoreCodec, StoreCodecExt};
 use hkdf::Hkdf;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
@@ -58,6 +63,10 @@ pub enum Error {
     /// Failed to deserialize or serialize a JSON value.
     #[error("Failed to deserialize or serialize a JSON value: `{0}`")]
     Json(#[from] serde_json::Error),
+
+    /// A [`StoreCodec`] failed to encode or decode a value.
+    #[error(transparent)]
+    Codec(#[from] CodecError),
 
     /// Error encrypting or decrypting a value.
     #[error("Error encrypting or decrypting a value: `{0}`")]
@@ -105,9 +114,15 @@ pub enum Error {
 /// assert_eq!(value, decrypted);
 /// # anyhow::Ok(()) };
 /// ```
-#[allow(missing_debug_implementations)]
 pub struct StoreCipher {
     inner: Keys,
+}
+
+impl fmt::Debug for StoreCipher {
+    /// Never print the key material.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StoreCipher").finish_non_exhaustive()
+    }
 }
 
 impl StoreCipher {
@@ -289,8 +304,9 @@ impl StoreCipher {
     /// # anyhow::Ok(()) };
     /// ```
     pub fn import(passphrase: &str, encrypted: &[u8]) -> Result<Self, Error> {
-        // Our old export format used serde_json for the serialization format. Let's
-        // first try the new format and if that fails, try the old one.
+        // Our old export format used serde_json for the serialization format.
+        // Let's first try the new format and if that fails, try the old
+        // one.
         let encrypted: EncryptedStoreCipher =
             if let Ok(deserialized) = rmp_serde::from_slice(encrypted) {
                 deserialized
@@ -344,15 +360,16 @@ impl StoreCipher {
 
         let mut key = match &encrypted.kdf_info {
             KdfInfo::None => {
-                // We used to be able to call this method only with a 32-byte array. If we call
-                // this method with a smaller key and the `None` KDF info, then there's a
+                // We used to be able to call this method only with a 32-byte
+                // array. If we call this method with a smaller
+                // key and the `None` KDF info, then there's a
                 // mismatch between how the export was used.
                 if key.len() != 32 {
                     return Err(Error::KdfMismatch);
                 }
 
-                // To avoid borrower issues between the two branches we copy the key here to
-                // take ownership over it.
+                // To avoid borrower issues between the two branches we copy the
+                // key here to take ownership over it.
                 let mut key_copy = Box::new([0u8; 32]);
                 key_copy.copy_from_slice(key);
 
@@ -491,6 +508,15 @@ impl StoreCipher {
     where
         D: EncryptableValue,
     {
+        self.encrypt_value_bytes(&mut data)
+    }
+
+    /// The object-safe body of [`StoreCipher::encrypt_value_data`], which
+    /// [`StoreCipherBackend`] forwards to.
+    fn encrypt_value_bytes(
+        &self,
+        data: &mut dyn EncryptableValue,
+    ) -> Result<EncryptedValue, Error> {
         let nonce = Keys::get_nonce();
         let cipher = XChaCha20Poly1305::new(self.inner.encryption_key());
 
@@ -695,8 +721,8 @@ pub enum EncryptedValueBase64DecodeError {
     IncorrectNonceLength(usize),
 }
 
-impl std::fmt::Display for EncryptedValueBase64DecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for EncryptedValueBase64DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let msg = match self {
             EncryptedValueBase64DecodeError::DecodeError(e) => e.to_string(),
             EncryptedValueBase64DecodeError::IncorrectNonceLength(length) => {
@@ -946,8 +972,8 @@ mod tests {
 
         assert_eq!(value, decrypted_value);
 
-        // Can't use assert matches here since we don't have a Debug implementation for
-        // StoreCipher.
+        // Can't use assert matches here since we don't have a Debug
+        // implementation for StoreCipher.
         match StoreCipher::import_with_key(&[0u8; 32], &encrypted) {
             Err(Error::KdfMismatch) => {}
             _ => panic!(

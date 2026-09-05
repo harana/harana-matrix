@@ -828,6 +828,8 @@ impl BaseClient {
 
         context.state_changes.ambiguity_maps = ambiguity_cache.cache;
 
+        self.record_member_writes_from_sync(&context.state_changes);
+
         processors::changes::save_and_apply(
             context,
             &self.state_store,
@@ -876,6 +878,34 @@ impl BaseClient {
         Ok(response)
     }
 
+    /// Record the `m.room.member` events that these state changes, coming from
+    /// a sync, are about to write.
+    ///
+    /// A `/members` request that was sent before them must not overwrite them
+    /// with the older state it describes. See [`Room::start_members_request`].
+    ///
+    /// This is a no-op unless a `/members` request is in flight for the room,
+    /// which is the common case.
+    pub(crate) fn record_member_writes_from_sync(&self, state_changes: &StateChanges) {
+        for (room_id, state) in &state_changes.state {
+            let Some(members) = state.get(&StateEventType::RoomMember) else {
+                continue;
+            };
+            let Some(room) = self.state_store.room(room_id) else {
+                continue;
+            };
+
+            for state_key in members.keys() {
+                match UserId::parse(state_key.as_str()) {
+                    Ok(user_id) => room.record_sync_member_write(&user_id),
+                    Err(error) => {
+                        warn!(state_key, ?error, "Member event with an invalid state key")
+                    }
+                }
+            }
+        }
+    }
+
     /// Receive a get member events response and convert it to a deserialized
     /// `MembersResponse`
     ///
@@ -907,7 +937,6 @@ impl BaseClient {
             return Ok(());
         };
 
-        let mut chunk = Vec::with_capacity(response.chunk.len());
         let mut context = Context::default();
 
         #[cfg(feature = "e2e-encryption")]
@@ -915,8 +944,22 @@ impl BaseClient {
 
         let mut ambiguity_map: HashMap<DisplayName, BTreeSet<OwnedUserId>> = Default::default();
 
+        // The response is a complete member list, so it is also the authoritative
+        // source for the member counts of the room summary, which a lazy-loading
+        // server may never have sent.
         let mut joined_member_count = 0u64;
         let mut invited_member_count = 0u64;
+
+        // Hold the state store lock for the whole of the processing below. A sync
+        // holds it too, so this is what makes the check against
+        // `Room::sync_wrote_member_since_request` meaningful: no sync can slip a
+        // member event in between that check and the write below.
+        let state_store_guard = self.state_store_lock().lock().await;
+
+        // The users whose member event this response would take backwards, and whose
+        // display name therefore has to come from the store rather than from the
+        // response when the ambiguity map is rebuilt below.
+        let mut outdated_members = Vec::new();
 
         for raw_event in &response.chunk {
             let member = match raw_event.deserialize() {
@@ -928,14 +971,26 @@ impl BaseClient {
                 }
             };
 
-            // TODO: All the actions in this loop used to be done only when the membership
-            // event was not in the store before. This was changed with the new room API,
-            // because e.g. leaving a room makes members events outdated and they need to be
-            // fetched by `members`. Therefore, they need to be overwritten here, even
-            // if they exist.
-            // However, this makes a new problem occur where setting the member events here
-            // potentially races with the sync.
+            // A `/members` response describes the room as it was when the request was
+            // sent. A sync that landed in the meantime carries fresher member events, so
+            // writing this response wholesale would make the member state of those users
+            // go backwards. Leave them alone.
+            //
             // See <https://github.com/matrix-org/matrix-rust-sdk/issues/1205>.
+            if room.sync_wrote_member_since_request(member.state_key()) {
+                debug!(
+                    user_id = %member.state_key(),
+                    "Skipping an outdated member event: a sync wrote a newer one"
+                );
+                outdated_members.push(member.state_key().to_owned());
+                continue;
+            }
+
+            // Note: the actions below used to be done only when the membership event was
+            // not in the store before. This was changed with the new room API, because
+            // e.g. leaving a room makes member events outdated and they need to be
+            // fetched by `members`. Therefore, they need to be overwritten here, even if
+            // they exist.
 
             match member.membership() {
                 MembershipState::Join => {
@@ -972,7 +1027,41 @@ impl BaseClient {
                 .entry(member.event_type())
                 .or_default()
                 .insert(member.state_key().to_string(), raw_event.clone().cast());
-            chunk.push(member);
+        }
+
+        // The ambiguity map is replaced wholesale below, so the members that were left
+        // alone must contribute the display name they have in the store, not the
+        // outdated one from the response.
+        for user_id in &outdated_members {
+            let Some(raw_event) = self.state_store.get_member_event(room_id, user_id).await? else {
+                continue;
+            };
+            let Ok(member) = raw_event.deserialize() else { continue };
+
+            match member.membership() {
+                MembershipState::Join => {
+                    joined_member_count = joined_member_count.saturating_add(1);
+
+                    #[cfg(feature = "e2e-encryption")]
+                    user_ids.insert(member.user_id().to_owned());
+                }
+                MembershipState::Invite => {
+                    invited_member_count = invited_member_count.saturating_add(1);
+
+                    #[cfg(feature = "e2e-encryption")]
+                    user_ids.insert(member.user_id().to_owned());
+                }
+                _ => (),
+            }
+
+            if is_member_active(member.membership())
+                && let Some(display_name) = member.displayname_value()
+            {
+                ambiguity_map
+                    .entry(DisplayName::new(display_name))
+                    .or_default()
+                    .insert(member.user_id().to_owned());
+            }
         }
 
         #[cfg(feature = "e2e-encryption")]
@@ -986,8 +1075,6 @@ impl BaseClient {
         context.state_changes.ambiguity_maps.insert(room_id.to_owned(), ambiguity_map);
 
         {
-            let state_store_guard = self.state_store_lock().lock().await;
-
             let mut room_info = room.clone_info();
             room_info.mark_members_synced();
             // We have the complete member list of the room, which is more reliable than
@@ -1008,6 +1095,8 @@ impl BaseClient {
             )
             .await?;
         }
+
+        drop(state_store_guard);
 
         let _ = room.room_member_updates_sender.send(RoomMembersUpdate::FullReload);
 

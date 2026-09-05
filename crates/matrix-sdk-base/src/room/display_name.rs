@@ -59,7 +59,7 @@ impl Room {
     ///
     /// This cache is refilled every time we call [`Self::display_name`].
     pub fn cached_display_name(&self) -> Option<RoomDisplayName> {
-        self.info.read().cached_display_name.clone()
+        self.info.read().cached_display_name().cloned()
     }
 
     /// Computes the display name for a room using the provided fields.

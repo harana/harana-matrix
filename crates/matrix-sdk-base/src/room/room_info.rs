@@ -23,7 +23,7 @@ use eyeball::Subscriber;
 use matrix_sdk_common::{ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK};
 use ruma::{
     EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedUserId,
-    RoomAliasId, RoomId, RoomVersionId,
+    RoomAliasId, RoomId, RoomVersionId, UserId,
     api::client::sync::sync_events::v3::RoomSummary as RumaSummary,
     events::{
         AnyPossiblyRedactedStateEventContent, AnyStrippedStateEvent, AnySyncStateEvent,
@@ -204,6 +204,15 @@ pub struct BaseRoomInfo {
     pub(crate) retention: Option<MinimalStateEvent<RoomRetentionEventContent>>,
     /// The `m.room.tombstone` event content of this room.
     pub(crate) tombstone: Option<MinimalStateEvent<PossiblyRedactedRoomTombstoneEventContent>>,
+    /// The sender of the `m.room.tombstone` event of this room.
+    ///
+    /// Their server is the one that certainly knows the successor room, which
+    /// makes it the best `via` candidate when following the tombstone. See
+    /// [`Room::successor_room`].
+    ///
+    /// [`Room::successor_room`]: crate::Room::successor_room
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tombstone_sender: Option<OwnedUserId>,
     /// The topic of this room.
     pub(crate) topic: Option<MinimalStateEvent<PossiblyRedactedRoomTopicEventContent>>,
     /// All minimal state events that containing one or more running matrixRTC
@@ -407,9 +416,12 @@ impl BaseRoomInfo {
                     as_variant!(any_event, AnyPossiblyRedactedStateEventContent::RoomTombstone)
                 }) {
                     self.tombstone = Some(event);
+                    self.tombstone_sender =
+                        raw_event.raw.get_field::<OwnedUserId>("sender").ok().flatten();
                     true
                 } else {
                     // Remove the previous content if the new content is unknown.
+                    self.tombstone_sender = None;
                     self.tombstone.take().is_some()
                 }
             }
@@ -574,6 +586,7 @@ impl Default for BaseRoomInfo {
             name: None,
             retention: None,
             tombstone: None,
+            tombstone_sender: None,
             topic: None,
             rtc_member_events: BTreeMap::new(),
             is_marked_unread: false,
@@ -886,7 +899,22 @@ impl RoomInfo {
         &mut self,
         raw_event: &mut RawStateEventWithKeys<AnyStrippedStateEvent>,
     ) -> bool {
-        self.base_info.handle_state_event(raw_event)
+        let base_info_has_been_modified = self.base_info.handle_state_event(raw_event);
+
+        if raw_event.event_type == StateEventType::RoomEncryption && raw_event.state_key.is_empty()
+        {
+            // The stripped state of an invite carries an `m.room.encryption` event, so
+            // the room _is_ encrypted. As for the non-stripped case in
+            // `Self::handle_state_event`, the reverse doesn't hold: a stripped state
+            // without that event doesn't mean the room is not encrypted, it only means
+            // the server didn't include it.
+            //
+            // This matters because we cannot ask the server: `/state` is forbidden for a
+            // room we are only invited to.
+            self.mark_encryption_state_synced();
+        }
+
+        base_info_has_been_modified
     }
 
     /// Handle the given redaction.
@@ -991,13 +1019,54 @@ impl RoomInfo {
     }
 
     /// Updates the joined member count.
-    pub(crate) fn update_joined_member_count(&mut self, count: u64) {
+    pub fn update_joined_member_count(&mut self, count: u64) {
         self.summary.joined_member_count = count;
     }
 
     /// Updates the invited member count.
-    pub(crate) fn update_invited_member_count(&mut self, count: u64) {
+    pub fn update_invited_member_count(&mut self, count: u64) {
         self.summary.invited_member_count = count;
+    }
+
+    /// Update the room name.
+    ///
+    /// As for [`RoomInfo::update_avatar`], this stores a name that did not
+    /// come from an `m.room.name` event, so the stored event has no event ID.
+    ///
+    /// The cached display name is dropped, since it is computed from the name;
+    /// it is recomputed on the next call to [`Room::display_name`].
+    ///
+    /// [`Room::display_name`]: crate::Room::display_name
+    pub fn update_name(&mut self, name: Option<String>) {
+        if self.name() != name.as_deref() {
+            self.cached_display_name = None;
+        }
+
+        self.base_info.name = name.map(|name| {
+            // The content types of a possibly redacted event are non-exhaustive and have
+            // no constructor, so this goes through their only public constructor: serde.
+            let content = serde_json::from_value::<PossiblyRedactedRoomNameEventContent>(
+                serde_json::json!({ "name": name }),
+            )
+            .expect("a room name is always valid `m.room.name` content");
+
+            MinimalStateEvent { content, event_id: None }
+        });
+    }
+
+    /// Update the room topic.
+    ///
+    /// As for [`RoomInfo::update_avatar`], this stores a topic that did not
+    /// come from an `m.room.topic` event, so the stored event has no event ID.
+    pub fn update_topic(&mut self, topic: Option<String>) {
+        self.base_info.topic = topic.map(|topic| {
+            let content = serde_json::from_value::<PossiblyRedactedRoomTopicEventContent>(
+                serde_json::json!({ "topic": topic }),
+            )
+            .expect("a room topic is always valid `m.room.topic` content");
+
+            MinimalStateEvent { content, event_id: None }
+        });
     }
 
     /// Updates the room heroes.
@@ -1190,7 +1259,7 @@ impl RoomInfo {
     /// the same user (e.g. profile-field mirroring) should use this.
     pub fn is_device_in_active_room_call(
         &self,
-        user_id: &ruma::UserId,
+        user_id: &UserId,
         device_id: &ruma::DeviceId,
     ) -> bool {
         self.active_room_call_memberships().iter().any(|(state_key, membership)| {
@@ -1312,6 +1381,153 @@ impl RoomInfo {
     /// Returns the computed read receipts for this room.
     pub fn read_receipts(&self) -> &ReadReceipts {
         &self.read_receipts
+    }
+
+    /// The unread notification counts as sent by the server.
+    ///
+    /// See [`Room::unread_notification_counts`].
+    ///
+    /// [`Room::unread_notification_counts`]: crate::Room::unread_notification_counts
+    pub fn unread_notification_counts(&self) -> UnreadNotificationsCount {
+        self.notification_counts
+    }
+
+    /// The number of unread messages, computed client-side.
+    ///
+    /// See [`Room::num_unread_messages`].
+    ///
+    /// [`Room::num_unread_messages`]: crate::Room::num_unread_messages
+    pub fn num_unread_messages(&self) -> u64 {
+        self.read_receipts.num_unread
+    }
+
+    /// The number of unread notifications, computed client-side.
+    ///
+    /// See [`Room::num_unread_notifications`].
+    ///
+    /// [`Room::num_unread_notifications`]: crate::Room::num_unread_notifications
+    pub fn num_unread_notifications(&self) -> u64 {
+        self.read_receipts.num_notifications
+    }
+
+    /// The number of unread mentions, computed client-side.
+    ///
+    /// See [`Room::num_unread_mentions`].
+    ///
+    /// [`Room::num_unread_mentions`]: crate::Room::num_unread_mentions
+    pub fn num_unread_mentions(&self) -> u64 {
+        self.read_receipts.num_mentions
+    }
+
+    /// Whether the state of this room is fully synced.
+    ///
+    /// See [`Room::is_state_fully_synced`].
+    ///
+    /// [`Room::is_state_fully_synced`]: crate::Room::is_state_fully_synced
+    pub fn is_state_fully_synced(&self) -> bool {
+        self.sync_info == SyncInfo::FullySynced
+    }
+
+    /// Whether the state of this room has been at least partially synced.
+    ///
+    /// See [`Room::is_state_partially_or_fully_synced`].
+    ///
+    /// [`Room::is_state_partially_or_fully_synced`]: crate::Room::is_state_partially_or_fully_synced
+    pub fn is_state_partially_or_fully_synced(&self) -> bool {
+        self.sync_info != SyncInfo::NoState
+    }
+
+    /// The `prev_batch` token received from the last sync, if the last sync
+    /// didn't contain the full room history.
+    pub fn last_prev_batch(&self) -> Option<&str> {
+        self.last_prev_batch.as_deref()
+    }
+
+    /// The cached computed display name of this room, if it has been computed.
+    ///
+    /// See [`Room::cached_display_name`].
+    ///
+    /// [`Room::cached_display_name`]: crate::Room::cached_display_name
+    pub fn cached_display_name(&self) -> Option<&RoomDisplayName> {
+        self.cached_display_name.as_ref()
+    }
+
+    /// The cached user-defined notification mode of this room, if it has been
+    /// computed.
+    ///
+    /// See [`Room::cached_user_defined_notification_mode`].
+    ///
+    /// [`Room::cached_user_defined_notification_mode`]: crate::Room::cached_user_defined_notification_mode
+    pub fn cached_user_defined_notification_mode(&self) -> Option<RoomNotificationMode> {
+        self.cached_user_defined_notification_mode
+    }
+
+    /// The latest event of this room.
+    pub fn latest_event_value(&self) -> &LatestEventValue {
+        &self.latest_event_value
+    }
+
+    /// The recency stamp of this room, if known.
+    ///
+    /// The recency stamp is the `origin_server_ts` of the latest event that
+    /// makes the room "recent", which is not necessarily the latest event of
+    /// the room.
+    pub fn recency_stamp(&self) -> Option<RoomRecencyStamp> {
+        self.recency_stamp
+    }
+
+    /// The `m.room.encryption` content that enabled end-to-end encryption in
+    /// this room, if any.
+    pub fn encryption_settings(&self) -> Option<&PossiblyRedactedRoomEncryptionEventContent> {
+        self.base_info.encryption.as_ref()
+    }
+
+    /// The users this room is considered a direct message with, if it is one.
+    ///
+    /// See [`Room::direct_targets`].
+    ///
+    /// [`Room::direct_targets`]: crate::Room::direct_targets
+    pub fn direct_targets(&self) -> &HashSet<OwnedDirectUserIdentifier> {
+        &self.base_info.dm_targets
+    }
+
+    /// The maximum power level that this room contains.
+    pub fn max_power_level(&self) -> i64 {
+        self.base_info.max_power_level
+    }
+
+    /// Whether this room has been manually marked as unread.
+    pub fn is_marked_unread(&self) -> bool {
+        self.base_info.is_marked_unread
+    }
+
+    /// Whether this room is tagged as a favourite.
+    pub fn is_favourite(&self) -> bool {
+        self.base_info.notable_tags.contains(RoomNotableTags::FAVOURITE)
+    }
+
+    /// Whether this room is tagged as low priority.
+    pub fn is_low_priority(&self) -> bool {
+        self.base_info.notable_tags.contains(RoomNotableTags::LOW_PRIORITY)
+    }
+
+    /// Whether this room has been tombstoned, i.e. whether it has received an
+    /// `m.room.tombstone` state event.
+    ///
+    /// See [`RoomInfo::tombstone`] for its content.
+    pub fn is_tombstoned(&self) -> bool {
+        self.base_info.tombstone.is_some()
+    }
+
+    /// The sender of the `m.room.tombstone` state event of this room, if it has
+    /// received one.
+    ///
+    /// Their server is the best `via` candidate when following the tombstone;
+    /// see [`Room::successor_room`].
+    ///
+    /// [`Room::successor_room`]: crate::Room::successor_room
+    pub fn tombstone_sender(&self) -> Option<&UserId> {
+        self.base_info.tombstone_sender.as_deref()
     }
 
     /// Set the computed read receipts for this room.
@@ -2034,6 +2250,139 @@ mod tests {
         );
         // And the computed value is reset
         assert!(info.summary.active_service_members.is_none());
+    }
+
+    #[async_test]
+    async fn test_update_name_and_topic() {
+        let (room, _state_store) = make_room_and_state_store(RoomState::Joined);
+
+        room.update_room_info(|mut info| {
+            info.update_name(Some("A room".to_owned()));
+            info.update_topic(Some("A topic".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+
+        let info = room.clone_info();
+        assert_eq!(info.name(), Some("A room"));
+        assert_eq!(info.topic(), Some("A topic"));
+
+        // Both can be cleared again.
+        room.update_room_info(|mut info| {
+            info.update_name(None);
+            info.update_topic(None);
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+
+        let info = room.clone_info();
+        assert_eq!(info.name(), None);
+        assert_eq!(info.topic(), None);
+    }
+
+    #[async_test]
+    async fn test_update_name_drops_the_cached_display_name_only_when_it_changes() {
+        let (room, _state_store) = make_room_and_state_store(RoomState::Joined);
+
+        // The display name is computed from the name, so a new name must not
+        // leave a stale computed one behind.
+        room.update_room_info(|mut info| {
+            info.update_name(Some("First".to_owned()));
+            info.cached_display_name = Some(RoomDisplayName::Named("First".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert!(room.clone_info().cached_display_name().is_some());
+
+        room.update_room_info(|mut info| {
+            info.update_name(Some("Second".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert_eq!(room.clone_info().cached_display_name(), None);
+
+        // Setting the same name again is not a change, so a cached value that is
+        // still correct is not thrown away.
+        room.update_room_info(|mut info| {
+            info.cached_display_name = Some(RoomDisplayName::Named("Second".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+
+        room.update_room_info(|mut info| {
+            info.update_name(Some("Second".to_owned()));
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert_eq!(
+            room.clone_info().cached_display_name(),
+            Some(&RoomDisplayName::Named("Second".to_owned()))
+        );
+
+        // Clearing the name is a change too.
+        room.update_room_info(|mut info| {
+            info.update_name(None);
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+        assert_eq!(room.clone_info().cached_display_name(), None);
+    }
+
+    #[async_test]
+    async fn test_room_info_is_self_contained() {
+        let (room, _state_store) = make_room_and_state_store(RoomState::Joined);
+
+        room.update_room_info(|mut info| {
+            info.update_name(Some("A room".to_owned()));
+            info.update_topic(Some("A topic".to_owned()));
+            info.update_joined_member_count(3);
+            info.update_invited_member_count(1);
+            info.mark_state_fully_synced();
+            info.set_prev_batch(Some("prev_batch"));
+
+            (info, RoomInfoNotableUpdateReasons::NONE)
+        })
+        .await;
+
+        // Everything a subscriber can read off the room is also readable off the
+        // `RoomInfo` it receives, without reaching back into the room.
+        let info = room.clone_info();
+
+        assert_eq!(info.name(), room.name().as_deref());
+        assert_eq!(info.topic(), room.topic().as_deref());
+        assert_eq!(info.state(), room.state());
+        assert_eq!(info.joined_members_count(), room.joined_members_count());
+        assert_eq!(info.invited_members_count(), room.invited_members_count());
+        assert_eq!(info.active_members_count(), room.active_members_count());
+        assert_eq!(info.are_members_synced(), room.are_members_synced());
+        assert_eq!(info.is_state_fully_synced(), room.is_state_fully_synced());
+        assert_eq!(
+            info.is_state_partially_or_fully_synced(),
+            room.is_state_partially_or_fully_synced()
+        );
+        assert_eq!(info.last_prev_batch(), room.last_prev_batch().as_deref());
+        assert_eq!(info.max_power_level(), room.max_power_level());
+        assert_eq!(info.is_marked_unread(), room.is_marked_unread());
+        assert_eq!(info.is_favourite(), room.is_favourite());
+        assert_eq!(info.is_low_priority(), room.is_low_priority());
+        assert_eq!(info.is_tombstoned(), room.is_tombstoned());
+        assert_eq!(info.recency_stamp(), room.recency_stamp());
+        assert_eq!(info.direct_targets(), &room.direct_targets());
+        assert_eq!(info.unread_notification_counts(), room.unread_notification_counts());
+        assert_eq!(info.num_unread_messages(), room.num_unread_messages());
+        assert_eq!(info.num_unread_notifications(), room.num_unread_notifications());
+        assert_eq!(info.num_unread_mentions(), room.num_unread_mentions());
+        assert_eq!(info.cached_display_name(), room.cached_display_name().as_ref());
+        assert_eq!(
+            info.cached_user_defined_notification_mode(),
+            room.cached_user_defined_notification_mode()
+        );
+        assert_eq!(info.encryption_settings().is_none(), room.encryption_settings().is_none());
+        assert_matches!(
+            (info.latest_event_value(), &room.latest_event()),
+            (LatestEventValue::None, LatestEventValue::None)
+        );
+        assert_eq!(info.tombstone_sender(), None);
     }
 
     fn make_room_and_state_store(room_state: RoomState) -> (Room, SaveLockedStateStore) {

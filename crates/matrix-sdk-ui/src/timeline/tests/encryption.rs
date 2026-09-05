@@ -46,7 +46,7 @@ use ruma::{
 };
 use serde_json::{json, value::to_raw_value};
 use stream_assert::{assert_next_matches, assert_pending};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 
 use super::TestTimeline;
 use crate::{
@@ -65,28 +65,6 @@ struct DummyUtdHook {
 impl UnableToDecryptHook for DummyUtdHook {
     fn on_utd(&self, info: UnableToDecryptInfo) {
         self.utds.lock().unwrap().push(info);
-    }
-}
-
-/// Poll `condition` until it holds, or give up after `timeout`.
-///
-/// Sleeping for a fixed duration and then asserting makes a test that passes on
-/// a fast machine and fails on a loaded one; waiting on the condition itself
-/// costs nothing when it is already true and still bounds the failure.
-async fn wait_until(timeout: Duration, condition: impl AsyncFn() -> bool) {
-    let deadline = tokio::time::Instant::now() + timeout;
-
-    loop {
-        if condition().await {
-            return;
-        }
-
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "The condition was still not met after {timeout:?}"
-        );
-
-        sleep(Duration::from_millis(10)).await;
     }
 }
 
@@ -256,6 +234,7 @@ async fn test_false_positive_late_decryption_regression() {
         .build()
         .await
         .unwrap();
+    let (_, mut stream) = timeline.subscribe().await;
 
     let event = event_factory
         .event(RoomEncryptedEventContent::new(
@@ -286,9 +265,10 @@ async fn test_false_positive_late_decryption_regression() {
         })
         .await;
 
-    // Wait for the UTD to reach the timeline rather than for a fixed duration: the
-    // retry below only exercises anything once the event is actually there.
-    wait_until(Duration::from_secs(5), async || timeline.controller.items().await.len() == 2).await;
+    // Wait for the event to reach the timeline before retrying, rather than
+    // sleeping for a duration the machine may not honour under load.
+    let diffs = assert_next_with_timeout!(stream);
+    assert!(diffs.iter().any(|diff| matches!(diff, VectorDiff::PushBack { .. })));
 
     // Simulate a retry decryption.
     // Due to the regression this was marking the event as successfully decrypted on
@@ -299,17 +279,29 @@ async fn test_false_positive_late_decryption_regression() {
         .await;
     assert_eq!(timeline.controller.items().await.len(), 2);
 
-    // Wait for the delayed report to be delivered, rather than for a duration we
-    // hope is longer than the hook's max delay.
-    wait_until(Duration::from_secs(5), async || hook.utds.lock().unwrap().len() == 1).await;
+    // `UtdHookManager` holds a UTD back for `max_delay` so that a late decryption
+    // can reclassify it, so the report can only be observed once that delay has
+    // passed. Wait for the report itself instead of for a fixed duration.
+    let utd = timeout(Duration::from_secs(10), async {
+        loop {
+            if let Some(utd) = hook.utds.lock().unwrap().first().cloned() {
+                break utd;
+            }
 
-    {
-        let utds = hook.utds.lock().unwrap();
-        assert_eq!(utds.len(), 1);
-        // This is the main thing we're testing: if this wasn't identified as a definite
-        // UTD, this would be `Some(..)`.
-        assert!(utds[0].time_to_decrypt.is_none());
-    }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the hook should have reported the undecryptable event");
+
+    // This is the main thing we're testing: if this wasn't identified as a definite
+    // UTD, this would be `Some(..)`.
+    assert!(utd.time_to_decrypt.is_none());
+
+    // And it is reported exactly once. Give a late duplicate the same window to
+    // show up in as the report above had.
+    sleep(Duration::from_millis(500)).await;
+    assert_eq!(hook.utds.lock().unwrap().len(), 1);
 }
 
 #[async_test]

@@ -4641,6 +4641,11 @@ impl<'a> MockEndpoint<'a, UserDirectoryEndpoint> {
 pub struct CreateRoomEndpoint;
 
 impl<'a> MockEndpoint<'a, CreateRoomEndpoint> {
+    /// Ensures that the body of the request matches a given JSON subset.
+    pub fn body_matches_partial_json(self, body: Value) -> Self {
+        Self { mock: self.mock.and(body_partial_json(body)), ..self }
+    }
+
     /// Returns a successful response.
     pub fn ok(self) -> MatrixMock<'a> {
         self.respond_with(

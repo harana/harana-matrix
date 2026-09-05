@@ -14,9 +14,11 @@
 
 #[cfg(feature = "sqlite")]
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[cfg(feature = "sqlite")]
 use matrix_sdk::SqliteStoreConfig;
+use matrix_sdk::StoreProvider;
 
 #[cfg(doc)]
 use crate::client_builder::ClientBuilder;
@@ -24,9 +26,12 @@ use crate::client_builder::ClientBuilder;
 /// The outcome of building a [`StoreBuilder`], with data that can be passed
 /// directly to a [`ClientBuilder`].
 pub enum StoreBuilderOutcome {
+    /// A store backend of the embedder's own.
+    Custom(Arc<dyn StoreProvider>),
+
     /// An SQLite store configuration successfully built.
     #[cfg(feature = "sqlite")]
-    Sqlite { config: SqliteStoreConfig, cache_path: PathBuf, store_path: PathBuf },
+    Sqlite { config: Box<SqliteStoreConfig>, cache_path: PathBuf, store_path: PathBuf },
 
     /// An IndexedDB store configuration successfully built.
     #[cfg(feature = "indexeddb")]
@@ -217,7 +222,7 @@ mod sqlite {
             }
 
             Ok(StoreBuilderOutcome::Sqlite {
-                config: sqlite_store_config,
+                config: Box::new(sqlite_store_config),
                 store_path: data_path.to_owned(),
                 cache_path: cache_path.to_owned(),
             })
@@ -283,6 +288,17 @@ pub enum StoreBuilder {
 
     /// Represents the builder for in-memory store.
     InMemory,
+
+    /// A store backend supplied by the embedder.
+    ///
+    /// The bindings only ever hand this straight to
+    /// [`matrix_sdk::ClientBuilder::store_provider`]; the SDK never assumes
+    /// anything about what is behind it. Set it with
+    /// [`ClientBuilder::custom_store`](crate::ClientBuilder::custom_store),
+    /// which is a Rust-only entry point: `uniffi` cannot carry a Rust trait
+    /// object across the FFI boundary, so foreign callers keep using the
+    /// SQLite, IndexedDB and in-memory builders above.
+    Custom(Arc<dyn StoreProvider>),
 }
 
 impl StoreBuilder {
@@ -296,6 +312,8 @@ impl StoreBuilder {
             Self::IndexedDb(config) => config.build(),
 
             Self::InMemory => Ok(StoreBuilderOutcome::InMemory),
+
+            Self::Custom(provider) => Ok(StoreBuilderOutcome::Custom(provider.clone())),
         }
     }
 }

@@ -35,7 +35,7 @@ use matrix_sdk::{
         edit::EditedContent,
         reply::{EnforceThread, Reply},
     },
-    send_queue::{RoomSendQueueError, SendHandle},
+    send_queue::{EnforceThreadInReply, RoomSendQueueError, SendHandle},
     task_monitor::BackgroundTaskHandle,
 };
 use mime::Mime;
@@ -459,6 +459,56 @@ impl Timeline {
             .expect("the reply will always be set because we provided a replied-to event id");
         let content = self.room().make_reply_event(content, reply).await?;
         self.send(content.into()).await
+    }
+
+    /// Send a reply to the given timeline item.
+    ///
+    /// Unlike [`Self::send_reply`], this accepts an item that hasn't been sent
+    /// yet: replying to one of our own local echoes, which is the only way to
+    /// reply while offline, and the only way to open a thread on a message
+    /// that is still being sent. The relation is built once the replied-to
+    /// event has been sent and its event ID is known; in the meantime the reply
+    /// is a local echo of its own.
+    ///
+    /// The threading semantics are those of [`Self::send_reply`].
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The content of the reply.
+    ///
+    /// * `in_reply_to` - The item to reply to.
+    #[instrument(skip(self, content))]
+    pub async fn send_reply_to(
+        &self,
+        content: RoomMessageEventContentWithoutRelation,
+        in_reply_to: &TimelineEventItemId,
+    ) -> Result<SendHandle, Error> {
+        let items = self.items().await;
+        let Some((_pos, item)) = rfind_event_by_item_id(&items, in_reply_to) else {
+            return Err(Error::EventNotInTimeline(in_reply_to.clone()));
+        };
+
+        match item.handle() {
+            TimelineItemHandle::Remote(event_id) => {
+                self.send_reply(content, event_id.to_owned()).await
+            }
+
+            TimelineItemHandle::Local(handle) => {
+                let enforce_thread = if self.controller.is_threaded() {
+                    EnforceThreadInReply::Threaded { is_reply: true }
+                } else {
+                    EnforceThreadInReply::MaybeThreaded
+                };
+
+                handle
+                    .reply(content, enforce_thread)
+                    .await
+                    .map_err(RoomSendQueueError::StorageError)?
+                    // The item was a local echo a moment ago; if the send queue no longer
+                    // knows about it, it has been sent in the meantime.
+                    .ok_or(Error::EventNotInTimeline(in_reply_to.clone()))
+            }
+        }
     }
 
     /// Send a location event to the room, with `body` as the plain-text
