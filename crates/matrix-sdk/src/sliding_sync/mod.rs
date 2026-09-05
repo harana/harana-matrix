@@ -99,6 +99,7 @@ pub(super) struct SlidingSyncInner {
     ///
     /// Note: in non-cfg(e2e-encryption) builds, it's unused. We keep it even
     /// so, to avoid sparkling cfg statements everywhere throughout this file.
+    #[cfg_attr(not(feature = "e2e-encryption"), allow(dead_code))]
     mark_tracked_users_dirty_on_new_session: bool,
 
     /// Position markers.
