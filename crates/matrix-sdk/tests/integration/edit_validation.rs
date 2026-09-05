@@ -208,3 +208,107 @@ fn test_edit_validity_valid_edit() {
 
     assert_matches!(result, Ok(_));
 }
+
+#[test]
+fn test_edit_validity_original_is_state_event() {
+    let event_factory = EventFactory::new();
+
+    // State events cannot be edited, whether it is the original event or the
+    // replacement that is one.
+    let event = Raw::new(&json!({
+        "content": {
+            "body": "Hello world",
+            "msgtype": "m.text",
+        },
+        "event_id": "$asbc",
+        "origin_server_ts": 0,
+        "sender": "@example:localhost",
+        "state_key": "@example:localhost",
+        "type": "m.room.message"
+    }))
+    .unwrap()
+    .cast_unchecked();
+
+    let replacement = event_factory
+        .sender(user_id!("@example:localhost"))
+        .text_msg("* edit")
+        .edit(event_id!("$asbc"), RoomMessageEventContentWithoutRelation::text_plain("edit"))
+        .into();
+
+    let result = check_validity_of_replacement_events(&event, None, &replacement, None);
+
+    assert_matches!(result, Err(EditValidityError::StateKeyPresent));
+}
+
+#[test]
+fn test_edit_validity_replacement_targets_another_event() {
+    let event_factory = EventFactory::new();
+    let event = original_event();
+
+    // The replacement is an edit, but of a different event.
+    let replacement = event_factory
+        .sender(user_id!("@example:localhost"))
+        .text_msg("* edit")
+        .edit(
+            event_id!("$another_event"),
+            RoomMessageEventContentWithoutRelation::text_plain("edit"),
+        )
+        .into();
+
+    let result = check_validity_of_replacement_events(&event, None, &replacement, None);
+
+    assert_matches!(result, Err(EditValidityError::NotReplacement));
+}
+
+#[test]
+fn test_edit_validity_replacement_has_another_relation() {
+    let event = original_event();
+
+    // A reply is a relation, but not a replacement.
+    let replacement = Raw::new(&json!({
+        "content": {
+            "body": "* edit",
+            "msgtype": "m.text",
+            "m.relates_to": {
+                "m.in_reply_to": { "event_id": "$asbc" },
+            },
+        },
+        "event_id": "$xG2xPOiRLXoEjG4Cgq:dummy.org",
+        "origin_server_ts": 0,
+        "sender": "@example:localhost",
+        "type": "m.room.message"
+    }))
+    .unwrap()
+    .cast_unchecked();
+
+    let result = check_validity_of_replacement_events(&event, None, &replacement, None);
+
+    assert_matches!(result, Err(EditValidityError::NotReplacement));
+}
+
+#[test]
+fn test_edit_validity_malformed_event() {
+    let event = original_event();
+
+    // The replacement is missing the `sender` field, so it cannot be checked
+    // at all.
+    let replacement = Raw::new(&json!({
+        "content": {
+            "body": "* edit",
+            "msgtype": "m.text",
+            "m.relates_to": {
+                "rel_type": "m.replace",
+                "event_id": "$asbc",
+            },
+        },
+        "event_id": "$xG2xPOiRLXoEjG4Cgq:dummy.org",
+        "origin_server_ts": 0,
+        "type": "m.room.message"
+    }))
+    .unwrap()
+    .cast_unchecked();
+
+    let result = check_validity_of_replacement_events(&event, None, &replacement, None);
+
+    assert_matches!(result, Err(EditValidityError::InvalidJson(_)));
+}
