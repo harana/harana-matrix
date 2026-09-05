@@ -2055,7 +2055,6 @@ mod tests {
         DeviceId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OneTimeKeyId, UserId, device_id,
         events::room::history_visibility::HistoryVisibility, room_id, user_id,
     };
-    use ruma::uint;
     use serde_json::json;
 
     use super::Account;
@@ -2169,8 +2168,9 @@ mod tests {
     /// resulting stock against the maximum.
     #[test]
     fn test_generating_one_time_keys_is_logged() {
-        // A fresh account has published no keys, so this generates a full batch.
         let mut account = Account::with_device_id(user_id(), device_id());
+        // Clear the keys the account starts with, so a full batch is generated.
+        account.mark_keys_as_published();
 
         let events = log_capture::Recorder::capture(|| {
             account.generate_one_time_keys_if_needed();
