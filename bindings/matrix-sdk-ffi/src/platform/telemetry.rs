@@ -60,7 +60,7 @@ use crate::error::ClientError;
 ///
 /// It is attached directly to the subscriber's registry, underneath the log
 /// level filter the bindings build from the
-/// [`TracingConfiguration`](super::TracingConfiguration), so it sees the same
+/// `TracingConfiguration`, so it sees the same
 /// events the text log does.
 pub type TelemetryLayer = Box<dyn Layer<Registry> + Send + Sync + 'static>;
 
@@ -99,7 +99,7 @@ mod imp {
 /// Install the telemetry providers the bindings should feed.
 ///
 /// This has to be called before
-/// [`init_platform`](super::init_platform), which is when the subscriber is
+/// `init_platform`, which is when the subscriber is
 /// built, and can only be called once. A second call, or a call after the
 /// subscriber exists, returns an error and changes nothing.
 ///

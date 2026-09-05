@@ -309,7 +309,7 @@ impl ClientBuilder {
     ///
     /// This performs a `.well-known/matrix/client` lookup, and is therefore
     /// incompatible with [`Self::disable_well_known_lookup`]: [`Self::build`]
-    /// then fails with [`ClientBuildError::WellKnownLookupDisabled`].
+    /// then fails with `ClientBuildError::WellKnownLookupDisabled`.
     pub fn server_name(self: Arc<Self>, server_name: String) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.homeserver_cfg = Some(HomeserverConfig::ServerName(server_name));
@@ -330,7 +330,7 @@ impl ClientBuilder {
     /// With [`Self::disable_well_known_lookup`], the discovery step is skipped
     /// and only the homeserver URL check is performed, so a homeserver URL
     /// still works while a delegating server name fails with
-    /// [`ClientBuildError::InvalidServerName`].
+    /// `ClientBuildError::InvalidServerName`.
     pub fn server_name_or_homeserver_url(self: Arc<Self>, server_name_or_url: String) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.homeserver_cfg = Some(HomeserverConfig::ServerNameOrUrl(server_name_or_url));
@@ -342,7 +342,7 @@ impl ClientBuilder {
     ///
     /// When building a client for restoration, prefer to use
     /// [`Self::homeserver_url`] as the restoration will pick up the user ID
-    /// from the [`Session`], and using this will result in a needless request
+    /// from the `Session`, and using this will result in a needless request
     /// to re-discover the homeserver.
     ///
     /// The following methods are mutually exclusive: [`Self::homeserver_url`],
@@ -352,7 +352,7 @@ impl ClientBuilder {
     ///
     /// This performs a `.well-known/matrix/client` lookup, and is therefore
     /// incompatible with [`Self::disable_well_known_lookup`]: [`Self::build`]
-    /// then fails with [`ClientBuildError::WellKnownLookupDisabled`].
+    /// then fails with `ClientBuildError::WellKnownLookupDisabled`.
     pub fn server_name_from_user_id(self: Arc<Self>, user_id: String) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.homeserver_cfg = Some(HomeserverConfig::ServerNameFromUserId(user_id));
