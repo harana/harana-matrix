@@ -12,7 +12,11 @@
 // See the License for that specific language governing permissions and
 // limitations under the License.
 
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use eyeball::{ObservableWriteGuard, SharedObservable, Subscriber};
 use eyeball_im::{ObservableVector, VectorSubscriberBatchedStream};
@@ -332,7 +336,20 @@ impl SpaceRoomList {
                 let children_state = (*self.children_state.lock()).clone().unwrap_or_default();
                 let mut rooms = self.rooms.lock().await;
 
-                join_all(children.into_iter().map(|room| {
+                // A `/hierarchy` page can contain a room the list already holds: the
+                // server may repeat a child across pages, and a `paginate` can race
+                // with the hierarchy being refreshed. Pushing it a second time would
+                // publish duplicate entries to the subscribers, so keep track of the
+                // room IDs we already know about and only push the new ones.
+                let mut known_room_ids: HashSet<OwnedRoomId> =
+                    rooms.iter().map(|room| room.room_id.clone()).collect();
+
+                let new_children = children
+                    .into_iter()
+                    .filter(|room| known_room_ids.insert(room.summary.room_id.clone()))
+                    .collect_vec();
+
+                join_all(new_children.into_iter().map(|room| {
                     let children_state = children_state.clone();
                     async move {
                         let child_state = children_state.get(&room.summary.room_id);
@@ -542,6 +559,97 @@ mod tests {
                 }
             ]
         );
+    }
+
+    #[async_test]
+    async fn test_room_list_pagination_deduplicates_rooms() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let space_service = SpaceService::new(client.clone()).await;
+
+        let parent_space_id = room_id!("!parent_space:example.org");
+        let child_room_id_1 = room_id!("!1:example.org");
+        let child_room_id_2 = room_id!("!2:example.org");
+        let child_room_id_3 = room_id!("!3:example.org");
+
+        let room_list = space_service.space_room_list(parent_space_id.to_owned()).await;
+
+        // The first page contains two rooms, and announces there is more to come.
+        {
+            let _guard = server
+                .mock_get_hierarchy()
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "next_batch": "next_page",
+                    "rooms": [
+                        hierarchy_room(child_room_id_1),
+                        hierarchy_room(child_room_id_2),
+                    ],
+                })))
+                .mount_as_scoped()
+                .await;
+
+            room_list.paginate().await.unwrap();
+        }
+
+        assert_eq!(
+            room_list.rooms().await.iter().map(|room| room.room_id.clone()).collect::<Vec<_>>(),
+            vec![child_room_id_1.to_owned(), child_room_id_2.to_owned()]
+        );
+
+        let (_, rooms_subscriber) = room_list.subscribe_to_room_updates().await;
+        pin_mut!(rooms_subscriber);
+        assert_pending!(rooms_subscriber);
+
+        // The second page repeats a room from the first page, plus contains a room
+        // twice. Only the room we don't know about yet must be pushed.
+        {
+            let _guard = server
+                .mock_get_hierarchy()
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "rooms": [
+                        hierarchy_room(child_room_id_2),
+                        hierarchy_room(child_room_id_3),
+                        hierarchy_room(child_room_id_3),
+                    ],
+                })))
+                .mount_as_scoped()
+                .await;
+
+            room_list.paginate().await.unwrap();
+        }
+
+        assert_eq!(
+            room_list.rooms().await.iter().map(|room| room.room_id.clone()).collect::<Vec<_>>(),
+            vec![
+                child_room_id_1.to_owned(),
+                child_room_id_2.to_owned(),
+                child_room_id_3.to_owned()
+            ]
+        );
+
+        // The subscriber only saw the room it didn't know about yet, once.
+        let pushed_room_ids = assert_ready!(rooms_subscriber)
+            .into_iter()
+            .map(|diff| match diff {
+                VectorDiff::PushBack { value } => value.room_id,
+                diff => panic!("unexpected diff: {diff:?}"),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(pushed_room_ids, vec![child_room_id_3.to_owned()]);
+
+        assert_pending!(rooms_subscriber);
+    }
+
+    /// Build a minimal `/hierarchy` room summary for `room_id`.
+    fn hierarchy_room(room_id: &RoomId) -> serde_json::Value {
+        json!({
+            "room_id": room_id,
+            "num_joined_members": 1,
+            "world_readable": false,
+            "guest_can_join": false,
+            "children_state": [],
+        })
     }
 
     #[async_test]

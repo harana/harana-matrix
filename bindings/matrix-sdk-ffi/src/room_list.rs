@@ -504,8 +504,16 @@ pub enum RoomListEntriesDynamicFilterKind {
     NonSpace,
     Space,
     NonLeft,
-    // Not { filter: RoomListEntriesDynamicFilterKind } - requires recursive enum
-    // support in uniffi https://github.com/mozilla/uniffi-rs/issues/396
+    /// Negates the filters it contains: a room matches if and only if it does
+    /// **not** match all of `filters` (i.e. `Not { filters }` is the negation
+    /// of `All { filters }`).
+    ///
+    /// `filters` is a vector because uniffi has no support for directly
+    /// recursive enum variants (https://github.com/mozilla/uniffi-rs/issues/396);
+    /// the vector provides the required indirection. Pass a single filter for a
+    /// plain negation. An empty vector matches nothing, since `All` with no
+    /// filter matches everything.
+    Not { filters: Vec<RoomListEntriesDynamicFilterKind> },
     Joined,
     ReadReceipts { expect: ReadReceiptsCategory },
     Favourite,
@@ -537,6 +545,9 @@ impl From<RoomListEntriesDynamicFilterKind> for BoxedFilterFn {
             Kind::NonSpace => Box::new(new_filter_not(Box::new(new_filter_space()))),
             Kind::Space => Box::new(new_filter_space()),
             Kind::NonLeft => Box::new(new_filter_non_left()),
+            Kind::Not { filters } => Box::new(new_filter_not(Box::new(new_filter_all(
+                filters.into_iter().map(BoxedFilterFn::from).collect(),
+            )))),
             Kind::Joined => Box::new(new_filter_joined()),
             Kind::ReadReceipts { expect } => Box::new(new_filter_read_receipts(expect)),
             Kind::Favourite => Box::new(new_filter_favourite()),
