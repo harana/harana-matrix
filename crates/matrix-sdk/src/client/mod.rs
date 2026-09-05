@@ -1814,6 +1814,44 @@ impl Client {
         }
     }
 
+    /// Refresh the access token if it is about to expire.
+    ///
+    /// The homeserver tells us how long an access token is valid for when it
+    /// issues one, at login and at every refresh. Acting on that is what keeps
+    /// a request from being sent with a token that has just expired, paying
+    /// for a round trip and surfacing a transient failure; the reactive
+    /// refresh, on `M_UNKNOWN_TOKEN`, stays as the fallback for the tokens
+    /// whose lifetime we don't know, such as a restored session's.
+    ///
+    /// Errors are swallowed: this is an optimisation, and the request that
+    /// follows still has the reactive path behind it. A failed refresh does
+    /// drop the expiration, so that every later request doesn't try again.
+    pub(crate) async fn refresh_access_token_if_expiring(&self) {
+        if !self.inner.auth_ctx.handle_refresh_tokens
+            || !self.inner.auth_ctx.access_token_expires_soon()
+        {
+            return;
+        }
+
+        // A refresh makes requests of its own, and those come back through here: they
+        // must not wait for the refresh that is sending them, and there is nothing to
+        // wait for anyway, since the token is still valid for the duration of the
+        // leeway.
+        if self.inner.auth_ctx.refresh_in_progress() {
+            trace!("Token refresh: a refresh is already happening, not waiting for it.");
+            return;
+        }
+
+        trace!("Token refresh: the access token is about to expire, refreshing it.");
+
+        if let Err(error) = self.refresh_access_token().await {
+            warn!("Token refresh: refreshing before expiration failed: {error}");
+            // Don't try again on every subsequent request: an expiration in the past
+            // would make all of them think a refresh is due.
+            self.inner.auth_ctx.forget_access_token_expiry();
+        }
+    }
+
     /// Refresh the access token using the authentication API used to log into
     /// this session.
     ///

@@ -18,7 +18,7 @@
 
 #[cfg(feature = "sso-login")]
 use std::future::Future;
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, fmt, time::Duration};
 
 use matrix_sdk_base::{SessionMeta, store::RoomLoadSettings};
 use ruma::{
@@ -542,7 +542,9 @@ impl MatrixAuth {
                     session_tokens.refresh_token = Some(refresh_token);
                 }
 
-                self.client.auth_ctx().set_session_tokens(session_tokens);
+                self.client
+                    .auth_ctx()
+                    .set_session_tokens_with_expiry(session_tokens, res.expires_in_ms);
 
                 if let Some(save_session_callback) =
                     self.client.inner.auth_ctx.save_session_callback.get()
@@ -621,6 +623,7 @@ impl MatrixAuth {
                 .set_session(
                     session,
                     RoomLoadSettings::default(),
+                    response.expires_in,
                     #[cfg(feature = "e2e-encryption")]
                     login_info,
                 )
@@ -734,6 +737,9 @@ impl MatrixAuth {
         self.set_session(
             session,
             room_load_settings,
+            // A restored access token comes without its lifetime: only the process that
+            // obtained it saw that, so this session refreshes reactively.
+            None,
             #[cfg(feature = "e2e-encryption")]
             None,
         )
@@ -818,6 +824,7 @@ impl MatrixAuth {
         self.set_session(
             response.into(),
             RoomLoadSettings::default(),
+            response.expires_in,
             #[cfg(feature = "e2e-encryption")]
             login_info,
         )
@@ -835,6 +842,10 @@ impl MatrixAuth {
     /// * `room_load_settings` — Specify how much rooms must be restored; use
     ///   `::default()` if you don't know which value to pick.
     ///
+    /// * `expires_in` — How long the access token is valid for, when the
+    ///   homeserver said so; `None` when it did not, or when the token comes
+    ///   from a stored session rather than from this process.
+    ///
     /// # Panic
     ///
     /// Panics if authentication data was already set.
@@ -842,6 +853,7 @@ impl MatrixAuth {
         &self,
         session: MatrixSession,
         room_load_settings: RoomLoadSettings,
+        expires_in: Option<Duration>,
         #[cfg(feature = "e2e-encryption")] login_info: Option<login::v3::LoginInfo>,
     ) -> Result<()> {
         // This API doesn't have any data but by setting this variant we protect the
@@ -851,7 +863,7 @@ impl MatrixAuth {
             .auth_data
             .set(AuthData::Matrix)
             .expect("Client authentication data was already set");
-        self.client.auth_ctx().set_session_tokens(session.tokens);
+        self.client.auth_ctx().set_session_tokens_with_expiry(session.tokens, expires_in);
         self.client
             .base_client()
             .activate(

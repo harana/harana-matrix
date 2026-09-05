@@ -1074,10 +1074,13 @@ impl OAuth {
             .await
             .map_err(OAuthAuthorizationCodeError::RequestToken)?;
 
-        self.client.auth_ctx().set_session_tokens(SessionTokens {
-            access_token: response.access_token().secret().clone(),
-            refresh_token: response.refresh_token().map(RefreshToken::secret).cloned(),
-        });
+        self.client.auth_ctx().set_session_tokens_with_expiry(
+            SessionTokens {
+                access_token: response.access_token().secret().clone(),
+                refresh_token: response.refresh_token().map(RefreshToken::secret).cloned(),
+            },
+            response.expires_in(),
+        );
 
         Ok(validation_data.device_id)
     }
@@ -1148,10 +1151,13 @@ impl OAuth {
             .request_async(self.http_client(), matrix_sdk_common::sleep::sleep, None)
             .await?;
 
-        self.client.auth_ctx().set_session_tokens(SessionTokens {
-            access_token: response.access_token().secret().to_owned(),
-            refresh_token: response.refresh_token().map(|t| t.secret().to_owned()),
-        });
+        self.client.auth_ctx().set_session_tokens_with_expiry(
+            SessionTokens {
+                access_token: response.access_token().secret().to_owned(),
+                refresh_token: response.refresh_token().map(|t| t.secret().to_owned()),
+            },
+            response.expires_in(),
+        );
 
         Ok(())
     }
@@ -1180,6 +1186,7 @@ impl OAuth {
 
         let new_access_token = response.access_token().secret().clone();
         let new_refresh_token = response.refresh_token().map(RefreshToken::secret).cloned();
+        let expires_in = response.expires_in();
 
         trace!(
             "Token refresh: new refresh_token: {} / access_token: {}",
@@ -1195,7 +1202,7 @@ impl OAuth {
         #[cfg(feature = "e2e-encryption")]
         let tokens_clone = tokens.clone();
 
-        self.client.auth_ctx().set_session_tokens(tokens);
+        self.client.auth_ctx().set_session_tokens_with_expiry(tokens, expires_in);
 
         // Call the save_session_callback if set, while the optional lock is being held.
         if let Some(save_session_callback) = self.client.auth_ctx().save_session_callback.get() {
