@@ -3545,6 +3545,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "proptest",
+ "pulldown-cmark",
  "rand 0.10.2",
  "reqwest",
  "ruma",

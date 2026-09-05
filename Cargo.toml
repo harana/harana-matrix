@@ -63,6 +63,7 @@ pbkdf2 = { version = "0.13.0", default-features = false }
 pin-project-lite = { version = "0.2.17", default-features = false }
 proc-macro2 = { version = "1.0.107", default-features = false }
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }
+pulldown-cmark = { version = "0.13.0", default-features = false }
 quote = { version = "1.0.47", default-features = false }
 rand = "0.10.2"
 rcgen = { version = "0.14.8", default-features = false }
