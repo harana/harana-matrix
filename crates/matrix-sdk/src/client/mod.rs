@@ -3625,6 +3625,7 @@ impl Client {
             .latest_events
             .get_or_init(|| async {
                 LatestEvents::new(
+                    self.task_monitor(),
                     WeakClient::from_client(self),
                     self.event_cache().clone(),
                     SendQueue::new(self.clone()),

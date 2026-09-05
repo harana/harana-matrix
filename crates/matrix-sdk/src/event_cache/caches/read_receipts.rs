@@ -435,15 +435,17 @@ fn select_best_receipt<T>(
     linked_chunk: &EventLinkedChunk,
     event_filter: &T,
     pending_receipts: &mut RingBuffer<OwnedEventId>,
-    new_receipt_event: Option<&ReceiptEventContent>,
+    new_receipt_events: &[ReceiptEventContent],
     latest_active: Option<&EventId>,
 ) -> Option<OwnedEventId>
 where
     T: EventFilter,
 {
-    // If we had a new receipt event, add the main/unthreaded receipts it contains
-    // to the pending receipts list. We'll try to chase them later.
-    if let Some(receipt_event) = new_receipt_event {
+    // A single sync can carry several receipt events: one for the room's
+    // unthreaded and main-timeline receipts, plus one per thread. Walk all of them,
+    // and add the receipts matching this timeline's thread to the pending receipts
+    // list. We'll try to chase them later.
+    for receipt_event in new_receipt_events {
         for (event_id, receipts) in &receipt_event.0 {
             for ty in ALL_RECEIPT_TYPES {
                 if let Some(receipts) = receipts.get(&ty)
@@ -560,7 +562,7 @@ async fn try_find_stored_receipts<T>(
 #[instrument(skip_all, fields(room_id = %event_filter.room_id()))]
 pub(crate) async fn compute_unread_counts<T>(
     user_id: &UserId,
-    receipt_event: Option<&ReceiptEventContent>,
+    receipt_events: &[ReceiptEventContent],
     linked_chunk: &EventLinkedChunk,
     event_filter: &T,
     read_receipts: &mut ReadReceipts,
@@ -581,7 +583,7 @@ pub(crate) async fn compute_unread_counts<T>(
         linked_chunk,
         event_filter,
         &mut read_receipts.pending,
-        receipt_event,
+        receipt_events,
         read_receipts.latest_active.as_ref().map(|latest_active| latest_active.event_id.as_ref()),
     );
 
@@ -1116,7 +1118,7 @@ mod tests {
         // When there are no pending receipts,
         let mut pending_receipts = RingBuffer::new(NonZeroUsize::new(16).unwrap());
         // And no new receipt,
-        let new_receipt_event = None;
+        let new_receipt_events: [super::ReceiptEventContent; 0] = [];
         // And no active receipt,
         let active_receipt = None;
 
@@ -1126,7 +1128,7 @@ mod tests {
             &linked_chunk,
             &event_filter,
             &mut pending_receipts,
-            new_receipt_event,
+            &new_receipt_events,
             active_receipt,
         );
         assert!(receipt.is_none());
@@ -1152,7 +1154,7 @@ mod tests {
         // When there are no pending receipts,
         let mut pending_receipts = RingBuffer::new(NonZeroUsize::new(16).unwrap());
         // And no new receipt,
-        let new_receipt_event = None;
+        let new_receipt_events: [super::ReceiptEventContent; 0] = [];
         // And no active receipt,
         let active_receipt = None;
 
@@ -1169,7 +1171,7 @@ mod tests {
             &linked_chunk,
             &event_filter,
             &mut pending_receipts,
-            new_receipt_event,
+            &new_receipt_events,
             active_receipt,
         );
         assert_eq!(receipt.unwrap(), event_id!("$2"));
@@ -1195,7 +1197,7 @@ mod tests {
         // When there are no pending receipts,
         let mut pending_receipts = RingBuffer::new(NonZeroUsize::new(16).unwrap());
         // And no new receipt,
-        let new_receipt_event = None;
+        let new_receipt_events: [super::ReceiptEventContent; 0] = [];
         // And an active receipt pointing at $2,
         let active_receipt = Some(event_id!("$2"));
 
@@ -1212,7 +1214,7 @@ mod tests {
             &linked_chunk,
             &event_filter,
             &mut pending_receipts,
-            new_receipt_event,
+            &new_receipt_events,
             active_receipt,
         );
         assert_eq!(receipt.unwrap(), event_id!("$2"));
@@ -1238,11 +1240,10 @@ mod tests {
         let mut pending_receipts = RingBuffer::new(NonZeroUsize::new(16).unwrap());
 
         // And a new receipt event which points to $2,
-        let new_receipt_event = Some(
-            f.read_receipts()
-                .add(event_id!("$2"), own_user_id, ReceiptType::Read, ReceiptThread::Unthreaded)
-                .into_content(),
-        );
+        let new_receipt_events = [f
+            .read_receipts()
+            .add(event_id!("$2"), own_user_id, ReceiptType::Read, ReceiptThread::Unthreaded)
+            .into_content()];
 
         // And no active receipt,
         let active_receipt = None;
@@ -1260,7 +1261,7 @@ mod tests {
             &linked_chunk,
             &event_filter,
             &mut pending_receipts,
-            new_receipt_event.as_ref(),
+            &new_receipt_events,
             active_receipt,
         );
         assert_eq!(receipt.unwrap(), event_id!("$2"));
@@ -1286,11 +1287,10 @@ mod tests {
         let mut pending_receipts = RingBuffer::new(NonZeroUsize::new(16).unwrap());
 
         // And a new receipt event, for an event we don't know about,
-        let new_receipt_event = Some(
-            f.read_receipts()
-                .add(event_id!("$4"), own_user_id, ReceiptType::Read, ReceiptThread::Unthreaded)
-                .into_content(),
-        );
+        let new_receipt_events = [f
+            .read_receipts()
+            .add(event_id!("$4"), own_user_id, ReceiptType::Read, ReceiptThread::Unthreaded)
+            .into_content()];
 
         // And no active receipt,
         let active_receipt = None;
@@ -1308,7 +1308,7 @@ mod tests {
             &linked_chunk,
             &event_filter,
             &mut pending_receipts,
-            new_receipt_event.as_ref(),
+            &new_receipt_events,
             active_receipt,
         );
 
@@ -1337,7 +1337,7 @@ mod tests {
         pending_receipts.push(owned_event_id!("$2"));
 
         // And no new receipt event,
-        let new_receipt_event = None;
+        let new_receipt_events: [super::ReceiptEventContent; 0] = [];
 
         // And no active receipt,
         let active_receipt = None;
@@ -1355,7 +1355,7 @@ mod tests {
             &linked_chunk,
             &event_filter,
             &mut pending_receipts,
-            new_receipt_event.as_ref(),
+            &new_receipt_events,
             active_receipt,
         );
         assert_eq!(receipt.unwrap(), event_id!("$2"));
@@ -1386,12 +1386,11 @@ mod tests {
         pending_receipts.push(owned_event_id!("$6"));
 
         // And a new receipt event pointing at $4 and $6,
-        let new_receipt_event = Some(
-            f.read_receipts()
-                .add(event_id!("$4"), own_user_id, ReceiptType::Read, ReceiptThread::Unthreaded)
-                .add(event_id!("$7"), own_user_id, ReceiptType::ReadPrivate, ReceiptThread::Main)
-                .into_content(),
-        );
+        let new_receipt_events = [f
+            .read_receipts()
+            .add(event_id!("$4"), own_user_id, ReceiptType::Read, ReceiptThread::Unthreaded)
+            .add(event_id!("$7"), own_user_id, ReceiptType::ReadPrivate, ReceiptThread::Main)
+            .into_content()];
 
         // And an active receipt point at $1,
         let active_receipt = Some(event_id!("$1"));
@@ -1410,7 +1409,7 @@ mod tests {
             &linked_chunk,
             &event_filter,
             &mut pending_receipts,
-            new_receipt_event.as_ref(),
+            &new_receipt_events,
             active_receipt,
         );
         assert_eq!(receipt.unwrap(), event_id!("$4"));

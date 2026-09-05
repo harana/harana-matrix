@@ -20,6 +20,7 @@ use std::{
 };
 
 use eyeball_im::VectorDiff;
+use tracing::error;
 
 use super::{
     ChunkContent, ChunkIdentifier, Iter, Position,
@@ -325,16 +326,24 @@ impl<Item, Acc: UpdatesAccumulator<Item>> UpdateToVectorDiff<Item, Acc> {
 
                         // New chunk is inserted between 2 chunks.
                         (Some(_previous), Some(next)) => {
-                            let next_chunk_index = self
+                            // Assuming `LinkedChunk` and `ObservableUpdates` are not buggy, and
+                            // assuming `Self::chunks` is correctly initialized, it is not
+                            // possible to insert a chunk between two chunks where one does not
+                            // exist. If this lookup fails, it means `LinkedChunk` or
+                            // `ObservableUpdates` contain a bug; skip the update rather than
+                            // bringing the whole application down.
+                            let Some(next_chunk_index) = self
                                 .chunks
                                 .iter()
                                 .position(|(chunk_identifier, _)| chunk_identifier == next)
-                                // SAFETY: Assuming `LinkedChunk` and `ObservableUpdates` are not
-                                // buggy, and assuming `Self::chunks` is correctly initialized, it
-                                // is not possible to insert a chunk between two chunks where one
-                                // does not exist. If this predicate fails, it means `LinkedChunk`
-                                // or `ObservableUpdates` contain a bug.
-                                .expect("Inserting new chunk: The chunk is not found");
+                            else {
+                                error!(
+                                    ?next,
+                                    "Inserting new chunk: the next chunk is not found; \
+                                     skipping this update"
+                                );
+                                continue;
+                            };
 
                             // No need to check `previous`. It's possible that the linked chunk is
                             // lazily loaded, chunk by chunk. The `next` is always reliable, but the
@@ -359,13 +368,19 @@ impl<Item, Acc: UpdatesAccumulator<Item>> UpdateToVectorDiff<Item, Acc> {
                 }
 
                 Update::RemoveChunk(chunk_identifier) => {
-                    let (offset, (chunk_index, _)) =
-                        self.map_to_offset(&Position(*chunk_identifier, 0));
+                    let Some((offset, (chunk_index, _))) =
+                        self.map_to_offset(&Position(*chunk_identifier, 0))
+                    else {
+                        continue;
+                    };
 
-                    let (_, number_of_items) = self
-                        .chunks
-                        .remove(chunk_index)
-                        .expect("Removing an index out of the bounds");
+                    let Some((_, number_of_items)) = self.chunks.remove(chunk_index) else {
+                        error!(
+                            ?chunk_index,
+                            "Removing a chunk at an index out of bounds; skipping this update"
+                        );
+                        continue;
+                    };
 
                     // Removing at the same index because each `Remove` shifts items to the left.
                     acc.extend(repeat_n(VectorDiff::Remove { index: offset }, number_of_items));
@@ -373,7 +388,10 @@ impl<Item, Acc: UpdatesAccumulator<Item>> UpdateToVectorDiff<Item, Acc> {
 
                 Update::PushItems { at: position, items } => {
                     let number_of_chunks = self.chunks.len();
-                    let (offset, (chunk_index, chunk_length)) = self.map_to_offset(position);
+                    let Some((offset, (chunk_index, chunk_length))) = self.map_to_offset(position)
+                    else {
+                        continue;
+                    };
 
                     let is_pushing_back =
                         chunk_index + 1 == number_of_chunks && position.index() >= *chunk_length;
@@ -399,7 +417,11 @@ impl<Item, Acc: UpdatesAccumulator<Item>> UpdateToVectorDiff<Item, Acc> {
                 }
 
                 Update::ReplaceItem { at: position, item } => {
-                    let (offset, (_chunk_index, _chunk_length)) = self.map_to_offset(position);
+                    let Some((offset, (_chunk_index, _chunk_length))) =
+                        self.map_to_offset(position)
+                    else {
+                        continue;
+                    };
 
                     // The chunk length doesn't change.
 
@@ -407,7 +429,10 @@ impl<Item, Acc: UpdatesAccumulator<Item>> UpdateToVectorDiff<Item, Acc> {
                 }
 
                 Update::RemoveItem { at: position } => {
-                    let (offset, (_chunk_index, chunk_length)) = self.map_to_offset(position);
+                    let Some((offset, (_chunk_index, chunk_length))) = self.map_to_offset(position)
+                    else {
+                        continue;
+                    };
 
                     // Remove one item to the chunk in `self.chunks`.
                     *chunk_length -= 1;
@@ -425,17 +450,22 @@ impl<Item, Acc: UpdatesAccumulator<Item>> UpdateToVectorDiff<Item, Acc> {
                     let expected_chunk_identifier = position.chunk_identifier();
                     let new_length = position.index();
 
-                    let chunk_length = self
-                        .chunks
-                        .iter_mut()
-                        .find_map(|(chunk_identifier, chunk_length)| {
+                    // Assuming `LinkedChunk` and `ObservableUpdates` are not buggy, and assuming
+                    // `Self::chunks` is correctly initialized, it is not possible to detach items
+                    // from a chunk that does not exist. If this lookup fails, it means
+                    // `LinkedChunk` or `ObservableUpdates` contain a bug; skip the update rather
+                    // than bringing the whole application down.
+                    let Some(chunk_length) =
+                        self.chunks.iter_mut().find_map(|(chunk_identifier, chunk_length)| {
                             (*chunk_identifier == expected_chunk_identifier).then_some(chunk_length)
                         })
-                        // SAFETY: Assuming `LinkedChunk` and `ObservableUpdates` are not buggy, and
-                        // assuming `Self::chunks` is correctly initialized, it is not possible to
-                        // detach items from a chunk that does not exist. If this predicate fails,
-                        // it means `LinkedChunk` or `ObservableUpdates` contain a bug.
-                        .expect("Detach last items: The chunk is not found");
+                    else {
+                        error!(
+                            ?expected_chunk_identifier,
+                            "Detach last items: the chunk is not found; skipping this update"
+                        );
+                        continue;
+                    };
 
                     *chunk_length = new_length;
 
@@ -469,38 +499,46 @@ impl<Item, Acc: UpdatesAccumulator<Item>> UpdateToVectorDiff<Item, Acc> {
         acc
     }
 
-    fn map_to_offset(&mut self, position: &Position) -> (usize, (usize, &mut usize)) {
+    /// Map a [`Position`] to an offset in the flattened item list, along with
+    /// the index and length of the chunk holding it.
+    ///
+    /// Returns `None` if the chunk is not tracked. Assuming `LinkedChunk` and
+    /// `ObservableUpdates` are not buggy, and assuming `Self::chunks` is
+    /// correctly initialized, it is not possible to work on a chunk that does
+    /// not exist; if it happens, it means `LinkedChunk` or `ObservableUpdates`
+    /// contain a bug. This used to panic, which took the whole application
+    /// down (e.g. while back-paginating a timeline). The update is now skipped
+    /// by the caller instead: the tracked ordering may drift, but the process
+    /// survives and the error is logged.
+    fn map_to_offset(&mut self, position: &Position) -> Option<(usize, (usize, &mut usize))> {
         let expected_chunk_identifier = position.chunk_identifier();
 
-        let (offset, (chunk_index, chunk_length)) = {
-            let control_flow = self.chunks.iter_mut().enumerate().try_fold(
-                position.index(),
-                |offset, (chunk_index, (chunk_identifier, chunk_length))| {
-                    if chunk_identifier == &expected_chunk_identifier {
-                        ControlFlow::Break((offset, (chunk_index, chunk_length)))
-                    } else {
-                        ControlFlow::Continue(offset + *chunk_length)
-                    }
-                },
-            );
-
-            match control_flow {
-                // Chunk has been found, and all values have been calculated as
-                // expected.
-                ControlFlow::Break(values) => values,
-
-                // Chunk has not been found.
-                ControlFlow::Continue(..) => {
-                    // SAFETY: Assuming `LinkedChunk` and `ObservableUpdates` are not buggy, and
-                    // assuming `Self::chunks` is correctly initialized, it is not possible to work
-                    // on a chunk that does not exist. If this predicate fails, it means
-                    // `LinkedChunk` or `ObservableUpdates` contain a bug.
-                    panic!("The chunk is not found");
+        let control_flow = self.chunks.iter_mut().enumerate().try_fold(
+            position.index(),
+            |offset, (chunk_index, (chunk_identifier, chunk_length))| {
+                if chunk_identifier == &expected_chunk_identifier {
+                    ControlFlow::Break((offset, (chunk_index, chunk_length)))
+                } else {
+                    ControlFlow::Continue(offset + *chunk_length)
                 }
-            }
-        };
+            },
+        );
 
-        (offset, (chunk_index, chunk_length))
+        match control_flow {
+            // Chunk has been found, and all values have been calculated as expected.
+            ControlFlow::Break(values) => Some(values),
+
+            // Chunk has not been found.
+            ControlFlow::Continue(..) => {
+                error!(
+                    ?expected_chunk_identifier,
+                    "The chunk is not found; skipping this update. This is a bug in \
+                     `LinkedChunk` or `ObservableUpdates`"
+                );
+
+                None
+            }
+        }
     }
 }
 
