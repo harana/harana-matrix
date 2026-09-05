@@ -1,0 +1,44 @@
+[package]
+name = "ruma-client"
+version = "0.20.0"
+description = "A Matrix client library."
+categories = ["api-bindings", "web-programming"]
+keywords = ["matrix", "chat", "messaging", "ruma"]
+license = "MIT"
+repository = "https://github.com/ruma/ruma-client"
+edition = "2024"
+rust-version = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+
+# The `reqwest` crate's `Client` as an `HttpClient` implementation. If you already depend on
+# `reqwest`, enable this and configure the TLS backend on `reqwest` directly; otherwise pick one
+# of the passthrough features below.
+reqwest = ["dep:reqwest"]
+reqwest-native-tls = ["reqwest", "reqwest?/native-tls"]
+reqwest-native-tls-no-alpn = ["reqwest", "reqwest?/native-tls-no-alpn"]
+reqwest-native-tls-vendored = ["reqwest", "reqwest?/native-tls-vendored"]
+reqwest-native-tls-vendored-no-alpn = ["reqwest", "reqwest?/native-tls-vendored-no-alpn"]
+reqwest-rustls = ["reqwest", "reqwest?/rustls"]
+reqwest-rustls-no-provider = ["reqwest", "reqwest?/rustls-no-provider"]
+
+[dependencies]
+as_variant.workspace = true
+assign = "1.1.1"
+async-stream.workspace = true
+bytes = "1.11.1"
+futures-core.workspace = true
+http = { workspace = true, features = ["std"] }
+reqwest = { workspace = true, optional = true }
+ruma.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio-stream.workspace = true
+
+[lints]
+workspace = true

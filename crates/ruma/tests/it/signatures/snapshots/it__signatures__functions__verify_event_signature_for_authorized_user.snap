@@ -1,0 +1,6 @@
+---
+source: crates/ruma/tests/it/signatures/functions.rs
+assertion_line: 60
+expression: signature
+---
+R258cU0L4dWp5oCluQv3ffXctzob7aneCt60xpo4Y0htpLMgf+iLMPUGyYBnF8PdjQrsX/0cKFCZVAV0UFU3BQ

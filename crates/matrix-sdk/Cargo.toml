@@ -105,7 +105,7 @@ socks = ["reqwest-transport", "reqwest?/socks"]
 local-server = ["dep:axum", "dep:rand", "dep:tower", "tokio/net", "tokio/rt"]
 sso-login = ["local-server"]
 # Enable methods that make calls to the federation API.
-federation-api = ["ruma/federation-api-c"]
+federation-api = ["ruma/federation-api"]
 
 uniffi = ["dep:uniffi", "matrix-sdk-base/uniffi", "dep:matrix-sdk-ffi-macros"]
 
