@@ -46,7 +46,8 @@ pub use self::{
         AnyOtherStateEventContentChange, BeaconInfo, EmbeddedEvent, EncryptedMessage,
         InReplyToDetails, LiveLocationState, MemberProfileChange, MembershipChange, Message,
         MsgLikeContent, MsgLikeKind, OtherMessageLike, OtherState, PollResult, PollState,
-        RoomMembershipChange, RoomPinnedEventsChange, Sticker, ThreadSummary, TimelineItemContent,
+        RedactedMessage, RoomMembershipChange, RoomPinnedEventsChange, Sticker, ThreadSummary,
+        TimelineItemContent,
     },
     local::{EventSendState, MediaUploadProgress},
 };
@@ -90,6 +91,9 @@ pub struct EventTimelineItem {
     /// before redaction. This applies to all sorts of timeline items, including
     /// state events. If no redaction is in flight, None.
     pub(super) unredacted_item: Option<UnredactedEventTimelineItem>,
+    /// If an edit is currently applied to this item, what it looked like
+    /// before that edit. `None` when no edit is applied.
+    pub(super) unedited_item: Option<Box<UneditedEventTimelineItem>>,
     /// The kind of event timeline item, local or remote.
     pub(super) kind: EventTimelineItemKind,
     /// Whether or not the event belongs to an encrypted room.
@@ -176,6 +180,20 @@ pub struct EditRevision {
     pub timestamp: Option<MilliSecondsSinceUnixEpoch>,
 }
 
+/// A container holding what an item looked like before an edit was applied to
+/// it, so the edit can be undone: either because the local echo of the edit
+/// was cancelled, or because the edit event was redacted.
+#[derive(Clone, Debug)]
+pub(super) struct UneditedEventTimelineItem {
+    /// The content of the item before any edit was applied.
+    pub(crate) content: TimelineItemContent,
+
+    /// JSON of the latest edit to this item before any edit was applied, i.e.
+    /// `None` unless the item was already carrying an edit from a bundled
+    /// relation.
+    pub(crate) latest_edit_json: Option<Raw<AnySyncTimelineEvent>>,
+}
+
 /// A container for temporarily holding onto data that is going to be erased by
 /// a redaction once the server plays it back.
 #[derive(Clone, Debug)]
@@ -210,6 +228,7 @@ impl EventTimelineItem {
             timestamp,
             content,
             unredacted_item: None,
+            unedited_item: None,
             kind,
             is_room_encrypted,
             local_edit: None,
@@ -495,11 +514,10 @@ impl EventTimelineItem {
             false
         } else if self.content.is_message() {
             true
-        } else if self.content().as_live_location_state().is_some() {
-            // Live location sharing session (MSC3489) events are state events, not always
-            // displayed in a timeline, so can't be replied to.
-            false
         } else {
+            // Note: live location sharing session (MSC3489) events are state events, but
+            // other clients let users reply to them, just like they do for static
+            // location messages, so we allow it too.
             self.latest_json().is_some()
         }
     }
@@ -571,11 +589,39 @@ impl EventTimelineItem {
         edit_json: Option<Raw<AnySyncTimelineEvent>>,
     ) -> Self {
         let mut new = self.clone();
+
+        // Remember what the item looked like before the first edit, so the edit can
+        // be undone if it's cancelled or redacted. Later edits are applied on top of
+        // the content of the previous one, so only the first stash is kept.
+        if new.unedited_item.is_none() {
+            new.unedited_item = Some(Box::new(UneditedEventTimelineItem {
+                content: new.content.clone(),
+                latest_edit_json: new.latest_edit_json().cloned(),
+            }));
+        }
+
         new.content = new_content;
         if let EventTimelineItemKind::Remote(r) = &mut new.kind {
             r.latest_edit_json = edit_json;
         }
         new
+    }
+
+    /// Create a clone of the current item with every edit undone, restoring
+    /// what it looked like before the first edit was applied.
+    ///
+    /// Returns `None` if no edit is currently applied to this item.
+    pub(super) fn unedit(&self) -> Option<Self> {
+        let unedited_item = self.unedited_item.as_deref()?;
+
+        let mut new = self.clone();
+        new.content = unedited_item.content.clone();
+        if let EventTimelineItemKind::Remote(r) = &mut new.kind {
+            r.latest_edit_json = unedited_item.latest_edit_json.clone();
+        }
+        new.unedited_item = None;
+
+        Some(new)
     }
 
     /// Clone the current event item, and update its `sender_profile`.
@@ -597,13 +643,18 @@ impl EventTimelineItem {
     }
 
     /// Create a clone of the current item, with content that's been redacted.
-    pub(super) fn redact(&self, rules: &RedactionRules, is_local: bool) -> Self {
+    pub(super) fn redact(
+        &self,
+        rules: &RedactionRules,
+        is_local: bool,
+        redacted: RedactedMessage,
+    ) -> Self {
         let unredacted_item = is_local.then(|| UnredactedEventTimelineItem {
             content: self.content.clone(),
             original_json: self.original_json().cloned(),
             latest_edit_json: self.latest_edit_json().cloned(),
         });
-        let content = self.content.redact(rules);
+        let content = self.content.redact(rules, redacted);
         let kind = match &self.kind {
             EventTimelineItemKind::Local(l) => EventTimelineItemKind::Local(l.clone()),
             EventTimelineItemKind::Remote(r) => EventTimelineItemKind::Remote(r.redact()),
@@ -616,6 +667,7 @@ impl EventTimelineItem {
             timestamp: self.timestamp,
             content,
             unredacted_item,
+            unedited_item: self.unedited_item.clone(),
             kind,
             is_room_encrypted: self.is_room_encrypted,
             // A redaction wipes the edits too.
@@ -646,6 +698,7 @@ impl EventTimelineItem {
             timestamp: self.timestamp,
             content: unredacted_item.content.clone(),
             unredacted_item: None,
+            unedited_item: self.unedited_item.clone(),
             kind,
             is_room_encrypted: self.is_room_encrypted,
             local_edit: self.local_edit.clone(),
@@ -708,7 +761,7 @@ impl EventTimelineItem {
                 },
                 MsgLikeKind::Sticker(_)
                 | MsgLikeKind::Poll(_)
-                | MsgLikeKind::Redacted
+                | MsgLikeKind::Redacted(_)
                 | MsgLikeKind::UnableToDecrypt(_)
                 | MsgLikeKind::Other(_)
                 | MsgLikeKind::LiveLocation(_) => None,
@@ -1116,8 +1169,14 @@ mod tests {
     }
 
     #[test]
-    fn cannot_reply_to_live_location_events() {
+    fn can_reply_to_live_location_events() {
         let item = remote_item(live_location_content(), Some(sample_raw_event()));
+        assert!(item.can_be_replied_to());
+    }
+
+    #[test]
+    fn cannot_reply_to_live_location_events_with_no_json() {
+        let item = remote_item(live_location_content(), None);
         assert!(!item.can_be_replied_to());
     }
 

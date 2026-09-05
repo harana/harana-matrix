@@ -44,8 +44,8 @@ use tracing::{debug, error, field::debug, instrument, trace, warn};
 
 use super::{
     BeaconInfo, EmbeddedEvent, EncryptedMessage, EventTimelineItem, InReplyToDetails,
-    LiveLocationState, MsgLikeContent, MsgLikeKind, OtherState, ReactionStatus, Sticker,
-    ThreadSummary, TimelineDetails, TimelineItem, TimelineItemContent,
+    LiveLocationState, MsgLikeContent, MsgLikeKind, OtherState, ReactionStatus, RedactedMessage,
+    Sticker, ThreadSummary, TimelineDetails, TimelineItem, TimelineItemContent,
     controller::{
         Aggregation, AggregationKind, ObservableItemsTransaction, PendingEditKind,
         TimelineMetadata, TimelineStateTransaction, find_item_and_apply_aggregation,
@@ -237,14 +237,18 @@ impl TimelineAction {
     ) -> Vec<TimelineAction> {
         let redaction_rules = room_data_provider.room_version_rules().redaction;
 
-        let redacted_message_or_none = |event_type: MessageLikeEventType| {
-            (event_type != MessageLikeEventType::Reaction).then_some(TimelineItemContent::MsgLike(
-                MsgLikeContent {
-                    thread_summary: thread_summary.clone(),
-                    ..MsgLikeContent::redacted()
-                },
-            ))
-        };
+        // Note: the `RedactedMessage` is only ever computed on the paths where the
+        // event actually is redacted, since reading it means parsing the event's
+        // `unsigned` data and possibly loading a profile.
+        let redacted_message_or_none =
+            |event_type: MessageLikeEventType, redacted: RedactedMessage| {
+                (event_type != MessageLikeEventType::Reaction).then_some(
+                    TimelineItemContent::MsgLike(MsgLikeContent {
+                        thread_summary: thread_summary.clone(),
+                        ..MsgLikeContent::redacted_by(redacted)
+                    }),
+                )
+            };
 
         match event {
             AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomRedaction(ev)) => {
@@ -254,10 +258,13 @@ impl TimelineAction {
                         kind: HandleAggregationKind::Redaction,
                     }]
                 } else {
-                    redacted_message_or_none(ev.event_type())
-                        .map(Self::add_item)
-                        .into_iter()
-                        .collect()
+                    redacted_message_or_none(
+                        ev.event_type(),
+                        redacted_because(raw_event, room_data_provider).await,
+                    )
+                    .map(Self::add_item)
+                    .into_iter()
+                    .collect()
                 }
             }
 
@@ -311,10 +318,13 @@ impl TimelineAction {
                     vec![Self::from_content(content, in_reply_to, thread_root, thread_summary)]
                 }
 
-                None => redacted_message_or_none(ev.event_type())
-                    .map(Self::add_item)
-                    .into_iter()
-                    .collect(),
+                None => redacted_message_or_none(
+                    ev.event_type(),
+                    redacted_because(raw_event, room_data_provider).await,
+                )
+                .map(Self::add_item)
+                .into_iter()
+                .collect(),
             },
 
             AnySyncTimelineEvent::State(ev) => match ev {
@@ -392,7 +402,9 @@ impl TimelineAction {
                     }
                     SyncStateEvent::Redacted(_) => {
                         vec![Self::add_item(TimelineItemContent::MsgLike(
-                            MsgLikeContent::redacted(),
+                            MsgLikeContent::redacted_by(
+                                redacted_because(raw_event, room_data_provider).await,
+                            ),
                         ))]
                     }
                 },
@@ -934,6 +946,13 @@ impl<'a, 'o> TimelineEventHandler<'a, 'o> {
             self.ctx.flow.timeline_item_id(),
             AggregationKind::Redaction {
                 is_local: false, // We can only get here for remote echoes of redactions.
+                // The sender of the event we're handling *is* the sender of the redaction.
+                redacted: RedactedMessage {
+                    redacted_by: Some(self.ctx.sender.clone()),
+                    redacted_by_profile: TimelineDetails::from_initial_value(
+                        self.ctx.sender_profile.clone(),
+                    ),
+                },
             },
         );
         self.meta.aggregations.add(target.clone(), aggregation.clone());
@@ -1479,5 +1498,42 @@ fn transfer_details(new_item: &mut EventTimelineItem, old_item: &EventTimelineIt
 
     if matches!(&in_reply_to.event, TimelineDetails::Unavailable) {
         in_reply_to.event = old_in_reply_to.event.clone();
+    }
+}
+
+/// Reads `unsigned.redacted_because` off a raw event, to learn who redacted it.
+///
+/// Homeservers bundle the redaction event that erased an event in its
+/// `unsigned` data; when they do, we can tell the client who deleted the
+/// message, even though this client never saw the redaction event go by.
+async fn redacted_because<P: RoomDataProvider>(
+    raw_event: &Raw<AnySyncTimelineEvent>,
+    room_data_provider: &P,
+) -> RedactedMessage {
+    #[derive(serde::Deserialize)]
+    struct RedactedBecause {
+        sender: OwnedUserId,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Unsigned {
+        redacted_because: Option<RedactedBecause>,
+    }
+
+    let Some(sender) = raw_event
+        .get_field::<Unsigned>("unsigned")
+        .ok()
+        .flatten()
+        .and_then(|unsigned| unsigned.redacted_because)
+        .map(|redacted_because| redacted_because.sender)
+    else {
+        return RedactedMessage::default();
+    };
+
+    let profile = room_data_provider.profile_from_user_id(&sender).await;
+
+    RedactedMessage {
+        redacted_by: Some(sender),
+        redacted_by_profile: TimelineDetails::from_initial_value(profile),
     }
 }

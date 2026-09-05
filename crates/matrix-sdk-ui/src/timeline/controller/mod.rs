@@ -69,9 +69,9 @@ pub(super) use self::{
 };
 use super::{
     DateDividerMode, EmbeddedEvent, Error, EventSendState, EventTimelineItem, InReplyToDetails,
-    MediaUploadProgress, Profile, TimelineDetails, TimelineEventItemId, TimelineFocus,
-    TimelineItem, TimelineItemContent, TimelineItemKind, TimelineReadReceiptTracking,
-    VirtualTimelineItem,
+    MediaUploadProgress, Profile, RedactedMessage, TimelineDetails, TimelineEventItemId,
+    TimelineFocus, TimelineItem, TimelineItemContent, TimelineItemKind,
+    TimelineReadReceiptTracking, VirtualTimelineItem,
     algorithms::{rfind_event_by_id, rfind_event_item},
     event_item::{ReactionStatus, RemoteEventOrigin},
     item::TimelineUniqueId,
@@ -921,6 +921,7 @@ impl<P: RoomDataProvider> TimelineController<P> {
         send_handle: Option<SendHandle>,
     ) {
         let sender = self.room_data_provider.own_user_id().to_owned();
+
         let profile = self.room_data_provider.profile_from_user_id(&sender).await;
 
         let date_divider_mode = self.settings.date_divider_mode.clone();
@@ -1414,6 +1415,10 @@ impl<P: RoomDataProvider> TimelineController<P> {
         txn_id: OwnedTransactionId,
         redacts: OwnedEventId,
     ) {
+        // The local echo of a redaction is always sent by us.
+        let own_user_id = self.room_data_provider.own_user_id().to_owned();
+        let own_profile = self.room_data_provider.profile_from_user_id(&own_user_id).await;
+
         let mut state = self.state.write().await;
         let mut tr = state.transaction();
 
@@ -1421,7 +1426,13 @@ impl<P: RoomDataProvider> TimelineController<P> {
 
         let aggregation = Aggregation::new(
             TimelineEventItemId::TransactionId(txn_id),
-            AggregationKind::Redaction { is_local: true },
+            AggregationKind::Redaction {
+                is_local: true,
+                redacted: RedactedMessage {
+                    redacted_by: Some(own_user_id),
+                    redacted_by_profile: TimelineDetails::from_initial_value(own_profile),
+                },
+            },
         );
 
         tr.meta.aggregations.add(target.clone(), aggregation.clone());

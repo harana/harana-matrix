@@ -743,6 +743,37 @@ async fn test_redacted_beacon_info_produces_redacted_item() {
     assert_pending!(stream);
 }
 
+/// A live location item can be replied to. These are state events, but other
+/// clients let users reply to them just like they do for static location
+/// messages, and `Timeline::send_reply` has no such restriction either.
+#[async_test]
+async fn test_live_location_item_can_be_replied_to() {
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe_events().await;
+
+    timeline
+        .send_beacon_info(
+            &ALICE,
+            event_id!("$beacon_info:example.org"),
+            BeaconInfoFields {
+                description: Some("Alice's walk".to_owned()),
+                duration: Duration::from_secs(3600),
+                live: true,
+                ts: None,
+            },
+        )
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    assert!(
+        item.content().as_live_location_state().is_some(),
+        "sanity check: this is a live location item"
+    );
+    assert!(item.can_be_replied_to(), "a live location item should be replyable");
+
+    assert_pending!(stream);
+}
+
 /// A reaction on a live location item is aggregated onto the item and exposed
 /// via `reactions()`.
 #[async_test]

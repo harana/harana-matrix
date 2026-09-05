@@ -596,6 +596,18 @@ impl Client {
         &self.inner.base_client
     }
 
+    /// The threading support this client was configured with, via
+    /// [`ClientBuilder::with_threading_support()`].
+    ///
+    /// Note this only reflects the client's own configuration; it says nothing
+    /// about whether the homeserver supports threads. See
+    /// [`Client::enabled_thread_subscriptions()`] for that.
+    ///
+    /// [`ClientBuilder::with_threading_support()`]: crate::ClientBuilder::with_threading_support
+    pub fn threading_support(&self) -> ThreadingSupport {
+        self.base_client().threading_support
+    }
+
     /// The transport the client sends its HTTP requests over.
     ///
     /// This is the [`ReqwestTransport`](crate::ReqwestTransport) the SDK builds
@@ -6280,6 +6292,42 @@ pub(crate) mod tests {
         assert_key_count!(client, 0);
 
         Ok(())
+    }
+
+    #[async_test]
+    async fn test_threading_support_reflects_the_builder_configuration() {
+        use matrix_sdk_base::ThreadingSupport;
+
+        // A client built without threading support reports it as disabled. This is
+        // the default.
+        let client = MockClientBuilder::new(None).build().await;
+        assert_matches!(client.threading_support(), ThreadingSupport::Disabled);
+
+        // A client built with threading support, without subscriptions.
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder
+                    .with_threading_support(ThreadingSupport::Enabled { with_subscriptions: false })
+            })
+            .build()
+            .await;
+        assert_matches!(
+            client.threading_support(),
+            ThreadingSupport::Enabled { with_subscriptions: false }
+        );
+
+        // And one with subscriptions too.
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder
+                    .with_threading_support(ThreadingSupport::Enabled { with_subscriptions: true })
+            })
+            .build()
+            .await;
+        assert_matches!(
+            client.threading_support(),
+            ThreadingSupport::Enabled { with_subscriptions: true }
+        );
     }
 
     #[async_test]

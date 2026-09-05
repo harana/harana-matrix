@@ -197,6 +197,7 @@ impl TimelineBuilder {
             // timeline. Make the misconfiguration visible instead of silently
             // misbehaving.
             warn!(
+                room_id = ?room.room_id(),
                 "Building a thread-focused timeline on a client built without threading \
                  support: local echoes and thread summaries will not be updated. Use \
                  `ClientBuilder::with_threading_support` to enable it."

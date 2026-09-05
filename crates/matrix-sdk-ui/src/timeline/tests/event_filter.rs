@@ -888,3 +888,44 @@ fn is_profile_change_item(item: &&Arc<TimelineItem>) -> bool {
         _ => false,
     }
 }
+
+#[async_test]
+async fn test_event_filter_applies_to_local_echoes() {
+    // A filter that only lets notices through.
+    let timeline = TestTimelineBuilder::new()
+        .settings(TimelineSettings {
+            event_filter: Arc::new(|event, _| {
+                let AnySyncTimelineEvent::MessageLike(msg) = event else { return false };
+                matches!(
+                    msg.original_content(),
+                    Some(AnyMessageLikeEventContent::RoomMessage(content))
+                        if matches!(content.msgtype, MessageType::Notice(_))
+                )
+            }),
+            ..Default::default()
+        })
+        .build()
+        .await;
+
+    // A local echo the filter excludes doesn't get an item…
+    timeline
+        .handle_local_event(AnyMessageLikeEventContent::RoomMessage(
+            RoomMessageEventContent::text_plain("filtered out"),
+        ))
+        .await;
+    assert_eq!(timeline.controller.items().await.len(), 0);
+
+    // …while one the filter allows does.
+    timeline
+        .handle_local_event(AnyMessageLikeEventContent::RoomMessage(
+            RoomMessageEventContent::notice_plain("let through"),
+        ))
+        .await;
+
+    let items = timeline.controller.items().await;
+    assert_eq!(items.len(), 2); // the local echo, and its date divider
+    let event = items[1].as_event().unwrap();
+    assert!(event.is_local_echo());
+    assert_let!(Some(message) = event.content().as_message());
+    assert_matches!(message.msgtype(), MessageType::Notice(_));
+}

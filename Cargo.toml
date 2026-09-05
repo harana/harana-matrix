@@ -81,6 +81,7 @@ ruma = { path = "crates/ruma", version = "0.16.0", features = [
     "compat-encrypted-stickers",
     "compat-lax-room-create-deser",
     "compat-lax-room-topic-deser",
+    "compat-optional",
     "unstable-msc1763",
     "unstable-msc3230",
     "unstable-msc3401",

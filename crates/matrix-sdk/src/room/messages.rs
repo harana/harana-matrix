@@ -70,15 +70,48 @@ pub struct MessagesOptions {
     pub limit: UInt,
 
     /// A [`RoomEventFilter`] to filter returned events with.
+    ///
+    /// Defaults to a filter that excludes live location updates, see
+    /// [`Self::new`].
     pub filter: RoomEventFilter,
 }
+
+/// The event types of a live location update ([MSC3489]), in their unstable
+/// and stable forms.
+///
+/// A room where somebody is sharing their live location accumulates one of
+/// these every few seconds, which makes `/messages` responses mostly beacons
+/// and slows pagination down, while a client only needs the
+/// `beacon_info` state event and the most recent updates, both of which come
+/// from sync.
+///
+/// [MSC3489]: https://github.com/matrix-org/matrix-spec-proposals/pull/3489
+const BEACON_EVENT_TYPES: &[&str] = &["org.matrix.msc3672.beacon", "m.beacon"];
 
 impl MessagesOptions {
     /// Creates `MessagesOptions` with the given direction.
     ///
-    /// All other parameters will be defaulted.
+    /// All other parameters will be defaulted, except for the filter, which
+    /// excludes live location updates ([MSC3489]) by default: see
+    /// [`Self::include_live_location_updates`] to get them back.
+    ///
+    /// [MSC3489]: https://github.com/matrix-org/matrix-spec-proposals/pull/3489
     pub fn new(dir: Direction) -> Self {
-        Self { from: None, to: None, dir, limit: uint!(10), filter: RoomEventFilter::default() }
+        let mut filter = RoomEventFilter::default();
+        filter.not_types = BEACON_EVENT_TYPES.iter().map(|ty| (*ty).to_owned()).collect();
+
+        Self { from: None, to: None, dir, limit: uint!(10), filter }
+    }
+
+    /// Stops excluding live location updates ([MSC3489]) from the response.
+    ///
+    /// Note that in an encrypted room the server can't tell a live location
+    /// update from any other event, so they are returned either way.
+    ///
+    /// [MSC3489]: https://github.com/matrix-org/matrix-spec-proposals/pull/3489
+    pub fn include_live_location_updates(mut self) -> Self {
+        self.filter.not_types.retain(|ty| !BEACON_EVENT_TYPES.contains(&ty.as_str()));
+        self
     }
 
     /// Creates `MessagesOptions` with `dir` set to `Backward`.
@@ -375,4 +408,31 @@ pub struct Relations {
     /// If [`RelationsOptions::recurse`] was set, the depth to which the server
     /// recursed.
     pub recursion_depth: Option<UInt>,
+}
+
+#[cfg(test)]
+mod tests {
+    use ruma::api::Direction;
+
+    use super::{BEACON_EVENT_TYPES, MessagesOptions};
+
+    #[test]
+    fn test_messages_options_exclude_live_location_updates_by_default() {
+        let options = MessagesOptions::new(Direction::Backward);
+
+        for event_type in BEACON_EVENT_TYPES {
+            assert!(
+                options.filter.not_types.iter().any(|ty| ty == event_type),
+                "{event_type} should be excluded by default"
+            );
+        }
+    }
+
+    #[test]
+    fn test_messages_options_can_include_live_location_updates() {
+        let options = MessagesOptions::new(Direction::Backward).include_live_location_updates();
+
+        assert!(options.filter.not_types.is_empty());
+        assert!(options.filter.is_empty());
+    }
 }

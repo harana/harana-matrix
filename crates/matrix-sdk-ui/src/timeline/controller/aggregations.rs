@@ -55,7 +55,7 @@ use tracing::{error, info, trace, warn};
 use super::{ObservableItemsTransaction, rfind_event_by_item_id};
 use crate::timeline::{
     BeaconInfo, EventSendState, EventTimelineItem, LiveLocationState, MsgLikeContent, MsgLikeKind,
-    PollState, ReactionInfo, ReactionStatus, TimelineEventItemId, TimelineItem,
+    PollState, ReactionInfo, ReactionStatus, RedactedMessage, TimelineEventItemId, TimelineItem,
     TimelineItemContent,
     event_item::{LocalEditState, beacon_info_matches},
 };
@@ -138,6 +138,9 @@ pub(crate) enum AggregationKind {
         /// Local echoes of redactions are applied reversibly whereas remote
         /// echoes of redactions are applied irreversibly.
         is_local: bool,
+
+        /// Who sent the redaction, and what we know of their profile.
+        redacted: RedactedMessage,
     },
 
     /// An event has been edited.
@@ -269,7 +272,7 @@ impl Aggregation {
                 }
             }
 
-            AggregationKind::Redaction { is_local } => {
+            AggregationKind::Redaction { is_local, redacted } => {
                 let is_local_redacted =
                     event.content().is_redacted() && event.unredacted_item.is_some();
                 let is_remote_redacted =
@@ -277,7 +280,7 @@ impl Aggregation {
                 if *is_local && is_local_redacted || !*is_local && is_remote_redacted {
                     ApplyAggregationResult::LeftItemIntact
                 } else {
-                    let new_item = event.redact(&rules.redaction, *is_local);
+                    let new_item = event.redact(&rules.redaction, *is_local, redacted.clone());
                     *event = Cow::Owned(new_item);
                     ApplyAggregationResult::UpdatedItem
                 }
@@ -402,7 +405,7 @@ impl Aggregation {
                 ApplyAggregationResult::Error(AggregationError::CantUndoPollEnd)
             }
 
-            AggregationKind::Redaction { is_local } => {
+            AggregationKind::Redaction { is_local, .. } => {
                 if *is_local {
                     if event.unredacted_item.is_some() {
                         // Unapply local redaction.
@@ -652,21 +655,31 @@ impl Aggregations {
                     warn!("error when unapplying aggregation: {err}");
                 }
                 ApplyAggregationResult::Edit => {
-                    // This edit has been removed; try to find another that still applies.
-                    if let Some(aggregations) = self.related_events.get(found) {
-                        if resolve_edits(aggregations, items, &mut cowed) {
-                            items.replace(
-                                item_pos,
-                                TimelineItem::new(cowed.into_owned(), item.internal_id.to_owned()),
-                            );
-                        } else {
-                            // No other edit was found, leave the item as is.
-                            // TODO likely need to change the item to indicate
-                            // it's been un-edited etc.
+                    // This edit has been removed; try to find another that still applies,
+                    // and if there is none, restore what the item looked like before it
+                    // was edited.
+                    let applied_another_edit = self
+                        .related_events
+                        .get(found)
+                        .is_some_and(|aggregations| resolve_edits(aggregations, items, &mut cowed));
+
+                    if !applied_another_edit {
+                        match cowed.unedit() {
+                            Some(unedited) => {
+                                trace!("no edit applies anymore, restoring the original content");
+                                cowed = Cow::Owned(unedited);
+                            }
+                            None => {
+                                // The item wasn't edited in the first place, nothing to undo.
+                                return Ok(true);
+                            }
                         }
-                    } else {
-                        // No other edits apply.
                     }
+
+                    items.replace(
+                        item_pos,
+                        TimelineItem::new(cowed.into_owned(), item.internal_id.to_owned()),
+                    );
                 }
             }
         } else {
@@ -796,7 +809,7 @@ impl Aggregations {
                     set_item_local_edit(items, &target, None);
                 }
 
-                AggregationKind::Redaction { is_local } => {
+                AggregationKind::Redaction { is_local, .. } => {
                     // Mark the redaction as being remote and apply it (irreversibly).
                     *is_local = false;
 
