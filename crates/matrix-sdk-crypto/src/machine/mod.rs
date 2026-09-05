@@ -1964,6 +1964,12 @@ impl OlmMachine {
             )
         }
 
+        // Processing the to-device events decides, for each room key we receive,
+        // whether it is better than the one already in the store, and the answer is
+        // only acted on by the write below. Hold the merge lock across both so
+        // an import running at the same time can't make that decision stale.
+        let merge_guard = self.store().lock_inbound_group_session_merge().await;
+
         let (events, changes) = self
             .preprocess_sync_changes(&mut store_transaction, sync_changes, decryption_settings)
             .await?;
@@ -1974,6 +1980,8 @@ impl OlmMachine {
             changes.inbound_group_sessions.iter().map(RoomKeyInfo::from).collect();
 
         self.store().save_changes(changes).await?;
+        drop(merge_guard);
+
         store_transaction.commit().await?;
 
         Ok((events, room_key_updates))

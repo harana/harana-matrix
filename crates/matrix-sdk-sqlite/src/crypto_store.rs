@@ -40,8 +40,8 @@ use matrix_sdk_crypto::{
 };
 use matrix_sdk_store_encryption::StoreCipher;
 use ruma::{
-    DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, RoomId, TransactionId, UserId,
-    events::secret::request::SecretName,
+    DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedRoomId, RoomId, TransactionId,
+    UserId, events::secret::request::SecretName,
 };
 use rusqlite::{OptionalExtension, named_params, params_from_iter};
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -616,10 +616,18 @@ impl SqliteConnectionExt for rusqlite::Connection {
         sender_key: Option<&[u8]>,
         sender_data_type: Option<u8>,
     ) -> rusqlite::Result<()> {
+        // `backed_up` is deliberately left out of the `DO UPDATE` clause: the column is
+        // the source of truth for whether a session has been backed up, and it is only
+        // ever changed by `mark_inbound_group_sessions_as_backed_up` and
+        // `reset_inbound_group_session_backup_state`. Writing it back from a pickle
+        // that was read before one of those ran would undo them — in particular
+        // it could re-mark a session as backed up right after a backup reset
+        // cleared the flag, leaving a session that is never uploaded and that
+        // future devices can't decrypt.
         self.execute(
             "INSERT INTO inbound_group_session (session_id, room_id, data, backed_up, sender_key, sender_data_type) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT (session_id) DO UPDATE SET data = ?3, backed_up = ?4, sender_key = ?5, sender_data_type = ?6",
+             ON CONFLICT (session_id) DO UPDATE SET data = ?3, sender_key = ?5, sender_data_type = ?6",
             (session_id, room_id, data, backed_up, sender_key, sender_data_type),
         )?;
         Ok(())
@@ -1356,9 +1364,36 @@ impl CryptoStore for SqliteCryptoStore {
             }
         });
 
+        // The `backed_up` column is only ever set by
+        // `mark_inbound_group_sessions_as_backed_up`, so importing sessions that are
+        // already in the backup has to say so explicitly rather than relying on the
+        // pickled flag being written through.
+        let backed_up_sessions: Vec<(OwnedRoomId, String)> = if backed_up_to_version.is_some() {
+            sessions
+                .iter()
+                .map(|session| (session.room_id().to_owned(), session.session_id().to_owned()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         // Currently, this store doesn't save the backup version separately, so this
         // just delegates to save_changes.
-        self.save_changes(Changes { inbound_group_sessions: sessions, ..Changes::default() }).await
+        self.save_changes(Changes { inbound_group_sessions: sessions, ..Changes::default() })
+            .await?;
+
+        if let Some(version) = backed_up_to_version
+            && !backed_up_sessions.is_empty()
+        {
+            let session_ids: Vec<(&RoomId, &str)> = backed_up_sessions
+                .iter()
+                .map(|(room_id, session_id)| (room_id.as_ref(), session_id.as_str()))
+                .collect();
+
+            self.mark_inbound_group_sessions_as_backed_up(version, &session_ids).await?;
+        }
+
+        Ok(())
     }
 
     async fn get_sessions(&self, sender_key: &str) -> Result<Option<Vec<Session>>> {

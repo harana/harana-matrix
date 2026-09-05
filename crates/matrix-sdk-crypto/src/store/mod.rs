@@ -717,6 +717,22 @@ impl Store {
         self.inner.store.save_changes(changes).await
     }
 
+    /// Take the lock that serialises whole-object writes of devices and user
+    /// identities.
+    ///
+    /// See [`CryptoStoreWrapper::lock_identity_update()`].
+    pub(crate) async fn lock_identity_update(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inner.store.lock_identity_update().await
+    }
+
+    /// Take the lock that serialises the check-and-store of inbound group
+    /// sessions.
+    ///
+    /// See [`CryptoStoreWrapper::lock_inbound_group_session_merge()`].
+    pub(crate) async fn lock_inbound_group_session_merge(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inner.store.lock_inbound_group_session_merge().await
+    }
+
     /// Given an `InboundGroupSession` which we have just received, see if we
     /// have a matching session already in the store, and determine how to
     /// handle it.
@@ -1602,6 +1618,11 @@ impl Store {
         from_backup_version: Option<&str>,
         progress_listener: impl Fn(usize, usize),
     ) -> Result<RoomKeyImportResult> {
+        // Hold the merge lock across the whole check-and-store, so a room key arriving
+        // over sync while we import can't slip between our "is this better than what we
+        // have?" check and the write that acts on the answer.
+        let _merge_guard = self.inner.store.lock_inbound_group_session_merge().await;
+
         let sessions: Vec<_> = sessions.collect();
         let mut imported_sessions = Vec::new();
 

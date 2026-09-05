@@ -39,6 +39,29 @@ pub(crate) struct CryptoStoreWrapper {
     /// A cache for the Olm Sessions.
     sessions: SessionStore,
 
+    /// Serialises the check-and-store of an inbound group session.
+    ///
+    /// Deciding whether a received room key is better than the one we already
+    /// have is a read, a comparison and a write. Two of those interleaving —
+    /// `import_room_keys` running while a sync delivers the same session, say —
+    /// means both read "nothing stored", both decide to write, and the worse
+    /// key can end up as the stored one with the comparison bypassed
+    /// altogether.
+    inbound_group_session_merge_lock: Mutex<()>,
+
+    /// Serialises writes that replace a whole stored `DeviceData` or
+    /// `UserIdentityData`.
+    ///
+    /// Those writes are read-modify-write on an object with several
+    /// independent fields: `Device::set_local_trust` only means to change the
+    /// trust, and `UserIdentity::pin` only means to change the pinned master
+    /// key, but each writes the object it was built from in full. Without a
+    /// lock, a `/keys/query` landing in between makes one of the two writes
+    /// disappear — a pin can revert freshly received cross-signing keys, and a
+    /// trust change can revert `deleted`, `olm_wedging_index` or
+    /// `withheld_code_sent`.
+    identity_update_lock: Mutex<()>,
+
     /// A cache for the per-room encryption settings.
     ///
     /// Reading these goes through a store lookup and a deserialization, and a
@@ -86,6 +109,8 @@ impl CryptoStoreWrapper {
             device_id: device_id.to_owned(),
             store: store.into_crypto_store(),
             sessions: SessionStore::new(),
+            inbound_group_session_merge_lock: Default::default(),
+            identity_update_lock: Default::default(),
             room_settings: Default::default(),
             room_keys_received_sender,
             room_keys_withheld_received_sender,
@@ -347,6 +372,24 @@ impl CryptoStoreWrapper {
             let _ = self.room_keys_received_sender.send(room_key_updates);
         }
         Ok(())
+    }
+
+    /// Take the lock that serialises the check-and-store of inbound group
+    /// sessions.
+    ///
+    /// Must be held from the moment a caller asks whether a received session is
+    /// better than the stored one until it has written its answer, otherwise
+    /// two callers can both find nothing stored and both write.
+    pub(crate) async fn lock_inbound_group_session_merge(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inbound_group_session_merge_lock.lock().await
+    }
+
+    /// Take the lock that serialises whole-object writes of devices and user
+    /// identities.
+    ///
+    /// Must be held across the read, the change and the write.
+    pub(crate) async fn lock_identity_update(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.identity_update_lock.lock().await
     }
 
     /// Get the encryption settings for a room, going through an in-memory

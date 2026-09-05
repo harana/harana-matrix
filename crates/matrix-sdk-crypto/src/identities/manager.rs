@@ -202,6 +202,13 @@ impl IdentityManager {
         self.failures.extend(failed_servers);
         self.failures.remove(successful_servers);
 
+        // Both of these read the stored devices and identities, change them and write
+        // them back in full. `Device::set_local_trust` and `UserIdentity::pin` do the
+        // same for a single object, so they have to be serialised against this: without
+        // the lock, a pin landing here reverts the cross-signing keys this response
+        // brought in, and a trust change reverts fields this response set.
+        let identity_guard = self.store.lock_identity_update().await;
+
         let devices = self.handle_devices_from_key_query(response.device_keys.clone()).await?;
         let (identities, cross_signing_identity) = self.handle_cross_signing_keys(response).await?;
 
@@ -213,6 +220,7 @@ impl IdentityManager {
         };
 
         self.store.save_changes(changes).await?;
+        drop(identity_guard);
 
         // Update the sender data on any existing inbound group sessions based on the
         // changes in this response.
