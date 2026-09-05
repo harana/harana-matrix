@@ -3575,6 +3575,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "matrix-sdk-appservice"
+version = "0.18.0"
+dependencies = [
+ "regex",
+ "ruma",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "matrix-sdk-base"
 version = "0.18.0"
 dependencies = [
@@ -5377,6 +5386,7 @@ dependencies = [
  "js_int",
  "js_option",
  "language-tags",
+ "ruma-appservice-api",
  "ruma-client-api",
  "ruma-common",
  "ruma-events",
@@ -5385,6 +5395,18 @@ dependencies = [
  "ruma-signatures",
  "ruma-state-res",
  "web-time",
+]
+
+[[package]]
+name = "ruma-appservice-api"
+version = "0.16.0"
+source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
+dependencies = [
+ "js_int",
+ "ruma-common",
+ "ruma-events",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
