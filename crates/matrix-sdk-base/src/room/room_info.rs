@@ -1470,7 +1470,7 @@ impl RoomInfo {
     /// The recency stamp of this room, if known.
     ///
     /// The recency stamp is the `origin_server_ts` of the latest event that
-    /// makes the room “recent”, which is not necessarily the latest event of
+    /// makes the room "recent", which is not necessarily the latest event of
     /// the room.
     pub fn recency_stamp(&self) -> Option<RoomRecencyStamp> {
         self.recency_stamp

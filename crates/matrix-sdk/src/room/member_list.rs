@@ -62,8 +62,8 @@ pub struct RoomMemberListPage {
 /// [`RoomMemberListQuery::page`] or [`RoomMemberListQuery::all`].
 ///
 /// The members are read from the state store and filtered and sorted in
-/// memory, so paginating avoids handing a whole member list to the caller —
-/// which is what makes it worth doing across an FFI boundary — but does not
+/// memory, so paginating avoids handing a whole member list to the caller,
+/// which is what makes it worth doing across an FFI boundary, but does not
 /// avoid loading the room's members from the store.
 #[derive(Debug)]
 pub struct RoomMemberListQuery {

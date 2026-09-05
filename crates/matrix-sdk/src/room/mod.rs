@@ -1062,6 +1062,8 @@ impl Room {
     ///
     /// Returns `None` if this room has not been tombstoned, or if its
     /// `m.room.tombstone` event carries no replacement room.
+    ///
+    /// [`SuccessorRoom::via`]: crate::SuccessorRoom::via
     pub async fn join_successor_room(&self) -> Result<Option<Room>> {
         let Some(successor_room) = self.successor_room() else {
             return Ok(None);
@@ -1082,6 +1084,8 @@ impl Room {
     ///
     /// Returns `None` if this room has not been tombstoned, or if its
     /// `m.room.tombstone` event carries no replacement room.
+    ///
+    /// [`SuccessorRoom::via`]: crate::SuccessorRoom::via
     pub async fn successor_room_preview(&self) -> Result<Option<RoomPreview>> {
         let Some(successor_room) = self.successor_room() else {
             return Ok(None);
