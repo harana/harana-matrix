@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Added
+
+- Add `OpenStoreError::is_database_corruption` and the
+  `OpenStoreError::RemoveCorruptedDatabase` variant.
+  ([#244](https://github.com/harana/harana-matrix/issues/244))
+
+### Fixed
+
+- Recreate the media store and event cache databases from scratch when they
+  turn out to be corrupted, instead of failing every open with "database disk
+  image is malformed". ([#244](https://github.com/harana/harana-matrix/issues/244))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 No significant changes.
