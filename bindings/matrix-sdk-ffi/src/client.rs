@@ -3924,4 +3924,216 @@ mod tests {
         assert!(converted.status.is_none());
         assert!(converted.call.is_none());
     }
+
+    /// The registration and password-change flows both run over UIAA: the
+    /// first attempt is refused with a challenge, and the second carries the
+    /// answer and the session the challenge named.
+    #[cfg(not(target_family = "wasm"))]
+    mod uiaa_flows {
+        use std::sync::Arc;
+
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
+        use serde_json::json;
+        use wiremock::{
+            Mock, ResponseTemplate,
+            matchers::{body_partial_json, method, path},
+        };
+
+        use crate::{
+            client::{Client, PasswordChangeOutcome, RegistrationOutcome},
+            ruma::AuthData,
+        };
+
+        /// Builds the FFI client over a mocked homeserver. The single-process
+        /// lock keeps `Client::new` from demanding session delegates.
+        async fn ffi_client(server: &MatrixMockServer, logged_in: bool) -> Arc<Client> {
+            let builder = server.client_builder().on_builder(|builder| {
+                builder.cross_process_store_config(CrossProcessLockConfig::SingleProcess)
+            });
+            let sdk_client =
+                if logged_in { builder.build().await } else { builder.unlogged().build().await };
+
+            Arc::new(Client::new(sdk_client, None, None).await.expect("the FFI client is built"))
+        }
+
+        #[tokio::test]
+        async fn test_registration_reports_the_challenge_then_registers() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            // The homeserver refuses the first attempt and names the stages.
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register"))
+                .respond_with(ResponseTemplate::new(401).set_body_json(json!({
+                    "flows": [{ "stages": ["m.login.dummy"] }],
+                    "params": {},
+                    "session": "registration-session",
+                })))
+                .up_to_n_times(1)
+                .mount(server.server())
+                .await;
+
+            let outcome = client
+                .register(Some("alice".to_owned()), Some("hunter2".to_owned()), None, None, None)
+                .await
+                .unwrap();
+
+            let RegistrationOutcome::AuthenticationRequired { challenge } = outcome else {
+                panic!("a UIAA response must be reported as a challenge, not an error");
+            };
+            assert_eq!(challenge.session.as_deref(), Some("registration-session"));
+            assert_eq!(challenge.flows.len(), 1);
+            assert_eq!(challenge.flows[0].stages, ["m.login.dummy"]);
+
+            // The second attempt answers the stage, carrying the session back.
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register"))
+                .and(body_partial_json(json!({
+                    "auth": { "type": "m.login.dummy", "session": "registration-session" },
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "user_id": "@alice:example.com",
+                    "device_id": "DEVICEID",
+                    "access_token": "an-access-token",
+                })))
+                .mount(server.server())
+                .await;
+
+            let outcome = client
+                .register(
+                    Some("alice".to_owned()),
+                    Some("hunter2".to_owned()),
+                    None,
+                    None,
+                    Some(AuthData::Dummy { session: Some("registration-session".to_owned()) }),
+                )
+                .await
+                .unwrap();
+
+            assert!(matches!(outcome, RegistrationOutcome::Registered));
+        }
+
+        /// An error that isn't a challenge stays an error: a taken username
+        /// must not be reported as though the flow could continue.
+        #[tokio::test]
+        async fn test_a_rejected_registration_is_an_error() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register"))
+                .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                    "errcode": "M_USER_IN_USE",
+                    "error": "Desired user ID is already taken.",
+                })))
+                .mount(server.server())
+                .await;
+
+            assert!(
+                client
+                    .register(
+                        Some("alice".to_owned()),
+                        Some("hunter2".to_owned()),
+                        None,
+                        None,
+                        None
+                    )
+                    .await
+                    .is_err(),
+                "a username that is taken is an error, not a challenge to answer"
+            );
+        }
+
+        /// The email token request hands back the session id the
+        /// `m.login.email.identity` stage is answered with.
+        #[tokio::test]
+        async fn test_the_email_token_request_returns_the_session_id() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register/email/requestToken"))
+                .and(body_partial_json(json!({
+                    "email": "alice@example.com",
+                    "client_secret": "a-secret",
+                    "send_attempt": 1,
+                })))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(json!({ "sid": "email-session" })),
+                )
+                .mount(server.server())
+                .await;
+
+            let sid = client
+                .request_registration_email_token(
+                    "alice@example.com".to_owned(),
+                    "a-secret".to_owned(),
+                    1,
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(sid, "email-session");
+        }
+
+        /// A client secret the spec doesn't allow is rejected before any
+        /// request is made.
+        #[tokio::test]
+        async fn test_an_empty_client_secret_is_rejected() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            client
+                .request_registration_email_token("alice@example.com".to_owned(), String::new(), 1)
+                .await
+                .unwrap_err();
+        }
+
+        #[tokio::test]
+        async fn test_changing_the_password_reports_the_challenge_then_changes_it() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, true).await;
+
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/account/password"))
+                .respond_with(ResponseTemplate::new(401).set_body_json(json!({
+                    "flows": [{ "stages": ["m.login.password"] }],
+                    "params": {},
+                    "session": "password-session",
+                })))
+                .up_to_n_times(1)
+                .mount(server.server())
+                .await;
+
+            let outcome = client.change_password("new-password".to_owned(), None).await.unwrap();
+
+            let PasswordChangeOutcome::AuthenticationRequired { challenge } = outcome else {
+                panic!("a UIAA response must be reported as a challenge, not an error");
+            };
+            assert_eq!(challenge.session.as_deref(), Some("password-session"));
+            assert_eq!(challenge.flows[0].stages, ["m.login.password"]);
+
+            // The second attempt carries the session from the challenge;
+            // without it the homeserver starts a new flow and refuses again.
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/account/password"))
+                .and(body_partial_json(json!({
+                    "auth": { "type": "m.login.dummy", "session": "password-session" },
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+                .mount(server.server())
+                .await;
+
+            let outcome = client
+                .change_password(
+                    "new-password".to_owned(),
+                    Some(AuthData::Dummy { session: Some("password-session".to_owned()) }),
+                )
+                .await
+                .unwrap();
+
+            assert!(matches!(outcome, PasswordChangeOutcome::Changed));
+        }
+    }
 }

@@ -2203,7 +2203,12 @@ impl TryFrom<SdkRoomSendQueueUpdate> for RoomSendQueueUpdate {
 mod tests {
     use std::time::Duration;
 
-    use matrix_sdk::{ruma::room_id, test_utils::mocks::MatrixMockServer};
+    use matrix_sdk::{
+        ruma::{events::RoomAccountDataEventType, room_id, user_id},
+        test_utils::mocks::MatrixMockServer,
+    };
+    use matrix_sdk_test::{JoinedRoomBuilder, event_factory::EventFactory};
+    use serde_json::json;
     use tempfile::tempdir;
 
     use super::*;
@@ -2244,6 +2249,151 @@ mod tests {
         std::thread::spawn(move || drop(ffi_room))
             .join()
             .expect("Room::drop panicked on a non-tokio thread");
+    }
+
+    /// State events reach the consumer as the raw JSON the homeserver sent,
+    /// so a client can read a type the bindings know nothing about.
+    #[tokio::test]
+    async fn test_state_events_are_read_out_of_the_room_state() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let room_id = room_id!("!state:example.com");
+        let alice = user_id!("@alice:example.com");
+        let bob = user_id!("@bob:example.com");
+        let factory = EventFactory::new().room(room_id);
+
+        let sdk_room = server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id).add_state_bulk(vec![
+                    factory.room_topic("the topic").sender(alice).into_raw_sync_state(),
+                    factory.member(alice).into_raw_sync_state(),
+                    factory.member(bob).into_raw_sync_state(),
+                ]),
+            )
+            .await;
+
+        let room = Room::new(sdk_room, None);
+
+        let topic = room
+            .get_state_event("m.room.topic".to_owned(), String::new())
+            .await
+            .unwrap()
+            .expect("the topic is in the room state");
+        let topic: serde_json::Value = serde_json::from_str(&topic).unwrap();
+        assert_eq!(topic["type"], "m.room.topic");
+        assert_eq!(topic["content"]["topic"], "the topic");
+
+        // A state key that isn't there is not an error.
+        assert!(
+            room.get_state_event("m.room.topic".to_owned(), "nope".to_owned())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            room.get_state_event("com.example.nothing".to_owned(), String::new())
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Every event of a type, whatever its state key.
+        let members = room.get_state_events("m.room.member".to_owned()).await.unwrap();
+        assert_eq!(members.len(), 2);
+
+        let mut senders: Vec<String> = members
+            .iter()
+            .map(|event| {
+                let event: serde_json::Value = serde_json::from_str(event).unwrap();
+                event["state_key"].as_str().expect("a member event has a state key").to_owned()
+            })
+            .collect();
+        senders.sort();
+        assert_eq!(senders, [alice.as_str(), bob.as_str()]);
+
+        assert!(room.get_state_events("com.example.nothing".to_owned()).await.unwrap().is_empty());
+    }
+
+    /// Room account data is written to the homeserver and read back out of the
+    /// store, as raw JSON in both directions.
+    #[tokio::test]
+    async fn test_room_account_data_is_written_and_read_back() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let room_id = room_id!("!account-data:example.com");
+        let sdk_room = server.sync_joined_room(&client, room_id).await;
+        let room = Room::new(sdk_room, None);
+
+        // Nothing stored yet.
+        assert!(room.account_data("m.fully_read".to_owned()).await.unwrap().is_none());
+
+        server
+            .mock_set_room_account_data(RoomAccountDataEventType::from("com.example.marker"))
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        room.set_account_data(
+            "com.example.marker".to_owned(),
+            json!({ "marked": true }).to_string(),
+        )
+        .await
+        .unwrap();
+
+        // The homeserver echoes account data back through sync, which is what
+        // puts it in the store the getter reads.
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id).add_account_data(
+                    Raw::from_json_string(
+                        json!({
+                            "type": "com.example.marker",
+                            "content": { "marked": true },
+                        })
+                        .to_string(),
+                    )
+                    .unwrap(),
+                ),
+            )
+            .await;
+
+        let stored = room
+            .account_data("com.example.marker".to_owned())
+            .await
+            .unwrap()
+            .expect("the account data is in the store");
+        let stored: serde_json::Value = serde_json::from_str(&stored).unwrap();
+        assert_eq!(stored["content"]["marked"], true);
+    }
+
+    /// Content that isn't JSON is rejected before it reaches the homeserver.
+    #[tokio::test]
+    async fn test_setting_account_data_to_invalid_json_is_an_error() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let sdk_room = server.sync_joined_room(&client, room_id!("!invalid:example.com")).await;
+        let room = Room::new(sdk_room, None);
+
+        // The content is rejected before anything is sent, so the homeserver
+        // is never asked to store it.
+        let guard = server
+            .mock_set_room_account_data(RoomAccountDataEventType::from("com.example.marker"))
+            .ok()
+            .expect(0)
+            .mount_as_scoped()
+            .await;
+
+        room.set_account_data("com.example.marker".to_owned(), "not json".to_owned())
+            .await
+            .unwrap_err();
+
+        drop(guard);
     }
 }
 

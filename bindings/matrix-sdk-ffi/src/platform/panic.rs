@@ -96,20 +96,26 @@ pub(crate) fn install_hook() {
     static INSTALLED: OnceLock<()> = OnceLock::new();
 
     INSTALLED.get_or_init(|| {
-        let previous = panic::take_hook();
-
-        panic::set_hook(Box::new(move |info| {
-            // Run the pre-existing hook first, so its output is emitted even if the
-            // listener misbehaves.
-            previous(info);
-
-            let listener = listener().read().unwrap().clone();
-            let Some(listener) = listener else { return };
-
-            listener.on_panic(details_from(info));
-        }));
+        panic::set_hook(chaining_hook(panic::take_hook()));
     });
 }
+
+/// The hook [`install_hook`] installs: notifies the listener, and runs
+/// `previous` first so nothing that was already being reported is lost.
+fn chaining_hook(previous: PanicHook) -> PanicHook {
+    Box::new(move |info| {
+        // Run the pre-existing hook first, so its output is emitted even if the
+        // listener misbehaves.
+        previous(info);
+
+        let listener = listener().read().unwrap().clone();
+        let Some(listener) = listener else { return };
+
+        listener.on_panic(details_from(info));
+    })
+}
+
+type PanicHook = Box<dyn Fn(&panic::PanicHookInfo<'_>) + Sync + Send + 'static>;
 
 fn details_from(info: &panic::PanicHookInfo<'_>) -> PanicDetails {
     let payload = info.payload();
@@ -137,12 +143,24 @@ fn details_from(info: &panic::PanicHookInfo<'_>) -> PanicDetails {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
+    use std::{
+        panic,
+        sync::{
+            Arc, Mutex, MutexGuard, OnceLock,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
-    use super::{PanicDetails, PanicListener, install_hook, listener, set_panic_listener};
+    use super::{
+        PanicDetails, PanicListener, chaining_hook, install_hook, listener, set_panic_listener,
+    };
+
+    /// The panic hook and the registered listener are both process-wide, so
+    /// the tests that swap them out must not run at the same time.
+    fn serialise() -> MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|error| error.into_inner())
+    }
 
     #[derive(Default)]
     struct Recorder {
@@ -165,11 +183,13 @@ mod tests {
 
     #[test]
     fn test_listener_receives_panic_details() {
+        let _guard = serialise();
         let recorder = Arc::new(Recorder::default());
 
         install_hook();
         *listener().write().unwrap() = Some(recorder.clone());
 
+        let line_of_the_panic = line!() + 1;
         catch_panic(|| panic!("boom"));
 
         assert_eq!(recorder.calls.load(Ordering::SeqCst), 1);
@@ -177,10 +197,59 @@ mod tests {
         let details = recorder.last.lock().unwrap().clone().expect("a panic was recorded");
         assert_eq!(details.message, "boom");
         assert!(details.file.expect("the panic location is known").ends_with("panic.rs"));
+        assert_eq!(details.line, Some(line_of_the_panic));
+        assert!(details.column.is_some_and(|column| column > 0));
+        assert!(details.thread.is_some(), "the panicking thread is named in a test binary");
 
         // Clearing the listener stops the notifications.
         set_panic_listener(None);
         catch_panic(|| panic!("second"));
         assert_eq!(recorder.calls.load(Ordering::SeqCst), 1);
+    }
+
+    /// A `String` payload, which is what `panic!("{}", ...)` produces, reads
+    /// the same way as the `&str` one a literal produces.
+    #[test]
+    fn test_a_formatted_panic_message_is_reported() {
+        let _guard = serialise();
+        let recorder = Arc::new(Recorder::default());
+
+        install_hook();
+        *listener().write().unwrap() = Some(recorder.clone());
+
+        catch_panic(|| panic!("{} went wrong", 1));
+
+        *listener().write().unwrap() = None;
+
+        let details = recorder.last.lock().unwrap().clone().expect("a panic was recorded");
+        assert_eq!(details.message, "1 went wrong");
+    }
+
+    /// `init_platform` installs a hook that logs panics. Ours has to chain to
+    /// it, or registering a listener would silently stop the panic logging.
+    #[test]
+    fn test_the_hook_that_was_already_installed_still_runs() {
+        let _guard = serialise();
+        let recorder = Arc::new(Recorder::default());
+        *listener().write().unwrap() = Some(recorder.clone());
+
+        let previous_calls = Arc::new(AtomicUsize::new(0));
+        let hook = chaining_hook({
+            let previous_calls = previous_calls.clone();
+            Box::new(move |_| {
+                previous_calls.fetch_add(1, Ordering::SeqCst);
+            })
+        });
+
+        let installed = panic::take_hook();
+        panic::set_hook(hook);
+
+        catch_panic(|| panic!("chained"));
+
+        panic::set_hook(installed);
+        *listener().write().unwrap() = None;
+
+        assert_eq!(previous_calls.load(Ordering::SeqCst), 1, "the previous hook was not run");
+        assert_eq!(recorder.calls.load(Ordering::SeqCst), 1, "the listener was not notified");
     }
 }

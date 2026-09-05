@@ -380,6 +380,27 @@ async fn test_mutual_sas_verification() -> Result<()> {
     assert!(bob_sas.is_done());
     assert!(alice_sas.is_done());
 
+    // A finished request still knows which device it verified, so a client can
+    // name it in its completion screen.
+    let alice_verified_device = assert_matches!(
+        alice_verification_request.state(),
+        VerificationRequestState::Done { other_device_data: Some(device_data) } => device_data
+    );
+    assert_eq!(alice_verified_device.user_id(), bob.user_id().unwrap());
+    assert_eq!(alice_verified_device.device_id(), bob.device_id().unwrap());
+
+    assert_eq!(alice_verification_request.other_device_id().as_deref(), bob.device_id().as_deref());
+    assert_eq!(
+        alice_verification_request.other_device_data().map(|device| device.device_id().to_owned()),
+        bob.device_id().map(ToOwned::to_owned)
+    );
+
+    let bob_verified_device = assert_matches!(
+        bob_verification_request.state(),
+        VerificationRequestState::Done { other_device_data: Some(device_data) } => device_data
+    );
+    assert_eq!(bob_verified_device.device_id(), alice.device_id().unwrap());
+
     // Both users appear as verified to each other.
     let alice_bob_ident =
         alice.encryption().get_user_identity(bob.user_id().unwrap()).await?.unwrap();

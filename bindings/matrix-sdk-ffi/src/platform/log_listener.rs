@@ -250,6 +250,58 @@ mod tests {
         assert!(event.file.as_deref().expect("the callsite is known").ends_with("log_listener.rs"));
     }
 
+    /// Every severity has to arrive with the level it was logged at: a host
+    /// that routes events into a platform logger picks the destination from
+    /// it.
+    #[test]
+    fn test_every_level_is_forwarded_as_itself() {
+        let _guard = serialise();
+
+        let recorder = Arc::new(Recorder::default());
+        *listener().write().unwrap() = Some(recorder.clone());
+
+        let subscriber =
+            registry()
+                .with(LogEventLayer.with_filter(
+                    tracing_subscriber::filter::LevelFilter::from_level(Level::TRACE),
+                ));
+
+        subscriber::with_default(subscriber, || {
+            tracing::error!(target: "test_levels", "an error");
+            tracing::warn!(target: "test_levels", "a warning");
+            tracing::info!(target: "test_levels", "some info");
+            tracing::debug!(target: "test_levels", "a debug line");
+            tracing::trace!(target: "test_levels", "a trace line");
+        });
+
+        *listener().write().unwrap() = None;
+
+        let events = recorder.events.lock().unwrap();
+
+        let levels: Vec<_> = events.iter().map(|event| event.level).collect();
+        assert!(
+            levels
+                == [
+                    LogLevel::Error,
+                    LogLevel::Warn,
+                    LogLevel::Info,
+                    LogLevel::Debug,
+                    LogLevel::Trace
+                ],
+            "the levels did not survive the trip to the listener"
+        );
+
+        let messages: Vec<_> = events.iter().map(|event| event.message.as_str()).collect();
+        assert_eq!(
+            messages,
+            ["an error", "a warning", "some info", "a debug line", "a trace line"]
+        );
+
+        // The timestamp is what orders events in a host's own log, so it must
+        // be filled in rather than left at zero.
+        assert!(events.iter().all(|event| event.timestamp.millis() > 0));
+    }
+
     #[test]
     fn test_the_listener_does_not_receive_its_own_logs() {
         let _guard = serialise();

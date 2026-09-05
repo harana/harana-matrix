@@ -210,4 +210,53 @@ mod tests {
         assert_eq!(recorded[1].message, "just a message");
         assert!(recorded[1].fields.is_empty());
     }
+
+    /// Each severity has a method of its own, so a host can map them onto its
+    /// own logger. All five have to be reachable.
+    #[test]
+    fn test_every_level_reaches_its_own_method() {
+        let recorder = Recorder::default();
+        let boxed: Box<dyn Logger> = Box::new(recorder.clone());
+        let wrapper = LoggerWrapper { inner: Arc::new(Mutex::new(boxed)) };
+
+        subscriber::with_default(registry().with(wrapper), || {
+            tracing::error!(target: "test_levels", "an error");
+            tracing::warn!(target: "test_levels", "a warning");
+            tracing::info!(target: "test_levels", "some info");
+            tracing::debug!(target: "test_levels", "a debug line");
+            tracing::trace!(target: "test_levels", "a trace line");
+        });
+
+        let recorded = recorder.0.lock().unwrap();
+        let levels: Vec<_> = recorded.iter().map(|entry| entry.level).collect();
+        assert_eq!(levels, ["error", "warn", "info", "debug", "trace"]);
+    }
+
+    /// The fields arrive separately from the message, keyed by name, rather
+    /// than flattened into the line as the single `log` method did.
+    #[test]
+    fn test_fields_are_delivered_separately_from_the_message() {
+        let recorder = Recorder::default();
+        let boxed: Box<dyn Logger> = Box::new(recorder.clone());
+        let wrapper = LoggerWrapper { inner: Arc::new(Mutex::new(boxed)) };
+
+        subscriber::with_default(registry().with(wrapper), || {
+            tracing::info!(
+                target: "test_fields",
+                room_id = "!room:localhost",
+                attempts = 3,
+                retried = true,
+                "sending"
+            );
+        });
+
+        let recorded = recorder.0.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+
+        let entry = &recorded[0];
+        assert_eq!(entry.message, "sending", "the fields must not be folded into the message");
+        assert_eq!(entry.fields.get("room_id").map(String::as_str), Some("!room:localhost"));
+        assert_eq!(entry.fields.get("attempts").map(String::as_str), Some("3"));
+        assert_eq!(entry.fields.get("retried").map(String::as_str), Some("true"));
+    }
 }

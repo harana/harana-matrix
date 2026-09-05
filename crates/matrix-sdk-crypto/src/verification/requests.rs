@@ -1779,6 +1779,12 @@ mod tests {
 
         assert_matches!(bob_request.state(), VerificationRequestState::Cancelled { .. });
         assert_matches!(alice_request.state(), VerificationRequestState::Cancelled { .. });
+
+        // Nothing was verified, so there is no device to name afterwards.
+        assert!(bob_request.other_device_data().is_none());
+        assert!(bob_request.other_device_id().is_none());
+        assert!(alice_request.other_device_data().is_none());
+        assert!(alice_request.other_device_id().is_none());
     }
 
     #[async_test]

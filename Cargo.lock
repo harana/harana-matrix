@@ -3780,6 +3780,7 @@ dependencies = [
  "matrix-sdk-contentscanner",
  "matrix-sdk-crypto",
  "matrix-sdk-ffi-macros",
+ "matrix-sdk-test",
  "matrix-sdk-ui",
  "mime",
  "oauth2",
@@ -3803,6 +3804,7 @@ dependencies = [
  "url",
  "uuid",
  "vergen-gitcl",
+ "wiremock",
  "zeroize",
  "zxcvbn",
 ]
