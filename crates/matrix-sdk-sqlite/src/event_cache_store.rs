@@ -47,7 +47,7 @@ use rusqlite::{
     OptionalExtension, ToSql, Transaction, TransactionBehavior, params, params_from_iter,
 };
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::{
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
@@ -201,8 +201,33 @@ impl SqliteEventCacheStore {
     }
 
     /// Open the SQLite-based event cache store with the config open config.
+    ///
+    /// If the database turns out to be corrupted, it is deleted and recreated
+    /// from scratch: Cached events will have to be fetched from the homeserver
+    /// again.
     #[instrument(skip(config), fields(path = ?config.path))]
     pub async fn open_with_config(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
+        match Self::open_with_config_inner(config).await {
+            Err(error) if error.is_database_corruption() => {
+                // There is no repairing this, and returning the error leaves the client
+                // permanently broken, with no way out short of reinstalling. The event cache
+                // store holds nothing we cannot fetch again, so start over. See
+                // issue #244.
+                warn!(
+                    "The event cache store database is corrupted, recreating it from scratch: {error}"
+                );
+
+                fs::remove_database_files(config.path.join(DATABASE_NAME))
+                    .await
+                    .map_err(OpenStoreError::RemoveCorruptedDatabase)?;
+
+                Self::open_with_config_inner(config).await
+            }
+            result => result,
+        }
+    }
+
+    async fn open_with_config_inner(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         debug!(?config);
 
         let _timer = timer!("open_with_config");
@@ -2054,6 +2079,53 @@ mod tests {
 
     event_cache_store_integration_tests!();
     event_cache_store_integration_tests_time!();
+
+    /// Regression test for issue #244: a corrupted database used to leave the
+    /// client permanently broken, with no recovery short of reinstalling.
+    #[async_test]
+    async fn test_a_corrupted_database_is_recreated() {
+        let tmpdir_path = new_event_cache_store_workspace();
+        let db_path = tmpdir_path.join(super::DATABASE_NAME);
+        let linked_chunk_id = LinkedChunkId::Room(&DEFAULT_TEST_ROOM_ID);
+
+        // Given an event cache store holding a chunk...
+        {
+            let store = SqliteEventCacheStore::open(&tmpdir_path, None).await.unwrap();
+            store
+                .handle_linked_chunk_updates(
+                    linked_chunk_id,
+                    vec![Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    }],
+                )
+                .await
+                .unwrap();
+            assert_eq!(store.load_all_chunks(linked_chunk_id).await.unwrap().len(), 1);
+        }
+
+        // ... whose file then gets mangled...
+        std::fs::write(&db_path, b"this is not an SQLite database").unwrap();
+
+        // ... when we open it again...
+        let store = SqliteEventCacheStore::open(&tmpdir_path, None).await.unwrap();
+
+        // ... then we get a working, empty store rather than an error.
+        assert!(store.load_all_chunks(linked_chunk_id).await.unwrap().is_empty());
+        store
+            .handle_linked_chunk_updates(
+                linked_chunk_id,
+                vec![Update::NewItemsChunk {
+                    previous: None,
+                    new: ChunkIdentifier::new(0),
+                    next: None,
+                }],
+            )
+            .await
+            .unwrap();
+        assert_eq!(store.load_all_chunks(linked_chunk_id).await.unwrap().len(), 1);
+    }
 
     #[async_test]
     async fn test_encryption_encode_decode_thread_id_roundtrip() {

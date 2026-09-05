@@ -37,7 +37,7 @@ use matrix_sdk_store_encryption::StoreCipher;
 use ruma::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
 use rusqlite::{OptionalExtension, params_from_iter};
 use tokio::sync::{Mutex, OwnedMutexGuard};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use crate::{
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
@@ -115,8 +115,29 @@ impl SqliteMediaStore {
     }
 
     /// Open the SQLite-based media store with the config open config.
+    ///
+    /// If the database turns out to be corrupted, it is deleted and recreated
+    /// from scratch: Cached media will have to be downloaded again.
     #[instrument(skip(config), fields(path = ?config.path))]
     pub async fn open_with_config(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
+        match Self::open_with_config_inner(config).await {
+            Err(error) if error.is_database_corruption() => {
+                // There is no repairing this, and returning the error leaves the client
+                // permanently broken, with no way out short of reinstalling. The media store
+                // holds nothing we cannot fetch again, so start over. See issue #244.
+                warn!("The media store database is corrupted, recreating it from scratch: {error}");
+
+                fs::remove_database_files(config.path.join(DATABASE_NAME))
+                    .await
+                    .map_err(OpenStoreError::RemoveCorruptedDatabase)?;
+
+                Self::open_with_config_inner(config).await
+            }
+            result => result,
+        }
+    }
+
+    async fn open_with_config_inner(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         debug!(?config);
 
         let _timer = timer!("open_with_config");
@@ -754,6 +775,47 @@ mod tests {
             })
             .await
             .expect("querying media cache content by last access failed")
+    }
+
+    /// Regression test for issue #244: a corrupted database used to leave the
+    /// client permanently broken, with no recovery short of reinstalling.
+    #[async_test]
+    async fn test_a_corrupted_database_is_recreated() {
+        let tmpdir_path = new_media_store_workspace();
+        let db_path = tmpdir_path.join(super::DATABASE_NAME);
+
+        // Given a media store holding some content...
+        let request = MediaRequestParameters {
+            source: MediaSource::Plain(mxc_uri!("mxc://localhost/media").to_owned()),
+            format: MediaFormat::File,
+        };
+        let content: Vec<u8> = "hello world".into();
+
+        {
+            let store = SqliteMediaStore::open(&tmpdir_path, None).await.unwrap();
+            store
+                .add_media_content(&request, content.clone(), IgnoreMediaRetentionPolicy::No)
+                .await
+                .unwrap();
+            assert_eq!(store.get_media_content(&request).await.unwrap(), Some(content));
+        }
+
+        // ... whose file then gets mangled...
+        std::fs::write(&db_path, b"this is not an SQLite database").unwrap();
+
+        // ... when we open it again...
+        let store = SqliteMediaStore::open(&tmpdir_path, None).await.unwrap();
+
+        // ... then we get a working, empty store rather than an error.
+        assert_eq!(store.get_media_content(&request).await.unwrap(), None);
+        store
+            .add_media_content(&request, "hello again".into(), IgnoreMediaRetentionPolicy::No)
+            .await
+            .unwrap();
+        assert_eq!(
+            store.get_media_content(&request).await.unwrap(),
+            Some("hello again".as_bytes().to_vec())
+        );
     }
 
     #[async_test]

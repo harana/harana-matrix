@@ -71,6 +71,40 @@ pub enum OpenStoreError {
     /// Failed to save the store cipher to the DB.
     #[error("Failed to save the store cipher to the DB: {0}")]
     SaveCipher(#[source] rusqlite::Error),
+
+    /// Failed to delete a corrupted database so that it could be recreated.
+    #[error("Failed to remove the corrupted database: {0}")]
+    RemoveCorruptedDatabase(#[source] io::Error),
+}
+
+impl OpenStoreError {
+    /// Does this error mean the database file itself is unusable?
+    ///
+    /// SQLite reports this as `SQLITE_CORRUPT` ("database disk image is
+    /// malformed") or `SQLITE_NOTADB` ("file is not a database"). Neither is
+    /// recoverable by retrying: the file has to go.
+    pub fn is_database_corruption(&self) -> bool {
+        fn is_corrupt(error: &rusqlite::Error) -> bool {
+            matches!(
+                error,
+                rusqlite::Error::SqliteFailure(ffi_error, _)
+                    if matches!(
+                        ffi_error.code,
+                        rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase,
+                    )
+            )
+        }
+
+        match self {
+            Self::LoadVersion(error) | Self::LoadCipher(error) | Self::SaveCipher(error) => {
+                is_corrupt(error)
+            }
+            Self::Migration(Error::Sqlite(error)) => is_corrupt(error),
+            Self::Migration(Error::Pool(PoolError::Backend(error)))
+            | Self::Pool(PoolError::Backend(error)) => is_corrupt(error),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
