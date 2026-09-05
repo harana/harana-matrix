@@ -385,7 +385,7 @@ fn strip_webp(data: &[u8]) -> Option<Vec<u8>> {
                     body.extend_from_slice(&(tiff.len() as u32).to_le_bytes());
                     body.extend_from_slice(&tiff);
 
-                    if tiff.len() % 2 != 0 {
+                    if !tiff.len().is_multiple_of(2) {
                         body.push(0);
                     }
                 } else if let Some(flags_offset) = flags_offset {
@@ -501,7 +501,7 @@ mod tests {
         out.extend_from_slice(&(data.len() as u32).to_le_bytes());
         out.extend_from_slice(data);
 
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             out.push(0);
         }
     }
