@@ -269,9 +269,24 @@ impl Caches {
                     self.internals.room_version_rules.clone(),
                     self.internals.linked_chunk_update_sender.clone(),
                     &self.internals.state,
+                    self.internals.auto_shrink_sender.clone(),
                 )
             })
             .await
+    }
+
+    /// Get all the [`ThreadEventCache`]s that have been created already.
+    ///
+    /// [`ThreadEventCache`]: thread::ThreadEventCache
+    pub async fn loaded_threads(&self) -> Vec<thread::ThreadEventCache> {
+        self.threads.read().await.values().cloned().collect()
+    }
+
+    /// Get the [`PinnedEventsCache`] if it has been created already.
+    ///
+    /// [`PinnedEventsCache`]: pinned_events::PinnedEventsCache
+    pub fn loaded_pinned_events(&self) -> Option<&pinned_events::PinnedEventsCache> {
+        self.pinned_events.get()
     }
 
     /// Get or create a [`EventFocusedCache`].

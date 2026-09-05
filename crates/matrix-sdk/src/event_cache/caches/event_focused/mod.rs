@@ -29,7 +29,7 @@
 //! case where we'd want to persist these caches on disk (e.g., for permalinks
 //! to work across sessions).
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use eyeball_im::VectorDiff;
 use matrix_sdk_base::{
@@ -37,10 +37,13 @@ use matrix_sdk_base::{
     event_cache::{Event, Gap},
     linked_chunk::OwnedLinkedChunkId,
 };
-use matrix_sdk_common::{linked_chunk::ChunkIdentifier, serde_helpers::extract_thread_root};
-use ruma::{OwnedEventId, UInt, api::Direction};
+use matrix_sdk_common::{
+    linked_chunk::ChunkIdentifier,
+    serde_helpers::{extract_relation, extract_thread_root},
+};
+use ruma::{OwnedEventId, UInt, api::Direction, events::relation::RelationType};
 use tokio::sync::broadcast::{Receiver, Sender};
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 
 #[cfg(feature = "e2e-encryption")]
 use super::super::redecryptor::{MaybeResolvedEvent, TryResolveEvents};
@@ -59,6 +62,40 @@ use crate::{
     paginators::{PaginationResult, Paginator, StartFromResult, thread::PaginableThread},
     room::{IncludeRelations, MessagesOptions, RelationsOptions, WeakRoom},
 };
+
+/// Maximum number of aggregations of the focused event loaded when the cache is
+/// (re)loaded, on top of the `/context` window.
+const MAX_AGGREGATIONS_TO_LOAD: u16 = 256;
+
+/// Among the relations of the focused event, the aggregations that `events`
+/// doesn't already contain, in the order the server returned them.
+///
+/// Only aggregations are kept: any other relation (a thread reply, a reference)
+/// is a timeline item of its own, and appending it at the end of the loaded
+/// window would misplace it.
+fn aggregations_to_append(
+    events: &[TimelineEvent],
+    relations: Vec<TimelineEvent>,
+) -> Vec<TimelineEvent> {
+    let known_event_ids =
+        events.iter().filter_map(|event| event.event_id()).collect::<BTreeSet<_>>();
+
+    relations
+        .into_iter()
+        .filter(|event| {
+            let Some((relation_type, _)) = extract_relation(event.raw()) else {
+                return false;
+            };
+
+            if !matches!(relation_type, RelationType::Annotation | RelationType::Replacement) {
+                return false;
+            }
+
+            // Don't duplicate what the `/context` window already contains.
+            event.event_id().is_some_and(|event_id| !known_event_ids.contains(&event_id))
+        })
+        .collect()
+}
 
 /// Options for controlling the behaviour of an `EventFocusedCache` when the
 /// focused event may be part of a thread, or a thread's root.
@@ -180,7 +217,7 @@ impl EventFocusedCacheState {
 
         trace!(num_context_events, "fetching event with context via /context");
 
-        let paginator = Paginator::new(room);
+        let paginator = Paginator::new(room.clone());
 
         let result =
             paginator.start_from(&self.focused_event_id, UInt::from(num_context_events)).await?;
@@ -257,6 +294,8 @@ impl EventFocusedCacheState {
             // Forward token.
             let forward_token = tokens.next.into_token();
 
+            let thread_events = self.with_aggregations_of_focused_event(&room, thread_events).await;
+
             self.add_initial_events_with_gaps(thread_events, backward_token, forward_token);
         } else {
             trace!("focused event is not part of a thread, setting up room pagination");
@@ -280,12 +319,65 @@ impl EventFocusedCacheState {
                 result.events.clone()
             };
 
+            let events = self.with_aggregations_of_focused_event(&room, events).await;
+
             self.add_initial_events_with_gaps(events, backward_token, forward_token);
         }
 
         self.propagate_changes();
 
         Ok(result)
+    }
+
+    /// Append the aggregations of the focused event that `events` doesn't
+    /// already contain.
+    ///
+    /// The `/context` window is centred on the focused event, so an edit or a
+    /// reaction that is older or newer than that window isn't part of it, and
+    /// the timeline built on top of this cache would render the focused event
+    /// without them. Only aggregations are loaded this way: they are folded
+    /// into the event they target instead of being rendered on their own, so
+    /// appending them at the end of the loaded window doesn't affect the
+    /// ordering of the timeline.
+    ///
+    /// Errors are not fatal here: a focused timeline missing an aggregation is
+    /// better than no focused timeline at all, so they're logged and the events
+    /// are returned unchanged.
+    async fn with_aggregations_of_focused_event(
+        &self,
+        room: &Room,
+        mut events: Vec<TimelineEvent>,
+    ) -> Vec<TimelineEvent> {
+        let options = RelationsOptions {
+            include_relations: IncludeRelations::AllRelations,
+            // Aggregations can target other aggregations: an edit of an edit, a reaction
+            // to an edit.
+            recurse: true,
+            limit: Some(UInt::from(MAX_AGGREGATIONS_TO_LOAD)),
+            ..Default::default()
+        };
+
+        let relations = match room.relations(self.focused_event_id.clone(), options).await {
+            Ok(relations) => relations.chunk,
+            Err(err) => {
+                warn!("error when loading the relations of the focused event: {err}");
+                return events;
+            }
+        };
+
+        let mut aggregations = aggregations_to_append(&events, relations);
+
+        if aggregations.is_empty() {
+            return events;
+        }
+
+        trace!(
+            num_aggregations = aggregations.len(),
+            "loaded aggregations of the focused event that were outside the context window"
+        );
+
+        events.append(&mut aggregations);
+        events
     }
 
     /// Add initial events to the chunk, with gaps for pagination tokens.
@@ -701,3 +793,68 @@ pub struct EventFocusedCacheKey {
 
 /// A small type to send updates in all channels.
 pub type EventFocusedCacheUpdateSender = Sender<TimelineVectorDiffs>;
+
+#[cfg(test)]
+mod tests {
+    use matrix_sdk_test::{ALICE, BOB, event_factory::EventFactory};
+    use ruma::{event_id, events::room::message::RoomMessageEventContentWithoutRelation, room_id};
+
+    use super::aggregations_to_append;
+
+    #[test]
+    fn test_aggregations_to_append() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let focused_event_id = event_id!("$focused");
+        let f = EventFactory::new().room(room_id).sender(*ALICE);
+
+        // The window returned by `/context`: the focused event, and a reaction to it
+        // that is recent enough to be part of it.
+        let known_reaction_id = event_id!("$known_reaction");
+        let events = vec![
+            f.text_msg("hello").event_id(focused_event_id).into_event(),
+            f.reaction(focused_event_id, "👍").event_id(known_reaction_id).into_event(),
+        ];
+
+        let edit_id = event_id!("$edit");
+        let reaction_id = event_id!("$reaction");
+
+        let relations = vec![
+            // An edit of the focused event: an aggregation, keep it.
+            f.text_msg("* hello, world")
+                .edit(
+                    focused_event_id,
+                    RoomMessageEventContentWithoutRelation::text_plain("hello, world"),
+                )
+                .event_id(edit_id)
+                .into_event(),
+            // A reaction to the focused event: an aggregation, keep it.
+            f.reaction(focused_event_id, "🎉").sender(*BOB).event_id(reaction_id).into_event(),
+            // The reaction the window already contains: don't duplicate it.
+            f.reaction(focused_event_id, "👍").event_id(known_reaction_id).into_event(),
+            // A reply in a thread rooted at the focused event: a timeline item of its
+            // own, leave it to pagination.
+            f.text_msg("in a thread")
+                .in_thread(focused_event_id, focused_event_id)
+                .event_id(event_id!("$thread_reply"))
+                .into_event(),
+            // An event that doesn't relate to anything: not an aggregation.
+            f.text_msg("unrelated").event_id(event_id!("$unrelated")).into_event(),
+        ];
+
+        let aggregations = aggregations_to_append(&events, relations);
+
+        let aggregation_ids =
+            aggregations.iter().filter_map(|event| event.event_id()).collect::<Vec<_>>();
+        assert_eq!(aggregation_ids, vec![edit_id.to_owned(), reaction_id.to_owned()]);
+    }
+
+    #[test]
+    fn test_aggregations_to_append_without_relations() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id).sender(*ALICE);
+
+        let events = vec![f.text_msg("hello").event_id(event_id!("$focused")).into_event()];
+
+        assert!(aggregations_to_append(&events, Vec::new()).is_empty());
+    }
+}

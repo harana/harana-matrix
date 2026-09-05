@@ -125,7 +125,7 @@ async fn test_thread_contains_its_root_event() {
 }
 
 #[async_test]
-async fn test_ignored_user_empties_threads() {
+async fn test_ignored_user_events_are_dropped_from_threads() {
     let server = MatrixMockServer::new().await;
     let client = client_with_threading_support(&server).await;
 
@@ -182,11 +182,11 @@ async fn test_ignored_user_empties_threads() {
         })
         .await;
 
-    // We do receive a clear.
+    // Only the event sent by `dexter` is removed from the thread.
     {
         assert_let_timeout!(Ok(TimelineVectorDiffs { diffs, .. }) = thread_stream.recv());
         assert_eq!(diffs.len(), 1);
-        assert_let!(VectorDiff::Clear = &diffs[0]);
+        assert_let!(VectorDiff::Remove { index: 0 } = &diffs[0]);
     }
 
     // Receiving new events still works.

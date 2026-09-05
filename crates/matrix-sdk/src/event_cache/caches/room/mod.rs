@@ -16,7 +16,11 @@ pub mod pagination;
 mod state;
 mod updates;
 
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    sync::Arc,
+};
 
 use eyeball::SharedObservable;
 use matrix_sdk_base::{
@@ -102,7 +106,7 @@ impl RoomEventCache {
     }
 
     /// Get the weak room of this [`RoomEventCache`].
-    pub(super) fn weak_room(&self) -> &WeakRoom {
+    pub(crate) fn weak_room(&self) -> &WeakRoom {
         &self.inner.weak_room
     }
 
@@ -284,6 +288,28 @@ impl RoomEventCache {
                 RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs {
                     diffs: timeline_event_diffs,
                     origin: EventsOrigin::Sync,
+                }),
+                Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Remove every event sent by one of the given users, from memory and from
+    /// the store, and notify the observers of this cache.
+    pub(in super::super) async fn remove_events_sent_by(
+        &self,
+        senders: &BTreeSet<OwnedUserId>,
+    ) -> Result<()> {
+        let timeline_event_diffs =
+            self.inner.state.write().await?.remove_events_sent_by(senders).await?;
+
+        if !timeline_event_diffs.is_empty() {
+            self.inner.update_sender.send(
+                RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs {
+                    diffs: timeline_event_diffs,
+                    origin: EventsOrigin::Cache,
                 }),
                 Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
             );
@@ -786,7 +812,7 @@ mod tests {
 
 #[cfg(all(test, not(target_family = "wasm")))] // This uses the cross-process lock, so needs time support.
 mod timed_tests {
-    use std::{ops::Not, sync::Arc};
+    use std::{collections::BTreeSet, ops::Not, sync::Arc};
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
@@ -900,6 +926,179 @@ mod timed_tests {
 
         // That's all, folks!
         assert!(chunks.next().is_none());
+    }
+
+    #[async_test]
+    async fn test_remove_events_sent_by() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id);
+
+        let event_cache_store = Arc::new(MemoryStore::new());
+
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder.store_config(
+                    StoreConfig::new(CrossProcessLockConfig::multi_process("hodor"))
+                        .event_cache_store(event_cache_store.clone()),
+                )
+            })
+            .build()
+            .await;
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Three events: Alice, Bob, Alice.
+        room_event_cache
+            .handle_joined_room_update(
+                JoinedRoomUpdate {
+                    timeline: Timeline {
+                        limited: false,
+                        prev_batch: None,
+                        events: vec![
+                            f.text_msg("hey").sender(*ALICE).event_id(event_id!("$ev0")).into(),
+                            f.text_msg("buy my coin")
+                                .sender(*BOB)
+                                .event_id(event_id!("$ev1"))
+                                .into(),
+                            f.text_msg("ugh").sender(*ALICE).event_id(event_id!("$ev2")).into(),
+                        ],
+                    },
+                    ..Default::default()
+                },
+                EphemeralEvents::default(),
+            )
+            .await
+            .unwrap();
+
+        let (initial_events, mut subscriber) = room_event_cache.subscribe().await.unwrap();
+        assert_eq!(initial_events.len(), 3);
+
+        // Removing the events of a user who sent none is a no-op: no update is sent.
+        room_event_cache
+            .remove_events_sent_by(&BTreeSet::from([user_id!("@nobody:saucisse.bzh").to_owned()]))
+            .await
+            .unwrap();
+
+        assert!(subscriber.is_empty());
+
+        // Bob's event is removed, Alice's events are kept.
+        room_event_cache.remove_events_sent_by(&BTreeSet::from([BOB.to_owned()])).await.unwrap();
+
+        assert_let_timeout!(
+            Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) =
+                subscriber.recv()
+        );
+        assert_eq!(diffs.len(), 1);
+        assert_let!(VectorDiff::Remove { index: 1 } = &diffs[0]);
+
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event_id(), Some(event_id!("$ev0")));
+        assert_eq!(events[1].event_id(), Some(event_id!("$ev2")));
+
+        // And it is gone from the storage too.
+        let linked_chunk = from_all_chunks::<3, _, _>(
+            event_cache_store.load_all_chunks(LinkedChunkId::Room(room_id)).await.unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+
+        let stored_event_ids = linked_chunk
+            .items()
+            .filter_map(|(_position, event)| event.event_id())
+            .collect::<Vec<_>>();
+        assert_eq!(stored_event_ids, vec![event_id!("$ev0"), event_id!("$ev2")]);
+    }
+
+    #[async_test]
+    async fn test_remove_events_sent_by_reaches_the_events_that_are_not_loaded() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id);
+
+        let event_cache_store = Arc::new(MemoryStore::new());
+
+        // Two chunks in the store: only the last one is loaded in memory, and each
+        // holds one event of the user to ignore.
+        event_cache_store
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            f.text_msg("old spam").sender(*BOB).event_id(event_id!("$ev0")).into(),
+                            f.text_msg("old hey").sender(*ALICE).event_id(event_id!("$ev1")).into(),
+                        ],
+                    },
+                    Update::NewItemsChunk {
+                        previous: Some(ChunkIdentifier::new(0)),
+                        new: ChunkIdentifier::new(1),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(1), 0),
+                        items: vec![
+                            f.text_msg("new spam").sender(*BOB).event_id(event_id!("$ev2")).into(),
+                            f.text_msg("new hey").sender(*ALICE).event_id(event_id!("$ev3")).into(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder.store_config(
+                    StoreConfig::new(CrossProcessLockConfig::multi_process("hodor"))
+                        .event_cache_store(event_cache_store.clone()),
+                )
+            })
+            .build()
+            .await;
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Only the last chunk is loaded in memory.
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+
+        room_event_cache.remove_events_sent_by(&BTreeSet::from([BOB.to_owned()])).await.unwrap();
+
+        // The loaded event is gone…
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_id(), Some(event_id!("$ev3")));
+
+        // …and so is the one that was only in the store.
+        let linked_chunk = from_all_chunks::<3, _, _>(
+            event_cache_store.load_all_chunks(LinkedChunkId::Room(room_id)).await.unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+
+        let stored_event_ids = linked_chunk
+            .items()
+            .filter_map(|(_position, event)| event.event_id())
+            .collect::<Vec<_>>();
+        assert_eq!(stored_event_ids, vec![event_id!("$ev1"), event_id!("$ev3")]);
     }
 
     #[async_test]

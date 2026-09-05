@@ -259,6 +259,108 @@ async fn test_pinned_event_with_paginated_reactions() {
 }
 
 #[async_test]
+async fn test_pinned_events_are_unloaded_when_the_last_timeline_is_dropped() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    let room_id = room_id!("!test:localhost");
+
+    let f = EventFactory::new().room(room_id).sender(*BOB);
+    let event_id_1 = event_id!("$1");
+    let event_1 = f
+        .text_msg("in the end")
+        .event_id(event_id_1)
+        .server_ts(MilliSecondsSinceUnixEpoch::now())
+        .into_raw_sync();
+    let event_id_2 = event_id!("$2");
+    let event_2 = f
+        .text_msg("it doesn't even matter")
+        .event_id(event_id_2)
+        .server_ts(MilliSecondsSinceUnixEpoch::now())
+        .into_raw_sync();
+
+    mock_events_endpoint(&server, room_id, vec![event_1.clone()]).await;
+
+    server
+        .mock_room_relations()
+        .match_target_event(event_id_1.to_owned())
+        .ok(RoomRelationsResponseTemplate::default().events(Vec::<Raw<AnyTimelineEvent>>::new()))
+        .mount()
+        .await;
+
+    // $1 is pinned, and a first pinned-events timeline loads it.
+    let room = PinnedEventsSync::new(room_id)
+        .with_pinned_event_ids(vec!["$1"])
+        .mock_and_sync(&client, &server)
+        .await
+        .expect("Room should be synced");
+
+    let timeline =
+        TimelineBuilder::new(&room).with_focus(TimelineFocus::PinnedEvents).build().await.unwrap();
+
+    let (mut items, mut timeline_stream) = timeline.subscribe().await;
+
+    if items.is_empty() {
+        assert_let_timeout!(Some(updates) = timeline_stream.next());
+        for up in updates {
+            up.apply(&mut items);
+        }
+    }
+
+    assert_eq!(items.len(), 1 + 1); // event item + a date divider
+    assert_eq!(items[1].as_event().unwrap().event_id().unwrap(), event_id_1);
+
+    // Nobody is listening to the pinned events anymore.
+    drop(timeline_stream);
+    drop(timeline);
+
+    // $2 gets pinned as well, but since nobody listens to the pinned events, they
+    // are not refreshed: the /event endpoint for $2 is never called.
+    let event_2_endpoint = server
+        .mock_room_event()
+        .room(room_id.to_owned())
+        .match_event_id()
+        .ok(TimelineEvent::from_plaintext(event_2.clone()))
+        .expect(0)
+        .mount_as_scoped()
+        .await;
+
+    let room = PinnedEventsSync::new(room_id)
+        .with_pinned_event_ids(vec!["$1", "$2"])
+        .mock_and_sync(&client, &server)
+        .await
+        .expect("Sync failed");
+
+    sleep(Duration::from_millis(300)).await;
+
+    drop(event_2_endpoint);
+
+    // A new pinned-events timeline reloads the pinned events, and $2 shows up.
+    mock_events_endpoint(&server, room_id, vec![event_2.clone()]).await;
+    server
+        .mock_room_relations()
+        .match_target_event(event_id_2.to_owned())
+        .ok(RoomRelationsResponseTemplate::default().events(Vec::<Raw<AnyTimelineEvent>>::new()))
+        .mount()
+        .await;
+
+    let timeline =
+        TimelineBuilder::new(&room).with_focus(TimelineFocus::PinnedEvents).build().await.unwrap();
+
+    let (mut items, mut timeline_stream) = timeline.subscribe().await;
+
+    while items.len() < 2 + 1 {
+        assert_let_timeout!(Some(updates) = timeline_stream.next());
+        for up in updates {
+            up.apply(&mut items);
+        }
+    }
+
+    assert_eq!(items.len(), 2 + 1); // event items + a date divider
+    assert_eq!(items[1].as_event().unwrap().event_id().unwrap(), event_id_1);
+    assert_eq!(items[2].as_event().unwrap().event_id().unwrap(), event_id_2);
+}
+
+#[async_test]
 async fn test_new_pinned_event_ids_reload_the_timeline() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
@@ -892,7 +994,12 @@ async fn test_ensure_max_concurrency_is_observed() {
     let handle = spawn({
         let timeline_builder = room.timeline_builder().with_focus(TimelineFocus::PinnedEvents);
         async {
-            let _ = timeline_builder.build().await;
+            let _timeline = timeline_builder.build().await;
+
+            // Hold on to the timeline: the pinned events are only loaded while someone
+            // listens to them, so dropping it here would cancel the requests that are
+            // still in flight.
+            sleep(Duration::from_secs(60)).await;
         }
     });
 
@@ -900,12 +1007,16 @@ async fn test_ensure_max_concurrency_is_observed() {
     // requests.
     sleep(Duration::from_secs(2)).await;
 
-    // Abort handle to stop requests from being processed.
-    handle.abort();
-
     // The real check happens here, based on the `max_concurrent_requests` expected
     // value set above for the mock endpoint.
+    //
+    // This must happen before the timeline is dropped: the pinned events are only
+    // loaded while someone listens to them, so dropping the timeline cancels the
+    // requests that are still in flight.
     server.server().verify().await;
+
+    // Abort handle to stop requests from being processed.
+    handle.abort();
 }
 
 async fn mock_events_endpoint(
