@@ -93,6 +93,13 @@ pub struct RoomInfo {
     highlight_count: u64,
     notification_count: u64,
     cached_user_defined_notification_mode: Option<RoomNotificationMode>,
+    /// The notification mode this room falls back to when the user hasn't
+    /// defined one for it, i.e. the account-level default for rooms of this
+    /// kind.
+    ///
+    /// `None` if the room isn't joined or its encryption state isn't known
+    /// yet.
+    default_notification_mode: Option<RoomNotificationMode>,
     has_room_call: bool,
     active_room_call_participants: Vec<String>,
     active_room_call_consensus_intent: RtcCallIntentConsensus,
@@ -197,6 +204,7 @@ impl RoomInfo {
             cached_user_defined_notification_mode: room
                 .cached_user_defined_notification_mode()
                 .map(Into::into),
+            default_notification_mode: room.default_notification_mode().await.map(Into::into),
             has_room_call: room.has_active_room_call(),
             active_room_call_participants: room
                 .active_room_call_participants()

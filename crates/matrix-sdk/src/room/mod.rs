@@ -3843,6 +3843,43 @@ impl Room {
         }
     }
 
+    /// Get the notification mode this room falls back to when the user hasn't
+    /// defined one for it.
+    ///
+    /// This is the account-level default for rooms of the same kind, i.e. it
+    /// depends on whether the room is encrypted and whether it involves
+    /// exactly two people.
+    ///
+    /// Returns `None` if the room isn't joined, or if its encryption state is
+    /// not known yet. Unlike [`Room::notification_mode`], this never requests
+    /// the encryption state over the network, so it is safe to call on a hot
+    /// path.
+    pub async fn default_notification_mode(&self) -> Option<RoomNotificationMode> {
+        if !matches!(self.state(), RoomState::Joined) {
+            return None;
+        }
+
+        let encryption_state = self.encryption_state();
+        if encryption_state.is_unknown() {
+            return None;
+        }
+
+        // From the point of view of notification settings, a `one-to-one` room is one
+        // that involves exactly two people.
+        let is_one_to_one = IsOneToOne::from(self.active_members_count() == 2);
+
+        Some(
+            self.client()
+                .notification_settings()
+                .await
+                .get_default_room_notification_mode(
+                    IsEncrypted::from(encryption_state.is_encrypted()),
+                    is_one_to_one,
+                )
+                .await,
+        )
+    }
+
     /// Get the user-defined notification mode.
     ///
     /// The result is cached for fast and non-async call. To read the cached

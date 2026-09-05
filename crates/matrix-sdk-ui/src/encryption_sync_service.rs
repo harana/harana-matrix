@@ -59,6 +59,29 @@ impl EncryptionSyncPermit {
     }
 }
 
+/// Which process an [`EncryptionSyncService`] runs in.
+///
+/// The two differ in how they treat the device list cache: see
+/// [`EncryptionSyncMode::Notification`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EncryptionSyncMode {
+    /// The service runs in the app's own, long-lived process.
+    #[default]
+    App,
+
+    /// The service runs in a short-lived notification process, e.g. the [NSE]
+    /// on iOS.
+    ///
+    /// Such a process starts a new sliding sync on every push, so it never has
+    /// a `pos` to resume from. Invalidating the device list cache each time
+    /// would force a `/keys/query` for every tracked user on every push, so
+    /// this mode leaves the cache alone: the app's own encryption sync is the
+    /// one that tracks device list updates.
+    ///
+    /// [NSE]: https://developer.apple.com/documentation/usernotifications/unnotificationserviceextension
+    Notification,
+}
+
 /// High-level helper for synchronizing encryption events using sliding sync.
 ///
 /// See the module's documentation for more details.
@@ -74,6 +97,7 @@ impl EncryptionSyncService {
     pub async fn new(
         client: Client,
         poll_and_network_timeouts: Option<(Duration, Duration)>,
+        mode: EncryptionSyncMode,
     ) -> Result<Self, Error> {
         // Make sure to use the same `conn_id` and caching store identifier, whichever
         // process is running this sliding sync. There must be at most one
@@ -85,7 +109,8 @@ impl EncryptionSyncService {
             .with_to_device_extension(
                 assign!(http::request::ToDevice::default(), { enabled: Some(true)}),
             )
-            .with_e2ee_extension(assign!(http::request::E2EE::default(), { enabled: Some(true)}));
+            .with_e2ee_extension(assign!(http::request::E2EE::default(), { enabled: Some(true)}))
+            .mark_tracked_users_dirty_without_pos(mode == EncryptionSyncMode::App);
 
         if let Some((poll_timeout, network_timeout)) = poll_and_network_timeouts {
             builder = builder.poll_timeout(poll_timeout).network_timeout(network_timeout);

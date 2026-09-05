@@ -37,6 +37,7 @@ use matrix_sdk::{
         DefaultMediaFetcher, MediaFormat, MediaRequestParameters, MediaRetentionPolicy,
         MediaThumbnailSettings,
     },
+    pusher::set_disable_badge_count,
     ruma::{
         EventEncryptionAlgorithm, RoomId, TransactionId, UInt, UserId,
         api::client::{
@@ -95,7 +96,7 @@ use ruma::{
     },
     events::{
         AnyMessageLikeEventContent, AnySyncTimelineEvent,
-        GlobalAccountDataEvent as RumaGlobalAccountDataEvent,
+        GlobalAccountDataEvent as RumaGlobalAccountDataEvent, MessageLikeEventType,
         RoomAccountDataEvent as RumaRoomAccountDataEvent, RoomAccountDataEventType,
         direct::DirectEventContent,
         fully_read::FullyReadEventContent,
@@ -1608,7 +1609,15 @@ impl Client {
     }
 
     /// Registers a pusher with given parameters
+    ///
+    /// Set `disable_badge_count` to signal, per [MSC4076], that this client
+    /// computes its own badge counts, so the homeserver stops sending
+    /// high-priority pushes whose only purpose is to update the unread count.
+    /// It only applies to HTTP pushers and is ignored for email pushers.
+    ///
+    /// [MSC4076]: https://github.com/matrix-org/matrix-spec-proposals/pull/4076
     #[allow(clippy::too_many_arguments)]
+    #[uniffi::method(default(disable_badge_count = false))]
     pub async fn set_pusher(
         &self,
         identifiers: PusherIdentifiers,
@@ -1618,17 +1627,17 @@ impl Client {
         profile_tag: Option<String>,
         lang: String,
         append: bool,
+        disable_badge_count: bool,
     ) -> Result<(), ClientError> {
         let ids = identifiers.into();
 
-        let pusher_init = PusherInit {
-            ids,
-            kind: kind.try_into()?,
-            app_display_name,
-            device_display_name,
-            profile_tag,
-            lang,
-        };
+        let mut kind: RumaPusherKind = kind.try_into()?;
+        if let RumaPusherKind::Http(data) = &mut kind {
+            set_disable_badge_count(data, disable_badge_count);
+        }
+
+        let pusher_init =
+            PusherInit { ids, kind, app_display_name, device_display_name, profile_tag, lang };
         self.inner.pusher().set(pusher_init.into(), append).await?;
         Ok(())
     }
@@ -2504,6 +2513,10 @@ async fn notification_handler(
         is_direct,
         is_space: room.is_space(),
         is_dm: room.compute_is_dm().await.ok().unwrap_or_default(),
+        can_send_message: room
+            .power_levels_or_default()
+            .await
+            .user_can_send_message(room.own_user_id(), MessageLikeEventType::RoomMessage),
     };
 
     listener.on_notification(
@@ -2569,15 +2582,24 @@ pub trait IgnoredUsersListener: SyncOutsideWasm + SendOutsideWasm {
 
 #[derive(uniffi::Enum)]
 pub enum NotificationProcessSetup {
-    MultipleProcesses,
-    SingleProcess { sync_service: Arc<SyncService> },
+    /// The notification client runs in its own process.
+    ///
+    /// `lock_holder_name` identifies this process for the cross-process lock
+    /// guarding writes to the SDK stores. It must be unique per process; two
+    /// processes sharing it will both believe they hold the lock.
+    MultipleProcesses {
+        lock_holder_name: String,
+    },
+    SingleProcess {
+        sync_service: Arc<SyncService>,
+    },
 }
 
 impl From<NotificationProcessSetup> for MatrixNotificationProcessSetup {
     fn from(value: NotificationProcessSetup) -> Self {
         match value {
-            NotificationProcessSetup::MultipleProcesses => {
-                MatrixNotificationProcessSetup::MultipleProcesses
+            NotificationProcessSetup::MultipleProcesses { lock_holder_name } => {
+                MatrixNotificationProcessSetup::MultipleProcesses { lock_holder_name }
             }
             NotificationProcessSetup::SingleProcess { sync_service } => {
                 MatrixNotificationProcessSetup::SingleProcess {

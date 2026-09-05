@@ -33,6 +33,8 @@ pub struct SlidingSyncBuilder {
     network_timeout: Duration,
     #[cfg(feature = "e2e-encryption")]
     share_pos: bool,
+    #[cfg(feature = "e2e-encryption")]
+    mark_tracked_users_dirty_without_pos: bool,
 }
 
 impl SlidingSyncBuilder {
@@ -55,6 +57,8 @@ impl SlidingSyncBuilder {
                 network_timeout: Duration::from_secs(30),
                 #[cfg(feature = "e2e-encryption")]
                 share_pos: false,
+                #[cfg(feature = "e2e-encryption")]
+                mark_tracked_users_dirty_without_pos: true,
             })
         }
     }
@@ -250,6 +254,25 @@ impl SlidingSyncBuilder {
         self
     }
 
+    /// Should this sliding sync instance mark all tracked users as dirty when
+    /// it sends a request without a `pos`?
+    ///
+    /// A request without a `pos` gets no device list updates back, so by
+    /// default the device list cache is invalidated, to avoid missing updates
+    /// that happened while this instance wasn't syncing.
+    ///
+    /// A short-lived instance that shares its crypto store with a long-lived
+    /// one (the notification process on iOS, for instance) should disable
+    /// this: it starts without a `pos` on every run, and invalidating the
+    /// whole cache each time forces a `/keys/query` for every tracked user,
+    /// while the long-lived instance is the one that actually keeps track of
+    /// device list updates.
+    #[cfg(feature = "e2e-encryption")]
+    pub fn mark_tracked_users_dirty_without_pos(mut self, enable: bool) -> Self {
+        self.mark_tracked_users_dirty_without_pos = enable;
+        self
+    }
+
     /// Build the Sliding Sync.
     #[allow(clippy::unused_async)] // Async is only used if the e2e-encryption feature is enabled.
     pub async fn build(self) -> Result<SlidingSync> {
@@ -295,6 +318,8 @@ impl SlidingSyncBuilder {
             client,
             storage_key: self.storage_key,
             share_pos,
+            #[cfg(feature = "e2e-encryption")]
+            mark_tracked_users_dirty_without_pos: self.mark_tracked_users_dirty_without_pos,
 
             lists,
 

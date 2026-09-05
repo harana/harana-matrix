@@ -32,8 +32,8 @@ use ruma::{
     assign,
     events::{
         AnyMessageLikeEventContent, AnyStateEvent, AnyStateEventContentChange,
-        AnySyncMessageLikeEvent, AnySyncTimelineEvent, StateEventContentChange, StateEventType,
-        TimelineEventType,
+        AnySyncMessageLikeEvent, AnySyncTimelineEvent, MessageLikeEventType,
+        StateEventContentChange, StateEventType, TimelineEventType,
         room::{
             encrypted::OriginalSyncRoomEncryptedEvent,
             join_rules::JoinRule,
@@ -52,7 +52,7 @@ use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
     DEFAULT_SANITIZER_MODE,
-    encryption_sync_service::{EncryptionSyncPermit, EncryptionSyncService},
+    encryption_sync_service::{EncryptionSyncMode, EncryptionSyncPermit, EncryptionSyncService},
     sync_service::SyncService,
 };
 
@@ -67,7 +67,16 @@ pub enum NotificationProcessSetup {
     ///
     /// In that case, a cross-process lock will be used to coordinate writes
     /// into the stores handled by the SDK.
-    MultipleProcesses,
+    MultipleProcesses {
+        /// The holder name identifying this process for the cross-process
+        /// lock.
+        ///
+        /// It must be unique per process, otherwise two processes will believe
+        /// they both hold the lock. Use
+        /// [`NotificationClient::DEFAULT_LOCK_HOLDER_NAME`] if there is only
+        /// ever one notification process.
+        lock_holder_name: String,
+    },
 
     /// The notification client runs in the same process as the rest of the
     /// `Client` performing syncs.
@@ -112,17 +121,21 @@ pub struct NotificationClient {
 
 impl NotificationClient {
     const CONNECTION_ID: &'static str = "notifications";
-    const LOCK_ID: &'static str = "notifications";
+
+    /// The holder name used for the cross-process lock when the caller doesn't
+    /// provide one.
+    pub const DEFAULT_LOCK_HOLDER_NAME: &'static str = "notifications";
 
     /// Create a new notification client.
     pub async fn new(
         parent_client: Client,
         process_setup: NotificationProcessSetup,
     ) -> Result<Self, Error> {
-        // Only create the lock id if cross process lock is needed (multiple processes)
-        let cross_process_store_config = match process_setup {
-            NotificationProcessSetup::MultipleProcesses => {
-                CrossProcessLockConfig::multi_process(Self::LOCK_ID)
+        // Only create the lock holder name if a cross-process lock is needed (multiple
+        // processes).
+        let cross_process_store_config = match &process_setup {
+            NotificationProcessSetup::MultipleProcesses { lock_holder_name } => {
+                CrossProcessLockConfig::multi_process(lock_holder_name.clone())
             }
             NotificationProcessSetup::SingleProcess { .. } => CrossProcessLockConfig::SingleProcess,
         };
@@ -245,7 +258,7 @@ impl NotificationClient {
 
         let push_ctx = room.push_context().await?;
         let sync_permit_guard = match &self.process_setup {
-            NotificationProcessSetup::MultipleProcesses => {
+            NotificationProcessSetup::MultipleProcesses { .. } => {
                 // We're running on our own process, dedicated for notifications. In that case,
                 // create a dummy sync permit; we're guaranteed there's at most one since we've
                 // acquired the `encryption_sync_mutex' lock here.
@@ -312,6 +325,7 @@ impl NotificationClient {
         let encryption_sync = EncryptionSyncService::new(
             self.client.clone(),
             Some((Duration::from_secs(3), Duration::from_secs(4))),
+            EncryptionSyncMode::Notification,
         )
         .await;
 
@@ -435,6 +449,7 @@ impl NotificationClient {
         let stripped_member_handler = self.client.add_event_handler({
             let requests = requests.clone();
             let room_ids: Vec<_> = room_ids.clone();
+            let user_id = user_id.clone();
             move |raw: Raw<StrippedRoomMemberEvent>, room: Room| async move {
                 if !room_ids.contains(&room.room_id().to_owned()) {
                     return;
@@ -497,10 +512,18 @@ impl NotificationClient {
         });
 
         // Room power levels are necessary to build the push context.
+        //
+        // MSC4186 removed the `$ME` special state key, so the own membership event is
+        // requested with the full user ID.
+        //
+        // FIXME: MSC4186 also removed `$LAZY`, and replaced it with a `lazy_members`
+        // flag on `required_state`. Ruma's sliding sync request still models
+        // `required_state` as a list of (event type, state key) pairs, so the flag
+        // can't be set from here yet; `$LAZY` is kept until Ruma exposes it.
         let required_state = vec![
             (StateEventType::RoomEncryption, "".to_owned()),
             (StateEventType::RoomMember, "$LAZY".to_owned()),
-            (StateEventType::RoomMember, "$ME".to_owned()),
+            (StateEventType::RoomMember, user_id.to_string()),
             (StateEventType::RoomCanonicalAlias, "".to_owned()),
             (StateEventType::RoomName, "".to_owned()),
             (StateEventType::RoomAvatar, "".to_owned()),
@@ -944,6 +967,12 @@ pub struct NotificationItem {
     pub active_service_members_count: u64,
     /// Is the room a space?
     pub is_space: bool,
+    /// Can the current user send a message in this room?
+    ///
+    /// This lets a client decide whether it can offer a direct reply action on
+    /// the notification, without having to load the room's power levels
+    /// itself.
+    pub can_send_message: bool,
 
     /// Is it a noisy notification? (i.e. does any push action contain a sound
     /// action)
@@ -1060,6 +1089,10 @@ impl NotificationItem {
             service_members,
             active_service_members_count,
             is_space: room.is_space(),
+            can_send_message: room
+                .power_levels_or_default()
+                .await
+                .user_can_send_message(room.own_user_id(), MessageLikeEventType::RoomMessage),
             is_noisy,
             has_mention,
             thread_id,
@@ -1177,10 +1210,14 @@ mod tests {
             .mount()
             .await;
 
-        let notification_client =
-            NotificationClient::new(client.clone(), NotificationProcessSetup::MultipleProcesses)
-                .await
-                .expect("Could not create a notification client");
+        let notification_client = NotificationClient::new(
+            client.clone(),
+            NotificationProcessSetup::MultipleProcesses {
+                lock_holder_name: NotificationClient::DEFAULT_LOCK_HOLDER_NAME.to_owned(),
+            },
+        )
+        .await
+        .expect("Could not create a notification client");
 
         // Check we don't receive the invite for a different room, even if it was
         // included in the sync response
@@ -1247,10 +1284,14 @@ mod tests {
             .mount()
             .await;
 
-        let notification_client =
-            NotificationClient::new(client.clone(), NotificationProcessSetup::MultipleProcesses)
-                .await
-                .expect("Could not create a notification client");
+        let notification_client = NotificationClient::new(
+            client.clone(),
+            NotificationProcessSetup::MultipleProcesses {
+                lock_holder_name: NotificationClient::DEFAULT_LOCK_HOLDER_NAME.to_owned(),
+            },
+        )
+        .await
+        .expect("Could not create a notification client");
 
         let result: NotificationStatus = notification_client
             .get_notification_with_sliding_sync(room_id, &event_id)
