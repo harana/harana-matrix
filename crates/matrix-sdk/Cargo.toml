@@ -98,14 +98,14 @@ experimental-push-secrets = [
     "ruma/unstable-msc4385",
 ]
 
-markdown = ["ruma/markdown"]
+markdown = ["dep:pulldown-cmark", "ruma/markdown"]
 socks = ["reqwest-transport", "reqwest?/socks"]
 # Requires a Tokio runtime: the local HTTP server is built on `axum`, which
 # only speaks Tokio.
 local-server = ["dep:axum", "dep:rand", "dep:tower", "tokio/net", "tokio/rt"]
 sso-login = ["local-server"]
 # Enable methods that make calls to the federation API.
-federation-api = ["ruma/federation-api-c"]
+federation-api = ["ruma/federation-api"]
 
 uniffi = ["dep:uniffi", "matrix-sdk-base/uniffi", "dep:matrix-sdk-ffi-macros"]
 
@@ -119,7 +119,12 @@ unstable-msc4274 = ["ruma/unstable-msc4274", "matrix-sdk-base/unstable-msc4274"]
 # Add support for user status profile fields (m.status, m.call).
 unstable-msc4426 = ["matrix-sdk-base/unstable-msc4426"]
 
-experimental-search = ["matrix-sdk-search"]
+# Message search with the built-in Tantivy backend.
+experimental-search = ["experimental-search-core", "matrix-sdk-search?/tantivy"]
+
+# The pluggable message search plumbing, without a built-in backend: install
+# your own with `ClientBuilder::search_index_provider`.
+experimental-search-core = ["dep:matrix-sdk-search"]
 
 experimental-element-recent-emojis = ["matrix-sdk-base/experimental-element-recent-emojis"]
 
@@ -162,6 +167,7 @@ mime2ext = "0.1.54"
 oauth2.workspace = true
 percent-encoding = "2.3.2"
 pin-project-lite.workspace = true
+pulldown-cmark = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 ruma = { workspace = true, features = [
     "rand",

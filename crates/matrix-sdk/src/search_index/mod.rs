@@ -13,18 +13,31 @@
 // limitations under the License.
 
 //! The search index is an abstraction layer in the matrix-sdk for the
-//! matrix-sdk-search crate. It provides a [`SearchIndex`] which wraps
-//! multiple [`RoomIndex`].
+//! matrix-sdk-search crate. It provides a [`SearchIndex`] which wraps one
+//! [`RoomSearchIndex`] per room.
+//!
+//! Which engine backs those indexes is up to the application: the SDK only
+//! talks to the [`RoomSearchIndex`] and [`SearchIndexProvider`] traits, and
+//! asks a provider for an index whenever it meets a room it has not indexed
+//! yet. The built-in provider is backed by Tantivy and is what
+//! [`SearchIndexStoreKind`] selects; install a provider of your own with
+//! [`ClientBuilder::search_index_provider`].
+//!
+//! [`ClientBuilder::search_index_provider`]: crate::ClientBuilder::search_index_provider
 
-use std::{collections::hash_map::HashMap, path::PathBuf, sync::Arc};
+#[cfg(feature = "experimental-search")]
+use std::path::PathBuf;
+use std::{collections::hash_map::HashMap, sync::Arc};
 
 use futures_util::future::join_all;
 use matrix_sdk_base::{
     check_validity_of_replacement_events, deserialized_responses::TimelineEvent,
 };
+#[cfg(feature = "experimental-search")]
+use matrix_sdk_search::index::builder::{TantivyIndexLocation, TantivyIndexProvider};
 use matrix_sdk_search::{
+    backend::{IndexableEvent, RoomIndexOperation, RoomSearchIndex, SearchIndexProvider},
     error::IndexError,
-    index::{IndexableEvent, RoomIndex, RoomIndexOperation, builder::RoomIndexBuilder},
 };
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, RoomId,
@@ -44,46 +57,122 @@ use ruma::{
 };
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, warn};
+#[cfg(feature = "experimental-search")]
+use zeroize::Zeroizing;
 
 use crate::event_cache::RoomEventCache;
 
+/// The password protecting an encrypted on-disk index.
+#[cfg(feature = "experimental-search")]
 type Password = String;
 
-/// Type of location to store [`RoomIndex`]
+/// The map of per-room search indexes a [`SearchIndex`] holds.
+pub type RoomIndexMap = HashMap<OwnedRoomId, Box<dyn RoomSearchIndex>>;
+
+/// Where the built-in Tantivy backend should keep its per-room indexes.
+///
+/// This selects one of the built-in backend's storage modes. To search with a
+/// different engine altogether, pass a [`SearchIndexProvider`] of your own to
+/// [`ClientBuilder::search_index_provider`] instead.
+///
+/// [`ClientBuilder::search_index_provider`]: crate::ClientBuilder::search_index_provider
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum SearchIndexStoreKind {
     /// Store unencrypted in file system folder
+    #[cfg(feature = "experimental-search")]
     UnencryptedDirectory(PathBuf),
     /// Store encrypted in file system folder
+    #[cfg(feature = "experimental-search")]
     EncryptedDirectory(PathBuf, Password),
     /// Store in memory
+    #[cfg(feature = "experimental-search")]
     InMemory,
+    /// Search with an engine of your own.
+    Custom(Arc<dyn SearchIndexProvider>),
 }
 
-/// Object that handles inteeraction with [`RoomIndex`]'s for search
+impl SearchIndexStoreKind {
+    /// The [`SearchIndexProvider`] this kind selects.
+    pub fn into_provider(self) -> Arc<dyn SearchIndexProvider> {
+        match self {
+            #[cfg(feature = "experimental-search")]
+            Self::UnencryptedDirectory(path) => Arc::new(TantivyIndexProvider::new(
+                TantivyIndexLocation::UnencryptedDirectory(path),
+            )),
+
+            #[cfg(feature = "experimental-search")]
+            Self::EncryptedDirectory(path, password) => Arc::new(TantivyIndexProvider::new(
+                TantivyIndexLocation::EncryptedDirectory(path, Zeroizing::new(password)),
+            )),
+
+            #[cfg(feature = "experimental-search")]
+            Self::InMemory => Arc::new(TantivyIndexProvider::new(TantivyIndexLocation::InMemory)),
+
+            Self::Custom(provider) => provider,
+        }
+    }
+}
+
+/// The provider a [`Client`](crate::Client) uses when none was configured.
+///
+/// With the `experimental-search` feature this is the built-in Tantivy backend
+/// kept in memory; without it there is no built-in backend, so searching
+/// reports an error until a provider is installed.
+pub(crate) fn default_search_index_provider() -> Arc<dyn SearchIndexProvider> {
+    #[cfg(feature = "experimental-search")]
+    return Arc::new(TantivyIndexProvider::new(TantivyIndexLocation::InMemory));
+
+    #[cfg(not(feature = "experimental-search"))]
+    return Arc::new(NoSearchIndexProvider);
+}
+
+/// The stand-in provider used when the SDK was built without a search backend
+/// and the application installed none.
+#[cfg(not(feature = "experimental-search"))]
+#[derive(Debug)]
+struct NoSearchIndexProvider;
+
+#[cfg(not(feature = "experimental-search"))]
+impl SearchIndexProvider for NoSearchIndexProvider {
+    fn create_index(&self, _room_id: &RoomId) -> Result<Box<dyn RoomSearchIndex>, IndexError> {
+        Err(IndexError::Backend(
+            "no search backend is installed: enable the `experimental-search` feature, or \
+             install one with `ClientBuilder::search_index_provider`"
+                .into(),
+        ))
+    }
+}
+
+/// Object that handles interaction with the per-room search indexes.
 #[derive(Clone, Debug)]
 pub struct SearchIndex {
-    /// HashMap that links each joined room to its RoomIndex
-    room_indexes: Arc<Mutex<HashMap<OwnedRoomId, RoomIndex>>>,
+    /// HashMap that links each joined room to its search index
+    room_indexes: Arc<Mutex<RoomIndexMap>>,
 
-    /// Base directory that stores the directories for each RoomIndex
-    search_index_store_kind: SearchIndexStoreKind,
+    /// Where new per-room indexes come from
+    provider: Arc<dyn SearchIndexProvider>,
 }
 
 impl SearchIndex {
     /// Create a new [`SearchIndex`]
     pub fn new(
-        room_indexes: Arc<Mutex<HashMap<OwnedRoomId, RoomIndex>>>,
-        search_index_store_kind: SearchIndexStoreKind,
+        room_indexes: Arc<Mutex<RoomIndexMap>>,
+        provider: Arc<dyn SearchIndexProvider>,
     ) -> Self {
-        Self { room_indexes, search_index_store_kind }
+        Self { room_indexes, provider }
+    }
+
+    /// The [`SearchIndexProvider`] new per-room indexes come from.
+    pub fn provider(&self) -> &Arc<dyn SearchIndexProvider> {
+        &self.provider
     }
 
     /// Acquire [`SearchIndexGuard`] for this [`SearchIndex`].
     pub async fn lock(&self) -> SearchIndexGuard<'_> {
         SearchIndexGuard {
             index_map: self.room_indexes.lock().await,
-            search_index_store_kind: &self.search_index_store_kind,
+            provider: self.provider.as_ref(),
         }
     }
 }
@@ -91,27 +180,16 @@ impl SearchIndex {
 /// Object that represents an acquired [`SearchIndex`].
 #[derive(Debug)]
 pub struct SearchIndexGuard<'a> {
-    /// Guard around the [`RoomIndex`] map
-    index_map: MutexGuard<'a, HashMap<OwnedRoomId, RoomIndex>>,
+    /// Guard around the per-room index map
+    index_map: MutexGuard<'a, RoomIndexMap>,
 
-    /// Base directory that stores the directories for each RoomIndex
-    search_index_store_kind: &'a SearchIndexStoreKind,
+    /// Where new per-room indexes come from
+    provider: &'a dyn SearchIndexProvider,
 }
 
 impl SearchIndexGuard<'_> {
-    fn create_index(&self, room_id: &RoomId) -> Result<RoomIndex, IndexError> {
-        let index = match self.search_index_store_kind {
-            SearchIndexStoreKind::UnencryptedDirectory(path) => {
-                RoomIndexBuilder::new_on_disk(path.to_path_buf(), room_id).unencrypted().build()?
-            }
-            SearchIndexStoreKind::EncryptedDirectory(path, password) => {
-                RoomIndexBuilder::new_on_disk(path.to_path_buf(), room_id)
-                    .encrypted(password)
-                    .build()?
-            }
-            SearchIndexStoreKind::InMemory => RoomIndexBuilder::new_in_memory(room_id).build(),
-        };
-        Ok(index)
+    fn create_index(&self, room_id: &RoomId) -> Result<Box<dyn RoomSearchIndex>, IndexError> {
+        self.provider.create_index(room_id)
     }
 
     /// Handle a [`RoomIndexOperation`] in the [`RoomIndex`] of a given
@@ -500,14 +578,128 @@ async fn parse_timeline_event(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use matrix_sdk_search::{
+        backend::{RoomIndexOperation, RoomSearchIndex, SearchIndexProvider},
+        error::IndexError,
+    };
     use matrix_sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
-        event_id, events::room::message::RoomMessageEventContentWithoutRelation, room_id, user_id,
+        OwnedEventId, RoomId, event_id,
+        events::room::message::RoomMessageEventContentWithoutRelation, room_id, user_id,
     };
 
     use crate::test_utils::mocks::MatrixMockServer;
 
-    #[cfg(feature = "experimental-search")]
+    /// A search backend that records what it is asked to index, and answers
+    /// every query with everything it holds.
+    #[derive(Debug, Default)]
+    struct RecordingIndex {
+        indexed: Arc<Mutex<Vec<(OwnedEventId, String)>>>,
+    }
+
+    impl RoomSearchIndex for RecordingIndex {
+        fn execute(&mut self, operation: RoomIndexOperation) -> Result<(), IndexError> {
+            if let RoomIndexOperation::Add(event) = operation {
+                self.indexed
+                    .lock()
+                    .unwrap()
+                    .push((event.event_id().clone(), event.body().to_owned()));
+            }
+
+            Ok(())
+        }
+
+        fn bulk_execute(&mut self, operations: Vec<RoomIndexOperation>) -> Result<(), IndexError> {
+            for operation in operations {
+                self.execute(operation)?;
+            }
+
+            Ok(())
+        }
+
+        fn search(
+            &self,
+            query: &str,
+            max_number_of_results: usize,
+            _pagination_offset: Option<usize>,
+        ) -> Result<Vec<(f32, OwnedEventId)>, IndexError> {
+            Ok(self
+                .indexed
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(_, body)| body.contains(query))
+                .map(|(event_id, _)| (1.0, event_id.clone()))
+                .take(max_number_of_results)
+                .collect())
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingProvider {
+        indexed: Arc<Mutex<Vec<(OwnedEventId, String)>>>,
+        created: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl SearchIndexProvider for RecordingProvider {
+        fn create_index(&self, room_id: &RoomId) -> Result<Box<dyn RoomSearchIndex>, IndexError> {
+            self.created.lock().unwrap().push(room_id.to_string());
+
+            Ok(Box::new(RecordingIndex { indexed: self.indexed.clone() }))
+        }
+    }
+
+    #[cfg(feature = "experimental-search-core")]
+    #[async_test]
+    async fn test_custom_search_index_provider_is_used() {
+        let indexed = Arc::new(Mutex::new(Vec::new()));
+        let created = Arc::new(Mutex::new(Vec::new()));
+        let provider =
+            Arc::new(RecordingProvider { indexed: indexed.clone(), created: created.clone() });
+
+        let mock_server = MatrixMockServer::new().await;
+        let client = mock_server
+            .client_builder()
+            .on_builder(|builder| builder.search_index_provider(provider))
+            .build()
+            .await;
+
+        client.event_cache().subscribe().unwrap();
+
+        let room_id = room_id!("!room_id:localhost");
+        let event_id = event_id!("$event_id:localhost");
+        let user_id = user_id!("@user_id:localhost");
+
+        let room = mock_server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id).add_timeline_event(
+                    EventFactory::new()
+                        .sender(user_id)
+                        .room(room_id)
+                        .text_msg("indexed by the custom backend")
+                        .event_id(event_id),
+                ),
+            )
+            .await;
+
+        // The custom provider was asked for this room's index, and the custom
+        // index saw the message.
+        assert_eq!(created.lock().unwrap().as_slice(), [room_id.to_string()]);
+        assert_eq!(
+            indexed.lock().unwrap().as_slice(),
+            [(event_id.to_owned(), "indexed by the custom backend".to_owned())],
+        );
+
+        // And searching goes through it too.
+        let results = room.search("custom backend", 5, None).await.unwrap();
+        assert_eq!(results.len(), 1, "unexpected results: {results:?}");
+        assert_eq!(results[0].1, event_id);
+    }
+
+    #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_sync_message_is_indexed() {
         let mock_server = MatrixMockServer::new().await;
@@ -539,7 +731,7 @@ mod tests {
         assert_eq!(response[0].1, event_id, "event id doesn't match: {response:?}");
     }
 
-    #[cfg(feature = "experimental-search")]
+    #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_sync_media_message_is_indexed() {
         use ruma::owned_mxc_uri;
@@ -588,7 +780,7 @@ mod tests {
         assert_eq!(response[0].1, file_id, "event id doesn't match: {response:?}");
     }
 
-    #[cfg(feature = "experimental-search")]
+    #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_sync_sticker_and_poll_are_indexed() {
         use ruma::{events::room::ImageInfo, owned_mxc_uri};
@@ -638,7 +830,7 @@ mod tests {
         assert_eq!(response[0].1, poll_id, "event id doesn't match: {response:?}");
     }
 
-    #[cfg(feature = "experimental-search")]
+    #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_sync_stable_poll_is_indexed() {
         use ruma::events::{
@@ -684,7 +876,7 @@ mod tests {
         assert_eq!(response[0].1, poll_id, "event id doesn't match: {response:?}");
     }
 
-    #[cfg(feature = "experimental-search")]
+    #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_search_index_edit_ordering() {
         let room_id = room_id!("!room_id:localhost");
@@ -704,7 +896,8 @@ mod tests {
 
         let f = EventFactory::new().room(room_id).sender(user_id!("@user_id:localhost"));
 
-        // Indexable dummy message required because RoomIndex is initialised lazily.
+        // Indexable dummy message required because RoomIndex is initialised
+        // lazily.
         let dummy = f.text_msg("dummy").event_id(dummy_id);
 
         let original = f.text_msg("This is a message").event_id(original_id);
@@ -744,8 +937,8 @@ mod tests {
 
         assert_eq!(results.len(), 0, "Search should return 0 results, got {results:?}");
 
-        // Adding the original after some pending edits should add the latest edit
-        // instead of the original.
+        // Adding the original after some pending edits should add the latest
+        // edit instead of the original.
         server
             .sync_room(&client, JoinedRoomBuilder::new(room_id).add_timeline_event(original))
             .await;
@@ -759,8 +952,8 @@ mod tests {
             results[0].1
         );
 
-        // Editing the original after it exists and there has been another edit should
-        // delete the previous edits and add this one
+        // Editing the original after it exists and there has been another edit
+        // should delete the previous edits and add this one
         server.sync_room(&client, JoinedRoomBuilder::new(room_id).add_timeline_event(edit3)).await;
 
         let results = room.search("message", 3, None).await.unwrap();
@@ -773,7 +966,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "experimental-search")]
+    #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_search_index_ignores_cross_sender_edit() {
         let room_id = room_id!("!room_id:localhost");

@@ -15,12 +15,13 @@
 use std::sync::Arc;
 
 use matrix_sdk::Room;
-use matrix_sdk_base::{SendOutsideWasm, SyncOutsideWasm};
+use matrix_sdk_base::{SendOutsideWasm, SyncOutsideWasm, ThreadingSupport};
 use ruma::{events::AnySyncTimelineEvent, room_version_rules::RoomVersionRules};
-use tracing::{Instrument, Span, info_span};
+use tracing::{Instrument, Span, info_span, warn};
 
 use super::{
-    DateDividerMode, Error, Timeline, TimelineDropHandle, TimelineFocus,
+    DateDividerMode, Error, Timeline, TimelineDropHandle, TimelineEventFocusThreadMode,
+    TimelineFocus,
     controller::{TimelineController, TimelineSettings},
 };
 #[cfg(feature = "unstable-msc4426")]
@@ -52,6 +53,27 @@ pub struct TimelineBuilder {
 
     /// An optional prefix for internal IDs.
     internal_id_prefix: Option<String>,
+}
+
+/// Whether a timeline with this focus is a threaded one.
+///
+/// A threaded timeline built on a client without threading support misbehaves
+/// silently, which is what [`TimelineBuilder::build`] warns about.
+///
+/// A [`TimelineFocus::Event`] with [`TimelineEventFocusThreadMode::Automatic`]
+/// is not one: whether it ends up threaded depends on the target event, which
+/// isn't known at the time the timeline is built.
+fn focus_is_threaded(focus: &TimelineFocus) -> bool {
+    match focus {
+        TimelineFocus::Thread { .. }
+        | TimelineFocus::Event { thread_mode: TimelineEventFocusThreadMode::ForceThread, .. } => {
+            true
+        }
+
+        TimelineFocus::Event { .. } | TimelineFocus::Live { .. } | TimelineFocus::PinnedEvents => {
+            false
+        }
+    }
 }
 
 impl TimelineBuilder {
@@ -165,6 +187,22 @@ impl TimelineBuilder {
 
         // Subscribe the event cache to sync responses, in case we hadn't done it yet.
         let client = room.client();
+
+        if focus_is_threaded(&focus)
+            && matches!(client.threading_support(), ThreadingSupport::Disabled)
+        {
+            // Without threading support, in-thread events aren't routed to the thread
+            // event cache: local echoes are never replaced by their remote counterparts,
+            // and the thread summary of the root event is never updated in the main
+            // timeline. Make the misconfiguration visible instead of silently
+            // misbehaving.
+            warn!(
+                "Building a thread-focused timeline on a client built without threading \
+                 support: local echoes and thread summaries will not be updated. Use \
+                 `ClientBuilder::with_threading_support` to enable it."
+            );
+        }
+
         let event_cache = client.event_cache();
         event_cache.subscribe()?;
 
@@ -309,5 +347,47 @@ impl TimelineBuilder {
         }
 
         Ok(timeline)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ruma::owned_event_id;
+
+    use super::focus_is_threaded;
+    use crate::timeline::{TimelineEventFocusThreadMode, TimelineFocus};
+
+    #[test]
+    fn test_focus_is_threaded() {
+        // A thread-focused timeline is threaded, obviously.
+        assert!(focus_is_threaded(&TimelineFocus::Thread {
+            root_event_id: owned_event_id!("$thread_root")
+        }));
+
+        // So is an event-focused one that forces threading, whatever the target
+        // event turns out to be.
+        assert!(focus_is_threaded(&TimelineFocus::Event {
+            target: owned_event_id!("$target"),
+            num_context_events: 10,
+            thread_mode: TimelineEventFocusThreadMode::ForceThread,
+        }));
+
+        // An event-focused timeline that decides based on the target event isn't:
+        // whether it ends up threaded isn't known yet.
+        for hide_threaded_events in [true, false] {
+            assert!(!focus_is_threaded(&TimelineFocus::Event {
+                target: owned_event_id!("$target"),
+                num_context_events: 10,
+                thread_mode: TimelineEventFocusThreadMode::Automatic { hide_threaded_events },
+            }));
+        }
+
+        // Neither is a live timeline, whether or not it hides in-thread events…
+        for hide_threaded_events in [true, false] {
+            assert!(!focus_is_threaded(&TimelineFocus::Live { hide_threaded_events }));
+        }
+
+        // …nor a pinned-events one.
+        assert!(!focus_is_threaded(&TimelineFocus::PinnedEvents));
     }
 }

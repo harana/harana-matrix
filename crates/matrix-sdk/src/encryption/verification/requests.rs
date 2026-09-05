@@ -68,7 +68,14 @@ pub enum VerificationRequestState {
         verification: Verification,
     },
     /// The verification flow that was started with this request has finished.
-    Done,
+    Done {
+        /// The device data of the device that took part in the verification, if
+        /// we know it.
+        ///
+        /// `None` when the request was accepted by another one of our own
+        /// devices, in which case we never spoke to a specific device.
+        other_device_data: Option<DeviceData>,
+    },
     /// The verification process has been cancelled.
     Cancelled(CancelInfo),
 }
@@ -238,7 +245,7 @@ impl VerificationRequest {
                     _ => unreachable!("We only support QR code and SAS verification"),
                 },
             },
-            Done => VerificationRequestState::Done,
+            Done { other_device_data } => VerificationRequestState::Done { other_device_data },
             Cancelled(c) => VerificationRequestState::Cancelled(c),
         }
     }

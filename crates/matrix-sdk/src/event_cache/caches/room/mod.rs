@@ -26,7 +26,7 @@ use matrix_sdk_base::{
 };
 use ruma::{
     EventId, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId,
-    events::{AnyRoomAccountDataEvent, relation::RelationType},
+    events::{AnyRoomAccountDataEvent, receipt::ReceiptEventContent, relation::RelationType},
     serde::Raw,
 };
 use tokio::sync::{Notify, mpsc};
@@ -300,6 +300,19 @@ impl RoomEventCache {
     /// Handle a single event from the `SendQueue`.
     pub(crate) async fn insert_sent_event_from_send_queue(&self, event: Event) -> Result<()> {
         self.inner.insert_sent_event_from_send_queue(event).await
+    }
+
+    /// Apply read receipts we have just sent ourselves, without waiting for
+    /// them to come back through sync.
+    ///
+    /// They go through the same computation as the ones a sync delivers, so
+    /// applying the same receipt again when it does arrive is a no-op.
+    pub(crate) async fn apply_local_read_receipts(
+        &self,
+        receipt_events: &[ReceiptEventContent],
+    ) -> Result<()> {
+        let mut state = self.inner.state.write().await?;
+        state.update_read_receipts(receipt_events).await
     }
 
     /// Return a nice debug string (a vector of lines) for the linked chunk of

@@ -114,6 +114,9 @@ impl<'a> IntoFuture for Enable<'a> {
                 let upload_future = backups.wait_for_steady_state();
                 let upload_progress = upload_future.subscribe_to_progress();
 
+                // Waiting only observes the upload task, so ask for the upload first.
+                backups.trigger_upload();
+
                 #[allow(unused_variables)]
                 let progress_task = matrix_sdk_common::executor::spawn({
                     let progress = progress.clone();

@@ -14,7 +14,7 @@
 
 //! The storage backend the SDK persists its data in.
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use matrix_sdk_base::store::StoreConfig;
 use matrix_sdk_common::{
@@ -117,4 +117,13 @@ pub trait StoreProvider: fmt::Debug + SendOutsideWasm + SyncOutsideWasm + 'stati
         &'a self,
         cross_process_lock_config: &'a CrossProcessLockConfig,
     ) -> BoxFuture<'a, Result<StoreConfig, StoreProviderError>>;
+}
+
+impl StoreProvider for Arc<dyn StoreProvider> {
+    fn open_stores<'a>(
+        &'a self,
+        cross_process_lock_config: &'a CrossProcessLockConfig,
+    ) -> BoxFuture<'a, Result<StoreConfig, StoreProviderError>> {
+        (**self).open_stores(cross_process_lock_config)
+    }
 }

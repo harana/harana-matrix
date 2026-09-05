@@ -20,11 +20,13 @@ use matrix_sdk::{
     ComposerDraft as SdkComposerDraft, ComposerDraftType as SdkComposerDraftType,
     DraftAttachment as SdkDraftAttachment, DraftAttachmentContent, DraftThumbnail, EncryptionState,
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
-    RoomMemberships, RoomState, SuccessorRoom as SdkSuccessorRoom,
-    deserialized_responses::TimelineEvent as SdkTimelineEvent,
+    RoomMembersUpdate as SdkRoomMembersUpdate, RoomMemberships, RoomState,
+    SuccessorRoom as SdkSuccessorRoom,
+    deserialized_responses::{RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent},
     encryption::LocalTrust,
     room::{
-        Room as SdkRoom, RoomMemberRole, edit::EditedContent, power_levels::RoomPowerLevelChanges,
+        Room as SdkRoom, RoomMemberRole, RoomMemberSortOrder, edit::EditedContent,
+        power_levels::RoomPowerLevelChanges,
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
@@ -47,10 +49,15 @@ use ruma::{
             join_rules::JoinRule as RumaJoinRule, message::RoomMessageEventContentWithoutRelation,
         },
     },
+    serde::Raw,
 };
+use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
 
-use self::{power_levels::RoomPowerLevels, room_info::RoomInfo};
+use self::{
+    power_levels::RoomPowerLevels,
+    room_info::{RoomInfo, RoomInfoUpdateReason},
+};
 use crate::{
     TaskHandle,
     chunk_iterator::ChunkIterator,
@@ -110,6 +117,14 @@ pub struct Room {
 impl Room {
     pub(crate) fn new(inner: SdkRoom, utd_hook_manager: Option<Arc<UtdHookManager>>) -> Self {
         Room { inner: AsyncRuntimeDropped::new(inner), utd_hook_manager }
+    }
+}
+
+/// The raw JSON of a state event, whichever room state it comes from.
+fn state_event_json(event: &RawAnySyncOrStrippedState) -> String {
+    match event {
+        RawAnySyncOrStrippedState::Sync(raw) => raw.json().get().to_owned(),
+        RawAnySyncOrStrippedState::Stripped(raw) => raw.json().get().to_owned(),
     }
 }
 
@@ -198,6 +213,28 @@ impl Room {
     /// The room's current membership state.
     pub fn membership(&self) -> Membership {
         self.inner.state().into()
+    }
+
+    /// Subscribe to our own membership in this room.
+    ///
+    /// The listener is called with the current membership right away, and then
+    /// on every transition, so a client learns that it was invited, joined,
+    /// kicked or banned without watching the timeline.
+    ///
+    /// Use the returned [`TaskHandle`] to cancel the subscription.
+    pub fn subscribe_to_membership(
+        self: Arc<Self>,
+        listener: Box<dyn MembershipListener>,
+    ) -> Arc<TaskHandle> {
+        let states = self.inner.subscribe_to_state();
+
+        Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
+            pin_mut!(states);
+
+            while let Some(state) = states.next().await {
+                listener.call(state.into());
+            }
+        })))
     }
 
     /// Returns the room heroes for this room.
@@ -338,6 +375,73 @@ impl Room {
         )))
     }
 
+    /// Get one page of the members of this room, filtered and sorted.
+    ///
+    /// Only `limit` members are handed across this boundary, whatever the size
+    /// of the room, and the returned page also carries how many members match
+    /// the query in total. Members are read from the local store; set
+    /// `sync_first` to fetch the member list from the homeserver first when it
+    /// may be incomplete.
+    ///
+    /// See `Room::subscribe_to_member_updates` to know when to ask again.
+    pub async fn paginated_members(
+        &self,
+        query: RoomMemberListQuery,
+        offset: u32,
+        limit: u32,
+    ) -> Result<RoomMemberListPage, ClientError> {
+        let mut request = self.inner.member_list().sort_by(query.sort);
+
+        if !query.sync_first {
+            request = request.no_sync();
+        }
+
+        if let Some(memberships) = query.memberships {
+            request = request.memberships(memberships.into());
+        }
+
+        if let Some(search_term) = query.search_term {
+            request = request.search(search_term);
+        }
+
+        if let Some(min_power_level) = query.min_power_level {
+            request = request.min_power_level(min_power_level);
+        }
+
+        let page = request.page(offset as usize, limit as usize).await?;
+
+        Ok(RoomMemberListPage {
+            members: page
+                .members
+                .into_iter()
+                .map(|member| member.try_into())
+                .collect::<Result<Vec<_>, _>>()?,
+            total: page.total as u32,
+        })
+    }
+
+    /// Subscribe to the member list of this room.
+    ///
+    /// The listener is called every time members join, leave or change their
+    /// profile, so a member list built with `Room::paginated_members` knows
+    /// when to ask again.
+    ///
+    /// Use the returned [`TaskHandle`] to cancel the subscription.
+    pub fn subscribe_to_member_updates(
+        self: Arc<Self>,
+        listener: Box<dyn RoomMemberUpdatesListener>,
+    ) -> Arc<TaskHandle> {
+        let updates = self.inner.subscribe_to_member_updates();
+
+        Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
+            pin_mut!(updates);
+
+            while let Some(update) = updates.next().await {
+                listener.call(update.into());
+            }
+        })))
+    }
+
     /// Get the user IDs of the joined and invited members, without the service
     /// members. The current user is part of the result. Fetches the member list
     /// if it is not synced yet.
@@ -418,11 +522,24 @@ impl Room {
         self: Arc<Self>,
         listener: Box<dyn RoomInfoListener>,
     ) -> Arc<TaskHandle> {
-        let mut subscriber = self.inner.subscribe_info();
+        // Listen to the notable updates rather than to `RoomInfo` itself: they are
+        // emitted for the same changes, but they also say what changed.
+        let mut receiver = self.inner.client().room_info_notable_update_receiver();
+        let room_id = self.inner.room_id().to_owned();
+
         Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
-            while subscriber.next().await.is_some() {
+            loop {
+                let reasons = match receiver.recv().await {
+                    Ok(update) if update.room_id != room_id => continue,
+                    Ok(update) => RoomInfoUpdateReason::from_reasons(update.reasons),
+                    // We missed updates, so we no longer know what changed. Report the
+                    // current state with no identified reason rather than stopping.
+                    Err(RecvError::Lagged(_)) => vec![RoomInfoUpdateReason::Unknown],
+                    Err(RecvError::Closed) => break,
+                };
+
                 match self.room_info().await {
-                    Ok(room_info) => listener.call(room_info),
+                    Ok(room_info) => listener.call(room_info, reasons),
                     Err(e) => {
                         error!("Failed to compute new RoomInfo: {e}");
                     }
@@ -497,6 +614,82 @@ impl Room {
             self.inner.send_state_event_raw(&event_type, &state_key, content_json).await?;
 
         Ok(response.event_id.to_string())
+    }
+
+    /// Get the state event of this room with exactly the given type and state
+    /// key, as a JSON string.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver. Returns `None` when the room has no such event, which for
+    /// an exact `(type, state key)` pair is the only other possibility: a room
+    /// holds at most one state event per pair. To tell apart zero, one and
+    /// several *rooms* carrying an event, see `Client::rooms_with_state_event`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state event (e.g. `"m.room.name"` or a
+    ///   custom type).
+    ///
+    /// * `state_key` - The state key of the event. This is often an empty
+    ///   string.
+    pub async fn state_event(
+        &self,
+        event_type: String,
+        state_key: String,
+    ) -> Result<Option<String>, ClientError> {
+        let event = self.inner.get_state_event(event_type.into(), &state_key).await?;
+        Ok(event.map(|event| state_event_json(&event)))
+    }
+
+    /// Get every state event of the given type in this room's state, as JSON
+    /// strings.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state events, e.g. `m.room.member`.
+    pub async fn state_events(&self, event_type: String) -> Result<Vec<String>, ClientError> {
+        let events = self.inner.get_state_events(event_type.into()).await?;
+        Ok(events.iter().map(state_event_json).collect())
+    }
+
+    /// Get the content of the room account data event of the given type, as a
+    /// JSON string.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver. For global account data, see `Client::accountData`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the account data event, e.g.
+    ///   `m.fully_read`.
+    pub async fn account_data(&self, event_type: String) -> Result<Option<String>, ClientError> {
+        let event = self.inner.account_data(event_type.into()).await?;
+        Ok(event.map(|event| event.json().get().to_owned()))
+    }
+
+    /// Set the room account data content for the given event type.
+    ///
+    /// The content should be supplied as a JSON string. For global account
+    /// data, see `Client::setAccountData`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the account data event, e.g.
+    ///   `m.fully_read`.
+    ///
+    /// * `content` - The content of the account data event encoded as a JSON
+    ///   string.
+    pub async fn set_account_data(
+        &self,
+        event_type: String,
+        content: String,
+    ) -> Result<(), ClientError> {
+        let raw_content = Raw::from_json_string(content)?;
+        self.inner.set_account_data_raw(event_type.into(), raw_content).await?;
+        Ok(())
     }
 
     /// Redacts an event from the room.
@@ -1514,7 +1707,114 @@ pub fn matrix_to_room_alias_permalink(
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
-    fn call(&self, room_info: RoomInfo);
+    /// A new [`RoomInfo`], and what about the room changed to produce it.
+    ///
+    /// `reasons` is empty for the initial value delivered on subscription,
+    /// which reflects the current state rather than a change.
+    fn call(&self, room_info: RoomInfo, reasons: Vec<RoomInfoUpdateReason>);
+}
+
+#[matrix_sdk_ffi_macros::export(callback_interface)]
+pub trait MembershipListener: SyncOutsideWasm + SendOutsideWasm {
+    fn call(&self, membership: Membership);
+}
+
+#[matrix_sdk_ffi_macros::export(callback_interface)]
+pub trait RoomMemberUpdatesListener: SyncOutsideWasm + SendOutsideWasm {
+    fn call(&self, update: RoomMemberUpdate);
+}
+
+/// What changed in the member list of a room.
+#[derive(uniffi::Enum)]
+pub enum RoomMemberUpdate {
+    /// The whole member list was reloaded, so anything shown from it is stale.
+    FullReload,
+    /// These members changed.
+    Partial { user_ids: Vec<String> },
+}
+
+impl From<SdkRoomMembersUpdate> for RoomMemberUpdate {
+    fn from(value: SdkRoomMembersUpdate) -> Self {
+        match value {
+            SdkRoomMembersUpdate::FullReload => Self::FullReload,
+            SdkRoomMembersUpdate::Partial(user_ids) => {
+                Self::Partial { user_ids: user_ids.into_iter().map(String::from).collect() }
+            }
+        }
+    }
+}
+
+/// Which members of a room to return, in what order. See
+/// `Room::paginated_members`.
+#[derive(uniffi::Record)]
+pub struct RoomMemberListQuery {
+    /// Only keep the members with one of these memberships. `None` keeps all
+    /// of them.
+    #[uniffi(default = None)]
+    pub memberships: Option<RoomMembershipFilter>,
+    /// Only keep the members whose display name or user ID contains this term,
+    /// case-insensitively.
+    #[uniffi(default = None)]
+    pub search_term: Option<String>,
+    /// Only keep the members whose power level is at least this high. This is
+    /// what showing the administrators of a room separately needs.
+    #[uniffi(default = None)]
+    pub min_power_level: Option<i64>,
+    /// How to order the members.
+    pub sort: RoomMemberSortOrder,
+    /// Fetch the member list from the homeserver first, in case the local one
+    /// is incomplete.
+    #[uniffi(default = true)]
+    pub sync_first: bool,
+}
+
+/// Which memberships to keep. Empty keeps all of them.
+#[derive(uniffi::Record)]
+pub struct RoomMembershipFilter {
+    #[uniffi(default = false)]
+    pub join: bool,
+    #[uniffi(default = false)]
+    pub invite: bool,
+    #[uniffi(default = false)]
+    pub knock: bool,
+    #[uniffi(default = false)]
+    pub leave: bool,
+    #[uniffi(default = false)]
+    pub ban: bool,
+}
+
+impl From<RoomMembershipFilter> for RoomMemberships {
+    fn from(value: RoomMembershipFilter) -> Self {
+        let mut memberships = RoomMemberships::empty();
+
+        if value.join {
+            memberships |= RoomMemberships::JOIN;
+        }
+        if value.invite {
+            memberships |= RoomMemberships::INVITE;
+        }
+        if value.knock {
+            memberships |= RoomMemberships::KNOCK;
+        }
+        if value.leave {
+            memberships |= RoomMemberships::LEAVE;
+        }
+        if value.ban {
+            memberships |= RoomMemberships::BAN;
+        }
+
+        memberships
+    }
+}
+
+/// One page of the member list of a room. See `Room::paginated_members`.
+#[derive(uniffi::Record)]
+pub struct RoomMemberListPage {
+    /// The members in this page.
+    pub members: Vec<RoomMember>,
+    /// How many members match the query in total, ignoring the bounds of this
+    /// page.
+    pub total: u32,
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
@@ -1983,11 +2283,23 @@ pub struct SuccessorRoom {
 
     /// The message explaining why the room has been tombstoned.
     pub reason: Option<String>,
+
+    /// Candidate servers to pass as `via` when previewing or joining the
+    /// replacement room.
+    ///
+    /// A room ID is not routable on its own, so without these a user whose own
+    /// server has never seen the replacement room cannot follow the tombstone.
+    /// This is a best-effort hint and may be empty.
+    pub via: Vec<String>,
 }
 
 impl From<SdkSuccessorRoom> for SuccessorRoom {
     fn from(value: SdkSuccessorRoom) -> Self {
-        Self { room_id: value.room_id.to_string(), reason: value.reason }
+        Self {
+            room_id: value.room_id.to_string(),
+            reason: value.reason,
+            via: value.via.into_iter().map(|server| server.to_string()).collect(),
+        }
     }
 }
 
@@ -2003,11 +2315,18 @@ impl From<SdkSuccessorRoom> for SuccessorRoom {
 pub struct PredecessorRoom {
     /// The ID of the replacement room.
     pub room_id: String,
+
+    /// Candidate servers to pass as `via` when previewing or joining the old
+    /// room. See [`SuccessorRoom::via`].
+    pub via: Vec<String>,
 }
 
 impl From<SdkPredecessorRoom> for PredecessorRoom {
     fn from(value: SdkPredecessorRoom) -> Self {
-        Self { room_id: value.room_id.to_string() }
+        Self {
+            room_id: value.room_id.to_string(),
+            via: value.via.into_iter().map(|server| server.to_string()).collect(),
+        }
     }
 }
 
@@ -2136,12 +2455,158 @@ impl TryFrom<SdkRoomSendQueueUpdate> for RoomSendQueueUpdate {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::time::Duration;
+    use std::{collections::BTreeSet, time::Duration};
 
-    use matrix_sdk::{ruma::room_id, test_utils::mocks::MatrixMockServer};
+    use matrix_sdk::{
+        ruma::{event_id, room_id, user_id},
+        test_utils::mocks::MatrixMockServer,
+    };
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn test_room_membership_filter_maps_to_room_memberships() {
+        // Nothing selected means no filtering, which is what
+        // `RoomMemberships::empty()` does.
+        let none = RoomMembershipFilter {
+            join: false,
+            invite: false,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(none), RoomMemberships::empty());
+
+        let joined = RoomMembershipFilter {
+            join: true,
+            invite: false,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(joined), RoomMemberships::JOIN);
+
+        // Several memberships combine rather than overwrite one another.
+        let active = RoomMembershipFilter {
+            join: true,
+            invite: true,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(active), RoomMemberships::JOIN | RoomMemberships::INVITE);
+
+        let all =
+            RoomMembershipFilter { join: true, invite: true, knock: true, leave: true, ban: true };
+        let all = RoomMemberships::from(all);
+        for membership in [
+            RoomMemberships::JOIN,
+            RoomMemberships::INVITE,
+            RoomMemberships::KNOCK,
+            RoomMemberships::LEAVE,
+            RoomMemberships::BAN,
+        ] {
+            assert!(all.contains(membership), "{membership:?} is missing");
+        }
+    }
+
+    #[test]
+    fn test_room_member_update_conversion() {
+        assert!(matches!(
+            RoomMemberUpdate::from(SdkRoomMembersUpdate::FullReload),
+            RoomMemberUpdate::FullReload
+        ));
+
+        let alice = user_id!("@alice:example.org");
+        let bob = user_id!("@bob:example.org");
+        let update =
+            SdkRoomMembersUpdate::Partial(BTreeSet::from([alice.to_owned(), bob.to_owned()]));
+
+        match RoomMemberUpdate::from(update) {
+            RoomMemberUpdate::Partial { user_ids } => {
+                assert_eq!(user_ids, vec![alice.to_string(), bob.to_string()]);
+            }
+            RoomMemberUpdate::FullReload => panic!("expected a partial update"),
+        }
+    }
+
+    /// The bindings can read the state events and room account data the SDK
+    /// already holds, without going to the homeserver for them.
+    #[tokio::test]
+    async fn test_state_events_and_account_data_are_readable() {
+        use matrix_sdk::ruma::{
+            events::{RoomAccountDataEventType, StateEventType},
+            user_id,
+        };
+        use matrix_sdk_test::{JoinedRoomBuilder, event_factory::EventFactory};
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let room_id = room_id!("!test:example.com");
+        let f = EventFactory::new().room(room_id).sender(user_id!("@alice:example.com"));
+
+        let sdk_room = server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id)
+                    .add_state_event(f.room_topic("the topic"))
+                    .add_account_data(f.fully_read(event_id!("$1"))),
+            )
+            .await;
+        let room = Room::new(sdk_room, None);
+
+        // A state event we know about comes back as its JSON.
+        let topic = room
+            .state_event(StateEventType::RoomTopic.to_string(), String::new())
+            .await
+            .unwrap()
+            .expect("the room has a topic");
+
+        let topic: serde_json::Value = serde_json::from_str(&topic).unwrap();
+        assert_eq!(topic["content"]["topic"], "the topic");
+        assert_eq!(topic["type"], "m.room.topic");
+
+        // So do all the events of a type.
+        let topics = room.state_events(StateEventType::RoomTopic.to_string()).await.unwrap();
+        assert_eq!(topics.len(), 1);
+
+        // One we don't have comes back as nothing, rather than as an error.
+        assert!(
+            room.state_event(StateEventType::RoomAvatar.to_string(), String::new())
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Room account data is readable too.
+        let fully_read = room
+            .account_data("m.fully_read".to_owned())
+            .await
+            .unwrap()
+            .expect("the room has a fully-read marker");
+
+        let fully_read: serde_json::Value = serde_json::from_str(&fully_read).unwrap();
+        assert_eq!(fully_read["content"]["event_id"], "$1");
+
+        assert!(room.account_data("m.tag".to_owned()).await.unwrap().is_none());
+
+        // And writable: the content reaches the homeserver as given.
+        server
+            .mock_set_room_account_data(RoomAccountDataEventType::FullyRead)
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        room.set_account_data(
+            "m.fully_read".to_owned(),
+            serde_json::to_string(&serde_json::json!({ "event_id": "$2" })).unwrap(),
+        )
+        .await
+        .unwrap();
+    }
 
     /// Dropping an FFI [`Room`] on a non-tokio thread must not panic.
     ///

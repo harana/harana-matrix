@@ -86,6 +86,7 @@ pub struct LoginBuilder {
     device_id: Option<String>,
     initial_device_display_name: Option<String>,
     request_refresh_token: bool,
+    request_config: Option<RequestConfig>,
 }
 
 impl LoginBuilder {
@@ -96,6 +97,7 @@ impl LoginBuilder {
             device_id: None,
             initial_device_display_name: None,
             request_refresh_token: false,
+            request_config: None,
         }
     }
 
@@ -157,6 +159,22 @@ impl LoginBuilder {
         self
     }
 
+    /// Set the [`RequestConfig`] used for the login request.
+    ///
+    /// By default the login request uses [`RequestConfig::short_retry()`],
+    /// which gives up after 3 attempts, rather than the config set on
+    /// [`ClientBuilder::request_config`]. A homeserver under load can answer a
+    /// login with `429 Too Many Requests` and a `retry_after` well beyond that;
+    /// pass a config with a higher retry limit or a longer
+    /// [`max_retry_time`][RequestConfig::max_retry_time] to wait it out instead
+    /// of failing.
+    ///
+    /// [`ClientBuilder::request_config`]: crate::ClientBuilder::request_config
+    pub fn request_config(mut self, request_config: RequestConfig) -> Self {
+        self.request_config = Some(request_config);
+        self
+    }
+
     /// Send the login request.
     ///
     /// Instead of calling this function and `.await`ing its return value, you
@@ -184,8 +202,9 @@ impl LoginBuilder {
             refresh_token: self.request_refresh_token,
         });
 
-        let response =
-            client.send(request).with_request_config(RequestConfig::short_retry()).await?;
+        let request_config = self.request_config.unwrap_or_else(RequestConfig::short_retry);
+
+        let response = client.send(request).with_request_config(request_config).await?;
         self.auth
             .receive_login_response(
                 &response,
@@ -221,6 +240,7 @@ pub struct SsoLoginBuilder<F> {
     server_builder: Option<LocalServerBuilder>,
     identity_provider_id: Option<String>,
     request_refresh_token: bool,
+    request_config: Option<RequestConfig>,
 }
 
 #[cfg(feature = "sso-login")]
@@ -238,6 +258,7 @@ where
             server_builder: None,
             identity_provider_id: None,
             request_refresh_token: false,
+            request_config: None,
         }
     }
 
@@ -269,6 +290,14 @@ where
     /// be used.
     pub fn server_builder(mut self, builder: LocalServerBuilder) -> Self {
         self.server_builder = Some(builder);
+        self
+    }
+
+    /// Set the [`RequestConfig`] used for the final login request.
+    ///
+    /// See [`LoginBuilder::request_config`].
+    pub fn request_config(mut self, request_config: RequestConfig) -> Self {
+        self.request_config = Some(request_config);
         self
     }
 
@@ -343,6 +372,7 @@ where
             device_id: self.device_id,
             initial_device_display_name: self.initial_device_display_name,
             request_refresh_token: self.request_refresh_token,
+            request_config: self.request_config,
             ..LoginBuilder::new_token(self.auth, token)
         };
         login_builder.send().await

@@ -758,7 +758,7 @@ impl VerificationRequest {
                 their_methods: their_methods.iter().map(|m| m.to_string()).collect(),
                 our_methods: our_methods.iter().map(|m| m.to_string()).collect(),
             },
-            RustVerificationRequestState::Done => VerificationRequestState::Done,
+            RustVerificationRequestState::Done { .. } => VerificationRequestState::Done,
             RustVerificationRequestState::Transitioned { .. } => {
                 let their_methods = request
                     .their_supported_methods()
@@ -792,7 +792,8 @@ impl VerificationRequest {
             // task.
             let should_break = matches!(
                 state,
-                RustVerificationRequestState::Done | RustVerificationRequestState::Cancelled { .. }
+                RustVerificationRequestState::Done { .. }
+                    | RustVerificationRequestState::Cancelled { .. }
             );
 
             let state = Self::convert_verification_request(&request, state);

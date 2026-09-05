@@ -14,26 +14,40 @@ version = "0.18.0"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
+[features]
+default = ["tantivy"]
+
+# The built-in full-text search backend, backed by Tantivy. Turn this off to
+# keep only the `backend` module's traits and supply an engine of your own;
+# Tantivy needs `mmap`, so it cannot be built for Wasm.
+tantivy = [
+    "dep:tantivy",
+    "dep:aes",
+    "dep:ctr",
+    "dep:hmac",
+    "dep:hkdf",
+    "dep:once_cell",
+    "dep:pbkdf2",
+    "dep:rand",
+    "dep:sha2",
+    "dep:byteorder",
+]
+
 [dependencies]
-aes = { version = "0.9.2", default-features = false }
-byteorder.workspace = true
-ctr = { version = "0.10.1", default-features = false}
-hmac = { workspace = true, features = ["zeroize"] }
-hkdf.workspace = true
+aes = { version = "0.9.2", default-features = false, optional = true }
+byteorder = { workspace = true, optional = true }
+ctr = { version = "0.10.1", default-features = false, optional = true }
+hmac = { workspace = true, features = ["zeroize"], optional = true }
+hkdf = { workspace = true, optional = true }
 matrix-sdk-test = { workspace = true, optional = true }
-once_cell.workspace = true
-pbkdf2.workspace = true
-rand = { workspace = true, features = ["thread_rng"] }
-sha2 = { workspace =  true, features = ["alloc", "zeroize"] }
-tantivy = { version = "0.26.1", default-features = false, features = ["mmap", "stopwords", "stemmer", "lz4-compression", "columnar-zstd-compression"] }
+once_cell = { workspace = true, optional = true }
+pbkdf2 = { workspace = true, optional = true }
+rand = { workspace = true, features = ["thread_rng"], optional = true }
+sha2 = { workspace =  true, features = ["alloc", "zeroize"], optional = true }
+tantivy = { version = "0.26.1", default-features = false, features = ["mmap", "stopwords", "stemmer", "lz4-compression", "columnar-zstd-compression"], optional = true }
 tracing = { workspace = true, features = ["attributes"] }
 thiserror.workspace = true
-ruma = { workspace = true , features = [
-    "client-api-c",
-    "events",
-    "rand",
-    "unstable-msc1767"
-] }
+ruma = { workspace = true, features = ["client", "rand", "unstable-msc1767"] }
 zeroize.workspace = true
 
 [dev-dependencies]

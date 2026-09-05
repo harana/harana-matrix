@@ -36,6 +36,8 @@ Som = "Som"
 Ba = "Ba"
 Yur = "Yur" # as found in crates/matrix-sdk-indexeddb/src/crypto_store/migrations/mod.rs
 TYE = "TYE" # as found in testing/matrix-sdk-test/src/test_json/keys_query_sets.rs
+NAX = "NAX" # as found in crates/ruma/src/events/room/thumbnail_source_serde.rs
+Pn = "Pn" # as found in crates/harana-olm
 
 [files]
 extend-exclude = [
@@ -43,4 +45,6 @@ extend-exclude = [
     "*.json",
     # Fuzzy match patterns that can be understood as typos confusingly.
     "crates/matrix-sdk-ui/tests/integration/room_list_service.rs",
+    # Binary fuzzing corpora vendored alongside crates/harana-olm.
+    "crates/harana-olm/afl/*/in/*",
 ]

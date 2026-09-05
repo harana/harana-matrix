@@ -63,6 +63,7 @@ use crate::{
         },
         requests::ToDeviceRequest,
     },
+    utilities::new_message_id,
 };
 
 #[derive(Clone, Debug)]
@@ -562,8 +563,11 @@ impl GroupSessionManager {
         withheld_devices: Vec<(DeviceData, WithheldCode)>,
     ) -> OlmResult<()> {
         // Convert a withheld code for the group session into a to-device event content.
+        // Like every other to-device message we send, it carries an `org.matrix.msgid`
+        // so it can be traced from our logs to the recipient's.
         let to_content = |code| {
-            let content = group_session.withheld_code(code);
+            let mut content = group_session.withheld_code(code);
+            content.set_message_id(new_message_id());
             Raw::new(&content).expect("We can always serialize a withheld content info").cast()
         };
 
@@ -1594,6 +1598,28 @@ mod tests {
             });
 
         assert!(has_blacklist);
+
+        // Every withheld message carries a distinct `org.matrix.msgid`, like every
+        // other to-device message we send.
+        let mut message_ids = BTreeSet::new();
+
+        for request in requests.iter().filter(|r| r.event_type == "m.room_key.withheld".into()) {
+            for device_map in request.messages.values() {
+                for content in device_map.values() {
+                    let withheld = content
+                        .deserialize_as_unchecked::<RoomKeyWithheldContent>()
+                        .expect("We should be able to deserialize our own withheld content");
+                    let message_id = withheld
+                        .message_id()
+                        .expect("Withheld messages must carry an org.matrix.msgid")
+                        .to_owned();
+
+                    assert!(message_ids.insert(message_id), "Message IDs must be unique");
+                }
+            }
+        }
+
+        assert_eq!(message_ids.len(), event_count);
     }
 
     #[async_test]

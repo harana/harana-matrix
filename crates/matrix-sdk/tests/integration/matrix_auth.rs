@@ -5,7 +5,9 @@ use matrix_sdk::{
     AuthApi, AuthSession, Client, SessionTokens,
     authentication::matrix::MatrixSession,
     config::RequestConfig,
-    test_utils::{logged_in_client_with_server, no_retry_test_client_with_server},
+    test_utils::{
+        logged_in_client_with_server, mocks::MatrixMockServer, no_retry_test_client_with_server,
+    },
 };
 use matrix_sdk_base::SessionMeta;
 use matrix_sdk_test::{async_test, test_json};
@@ -43,6 +45,116 @@ async fn test_restore_session() {
 
     assert_matches!(client.auth_api(), Some(AuthApi::Matrix(_)));
     assert_matches!(client.session(), Some(AuthSession::Matrix(_)));
+}
+
+#[async_test]
+async fn test_logout_stops_the_send_queue() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    client.send_queue().set_enabled(true).await;
+    assert!(client.send_queue().is_enabled());
+
+    server.mock_logout().ok().mock_once().mount().await;
+    client.matrix_auth().logout().await.unwrap();
+
+    // Queued requests belong to the session that queued them, so nothing more is
+    // sent under the token we just invalidated.
+    assert!(!client.send_queue().is_enabled());
+}
+
+#[async_test]
+async fn test_restore_session_with_access_token() {
+    let (client, server) = no_retry_test_client_with_server().await;
+
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/r0/account/whoami"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "user_id": "@example:localhost",
+            "device_id": "MYDEVICEID",
+        })))
+        .mount(&server)
+        .await;
+
+    let session = client
+        .restore_session_with_access_token(
+            SessionTokens { access_token: "My-Token".to_owned(), refresh_token: None },
+            Default::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(session.meta.user_id, "@example:localhost");
+    assert_eq!(session.meta.device_id, "MYDEVICEID");
+    assert!(client.matrix_auth().logged_in());
+}
+
+#[async_test]
+async fn test_restore_session_with_access_token_without_a_device_id() {
+    let (client, server) = no_retry_test_client_with_server().await;
+
+    // The device ID is optional in the specification, but the SDK needs one.
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/r0/account/whoami"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "user_id": "@example:localhost",
+        })))
+        .mount(&server)
+        .await;
+
+    let error = client
+        .restore_session_with_access_token(
+            SessionTokens { access_token: "My-Token".to_owned(), refresh_token: None },
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
+
+    assert_matches!(error, matrix_sdk::Error::MissingDeviceId);
+    assert!(!client.matrix_auth().logged_in());
+}
+
+#[async_test]
+async fn test_login_honours_the_request_config() {
+    // The server rate-limits every login attempt.
+    async fn rate_limited_server() -> (Client, MockServer) {
+        let (client, server) = no_retry_test_client_with_server().await;
+
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/login"))
+            .respond_with(ResponseTemplate::new(429).set_body_json(json!({
+                "errcode": "M_LIMIT_EXCEEDED",
+                "error": "Too many requests",
+                "retry_after_ms": 1,
+            })))
+            .up_to_n_times(5)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/login"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::LOGIN))
+            .mount(&server)
+            .await;
+
+        (client, server)
+    }
+
+    // The default configuration gives up before the server stops rate-limiting.
+    let (client, _server) = rate_limited_server().await;
+    client.matrix_auth().login_username("example", "wordpass").send().await.unwrap_err();
+    assert!(!client.matrix_auth().logged_in());
+
+    // A configuration with a higher retry limit waits the rate limit out.
+    let (client, _server) = rate_limited_server().await;
+    client
+        .matrix_auth()
+        .login_username("example", "wordpass")
+        .request_config(RequestConfig::new().retry_limit(10))
+        .send()
+        .await
+        .unwrap();
+    assert!(client.matrix_auth().logged_in());
 }
 
 #[async_test]

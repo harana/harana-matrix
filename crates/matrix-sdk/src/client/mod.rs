@@ -41,7 +41,11 @@ use matrix_sdk_base::{
     sync::{Notification, RoomUpdates},
     task_monitor::TaskMonitor,
 };
-use matrix_sdk_common::{cross_process_lock::CrossProcessLockConfig, ttl::TtlValue};
+use matrix_sdk_common::{
+    cross_process_lock::CrossProcessLockConfig,
+    executor::{JoinHandle, spawn},
+    ttl::TtlValue,
+};
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::{InitialStateEvent, room::encryption::RoomEncryptionEventContent};
 use ruma::{
@@ -62,7 +66,7 @@ use ruma::{
             membership::{join_room_by_id, join_room_by_id_or_alias},
             presence::set_presence as set_presence_status,
             retention::get_retention_configuration,
-            room::create_room,
+            room::create_room::{self, RoomPowerLevelsContentOverride, v3::CreationContent},
             rtc::{RtcTransport, transports},
             session::login::v3::DiscoveryInfo,
             sync::sync_events,
@@ -74,9 +78,14 @@ use ruma::{
         path_builder::PathBuilder,
     },
     assign,
-    events::{beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier},
+    events::{
+        StateEventType, beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier,
+    },
+    int,
     presence::PresenceState,
     push::Ruleset,
+    room::RoomType,
+    serde::Raw,
     time::Instant,
 };
 use serde::de::DeserializeOwned;
@@ -92,7 +101,8 @@ use crate::{
     Account, AuthApi, AuthSession, Error, HttpError, Media, Pusher, RefreshTokenError, Result,
     Room, SessionTokens, TransmissionProgress,
     authentication::{
-        AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback, matrix::MatrixAuth,
+        AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback,
+        matrix::{MatrixAuth, MatrixSession},
         oauth::OAuth,
     },
     client::{
@@ -136,7 +146,7 @@ pub(crate) mod thread_subscriptions;
 pub use self::builder::{
     ClientBuildError, ClientBuilder, StoreProvider, StoreProviderError, sanitize_server_name,
 };
-#[cfg(feature = "experimental-search")]
+#[cfg(feature = "experimental-search-core")]
 use crate::search_index::SearchIndex;
 
 #[cfg(not(target_family = "wasm"))]
@@ -291,18 +301,18 @@ pub(crate) struct ClientInner {
     /// All the data related to authentication and authorization.
     pub(crate) auth_ctx: Arc<AuthCtx>,
 
-    /// The URL of the server.
+    /// The Matrix server name this client was built from.
     ///
-    /// Not to be confused with the `Self::homeserver`. `server` is usually
-    /// the server part in a user ID, e.g. with `@mnt_io:matrix.org`, here
-    /// `matrix.org` is the server, whilst `matrix-client.matrix.org` is the
-    /// homeserver (at the time of writing — 2024-08-28).
+    /// Not to be confused with the `Self::homeserver`. The server name is the
+    /// server part in a user ID, e.g. with `@mnt_io:matrix.org`, here
+    /// `matrix.org` is the server name, whilst `matrix-client.matrix.org` is
+    /// the homeserver (at the time of writing — 2024-08-28).
     ///
     /// This value is optional depending on how the `Client` has been built.
     /// If it's been built from a homeserver URL directly, we don't know the
     /// server. However, if the `Client` has been built from a server URL or
     /// name, then the homeserver has been discovered, and we know both.
-    server: StdRwLock<Option<Url>>,
+    server: StdRwLock<Option<OwnedServerName>>,
 
     /// The URL of the homeserver to connect to.
     ///
@@ -421,7 +431,7 @@ pub(crate) struct ClientInner {
     /// background.
     thread_subscription_catchup: OnceCell<Arc<ThreadSubscriptionCatchup>>,
 
-    #[cfg(feature = "experimental-search")]
+    #[cfg(feature = "experimental-search-core")]
     /// Handler for [`RoomIndex`]'s of each room
     search_index: SearchIndex,
 
@@ -458,7 +468,7 @@ impl ClientInner {
     #[allow(clippy::too_many_arguments)]
     async fn new(
         auth_ctx: Arc<AuthCtx>,
-        server: Option<Url>,
+        server: Option<OwnedServerName>,
         homeserver: Url,
         sliding_sync_version: SlidingSyncVersion,
         sync_presence: Arc<StdRwLock<PresenceState>>,
@@ -475,7 +485,7 @@ impl ClientInner {
         #[cfg(feature = "e2e-encryption")] encryption_settings: EncryptionSettings,
         #[cfg(feature = "e2e-encryption")] enable_share_history_on_invite: bool,
         cross_process_lock_config: CrossProcessLockConfig,
-        #[cfg(feature = "experimental-search")] search_index_handler: SearchIndex,
+        #[cfg(feature = "experimental-search-core")] search_index_handler: SearchIndex,
         thread_subscription_catchup: OnceCell<Arc<ThreadSubscriptionCatchup>>,
         media_fetcher: Arc<dyn MediaFetcher>,
     ) -> Arc<Self> {
@@ -519,7 +529,7 @@ impl ClientInner {
             #[cfg(feature = "e2e-encryption")]
             enable_share_history_on_invite,
             server_max_upload_size: Mutex::new(OnceCell::new()),
-            #[cfg(feature = "experimental-search")]
+            #[cfg(feature = "experimental-search-core")]
             search_index: search_index_handler,
             thread_subscription_catchup,
             task_monitor: TaskMonitor::new(),
@@ -616,7 +626,7 @@ impl Client {
 
     /// Change the homeserver URL used by this client.
     ///
-    /// Note that this will reset [`Client::server`] to `None`.
+    /// Note that this will reset [`Client::server_name`] to `None`.
     ///
     /// # Arguments
     ///
@@ -715,31 +725,37 @@ impl Client {
         self.inner.base_client.is_active()
     }
 
-    /// The URL built from the server name that was used for `.well-known`
-    /// discovery, if any.
+    /// The Matrix server name this client talks to, e.g. `matrix.org`.
     ///
-    /// This is set when the client was built with [`ClientBuilder::server_name`],
-    /// [`ClientBuilder::insecure_server_name_no_tls`], or
-    /// [`ClientBuilder::server_name_or_homeserver_url`] and a server name (as
-    /// opposed to a homeserver URL) was resolved. It is `None` when the
+    /// This is the server part of the logged-in user's ID: with
+    /// `@mnt_io:matrix.org`, it is `matrix.org`. It is *not* a URL, and it is
+    /// not the host requests are sent to: a server delegating via
+    /// `.well-known` has a different homeserver URL, which
+    /// [`Client::homeserver`] reports.
+    ///
+    /// It is derived from the session's user ID once the client is logged in.
+    /// Before that, it is the name the client was built from with
+    /// [`ClientBuilder::server_name`],
+    /// [`ClientBuilder::insecure_server_name_no_tls`] or
+    /// [`ClientBuilder::server_name_or_homeserver_url`], and `None` when the
     /// client was built directly from a homeserver URL with
-    /// [`ClientBuilder::homeserver_url`], since there is then no separate
-    /// server name to report.
-    ///
-    /// Note that despite the name, this returns a [`Url`], not a Matrix
-    /// server name: it is the server name combined with the scheme (`http`
-    /// or `https`) that was used to reach it. A server delegating to a
-    /// different homeserver via `.well-known` means this can differ from
-    /// [`Client::homeserver`], which is the URL requests are actually sent
-    /// to.
-    pub fn server(&self) -> Option<Url> {
+    /// [`ClientBuilder::homeserver_url`], since a homeserver URL doesn't tell
+    /// us the server name.
+    pub fn server_name(&self) -> Option<OwnedServerName> {
+        // The user ID is authoritative: it's the name other servers use to reach
+        // this one, and it survives a `.well-known` delegation.
+        if let Some(session_meta) = self.session_meta() {
+            return Some(session_meta.user_id.server_name().to_owned());
+        }
+
         self.inner.server.read().unwrap().clone()
     }
 
     /// The URL of the homeserver that this client sends requests to.
     ///
-    /// This may differ from [`Client::server`] when the server delegates to
-    /// another homeserver via `.well-known` discovery.
+    /// This may differ from [`Client::server_name`] when the server delegates
+    /// to another homeserver via `.well-known` discovery. It is also a URL,
+    /// where the server name is a bare Matrix server name.
     pub fn homeserver(&self) -> Url {
         self.inner.homeserver.read().unwrap().clone()
     }
@@ -1244,8 +1260,8 @@ impl Client {
         Ev: SyncEvent + DeserializeOwned + SendOutsideWasm + SyncOutsideWasm + 'static,
         Ctx: EventHandlerContext + SendOutsideWasm + SyncOutsideWasm + 'static,
     {
-        // The default value is `None`. It becomes `Some((Ev, Ctx))` once it has a
-        // new value.
+        // The default value is `None`. It becomes `Some((Ev, Ctx))` once it has
+        // a new value.
         let shared_observable = SharedObservable::new(None);
 
         ObservableEventHandler::new(
@@ -1509,8 +1525,47 @@ impl Client {
         self.base_client().get_room(room_id).map(|room| Room::new(self.clone(), room))
     }
 
+    /// Find every known room whose state holds an event with exactly the given
+    /// type and state key.
+    ///
+    /// This is the query behind a fail-closed retry: a client that writes an
+    /// idempotency marker as a state event when it creates a room can, after a
+    /// timeout, tell the three cases apart by the length of the returned list.
+    /// Zero means the room was never created, so it is safe to create it; one
+    /// means it was created, so the marker identifies it; more than one means
+    /// duplicates exist and the situation needs resolving rather than another
+    /// blind retry.
+    ///
+    /// Only rooms the client knows about are searched, so a room created by a
+    /// request whose response was lost is only found once a sync has brought it
+    /// in.
+    pub async fn rooms_with_state_event(
+        &self,
+        event_type: StateEventType,
+        state_key: &str,
+    ) -> Result<Vec<Room>> {
+        let mut rooms = Vec::new();
+
+        for room in self.rooms() {
+            if room.get_state_event(event_type.clone(), state_key).await?.is_some() {
+                rooms.push(room);
+            }
+        }
+
+        Ok(rooms)
+    }
+
     /// Gets the preview of a room, whether the current user has joined it or
     /// not.
+    ///
+    /// This waits on the server whenever the local data cannot be trusted, so
+    /// the preview it returns is as accurate as the SDK can make it. Use
+    /// [`Client::get_room_preview_local_first`] when showing something right
+    /// away matters more than that.
+    ///
+    /// Whatever the server answers is saved onto the local room, when the
+    /// client knows that room, so the next preview answered from local data is
+    /// closer to the truth.
     pub async fn get_room_preview(
         &self,
         room_or_alias_id: &RoomOrAliasId,
@@ -1522,11 +1577,12 @@ impl Client {
         };
 
         if let Some(room) = self.get_room(&room_id) {
-            // The cached data can only be trusted if the room state is joined or
-            // banned: for invite and knock rooms, no updates will be received
-            // for the rooms after the invite/knock action took place so we may
-            // have very out to date data for important fields such as
-            // `join_rule`. For left rooms, the homeserver should return the latest info.
+            // The cached data can only be trusted if the room state is joined
+            // or banned: for invite and knock rooms, no updates
+            // will be received for the rooms after the invite/knock
+            // action took place so we may have very out to date
+            // data for important fields such as `join_rule`. For
+            // left rooms, the homeserver should return the latest info.
             match room.state() {
                 RoomState::Joined | RoomState::Banned => {
                     return Ok(RoomPreview::from_known_room(&room).await);
@@ -1535,7 +1591,67 @@ impl Client {
             }
         }
 
-        RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await
+        let preview = RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await?;
+        preview.save_to_local_room(self).await;
+
+        Ok(preview)
+    }
+
+    /// Gets the preview of a room, answering from local data when the client
+    /// already knows the room.
+    ///
+    /// Unlike [`Client::get_room_preview`], this doesn't wait on the server for
+    /// a room the client knows about, so a preview that can be shown
+    /// immediately is shown immediately. It still asks the server, in the
+    /// background, and saves the answer onto the local room, so the next call
+    /// is more accurate; the returned [`JoinHandle`] resolves when that
+    /// refresh is done, and can be ignored.
+    ///
+    /// The local data of an invited or knocked room can be out of date: no
+    /// updates are received for such a room after the invite or the knock, so
+    /// an important field such as the join rule may have changed since. Prefer
+    /// [`Client::get_room_preview`] when accuracy matters more than latency.
+    ///
+    /// For a room the client doesn't know, this is exactly
+    /// [`Client::get_room_preview`], and no handle is returned.
+    pub async fn get_room_preview_local_first(
+        &self,
+        room_or_alias_id: &RoomOrAliasId,
+        via: Vec<OwnedServerName>,
+    ) -> Result<(RoomPreview, Option<JoinHandle<()>>)> {
+        let room_id = match <&RoomId>::try_from(room_or_alias_id) {
+            Ok(room_id) => room_id.to_owned(),
+            Err(alias) => self.resolve_room_alias(alias).await?.room_id,
+        };
+
+        let Some(room) = self.get_room(&room_id) else {
+            return Ok((self.get_room_preview(room_or_alias_id, via).await?, None));
+        };
+
+        let preview = RoomPreview::from_known_room(&room).await;
+
+        // A joined or banned room is already up to date through sync, there is
+        // nothing to refresh.
+        if matches!(room.state(), RoomState::Joined | RoomState::Banned) {
+            return Ok((preview, None));
+        }
+
+        let handle = spawn({
+            let client = self.clone();
+            let room_or_alias_id = room_or_alias_id.to_owned();
+
+            async move {
+                match RoomPreview::from_remote_room(&client, room_id, &room_or_alias_id, via).await
+                {
+                    Ok(preview) => preview.save_to_local_room(&client).await,
+                    Err(error) => {
+                        warn!("Failed to refresh the preview of {room_or_alias_id}: {error}")
+                    }
+                }
+            }
+        });
+
+        Ok((preview, Some(handle)))
     }
 
     /// Resolve a room alias to a room id and a list of servers which know
@@ -1636,6 +1752,64 @@ impl Client {
             }
             AuthSession::OAuth(session) => {
                 Box::pin(self.oauth().restore_session(*session, room_load_settings)).await
+            }
+        }
+    }
+
+    /// Restore a session from an access token alone, discovering the user and
+    /// device with `whoami`.
+    ///
+    /// [`Client::restore_session()`] needs the [`SessionMeta`] that was saved
+    /// alongside the token. Use this when only the token is available, for
+    /// instance when it was obtained outside this SDK.
+    ///
+    /// This costs one request, and only works for the native Matrix
+    /// authentication API: an OAuth 2.0 session cannot be restored this way.
+    ///
+    /// See [`MatrixAuth::restore_session_with_access_token()`] for the details,
+    /// including what happens when the homeserver reports no device ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a session was already restored or logged in.
+    ///
+    /// [`MatrixAuth::restore_session_with_access_token()`]:
+    ///     crate::authentication::matrix::MatrixAuth::restore_session_with_access_token
+    pub async fn restore_session_with_access_token(
+        &self,
+        tokens: SessionTokens,
+        room_load_settings: RoomLoadSettings,
+    ) -> Result<MatrixSession> {
+        Box::pin(self.matrix_auth().restore_session_with_access_token(tokens, room_load_settings))
+            .await
+    }
+
+    /// Stop the background tasks this client runs on the session's behalf.
+    ///
+    /// Called as part of logging out: without it, the send queue keeps retrying
+    /// its requests and the encryption tasks keep polling, so a client that has
+    /// logged out (and possibly logged in again elsewhere) goes on talking to
+    /// the previous account's homeserver.
+    ///
+    /// This does not stop a sync loop, which the caller owns and must stop
+    /// itself, nor the services built on top of the client (the sync service,
+    /// the room list service), which own their own tasks.
+    pub(crate) fn stop_background_tasks(&self) {
+        // Queued requests belong to the session that queued them; they must not be
+        // sent under another one.
+        self.send_queue().disable_without_respawning();
+
+        #[cfg(feature = "e2e-encryption")]
+        {
+            // Dropping the tasks aborts the ones holding an abort-on-drop handle; the
+            // plain join handles need to be told.
+            let tasks = std::mem::take(&mut *self.inner.e2ee.tasks.lock());
+
+            if let Some(handle) = &tasks.update_recovery_state_after_backup {
+                handle.abort();
+            }
+            if let Some(handle) = &tasks.setup_e2ee {
+                handle.abort();
             }
         }
     }
@@ -1807,12 +1981,12 @@ impl Client {
             room.set_is_direct(true).await?;
         }
 
-        // If we joined following an invite, check if we had previously received a key
-        // bundle from the inviter, and import it if so.
+        // If we joined following an invite, check if we had previously received
+        // a key bundle from the inviter, and import it if so.
         //
-        // It's important that we only do this once `BaseClient::room_joined` has
-        // completed: see the notes on `BundleReceiverTask::handle_bundle` on avoiding a
-        // race.
+        // It's important that we only do this once `BaseClient::room_joined`
+        // has completed: see the notes on
+        // `BundleReceiverTask::handle_bundle` on avoiding a race.
         #[cfg(feature = "e2e-encryption")]
         if self.inner.enable_share_history_on_invite
             && let Some(inviter) =
@@ -1838,8 +2012,9 @@ impl Client {
     /// * `room_id` - The `RoomId` of the room to be joined.
     #[instrument(skip(self))]
     pub async fn join_room_by_id(&self, room_id: &RoomId) -> Result<Room> {
-        // See who invited us to this room, if anyone. Note we have to do this before
-        // making the `/join` request, otherwise we could race against the sync.
+        // See who invited us to this room, if anyone. Note we have to do this
+        // before making the `/join` request, otherwise we could race
+        // against the sync.
         let pre_join_info = self.prepare_join_room_by_id(room_id).await;
 
         let request = join_room_by_id::v3::Request::new(room_id.to_owned());
@@ -1952,7 +2127,14 @@ impl Client {
     pub async fn create_room(&self, request: create_room::v3::Request) -> Result<Room> {
         let invite = request.invite.clone();
         let is_direct_room = request.is_direct;
-        let response = self.send(request).await?;
+        // `/createRoom` has no transaction ID, so it is not idempotent: a retry
+        // creates another room. The server answers with a 5xx error when, for
+        // instance, it fails to invite a user that doesn't exist, and the default
+        // retry policy treats every 5xx as transient. Retrying would leave a trail of
+        // empty rooms behind and still fail in the end, so let the error through
+        // instead.
+        let response =
+            self.send(request).with_request_config(self.request_config().disable_retry()).await?;
 
         let base_room = self.base_client().get_or_create_room(&response.room_id, RoomState::Joined);
 
@@ -1968,6 +2150,66 @@ impl Client {
         }
 
         Ok(joined_room)
+    }
+
+    /// Create a space.
+    ///
+    /// A space is a room whose type is `m.space`. Its timeline is not meant to
+    /// be written to, but the specification leaves enforcing that to whoever
+    /// creates the space, so this raises `events_default` to 100 to stop
+    /// ordinary members from posting into it.
+    ///
+    /// Everything else works as in [`Client::create_room`]. The request is only
+    /// filled in where the caller left it empty:
+    ///
+    /// - the room type of the creation content is set to `m.space` unless the
+    ///   creation content already names one;
+    /// - the power level override is set unless the caller provided one, in
+    ///   which case it is used verbatim and it is up to the caller to keep
+    ///   ordinary members from posting.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use matrix_sdk::{
+    ///     Client,
+    ///     ruma::{
+    ///         api::client::room::create_room::v3::Request as CreateRoomRequest, assign,
+    ///     },
+    /// };
+    /// # use url::Url;
+    /// #
+    /// # async {
+    /// # let homeserver = Url::parse("http://example.com")?;
+    /// # let client = Client::new(homeserver).await?;
+    /// let request = assign!(CreateRoomRequest::new(), {
+    ///     name: Some("My space".to_owned()),
+    /// });
+    /// let space = client.create_space(request).await?;
+    /// assert!(space.is_space());
+    /// # anyhow::Ok(()) };
+    /// ```
+    pub async fn create_space(&self, mut request: create_room::v3::Request) -> Result<Room> {
+        let mut creation_content = match &request.creation_content {
+            Some(raw) => raw.deserialize_as_unchecked::<CreationContent>()?,
+            None => CreationContent::new(),
+        };
+
+        if creation_content.room_type.is_none() {
+            creation_content.room_type = Some(RoomType::Space);
+        }
+
+        request.creation_content = Some(Raw::new(&creation_content)?);
+
+        if request.power_level_content_override.is_none() {
+            let mut power_levels = RoomPowerLevelsContentOverride::new();
+            // Nobody but the creator can post into the space room itself.
+            power_levels.events_default = Some(int!(100));
+
+            request.power_level_content_override = Some(Raw::new(&power_levels)?);
+        }
+
+        self.create_room(request).await
     }
 
     /// Create a DM room.
@@ -2231,11 +2473,13 @@ impl Client {
             if let Err(Some(ErrorKind::UnknownToken { .. })) =
                 result.as_ref().map_err(HttpError::client_api_error_kind)
             {
-                // If the access token is actually expired, mark it as expired and fallback to
-                // the unauthenticated request below.
+                // If the access token is actually expired, mark it as expired
+                // and fallback to the unauthenticated request
+                // below.
                 self.auth_ctx().set_access_token_expired(&access_token);
             } else {
-                // If the request succeeded or it's an other error, just stop now.
+                // If the request succeeded or it's an other error, just stop
+                // now.
                 return result;
             }
         }
@@ -2256,13 +2500,10 @@ impl Client {
 
     /// Fetches client well_known from network; no caching.
     ///
-    /// 1. If the [`Client::server`] value is available, we use it to fetch the
-    ///    well-known contents.
-    /// 2. If it's not, we try extracting the server name from the
-    ///    [`Client::user_id`] and building the server URL from it.
-    /// 3. If we couldn't get the well-known contents with either the explicit
-    ///    server name or the implicit extracted one, we try the homeserver URL
-    ///    as a last resort.
+    /// 1. If the [`Client::server_name`] value is available, we build the
+    ///    server URL from it and use that to fetch the well-known contents.
+    /// 2. If we couldn't get the well-known contents that way, we try the
+    ///    homeserver URL as a last resort.
     ///
     /// Always returns `None` if well-known lookups were disabled with
     /// [`ClientBuilder::disable_well_known_lookup`].
@@ -2277,13 +2518,11 @@ impl Client {
         // Use the server name, either an explicit one or an implicit one taken from
         // the user id: sometimes we'll have only the homeserver url available and no
         // server name, but the server name can be extracted from the current user id.
-        let server_url = self
-            .server()
-            .map(|server| server.to_string())
-            // If the server name wasn't available, extract it from the user id and build a URL:
-            // Reuse the same scheme as the homeserver url does, assuming if it's `http` there it
-            // will be the same for the public server url, lacking a better candidate.
-            .or_else(|| self.user_id().map(|id| format!("{}://{}", scheme, id.server_name())));
+        //
+        // Reuse the same scheme as the homeserver url does, assuming if it's `http`
+        // there it will be the same for the public server url, lacking a better
+        // candidate.
+        let server_url = self.server_name().map(|name| format!("{scheme}://{name}"));
 
         // If the server name is available, first try using it
         let response = if let Some(server_url) = server_url {
@@ -2293,10 +2532,12 @@ impl Client {
             None
         };
 
-        // If we didn't get a well-known value yet, try with the homeserver url instead:
+        // If we didn't get a well-known value yet, try with the homeserver url
+        // instead:
         if response.is_none() {
-            // Sometimes people configure their well-known directly on the homeserver so use
-            // this as a fallback when the server name is unknown.
+            // Sometimes people configure their well-known directly on the
+            // homeserver so use this as a fallback when the server
+            // name is unknown.
             warn!(
                 "Fetching the well-known from the server name didn't work, using the homeserver url instead"
             );
@@ -2422,7 +2663,8 @@ impl Client {
         let mut supported_versions_guard = match cached_supported_versions.refresh_lock.try_lock() {
             Ok(guard) => guard,
             Err(_) => {
-                // There is already a refresh in progress, wait for it to finish.
+                // There is already a refresh in progress, wait for it to
+                // finish.
                 let guard = cached_supported_versions.refresh_lock.lock().await;
 
                 if let Err(error) = guard.as_ref() {
@@ -2437,7 +2679,8 @@ impl Client {
                     return Ok(value.into_data());
                 }
 
-                // The data wasn't cached or has expired, we need to make another request.
+                // The data wasn't cached or has expired, we need to make
+                // another request.
                 guard
             }
         };
@@ -2539,8 +2782,8 @@ impl Client {
             return Ok(None);
         };
 
-        // Spawn a task to refresh the cache if it has expired and we have a valid
-        // access token.
+        // Spawn a task to refresh the cache if it has expired and we have a
+        // valid access token.
         if value.has_expired() && self.auth_ctx().has_valid_access_token() {
             debug!("spawning task to refresh supported versions cache");
 
@@ -2658,11 +2901,12 @@ impl Client {
         let _well_known_guard = match well_known_cache.refresh_lock.try_lock() {
             Ok(guard) => guard,
             Err(_) => {
-                // There is already a refresh in progress, wait for it to finish.
+                // There is already a refresh in progress, wait for it to
+                // finish.
                 let guard = well_known_cache.refresh_lock.lock().await;
 
-                // A refresh can't fail because we ignore failures, so there shouldn't be an
-                // error in the refresh lock.
+                // A refresh can't fail because we ignore failures, so there
+                // shouldn't be an error in the refresh lock.
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = well_known_cache.value()
@@ -2671,7 +2915,8 @@ impl Client {
                     return value.into_data();
                 }
 
-                // The data wasn't cached or has expired, we need to make another request.
+                // The data wasn't cached or has expired, we need to make
+                // another request.
                 guard
             }
         };
@@ -2802,8 +3047,8 @@ impl Client {
             return CachedValue::NotSet;
         };
 
-        // Spawn a task to refresh the cache if it has expired and we have a valid
-        // access token.
+        // Spawn a task to refresh the cache if it has expired and we have a
+        // valid access token.
         if value.has_expired() && self.auth_ctx().has_valid_access_token() {
             debug!("spawning task to refresh RTC transports cache");
 
@@ -2825,7 +3070,8 @@ impl Client {
         let mut refresh_guard = match cache.refresh_lock.try_lock() {
             Ok(guard) => guard,
             Err(_) => {
-                // There is already a refresh in progress, wait for it to finish.
+                // There is already a refresh in progress, wait for it to
+                // finish.
                 let guard = cache.refresh_lock.lock().await;
 
                 if let Err(error) = guard.as_ref() {
@@ -2840,7 +3086,8 @@ impl Client {
                     return Ok(value.into_data());
                 }
 
-                // The data wasn't cached or has expired, we need to make another request.
+                // The data wasn't cached or has expired, we need to make
+                // another request.
                 guard
             }
         };
@@ -2852,11 +3099,13 @@ impl Client {
                 Ok(Some(transports))
             }
             Err(error) if error.is_endpoint_not_implemented() => {
-                // The homeserver doesn't implement the RTC transports endpoint. Cache
-                // `None` (with the normal TTL) so we don't hit the endpoint on every
-                // call; this self-heals after the TTL in case the homeserver is
-                // upgraded. `None` is kept distinct from `Some(vec![])` (a homeserver
-                // that advertises no transports) so callers can decide whether to fall
+                // The homeserver doesn't implement the RTC transports endpoint.
+                // Cache `None` (with the normal TTL) so we
+                // don't hit the endpoint on every call; this
+                // self-heals after the TTL in case the homeserver is
+                // upgraded. `None` is kept distinct from `Some(vec![])` (a
+                // homeserver that advertises no transports) so
+                // callers can decide whether to fall
                 // back to the well-known foci (see `Client::rtc_foci`).
                 debug!("homeserver does not implement the RTC transports endpoint");
                 *refresh_guard = Ok(());
@@ -2921,8 +3170,8 @@ impl Client {
             return Ok(Some(transports));
         }
 
-        // The homeserver doesn't implement the discovery endpoint or does not expose
-        // any transports, fall back to the well-known foci.
+        // The homeserver doesn't implement the discovery endpoint or does not
+        // expose any transports, fall back to the well-known foci.
         // `well_known` returns `None` when well-known discovery is
         // disabled, which correctly collapses into "nothing was discovered".
         Ok(self.well_known().await.map(|well_known| well_known.rtc_foci))
@@ -3642,10 +3891,14 @@ impl Client {
         &self,
         cross_process_lock_config: CrossProcessLockConfig,
     ) -> Result<Client> {
+        // Read the server name out before building the client, so the lock guard isn't
+        // held across an `.await`.
+        let server_name = self.inner.server.read().unwrap().clone();
+
         let client = Client {
             inner: ClientInner::new(
                 self.inner.auth_ctx.clone(),
-                self.server(),
+                server_name,
                 self.homeserver(),
                 self.sliding_sync_version(),
                 self.inner.sync_presence.clone(),
@@ -3667,7 +3920,7 @@ impl Client {
                 #[cfg(feature = "e2e-encryption")]
                 self.inner.enable_share_history_on_invite,
                 cross_process_lock_config,
-                #[cfg(feature = "experimental-search")]
+                #[cfg(feature = "experimental-search-core")]
                 self.inner.search_index.clone(),
                 self.inner.thread_subscription_catchup.clone(),
                 (*self.inner.media_fetcher.read().await).clone(),
@@ -3781,9 +4034,16 @@ impl Client {
     }
 
     /// Returns the [`SearchIndex`] for this [`Client`].
-    #[cfg(feature = "experimental-search")]
+    #[cfg(feature = "experimental-search-core")]
     pub fn search_index(&self) -> &SearchIndex {
         &self.inner.search_index
+    }
+
+    /// The threading support this client was built with.
+    ///
+    /// See [`ClientBuilder::with_threading_support`] for more details.
+    pub fn threading_support(&self) -> ThreadingSupport {
+        self.base_client().threading_support
     }
 
     /// Whether the client is configured to take thread subscriptions (MSC4306
@@ -3797,7 +4057,8 @@ impl Client {
     /// This is async and fallible as it may use the network to retrieve the
     /// server supported features, if they aren't cached already.
     pub async fn enabled_thread_subscriptions(&self) -> Result<bool> {
-        // Check if the client is configured to support thread subscriptions first.
+        // Check if the client is configured to support thread subscriptions
+        // first.
         match self.base_client().threading_support {
             ThreadingSupport::Enabled { with_subscriptions: false }
             | ThreadingSupport::Disabled => return Ok(false),
@@ -4080,16 +4341,24 @@ pub(crate) mod tests {
         RoomId, ServerName, UserId,
         api::{
             FeatureFlag, MatrixVersion,
-            client::{room::create_room::v3::Request as CreateRoomRequest, rtc::RtcTransport},
+            client::{
+                room::create_room::{
+                    RoomPowerLevelsContentOverride, v3::Request as CreateRoomRequest,
+                },
+                rtc::RtcTransport,
+            },
         },
         assign,
         events::{
+            AnySyncStateEvent,
             ignored_user_list::IgnoredUserListEventContent,
             media_preview_config::{InviteAvatars, MediaPreviewConfigEventContent, MediaPreviews},
         },
-        owned_device_id, owned_room_id, owned_user_id,
+        int, owned_device_id, owned_room_id, owned_user_id,
         presence::PresenceState,
-        room_alias_id, room_id, user_id,
+        room_alias_id, room_id,
+        serde::Raw,
+        user_id,
     };
     use serde_json::json;
     use stream_assert::{assert_next_matches, assert_pending};
@@ -4290,7 +4559,8 @@ pub(crate) mod tests {
             .mount()
             .await;
 
-        // The `/versions` is on the homeserver (e.g. `matrix-client.matrix.org`).
+        // The `/versions` is on the homeserver (e.g.
+        // `matrix-client.matrix.org`).
         homeserver.mock_versions().ok().mock_once().named("versions").mount().await;
 
         let client = Client::builder()
@@ -4299,9 +4569,59 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        assert_eq!(client.server().unwrap(), Url::parse(&server_url).unwrap());
+        assert_eq!(client.server_name().unwrap(), alice.server_name());
         assert_eq!(client.homeserver(), Url::parse(&homeserver_url).unwrap());
         client.server_versions().await.unwrap();
+    }
+
+    #[cfg(feature = "e2e-encryption")]
+    #[async_test]
+    async fn test_stopping_background_tasks_clears_them() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        client.send_queue().set_enabled(true).await;
+        assert!(client.send_queue().is_enabled());
+
+        // The encryption tasks are set up when the client is logged in.
+        client.encryption().spawn_initialization_task(None).await;
+        client.encryption().wait_for_e2ee_initialization_tasks().await;
+
+        client.stop_background_tasks();
+
+        // Nothing is left to keep talking to the homeserver on the session's behalf.
+        assert!(!client.send_queue().is_enabled());
+
+        let tasks = client.inner.e2ee.tasks.lock();
+        assert!(tasks.upload_room_keys.is_none());
+        assert!(tasks.download_room_keys.is_none());
+        assert!(tasks.update_recovery_state_after_backup.is_none());
+        assert!(tasks.update_recovery_state.is_none());
+        assert!(tasks.receive_historic_room_key_bundles.is_none());
+        assert!(tasks.setup_e2ee.is_none());
+    }
+
+    #[async_test]
+    async fn test_server_name_comes_from_the_user_id_once_logged_in() {
+        let server = MatrixMockServer::new().await;
+
+        // Built from a homeserver URL, so there is no server name to report yet.
+        let client = server.client_builder().unlogged().build().await;
+        assert_eq!(client.server_name(), None);
+
+        // Logging in gives us one: the server part of our own user ID, which is a bare
+        // Matrix server name rather than the URL requests are sent to.
+        server.mock_login().ok().mock_once().mount().await;
+        client.matrix_auth().login_username("example", "hunter2").send().await.unwrap();
+
+        let server_name = client.server_name().expect("we know the server name once logged in");
+        assert_eq!(server_name, client.user_id().unwrap().server_name());
+        assert_eq!(server_name, "matrix.org");
+
+        // It comes from the user ID rather than from the host requests go to, and it
+        // is a bare server name rather than a URL.
+        assert!(client.homeserver().to_string().starts_with("http://"));
+        assert_ne!(client.homeserver().to_string(), server_name.to_string());
     }
 
     #[async_test]
@@ -4320,19 +4640,19 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        assert_eq!(client.server().unwrap(), Url::parse(&homeserver_url).unwrap());
+        assert_eq!(client.server_name().unwrap(), alice.server_name());
         assert_eq!(client.homeserver(), Url::parse(&homeserver_url).unwrap());
 
         let new_server = Url::parse("http://example.org").unwrap();
-        // Since we're explicitly setting the server to something else, like we might do
-        // during QR code login...
+        // Since we're explicitly setting the server to something else, like we
+        // might do during QR code login...
         client.set_homeserver(new_server.clone());
 
         // The new URL should be set in the homeserver field.
         assert_eq!(client.homeserver(), new_server);
         // But the server field should be set to empty, since we didn't do any discovery
         // now.
-        assert!(client.server().is_none())
+        assert!(client.server_name().is_none())
     }
 
     #[async_test]
@@ -4529,7 +4849,8 @@ pub(crate) mod tests {
             [room_id!("!beta:localhost"), room_id!("!alpha:localhost")]
         );
 
-        // Tracking the first room yet again should move it to the front of the list
+        // Tracking the first room yet again should move it to the front of the
+        // list
         account.track_recently_visited_room(owned_room_id!("!alpha:localhost")).await.unwrap();
         assert_eq!(account.get_recently_visited_rooms().await.unwrap().len(), 2);
         assert_eq!(
@@ -4664,7 +4985,8 @@ pub(crate) mod tests {
 
         drop(versions_mock);
 
-        // Now, reset the cache, and observe the endpoint being called again once.
+        // Now, reset the cache, and observe the endpoint being called again
+        // once.
         client.reset_supported_versions().await.unwrap();
 
         server.mock_versions().ok().expect(2).named("second versions mock").mount().await;
@@ -4684,7 +5006,8 @@ pub(crate) mod tests {
         // Call the method to trigger a cache refresh background task.
         client.supported_versions_cached().await.unwrap().unwrap();
 
-        // We wait for the task to finish, the endpoint should have been called again.
+        // We wait for the task to finish, the endpoint should have been called
+        // again.
         sleep(Duration::from_secs(1)).await;
         assert_matches!(client.inner.caches.supported_versions.value(), CachedValue::Cached(value) if !value.has_expired());
     }
@@ -4743,7 +5066,8 @@ pub(crate) mod tests {
 
         drop(well_known_mock);
 
-        // Now, reset the cache, and observe the endpoints being called again once.
+        // Now, reset the cache, and observe the endpoints being called again
+        // once.
         client.reset_well_known().await.unwrap();
 
         server.mock_well_known().ok().named("second well known mock").expect(2).mount().await;
@@ -4762,9 +5086,10 @@ pub(crate) mod tests {
         // Call the method again to trigger a cache refresh background task.
         client.well_known().await;
 
-        // We wait for the task to finish, the endpoint should have been called again.
-        // We need to wait a bit because the first requests using the server name of the
-        // user will fail, only the requests using the homeserver URL will succeed.
+        // We wait for the task to finish, the endpoint should have been called
+        // again. We need to wait a bit because the first requests using
+        // the server name of the user will fail, only the requests
+        // using the homeserver URL will succeed.
         sleep(Duration::from_secs(5)).await;
         assert_matches!(client.inner.caches.well_known.value(), CachedValue::Cached(value) if !value.has_expired());
     }
@@ -4829,7 +5154,8 @@ pub(crate) mod tests {
         // Call the method again to trigger a cache refresh background task.
         client.rtc_transports().await.unwrap();
 
-        // We wait for the task to finish, the endpoint should have been called again.
+        // We wait for the task to finish, the endpoint should have been called
+        // again.
         sleep(Duration::from_secs(1)).await;
         assert_matches!(client.inner.caches.rtc_transports.value(), CachedValue::Cached(value) if !value.has_expired());
     }
@@ -4843,10 +5169,10 @@ pub(crate) mod tests {
 
         let server = MatrixMockServer::new().await;
 
-        // The homeserver doesn't implement the endpoint: it responds with a 404 and an
-        // `M_UNRECOGNIZED` error (as a homeserver does for an unrecognized endpoint).
-        // We expect it to be hit only once, despite several calls, thanks to the
-        // negative caching.
+        // The homeserver doesn't implement the endpoint: it responds with a 404
+        // and an `M_UNRECOGNIZED` error (as a homeserver does for an
+        // unrecognized endpoint). We expect it to be hit only once,
+        // despite several calls, thanks to the negative caching.
         Mock::given(method("GET"))
             .and(path_regex(r"^/_matrix/client/unstable/org.matrix.msc4143/rtc/transports"))
             .respond_with(ResponseTemplate::new(404).set_body_json(json!({
@@ -4863,7 +5189,8 @@ pub(crate) mod tests {
         // First call hits the network and gets a 404, which is cached as `None`
         // (unsupported), distinct from `Some(vec![])` (supported but empty).
         assert_eq!(client.rtc_transports().await.unwrap(), None);
-        // Subsequent call hits the in-memory cache, without re-hitting the endpoint.
+        // Subsequent call hits the in-memory cache, without re-hitting the
+        // endpoint.
         assert_eq!(client.rtc_transports().await.unwrap(), None);
         assert_matches!(client.inner.caches.rtc_transports.value(), CachedValue::Cached(value) if !value.has_expired());
     }
@@ -4909,8 +5236,8 @@ pub(crate) mod tests {
 
         let _transports_mock = mock_rtc_transports_endpoint(&server, true).await;
 
-        // The homeserver implements the discovery endpoint, so the well-known must not
-        // be queried at all.
+        // The homeserver implements the discovery endpoint, so the well-known
+        // must not be queried at all.
         let _well_known_mock = server
             .mock_well_known()
             .ok()
@@ -4942,8 +5269,8 @@ pub(crate) mod tests {
 
         let client = server.client_builder().build().await;
 
-        // The homeserver doesn't implement the discovery endpoint, so the well-known
-        // foci are used instead.
+        // The homeserver doesn't implement the discovery endpoint, so the
+        // well-known foci are used instead.
         assert_eq!(client.discover_rtc_transports().await.unwrap(), Some(rtc_foci));
     }
 
@@ -4968,8 +5295,9 @@ pub(crate) mod tests {
             .build()
             .await;
 
-        // The homeserver doesn't implement the discovery endpoint, and falling back to
-        // the well-known isn't allowed, so nothing could be discovered.
+        // The homeserver doesn't implement the discovery endpoint, and falling
+        // back to the well-known isn't allowed, so nothing could be
+        // discovered.
         assert_eq!(client.discover_rtc_transports().await.unwrap(), None);
         // The other well-known consumers are disabled too.
         assert!(client.well_known_rtc_transports().await.unwrap().is_empty());
@@ -4990,8 +5318,9 @@ pub(crate) mod tests {
         let client = server.client_builder().build().await;
         client.disable_well_known_lookup(true);
 
-        // The homeserver doesn't implement the discovery endpoint, and falling back to
-        // the well-known isn't allowed, so nothing could be discovered.
+        // The homeserver doesn't implement the discovery endpoint, and falling
+        // back to the well-known isn't allowed, so nothing could be
+        // discovered.
         assert_eq!(client.discover_rtc_transports().await.unwrap(), None);
         // The other well-known consumers are disabled too.
         assert!(client.well_known_rtc_transports().await.unwrap().is_empty());
@@ -5050,7 +5379,8 @@ pub(crate) mod tests {
 
         drop(well_known_mock);
 
-        // Now, reset the cache, and observe the endpoints being called again once.
+        // Now, reset the cache, and observe the endpoints being called again
+        // once.
         client.reset_well_known().await.unwrap();
 
         server
@@ -5075,8 +5405,8 @@ pub(crate) mod tests {
             .build()
             .await;
 
-        // We don't define a mock server on purpose here, so that the error is really a
-        // network error.
+        // We don't define a mock server on purpose here, so that the error is
+        // really a network error.
         client.whoami().await.unwrap_err();
     }
 
@@ -5133,8 +5463,8 @@ pub(crate) mod tests {
         let client = MockClientBuilder::new(None).build().await;
 
         let room_id = room_id!("!room:example.org");
-        // Room is not present so the client won't be able to find it. The call will
-        // timeout.
+        // Room is not present so the client won't be able to find it. The call
+        // will timeout.
         timeout(Duration::from_secs(1), client.await_room_remote_echo(room_id)).await.unwrap_err();
     }
 
@@ -5158,6 +5488,132 @@ pub(crate) mod tests {
         timeout(Duration::from_secs(1), client.await_room_remote_echo(room.room_id()))
             .await
             .unwrap_err();
+    }
+
+    #[async_test]
+    async fn test_create_space() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // A space is a room of type `m.space` whose timeline ordinary members cannot
+        // write to.
+        server
+            .mock_create_room()
+            .body_matches_partial_json(json!({
+                "creation_content": { "type": "m.space" },
+                "power_level_content_override": { "events_default": 100 },
+            }))
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        client.create_space(CreateRoomRequest::new()).await.unwrap();
+    }
+
+    #[async_test]
+    async fn test_create_space_does_not_override_what_the_caller_set() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // The caller took over the power levels, so they are used verbatim, and the
+        // creation content already names a room type, so it is left alone.
+        server
+            .mock_create_room()
+            .body_matches_partial_json(json!({
+                "creation_content": { "type": "org.example.custom" },
+                "power_level_content_override": { "events_default": 50 },
+            }))
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        let mut power_levels = RoomPowerLevelsContentOverride::new();
+        power_levels.events_default = Some(int!(50));
+
+        let request = assign!(CreateRoomRequest::new(), {
+            creation_content: Some(
+                Raw::new(&json!({ "type": "org.example.custom" })).unwrap().cast_unchecked(),
+            ),
+            power_level_content_override: Some(Raw::new(&power_levels).unwrap()),
+        });
+
+        client.create_space(request).await.unwrap();
+    }
+
+    #[async_test]
+    async fn test_rooms_with_state_event() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let marker_type = "org.example.creation_marker";
+        let marker_key = "abcdef";
+        let marker = |room_id: &RoomId| -> Raw<AnySyncStateEvent> {
+            Raw::new(&json!({
+                "type": marker_type,
+                "state_key": marker_key,
+                "content": { "hello": "world" },
+                "event_id": format!("$marker_{}", room_id.as_str().replace(['!', ':', '.'], "_")),
+                "sender": "@example:localhost",
+                "origin_server_ts": 0u64,
+            }))
+            .unwrap()
+            .cast_unchecked()
+        };
+
+        // No room carries the marker yet: creating the room is safe.
+        assert!(
+            client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap().is_empty()
+        );
+
+        let first = room_id!("!first:localhost");
+        server
+            .sync_room(&client, JoinedRoomBuilder::new(first).add_state_event(marker(first)))
+            .await;
+
+        // Exactly one room carries it: this is the room that was created.
+        let rooms = client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap();
+        assert_eq!(rooms.len(), 1);
+        assert_eq!(rooms[0].room_id(), first);
+
+        // A retry created a duplicate: the caller can see the ambiguity instead of
+        // being handed a false certainty.
+        let second = room_id!("!second:localhost");
+        server
+            .sync_room(&client, JoinedRoomBuilder::new(second).add_state_event(marker(second)))
+            .await;
+
+        let rooms = client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap();
+        assert_eq!(rooms.len(), 2);
+
+        // The state key is part of the match.
+        assert!(
+            client.rooms_with_state_event(marker_type.into(), "other").await.unwrap().is_empty()
+        );
+    }
+
+    #[async_test]
+    async fn test_create_room_is_not_retried() {
+        let server = MatrixMockServer::new().await;
+        // Retries are disabled in the mock client by default; turn them back on, this
+        // is exactly what the test is about.
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().retry_limit(3)))
+            .build()
+            .await;
+
+        // `/createRoom` has no transaction ID, so a retry creates another room. The
+        // server answers with a 5xx error when, for instance, it fails to invite a
+        // user that doesn't exist; retrying would leave a trail of empty rooms
+        // behind, so the request must be sent exactly once.
+        server.mock_create_room().error500().expect(1).mount().await;
+
+        client
+            .create_room(CreateRoomRequest::new())
+            .await
+            .expect_err("creating the room should have failed");
     }
 
     #[async_test]
@@ -5451,8 +5907,8 @@ pub(crate) mod tests {
 
     #[async_test]
     async fn test_load_or_fetch_max_upload_size_with_auth_matrix_version() {
-        // The default Matrix version we use is 1.11 or higher, so authenticated media
-        // is supported.
+        // The default Matrix version we use is 1.11 or higher, so authenticated
+        // media is supported.
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
 
@@ -5466,8 +5922,9 @@ pub(crate) mod tests {
 
     #[async_test]
     async fn test_load_or_fetch_max_upload_size_with_auth_stable_feature() {
-        // The server must advertise support for the stable feature for authenticated
-        // media support, so we mock the `GET /versions` response.
+        // The server must advertise support for the stable feature for
+        // authenticated media support, so we mock the `GET /versions`
+        // response.
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().no_server_versions().build().await;
 

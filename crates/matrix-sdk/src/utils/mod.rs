@@ -103,6 +103,15 @@ impl<T: 'static + Send + Clone> ChannelObservable<T> {
     pub(crate) fn get(&self) -> T {
         self.value.read().unwrap().to_owned()
     }
+
+    /// Subscribe to updates without consuming them as a stream yet.
+    ///
+    /// Unlike [`Self::subscribe()`], this starts buffering updates as soon as
+    /// it is called, so a caller that subscribes now and reads later doesn't
+    /// miss what happened in between. The current value is not included.
+    pub(crate) fn subscribe_receiver(&self) -> broadcast::Receiver<T> {
+        self.channel.subscribe()
+    }
 }
 
 /// The set of types that can be used with [`Room::send_raw`].
@@ -238,7 +247,60 @@ pub fn formatted_body_from(
     body: Option<&str>,
     formatted_body: Option<FormattedBody>,
 ) -> Option<FormattedBody> {
-    if formatted_body.is_some() { formatted_body } else { body.and_then(FormattedBody::markdown) }
+    if formatted_body.is_some() {
+        formatted_body
+    } else {
+        body.and_then(formatted_body_from_markdown)
+    }
+}
+
+/// Interpret `body` as markdown, and return the formatted body it produces.
+///
+/// Returns `None` if `body` carries no markdown formatting, and so is better
+/// sent as plain text.
+///
+/// Prefer this over [`FormattedBody::markdown`]: it additionally leaves alone a
+/// body that markdown would read as list markup carrying no content at all,
+/// such as a bare `5.`, which that conversion would strip down to an empty
+/// list item.
+#[cfg(feature = "markdown")]
+pub fn formatted_body_from_markdown(body: &str) -> Option<FormattedBody> {
+    if is_content_free_list(body) { None } else { FormattedBody::markdown(body) }
+}
+
+/// Whether `body` is read by markdown as list markup that carries no content
+/// at all.
+///
+/// A body like `5.` is a complete ordered list whose single item is empty: the
+/// characters the user typed survive only as the list's `start` attribute, so
+/// a receiving client that doesn't honour `start` renders the message as `1.`,
+/// and one that drops the empty item renders nothing. Either way the content
+/// is altered, and an empty list is never what the sender meant, so such a body
+/// is sent as plain text instead.
+///
+/// Only lists whose every item is empty are refused; `5. buy milk` is a list
+/// the sender did mean, and is left alone.
+#[cfg(feature = "markdown")]
+fn is_content_free_list(body: &str) -> bool {
+    use pulldown_cmark::{Event, Options, Parser, Tag};
+
+    // Keep in sync with the options ruma's `parse_markdown` uses, so that this
+    // reads `body` the same way the conversion that follows will.
+    const OPTIONS: Options = Options::ENABLE_TABLES.union(Options::ENABLE_STRIKETHROUGH);
+
+    let mut is_list = false;
+
+    for event in Parser::new_ext(body, OPTIONS) {
+        match event {
+            Event::Start(Tag::List(_)) => is_list = true,
+            // An item with content produces events between its start and end.
+            Event::Start(Tag::Item) | Event::End(_) => {}
+            // Anything else is either content, or markup that isn't a list.
+            _ => return false,
+        }
+    }
+
+    is_list
 }
 
 /// A full URL or just the query part of a URL.
@@ -380,6 +442,39 @@ mod test {
         let expected_formatted_body = FormattedBody::html("<h1>Parsed</h1>\n".to_owned());
         assert_eq!(expected_formatted_body.body, result_formatted_body.body);
         assert_eq!(expected_formatted_body.format, result_formatted_body.format);
+    }
+
+    #[test]
+    #[cfg(feature = "markdown")]
+    fn test_formatted_body_from_a_bare_ordered_list_marker_stays_plain() {
+        // `5.` is read by markdown as an ordered list with a single empty item,
+        // which loses the characters the user typed. It must be sent as is.
+        for body in ["5.", "5. ", "5)", "10."] {
+            assert_matches!(formatted_body_from(Some(body), None), None, "body: {body:?}");
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "markdown")]
+    fn test_formatted_body_from_a_bare_unordered_list_marker_stays_plain() {
+        for body in ["* ", "- ", "+ ", "* \n* "] {
+            assert_matches!(formatted_body_from(Some(body), None), None, "body: {body:?}");
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "markdown")]
+    fn test_formatted_body_from_a_list_with_content_is_still_formatted() {
+        assert_let!(Some(formatted_body) = formatted_body_from(Some("5. buy milk"), None));
+        assert_eq!(formatted_body.body, "<ol start=\"5\">\n<li>buy milk</li>\n</ol>\n");
+    }
+
+    #[test]
+    #[cfg(feature = "markdown")]
+    fn test_formatted_body_from_a_number_and_a_period_within_a_sentence_is_unaffected() {
+        // This never was a list, and the text carries no other markdown, so it
+        // stays plain for the usual reason.
+        assert_matches!(formatted_body_from(Some("I want 5."), None), None);
     }
 
     #[test]

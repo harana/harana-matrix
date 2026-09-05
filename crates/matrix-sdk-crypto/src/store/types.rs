@@ -259,6 +259,12 @@ pub struct DeviceUpdates {
     pub new: BTreeMap<OwnedUserId, BTreeMap<OwnedDeviceId, Device>>,
     /// The list of changed devices.
     pub changed: BTreeMap<OwnedUserId, BTreeMap<OwnedDeviceId, Device>>,
+    /// The list of devices that have been removed.
+    ///
+    /// The device is no longer known to the homeserver: it has been logged out
+    /// or deleted. The [`Device`] here is the last state we knew about it, so
+    /// consumers can tell *which* device disappeared.
+    pub deleted: BTreeMap<OwnedUserId, BTreeMap<OwnedDeviceId, Device>>,
 }
 
 /// Updates about [`UserIdentity`]s which got received over the `/keys/query`

@@ -46,6 +46,7 @@ use matrix_sdk_base::{
         RawAnySyncOrStrippedState, RawSyncOrStrippedState, SyncOrStrippedState,
     },
     media::{MediaThumbnailSettings, store::IgnoreMediaRetentionPolicy},
+    read_receipts::ReadReceipts,
     serde_helpers::extract_relation,
     store::{StateStoreExt, ThreadSubscriptionStatus},
 };
@@ -71,8 +72,9 @@ use ruma::events::{
     AnySyncTimelineEvent, SyncMessageLikeEvent, room::encrypted::OriginalSyncRoomEncryptedEvent,
 };
 use ruma::{
-    EventId, Int, MatrixToUri, MatrixUri, MxcUri, OwnedEventId, OwnedRoomId, OwnedServerName,
-    OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt, UserId,
+    EventId, Int, MatrixToUri, MatrixUri, MilliSecondsSinceUnixEpoch, MxcUri, OwnedEventId,
+    OwnedRoomId, OwnedServerName, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt,
+    UserId,
     api::{
         client::{
             config::{set_global_account_data, set_room_account_data},
@@ -113,7 +115,7 @@ use ruma::{
         beacon_info::BeaconInfoEventContent,
         direct::DirectEventContent,
         marked_unread::MarkedUnreadEventContent,
-        receipt::{Receipt, ReceiptThread, ReceiptType},
+        receipt::{Receipt, ReceiptEventContent, ReceiptThread, ReceiptType},
         relation::RelationType,
         room::{
             ImageInfo, MediaSource, ThumbnailInfo,
@@ -159,6 +161,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use self::futures::{SendAttachment, SendMessageLikeEvent, SendRawMessageLikeEvent};
 pub use self::{
     member::{RoomMember, RoomMemberRole},
+    member_list::{RoomMemberListPage, RoomMemberListQuery, RoomMemberSortOrder},
     messages::{
         EventWithContextResponse, IncludeRelations, ListThreadsOptions, Messages, MessagesOptions,
         Relations, RelationsOptions, ThreadRoots,
@@ -186,6 +189,7 @@ use crate::{
         power_levels::{RoomPowerLevelChanges, RoomPowerLevelsExt},
         privacy_settings::RoomPrivacySettings,
     },
+    room_preview::RoomPreview,
     sync::RoomUpdate,
     utils::{IntoRawMessageLikeEventContent, IntoRawStateEventContent},
 };
@@ -196,6 +200,7 @@ pub mod identity_status_changes;
 /// Contains code related to requests to join a room.
 pub mod knock_requests;
 mod member;
+mod member_list;
 mod messages;
 pub mod power_levels;
 pub mod reply;
@@ -1021,6 +1026,11 @@ impl Room {
             .locks()
             .members_request_deduplicated_handler
             .run(self.room_id().to_owned(), async move {
+                // Taken before the request is sent, and held until its response has been
+                // handled: it makes the member events a sync writes in the meantime win
+                // over the older state this response describes.
+                let _guard = self.inner.start_members_request();
+
                 let request = get_member_events::v3::Request::new(self.inner.room_id().to_owned());
                 let response = self
                     .client
@@ -1045,12 +1055,70 @@ impl Room {
             .await
     }
 
+    /// Join the successor of this room, i.e. the room that replaced it when it
+    /// was tombstoned.
+    ///
+    /// The candidate servers of [`SuccessorRoom::via`] are passed along as
+    /// `via` parameters, which is what lets a user whose own server has never
+    /// seen the successor room follow the tombstone.
+    ///
+    /// Returns `None` if this room has not been tombstoned, or if its
+    /// `m.room.tombstone` event carries no replacement room.
+    ///
+    /// [`SuccessorRoom::via`]: crate::SuccessorRoom::via
+    pub async fn join_successor_room(&self) -> Result<Option<Room>> {
+        let Some(successor_room) = self.successor_room() else {
+            return Ok(None);
+        };
+
+        self.client
+            .join_room_by_id_or_alias((*successor_room.room_id).into(), &successor_room.via)
+            .await
+            .map(Some)
+    }
+
+    /// Preview the successor of this room, i.e. the room that replaced it when
+    /// it was tombstoned.
+    ///
+    /// As for [`Room::join_successor_room`], the candidate servers of
+    /// [`SuccessorRoom::via`] are passed along, so the preview works from a
+    /// server that has never seen the successor room.
+    ///
+    /// Returns `None` if this room has not been tombstoned, or if its
+    /// `m.room.tombstone` event carries no replacement room.
+    ///
+    /// [`SuccessorRoom::via`]: crate::SuccessorRoom::via
+    pub async fn successor_room_preview(&self) -> Result<Option<RoomPreview>> {
+        let Some(successor_room) = self.successor_room() else {
+            return Ok(None);
+        };
+
+        self.client
+            .get_room_preview((*successor_room.room_id).into(), successor_room.via)
+            .await
+            .map(Some)
+    }
+
     /// Request to update the encryption state for this room.
     ///
     /// It does nothing if the encryption state is already
     /// [`EncryptionState::Encrypted`] or [`EncryptionState::NotEncrypted`].
+    ///
+    /// It also does nothing for a room we are only invited to: the server
+    /// answers `/state` with a `M_FORBIDDEN` error in that case. The encryption
+    /// state of such a room is known only if its stripped state carried an
+    /// `m.room.encryption` event, and stays [`EncryptionState::Unknown`]
+    /// otherwise, until the room is joined.
     pub async fn request_encryption_state(&self) -> Result<()> {
         if !self.inner.encryption_state().is_unknown() {
+            return Ok(());
+        }
+
+        if self.state() == RoomState::Invited {
+            debug!(
+                room_id = ?self.room_id(),
+                "Not requesting the encryption state of a room we are only invited to,                  the server would deny it"
+            );
             return Ok(());
         }
 
@@ -2173,6 +2241,19 @@ impl Room {
                 // We will unset the unread flag if we send an unthreaded receipt.
                 let is_unthreaded = thread == ReceiptThread::Unthreaded;
 
+                // Apply the receipt locally right away, so the room stops showing as
+                // unread without waiting for it to come back through sync. This is what
+                // the receipt event will look like when it does.
+                //  Boxed: this future ends up inside the deduplicating handler's, and the
+                // read receipt computation it awaits is large enough to overflow the
+                // stack otherwise.
+                let echo = Box::pin(self.apply_local_read_receipt_echo(
+                    receipt_type.clone(),
+                    &thread,
+                    &event_id,
+                ))
+                .await;
+
                 let mut request = create_receipt::v3::Request::new(
                     self.room_id().to_owned(),
                     receipt_type,
@@ -2180,7 +2261,13 @@ impl Room {
                 );
                 request.thread = thread;
 
-                self.client.send(request).await?;
+                if let Err(error) = self.client.send(request).await {
+                    if let Some(echo) = echo {
+                        echo.roll_back(self).await;
+                    }
+
+                    return Err(error.into());
+                }
 
                 if is_unthreaded {
                     self.set_unread_flag(false).await?;
@@ -2189,6 +2276,58 @@ impl Room {
                 Ok(())
             })
             .await
+    }
+
+    /// Apply a read receipt we are about to send as if it had already come
+    /// back through sync.
+    ///
+    /// Without this, marking a room as read leaves it showing as unread until
+    /// the receipt is echoed by the server, which on a slow connection or a
+    /// busy homeserver takes long enough to look broken.
+    ///
+    /// Returns what is needed to undo it if the request fails, or `None` when
+    /// nothing was applied (the event cache isn't running, or the receipt
+    /// doesn't affect the room's unread state).
+    async fn apply_local_read_receipt_echo(
+        &self,
+        receipt_type: create_receipt::v3::ReceiptType,
+        thread: &ReceiptThread,
+        event_id: &EventId,
+    ) -> Option<ReadReceiptEcho> {
+        // A receipt in a thread doesn't move the room's own unread state, which is
+        // what this echo is about.
+        if !matches!(thread, ReceiptThread::Unthreaded | ReceiptThread::Main) {
+            return None;
+        }
+
+        let receipt_type = match receipt_type {
+            create_receipt::v3::ReceiptType::Read => ReceiptType::Read,
+            create_receipt::v3::ReceiptType::ReadPrivate => ReceiptType::ReadPrivate,
+            // `m.fully_read` isn't a receipt that counts towards unread messages.
+            _ => return None,
+        };
+
+        let user_id = self.client.user_id()?;
+
+        let (room_event_cache, _drop_handles) = self.event_cache().await.ok()?;
+
+        let mut receipt = Receipt::new(MilliSecondsSinceUnixEpoch::now());
+        receipt.thread = thread.clone();
+
+        let receipts = BTreeMap::from([(
+            event_id.to_owned(),
+            BTreeMap::from([(receipt_type, BTreeMap::from([(user_id.to_owned(), receipt)]))]),
+        )]);
+        let receipt_event = ReceiptEventContent(receipts);
+
+        let previous = self.inner.read_receipts();
+
+        if let Err(error) = room_event_cache.apply_local_read_receipts(&[receipt_event]).await {
+            debug!(?error, "Couldn't apply the local read receipt echo");
+            return None;
+        }
+
+        Some(ReadReceiptEcho { previous, echoed: self.inner.read_receipts() })
     }
 
     /// Send a request to set multiple receipts at once.
@@ -4798,6 +4937,39 @@ impl WeakRoom {
     /// The room id for that room.
     pub fn room_id(&self) -> &RoomId {
         &self.room_id
+    }
+}
+
+/// What an optimistically applied read receipt replaced, so it can be undone.
+struct ReadReceiptEcho {
+    /// The read receipts as they were before the echo was applied.
+    previous: ReadReceipts,
+
+    /// The read receipts the echo produced.
+    echoed: ReadReceipts,
+}
+
+impl ReadReceiptEcho {
+    /// Undo the echo, unless something else changed the read receipts since.
+    ///
+    /// A sync landing in between knows better than we do, so leave its result
+    /// alone rather than replacing it with a stale snapshot.
+    async fn roll_back(self, room: &Room) {
+        if room.inner.read_receipts() != self.echoed {
+            return;
+        }
+
+        let result = room
+            .inner
+            .update_and_save_room_info(|mut room_info| {
+                room_info.set_read_receipts(self.previous);
+                (room_info, RoomInfoNotableUpdateReasons::READ_RECEIPT)
+            })
+            .await;
+
+        if let Err(error) = result {
+            warn!(?error, "Couldn't roll back the local read receipt echo");
+        }
     }
 }
 

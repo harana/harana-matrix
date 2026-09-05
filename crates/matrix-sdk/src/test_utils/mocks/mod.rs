@@ -4641,6 +4641,11 @@ impl<'a> MockEndpoint<'a, UserDirectoryEndpoint> {
 pub struct CreateRoomEndpoint;
 
 impl<'a> MockEndpoint<'a, CreateRoomEndpoint> {
+    /// Ensures that the body of the request matches a given JSON subset.
+    pub fn body_matches_partial_json(self, body: Value) -> Self {
+        Self { mock: self.mock.and(body_partial_json(body)), ..self }
+    }
+
     /// Returns a successful response.
     pub fn ok(self) -> MatrixMock<'a> {
         self.respond_with(
@@ -5149,6 +5154,32 @@ impl<'a> MockEndpoint<'a, GetHierarchyEndpoint> {
 
         self.respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "rooms": rooms,
+        })))
+    }
+
+    /// Returns a successful response containing the given room IDs, along with
+    /// a `next_batch` token so the caller paginates again.
+    pub fn ok_with_room_ids_and_next_batch(
+        self,
+        room_ids: Vec<&RoomId>,
+        next_batch: &str,
+    ) -> MatrixMock<'a> {
+        let rooms = room_ids
+            .iter()
+            .map(|id| {
+                json!({
+                  "room_id": id,
+                  "num_joined_members": 1,
+                  "world_readable": false,
+                  "guest_can_join": false,
+                  "children_state": []
+                })
+            })
+            .collect::<Vec<_>>();
+
+        self.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "rooms": rooms,
+            "next_batch": next_batch,
         })))
     }
 

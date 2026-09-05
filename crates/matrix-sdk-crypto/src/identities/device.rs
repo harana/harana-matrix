@@ -58,6 +58,7 @@ use crate::{
         },
         requests::{OutgoingVerificationRequest, ToDeviceRequest},
     },
+    utilities::new_message_id,
     verification::VerificationMachine,
 };
 
@@ -410,18 +411,40 @@ impl Device {
     /// This won't affect any cross signing trust state, this only sets a flag
     /// marking to have the given trust state.
     ///
+    /// Setting [`LocalTrust::BlackListed`] additionally stops the device from
+    /// receiving any room key we share from then on, tells it why with an
+    /// `m.blacklisted` withheld message, and rotates the current room key; see
+    /// that variant's documentation.
+    ///
     /// # Arguments
     ///
     /// * `trust_state` - The new trust state that should be set for the device.
     pub async fn set_local_trust(&self, trust_state: LocalTrust) -> StoreResult<()> {
+        // Keep the in-memory copy the caller holds in step with what they asked for.
         self.inner.set_trust_state(trust_state);
 
+        let store = self.verification_machine.store.inner();
+
+        // Saving a whole `DeviceData` built from this copy would write back every other
+        // field as it was when the copy was made, undoing anything set on the device in
+        // the meantime — `deleted`, `olm_wedging_index` or `withheld_code_sent`. Work
+        // from what the store holds now instead, under the lock that serialises these
+        // whole-object writes.
+        let _guard = store.lock_identity_update().await;
+
+        let Some(stored) = store.get_device(self.user_id(), self.device_id()).await? else {
+            // The device is gone from the store; there is nothing to mark.
+            return Ok(());
+        };
+
+        stored.set_trust_state(trust_state);
+
         let changes = Changes {
-            devices: DeviceChanges { changed: vec![self.inner.clone()], ..Default::default() },
+            devices: DeviceChanges { changed: vec![stored], ..Default::default() },
             ..Default::default()
         };
 
-        self.verification_machine.store.save_changes(changes).await
+        store.save_changes(changes).await
     }
 
     /// Encrypt the given content for this `Device`.
@@ -606,12 +629,36 @@ impl UserDevices {
 }
 
 /// The local trust state of a device.
+///
+/// This is trust we assign to a device ourselves, on this device only: it is
+/// never uploaded to the homeserver and never shared with our other devices.
+/// It is set with [`Device::set_local_trust()`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum LocalTrust {
     /// The device has been verified and is trusted.
     Verified = 0,
-    /// The device been blacklisted from communicating.
+    /// The device has been blocked from receiving anything we send.
+    ///
+    /// This is a supported feature, not a leftover: a client offers it so a
+    /// user can shut a device they don't trust out of their encrypted
+    /// conversations without waiting for it to be signed out.
+    ///
+    /// Marking a device this way has three effects, all of them handled by the
+    /// SDK:
+    ///
+    /// * the device is left out of the recipients of every room key we share
+    ///   from then on, whichever [`CollectStrategy`] is in use;
+    /// * it is sent an `m.room_key.withheld` message with the `m.blacklisted`
+    ///   code, so the other side can tell its user why messages don't decrypt
+    ///   rather than showing an unexplained failure;
+    /// * the current room key is rotated, so the device can't keep reading new
+    ///   messages with a key it already has.
+    ///
+    /// The block is undone by setting any other [`LocalTrust`]; the room key
+    /// is not rotated back, so the device only sees messages sent after that.
+    ///
+    /// [`CollectStrategy`]: crate::CollectStrategy
     BlackListed = 1,
     /// The trust state of the device is being ignored.
     Ignored = 2,
@@ -696,9 +743,11 @@ impl DeviceData {
         self.local_trust_state() == LocalTrust::Verified
     }
 
-    /// Is the device locally marked as blacklisted.
+    /// Is the device locally marked as blocked?
     ///
-    /// Blacklisted devices won't receive any group sessions.
+    /// A blocked device is left out of every room key we share and is told why
+    /// with an `m.blacklisted` withheld message. See
+    /// [`LocalTrust::BlackListed`] for what setting this does.
     pub fn is_blacklisted(&self) -> bool {
         self.local_trust_state() == LocalTrust::BlackListed
     }
@@ -740,8 +789,13 @@ impl DeviceData {
         }
     }
 
-    /// Find and return the most recently created Olm [`Session`] we are sharing
-    /// with this device.
+    /// Find and return the Olm [`Session`] we should use to talk to this
+    /// device.
+    ///
+    /// The spec tells us to prefer the session that most recently decrypted a
+    /// message from the other side, since that is the session the other side
+    /// has demonstrably got, falling back to the most recently created session
+    /// when none of ours has decrypted anything yet.
     pub(crate) async fn get_most_recent_session(
         &self,
         store: &CryptoStoreWrapper,
@@ -749,7 +803,7 @@ impl DeviceData {
         if let Some(sender_key) = self.curve25519_key() {
             if let Some(sessions) = store.get_sessions(&sender_key.to_base64()).await? {
                 let mut sessions = sessions.lock().await;
-                sessions.sort_by_key(|s| s.creation_time);
+                sessions.sort_by_key(|s| (s.last_decryption_time, s.creation_time));
 
                 Ok(sessions.last().cloned())
             } else {
@@ -877,10 +931,7 @@ impl DeviceData {
         event_type: &str,
         content: impl Serialize,
     ) -> OlmResult<(Session, Raw<ToDeviceEncryptedEventContent>, String)> {
-        #[cfg(not(target_family = "wasm"))]
-        let message_id = ulid::Ulid::generate().to_string();
-        #[cfg(target_family = "wasm")]
-        let message_id = ruma::TransactionId::new().to_string();
+        let message_id = new_message_id();
 
         tracing::Span::current().record("message_id", &message_id);
 

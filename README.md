@@ -6,14 +6,10 @@ That means that we add features, merge PRs, fix bugs, update dependencies etc at
 
 ## Differences
 
-We already diverge in a number of ways:
+We diverge in a number of ways:
 
-* Everything is pluggable. Which means Tokio, Sqlite, Tantivy, TLS etc are all optional.
-* [harana-olm](https://github.com/harana/harana-olm) is used as it fixes a number of security issues.
-
-## Bindings
-
-The higher-level crates of the Matrix Rust SDK can be embedded in other environments such as Swift, Kotlin, JavaScript, and Node.js. Check out the [bindings/](./bindings/) directory to learn more about how to integrate the SDK into your language of choice.
+* *Everything* is pluggable so Tokio, Sqlite, Tantivy, TLS etc are all optional.
+* [Ruma](https://github.com/ruma/ruma), [Vodozemac](https://github.com/harana/harana-olm), [Tuwunel](https://github.com/matrix-construct/tuwunel) have all been inlined to make the library simpler and improve velocity. 
 
 ## License
 

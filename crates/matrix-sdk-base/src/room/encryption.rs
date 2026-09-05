@@ -25,7 +25,7 @@ impl Room {
     /// Get the `m.room.encryption` content that enabled end to end encryption
     /// in the room.
     pub fn encryption_settings(&self) -> Option<PossiblyRedactedRoomEncryptionEventContent> {
-        self.info.read().base_info.encryption.clone()
+        self.info.read().encryption_settings().cloned()
     }
 }
 
@@ -88,7 +88,9 @@ mod tests {
     use matrix_sdk_test::{ALICE, event_factory::EventFactory};
     use ruma::{
         EventEncryptionAlgorithm, MilliSecondsSinceUnixEpoch, event_id,
-        events::{AnySyncStateEvent, room::encryption::RoomEncryptionEventContent},
+        events::{
+            AnyStrippedStateEvent, AnySyncStateEvent, room::encryption::RoomEncryptionEventContent,
+        },
         room_id,
         serde::Raw,
         time::SystemTime,
@@ -119,6 +121,19 @@ mod tests {
             SystemTime::now().sub(Duration::from_secs((60 * minutes_ago).into())),
         )
         .expect("date out of range")
+    }
+
+    fn receive_stripped_state_events(room: &Room, events: Vec<Raw<AnyStrippedStateEvent>>) {
+        room.info.update_if(|info| {
+            let mut res = false;
+            for ev in events {
+                res |= info.handle_stripped_state_event(
+                    &mut RawStateEventWithKeys::try_from_raw_state_event(ev)
+                        .expect("generated state event should be valid"),
+                );
+            }
+            res
+        });
     }
 
     fn receive_state_events(room: &Room, events: Vec<Raw<AnySyncStateEvent>>) {
@@ -152,6 +167,28 @@ mod tests {
             .server_ts(timestamp(0))
             .into();
         receive_state_events(&room, vec![encryption_event]);
+
+        assert_matches!(room.encryption_state(), EncryptionState::Encrypted);
+    }
+
+    #[test]
+    fn test_encryption_is_set_when_a_stripped_encryption_event_is_received() {
+        // A room we are only invited to: we cannot ask the server for its state, so the
+        // stripped state of the invite is all we have to go on.
+        let (_store, room) = make_room_test_helper(RoomState::Invited);
+
+        assert_matches!(room.encryption_state(), EncryptionState::Unknown);
+
+        let encryption_content =
+            RoomEncryptionEventContent::new(EventEncryptionAlgorithm::MegolmV1AesSha2);
+        let encryption_event = EventFactory::new()
+            .sender(*ALICE)
+            .event(encryption_content)
+            .state_key("")
+            .event_id(event_id!("$1234_1"))
+            .server_ts(timestamp(0))
+            .into();
+        receive_stripped_state_events(&room, vec![encryption_event]);
 
         assert_matches!(room.encryption_state(), EncryptionState::Encrypted);
     }

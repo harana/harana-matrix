@@ -22,6 +22,7 @@ js = ["dep:getrandom", "getrandom?/wasm_js"]
 base64.workspace = true
 blake3 = { version = "1.8.5", default-features = false }
 chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc"] }
+erased-serde.workspace = true
 getrandom = { workspace = true, optional = true }
 hkdf.workspace = true
 hmac.workspace = true

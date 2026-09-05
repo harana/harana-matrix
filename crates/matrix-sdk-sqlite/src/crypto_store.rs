@@ -38,10 +38,9 @@ use matrix_sdk_crypto::{
         },
     },
 };
-use matrix_sdk_store_encryption::StoreCipher;
 use ruma::{
-    DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, RoomId, TransactionId, UserId,
-    events::secret::request::SecretName,
+    DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedRoomId, RoomId, TransactionId,
+    UserId, events::secret::request::SecretName,
 };
 use rusqlite::{OptionalExtension, named_params, params_from_iter};
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -50,8 +49,9 @@ use vodozemac::Curve25519PublicKey;
 use zeroize::Zeroizing;
 
 use crate::{
-    OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
+    OpenStoreError, RuntimeConfig, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
+    encryption::{EncryptionConfig, StoreEncryption},
     error::{Error, Result},
     fs,
     utils::{
@@ -66,7 +66,7 @@ const DATABASE_NAME: &str = "matrix-sdk-crypto.sqlite3";
 /// An SQLite-based crypto store.
 #[derive(Clone)]
 pub struct SqliteCryptoStore {
-    store_cipher: Option<Arc<StoreCipher>>,
+    encryption: StoreEncryption,
 
     /// `Some` when active, `None` when closed.
     /// The outer `Mutex` serialises close/reopen with connection access.
@@ -94,8 +94,8 @@ impl fmt::Debug for SqliteCryptoStore {
 }
 
 impl EncryptableStore for SqliteCryptoStore {
-    fn get_cypher(&self) -> Option<&StoreCipher> {
-        self.store_cipher.as_deref()
+    fn encryption(&self) -> &StoreEncryption {
+        &self.encryption
     }
 }
 
@@ -106,27 +106,24 @@ impl SqliteCryptoStore {
     ///
     /// # Arguments
     ///
-    /// * `secret` - The secret used to encrypt the data.
+    /// * `encryption_config` - How the store encrypts and serializes the data.
     ///
     /// * `pool` - A connection pool to use for reading from the store.
     ///
     /// * `conn` - The connection to use for writing to the store.
     pub(crate) async fn create_raw(
-        secret: Option<Secret>,
+        encryption_config: EncryptionConfig,
         pool: SqlitePool,
         conn: SqliteAsyncConn,
         pool_config: PoolConfig,
         runtime_config: RuntimeConfig,
     ) -> Result<Self, OpenStoreError> {
-        let store_cipher = match secret {
-            Some(s) => Some(Arc::new(conn.get_or_create_store_cipher(s).await?)),
-            None => None,
-        };
+        let encryption = conn.open_store_encryption(&encryption_config).await?;
 
         let db_path = pool.manager().database_path.clone();
 
         Ok(Self {
-            store_cipher,
+            encryption,
             connections: Arc::new(Mutex::new(Some(SqliteConnections {
                 pool,
                 write_connection: Arc::new(Mutex::new(conn)),
@@ -166,17 +163,19 @@ impl SqliteCryptoStore {
         let runtime_config = config.runtime_config();
 
         let this =
-            Self::open_with_pool(pool, config.secret.clone(), pool_config, runtime_config).await?;
+            Self::open_with_pool(pool, config.encryption_config(), pool_config, runtime_config)
+                .await?;
         this.read().await?.apply_runtime_config(runtime_config).await?;
 
         Ok(this)
     }
 
     /// Create an SQLite-based crypto store using the given SQLite database
-    /// pool. The given secret will be used to encrypt private data.
+    /// pool. The given encryption config decides how private data is
+    /// encrypted and serialized.
     async fn open_with_pool(
         pool: SqlitePool,
-        secret: Option<Secret>,
+        encryption_config: EncryptionConfig,
         pool_config: PoolConfig,
         runtime_config: RuntimeConfig,
     ) -> Result<Self, OpenStoreError> {
@@ -187,7 +186,8 @@ impl SqliteCryptoStore {
 
         let version = initialize_store(&conn, version).await?;
 
-        let store = Self::create_raw(secret, pool, conn, pool_config, runtime_config).await?;
+        let store =
+            Self::create_raw(encryption_config, pool, conn, pool_config, runtime_config).await?;
 
         run_migrations(&store, version, None).await?;
 
@@ -203,10 +203,10 @@ impl SqliteCryptoStore {
     ) -> Result<InboundGroupSession> {
         let mut pickle: PickledInboundGroupSession = self.deserialize_value(&value)?;
 
-        // The `backed_up` SQL column is the source of truth, because we update it
-        // inside `mark_inbound_group_sessions_as_backed_up` and don't update
-        // the pickled value inside the `data` column (until now, when we are puling it
-        // out of the DB).
+        // The `backed_up` SQL column is the source of truth, because we update
+        // it inside `mark_inbound_group_sessions_as_backed_up` and
+        // don't update the pickled value inside the `data` column
+        // (until now, when we are puling it out of the DB).
         pickle.backed_up = backed_up;
 
         Ok(InboundGroupSession::from_pickle(pickle)?)
@@ -214,8 +214,8 @@ impl SqliteCryptoStore {
 
     fn deserialize_key_request(&self, value: &[u8], sent_out: bool) -> Result<GossipRequest> {
         let mut request: GossipRequest = self.deserialize_value(value)?;
-        // sent_out SQL column is source of truth, sent_out field in serialized value
-        // needed for other stores though
+        // sent_out SQL column is source of truth, sent_out field in serialized
+        // value needed for other stores though
         request.sent_out = sent_out;
         Ok(request)
     }
@@ -273,8 +273,9 @@ pub(crate) async fn initialize_store(conn: &SqliteAsyncConn, version: u8) -> Res
 
     if version < 1 {
         debug!("Creating database");
-        // First turn on WAL mode, this can't be done in the transaction, it fails with
-        // the error message: "cannot change into wal mode from within a transaction".
+        // First turn on WAL mode, this can't be done in the transaction, it
+        // fails with the error message: "cannot change into wal mode
+        // from within a transaction".
         conn.execute_batch("PRAGMA journal_mode = wal;").await?;
         conn.with_transaction(|txn| {
             txn.execute_batch(include_str!("../migrations/crypto_store/001_init.sql"))?;
@@ -616,10 +617,18 @@ impl SqliteConnectionExt for rusqlite::Connection {
         sender_key: Option<&[u8]>,
         sender_data_type: Option<u8>,
     ) -> rusqlite::Result<()> {
+        // `backed_up` is deliberately left out of the `DO UPDATE` clause: the column is
+        // the source of truth for whether a session has been backed up, and it is only
+        // ever changed by `mark_inbound_group_sessions_as_backed_up` and
+        // `reset_inbound_group_session_backup_state`. Writing it back from a pickle
+        // that was read before one of those ran would undo them — in particular
+        // it could re-mark a session as backed up right after a backup reset
+        // cleared the flag, leaving a session that is never uploaded and that
+        // future devices can't decrypt.
         self.execute(
             "INSERT INTO inbound_group_session (session_id, room_id, data, backed_up, sender_key, sender_data_type) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT (session_id) DO UPDATE SET data = ?3, backed_up = ?4, sender_key = ?5, sender_data_type = ?6",
+             ON CONFLICT (session_id) DO UPDATE SET data = ?3, sender_key = ?5, sender_data_type = ?6",
             (session_id, room_id, data, backed_up, sender_key, sender_data_type),
         )?;
         Ok(())
@@ -857,8 +866,9 @@ trait SqliteObjectCryptoStoreExt: SqliteAsyncConnExt {
                 move |mut stmt| {
                     let sender_data_type = sender_data_type as u8;
 
-                    // If we are not provided with an `after_session_id`, use a key which will sort
-                    // before all real keys: the empty string.
+                    // If we are not provided with an `after_session_id`, use a
+                    // key which will sort before all real
+                    // keys: the empty string.
                     let after_session_id = after_session_id.unwrap_or(Key::Plain(Vec::new()));
 
                     stmt.query(named_params! {
@@ -891,8 +901,9 @@ trait SqliteObjectCryptoStoreExt: SqliteAsyncConnExt {
         }
 
         self.chunk_large_query_over(session_ids, None, move |txn, session_ids| {
-            // Safety: host parameters are not generated using any user input except the
-            // number of session IDs, so it is safe from injection.
+            // Safety: host parameters are not generated using any user input
+            // except the number of session IDs, so it is safe from
+            // injection.
             let query = format!(
                 "UPDATE inbound_group_session SET backed_up = TRUE where session_id IN ({})",
                 session_ids.host_parameters()
@@ -1138,10 +1149,11 @@ impl CryptoStore for SqliteCryptoStore {
     }
 
     async fn save_pending_changes(&self, changes: PendingChanges) -> Result<()> {
-        // Serialize calls to `save_pending_changes`; there are multiple await points
-        // below, and we're pickling data as we go, so we don't want to
-        // invalidate data we've previously read and overwrite it in the store.
-        // TODO: #2000 should make this lock go away, or change its shape.
+        // Serialize calls to `save_pending_changes`; there are multiple await
+        // points below, and we're pickling data as we go, so we don't
+        // want to invalidate data we've previously read and overwrite
+        // it in the store. TODO: #2000 should make this lock go away,
+        // or change its shape.
         let _guard = self.save_changes_lock.lock().await;
 
         let pickled_account = if let Some(account) = changes.account {
@@ -1168,10 +1180,11 @@ impl CryptoStore for SqliteCryptoStore {
     }
 
     async fn save_changes(&self, changes: Changes) -> Result<()> {
-        // Serialize calls to `save_changes`; there are multiple await points below, and
-        // we're pickling data as we go, so we don't want to invalidate data
-        // we've previously read and overwrite it in the store.
-        // TODO: #2000 should make this lock go away, or change its shape.
+        // Serialize calls to `save_changes`; there are multiple await points
+        // below, and we're pickling data as we go, so we don't want to
+        // invalidate data we've previously read and overwrite it in the
+        // store. TODO: #2000 should make this lock go away, or change
+        // its shape.
         let _guard = self.save_changes_lock.lock().await;
 
         let pickled_private_identity =
@@ -1344,7 +1357,8 @@ impl CryptoStore for SqliteCryptoStore {
         sessions: Vec<InboundGroupSession>,
         backed_up_to_version: Option<&str>,
     ) -> matrix_sdk_crypto::store::Result<(), Self::Error> {
-        // Sanity-check that the data in the sessions corresponds to backed_up_version
+        // Sanity-check that the data in the sessions corresponds to
+        // backed_up_version
         sessions.iter().for_each(|s| {
             let backed_up = s.backed_up();
             if backed_up != backed_up_to_version.is_some() {
@@ -1356,9 +1370,36 @@ impl CryptoStore for SqliteCryptoStore {
             }
         });
 
+        // The `backed_up` column is only ever set by
+        // `mark_inbound_group_sessions_as_backed_up`, so importing sessions that are
+        // already in the backup has to say so explicitly rather than relying on the
+        // pickled flag being written through.
+        let backed_up_sessions: Vec<(OwnedRoomId, String)> = if backed_up_to_version.is_some() {
+            sessions
+                .iter()
+                .map(|session| (session.room_id().to_owned(), session.session_id().to_owned()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         // Currently, this store doesn't save the backup version separately, so this
         // just delegates to save_changes.
-        self.save_changes(Changes { inbound_group_sessions: sessions, ..Changes::default() }).await
+        self.save_changes(Changes { inbound_group_sessions: sessions, ..Changes::default() })
+            .await?;
+
+        if let Some(version) = backed_up_to_version
+            && !backed_up_sessions.is_empty()
+        {
+            let session_ids: Vec<(&RoomId, &str)> = backed_up_sessions
+                .iter()
+                .map(|(room_id, session_id)| (room_id.as_ref(), session_id.as_str()))
+                .collect();
+
+            self.mark_inbound_group_sessions_as_backed_up(version, &session_ids).await?;
+        }
+
+        Ok(())
     }
 
     async fn get_sessions(&self, sender_key: &str) -> Result<Option<Vec<Session>>> {
@@ -1792,23 +1833,11 @@ impl CryptoStore for SqliteCryptoStore {
         let Some(serialized) = self.read().await?.get_kv(key).await? else {
             return Ok(None);
         };
-        let value = if let Some(cipher) = &self.store_cipher {
-            let encrypted = rmp_serde::from_slice(&serialized)?;
-            cipher.decrypt_value_data(encrypted)?
-        } else {
-            serialized
-        };
-
-        Ok(Some(value))
+        Ok(Some(self.decode_value(&serialized)?.into_owned()))
     }
 
     async fn set_custom_value(&self, key: &str, value: Vec<u8>) -> Result<()> {
-        let serialized = if let Some(cipher) = &self.store_cipher {
-            let encrypted = cipher.encrypt_value_data(value)?;
-            rmp_serde::to_vec_named(&encrypted)?
-        } else {
-            value
-        };
+        let serialized = self.encode_value(value)?;
 
         self.write().await?.set_kv(key, serialized).await?;
         Ok(())
@@ -1936,7 +1965,8 @@ mod tests {
         let tmpdir = tempdir().unwrap();
         let destination = tmpdir.path().join(db_name);
 
-        // Copy the test database to the tempdir so our test runs are idempotent.
+        // Copy the test database to the tempdir so our test runs are
+        // idempotent.
         std::fs::copy(&database_path, destination).unwrap();
 
         tmpdir
@@ -2330,7 +2360,7 @@ mod tests {
         let conn = pool.get().await.unwrap();
         let version = super::initialize_store(&conn, 0).await.unwrap();
         let old_data_store = SqliteCryptoStore::create_raw(
-            config.secret.clone(),
+            config.encryption_config(),
             pool,
             conn,
             config.pool_config(),
@@ -2403,7 +2433,7 @@ mod tests {
         let conn = pool.get().await.unwrap();
         let version = super::initialize_store(&conn, 0).await.unwrap();
         let old_data_store = SqliteCryptoStore::create_raw(
-            config.secret.clone(),
+            config.encryption_config(),
             pool,
             conn,
             config.pool_config(),

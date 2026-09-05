@@ -22,6 +22,7 @@ experimental-encrypted-state-events = [
 
 [dev-dependencies]
 anyhow.workspace = true
+as_variant.workspace = true
 assert_matches.workspace = true
 assert_matches2.workspace = true
 assign = "1"

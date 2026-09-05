@@ -1,9 +1,12 @@
-use std::{future, ops::Deref, sync::Arc};
+use std::{collections::BTreeMap, future, ops::Deref, sync::Arc};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
-use matrix_sdk_common::cross_process_lock::{CrossProcessLock, CrossProcessLockConfig};
-use ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
+use matrix_sdk_common::{
+    cross_process_lock::{CrossProcessLock, CrossProcessLockConfig},
+    locks::RwLock as StdRwLock,
+};
+use ruma::{DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId};
 use tokio::sync::{Mutex, broadcast};
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{debug, trace, warn};
@@ -18,7 +21,7 @@ use crate::{
     store,
     store::{
         Changes, DynCryptoStore, IntoCryptoStore, RoomKeyInfo, RoomKeyWithheldInfo,
-        types::SecretsInboxItem,
+        types::{RoomSettings, SecretsInboxItem},
     },
 };
 
@@ -35,6 +38,39 @@ pub(crate) struct CryptoStoreWrapper {
 
     /// A cache for the Olm Sessions.
     sessions: SessionStore,
+
+    /// Serialises the check-and-store of an inbound group session.
+    ///
+    /// Deciding whether a received room key is better than the one we already
+    /// have is a read, a comparison and a write. Two of those interleaving —
+    /// `import_room_keys` running while a sync delivers the same session, say —
+    /// means both read "nothing stored", both decide to write, and the worse
+    /// key can end up as the stored one with the comparison bypassed
+    /// altogether.
+    inbound_group_session_merge_lock: Mutex<()>,
+
+    /// Serialises writes that replace a whole stored `DeviceData` or
+    /// `UserIdentityData`.
+    ///
+    /// Those writes are read-modify-write on an object with several
+    /// independent fields: `Device::set_local_trust` only means to change the
+    /// trust, and `UserIdentity::pin` only means to change the pinned master
+    /// key, but each writes the object it was built from in full. Without a
+    /// lock, a `/keys/query` landing in between makes one of the two writes
+    /// disappear — a pin can revert freshly received cross-signing keys, and a
+    /// trust change can revert `deleted`, `olm_wedging_index` or
+    /// `withheld_code_sent`.
+    identity_update_lock: Mutex<()>,
+
+    /// A cache for the per-room encryption settings.
+    ///
+    /// Reading these goes through a store lookup and a deserialization, and a
+    /// client asks for them on the critical path of showing a room's encryption
+    /// state, which made the call take seconds rather than milliseconds. The
+    /// settings only change when we write them, so they can simply be
+    /// remembered. `None` is cached as well: "this room has no settings" is the
+    /// answer that gets asked for over and over.
+    room_settings: StdRwLock<BTreeMap<OwnedRoomId, Option<RoomSettings>>>,
 
     /// The sender side of a broadcast stream that is notified whenever we get
     /// an update to an inbound group session.
@@ -73,6 +109,9 @@ impl CryptoStoreWrapper {
             device_id: device_id.to_owned(),
             store: store.into_crypto_store(),
             sessions: SessionStore::new(),
+            inbound_group_session_merge_lock: Default::default(),
+            identity_update_lock: Default::default(),
+            room_settings: Default::default(),
             room_keys_received_sender,
             room_keys_withheld_received_sender,
             secrets_broadcaster,
@@ -138,7 +177,30 @@ impl CryptoStoreWrapper {
             }
         }
 
+        // Keep the room settings cache in step with what we are about to write. Doing
+        // it before the write and again after would leave a window where a
+        // concurrent read repopulates the cache with the old value, so clear
+        // the affected entries first and fill them in from the changes once the
+        // write went through.
+        let room_settings_updates = changes.room_settings.clone();
+
+        if !room_settings_updates.is_empty() {
+            let mut cache = self.room_settings.write();
+
+            for room_id in room_settings_updates.keys() {
+                cache.remove(room_id);
+            }
+        }
+
         self.store.save_changes(changes).await?;
+
+        if !room_settings_updates.is_empty() {
+            let mut cache = self.room_settings.write();
+
+            for (room_id, settings) in room_settings_updates {
+                cache.insert(room_id, Some(settings));
+            }
+        }
 
         // If we updated our own public identity, log it for debugging purposes
         if tracing::level_enabled!(tracing::Level::DEBUG) {
@@ -310,6 +372,41 @@ impl CryptoStoreWrapper {
             let _ = self.room_keys_received_sender.send(room_key_updates);
         }
         Ok(())
+    }
+
+    /// Take the lock that serialises the check-and-store of inbound group
+    /// sessions.
+    ///
+    /// Must be held from the moment a caller asks whether a received session is
+    /// better than the stored one until it has written its answer, otherwise
+    /// two callers can both find nothing stored and both write.
+    pub(crate) async fn lock_inbound_group_session_merge(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inbound_group_session_merge_lock.lock().await
+    }
+
+    /// Take the lock that serialises whole-object writes of devices and user
+    /// identities.
+    ///
+    /// Must be held across the read, the change and the write.
+    pub(crate) async fn lock_identity_update(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.identity_update_lock.lock().await
+    }
+
+    /// Get the encryption settings for a room, going through an in-memory
+    /// cache.
+    ///
+    /// The settings only ever change when we write them ourselves, which is
+    /// what keeps the cache correct.
+    pub async fn get_room_settings(&self, room_id: &RoomId) -> store::Result<Option<RoomSettings>> {
+        if let Some(settings) = self.room_settings.read().get(room_id) {
+            return Ok(settings.clone());
+        }
+
+        let settings = self.store.get_room_settings(room_id).await?;
+
+        self.room_settings.write().insert(room_id.to_owned(), settings.clone());
+
+        Ok(settings)
     }
 
     /// Receive notifications of room keys being received as a [`Stream`].

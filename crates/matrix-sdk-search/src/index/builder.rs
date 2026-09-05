@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf, sync::Arc};
 
-use ruma::OwnedRoomId;
+use ruma::{OwnedRoomId, RoomId};
 use tantivy::{
     Index,
     directory::{MmapDirectory, error::OpenDirectoryError},
@@ -8,6 +8,7 @@ use tantivy::{
 use zeroize::Zeroizing;
 
 use crate::{
+    backend::{RoomSearchIndex, SearchIndexProvider},
     encrypted::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT},
     error::IndexError,
     index::RoomIndex,
@@ -142,5 +143,51 @@ impl MemoryRoomIndexBuilder {
         let schema = RoomMessageSchema::new();
         let index = Index::create_in_ram(schema.as_tantivy_schema());
         RoomIndex::new_with(index, schema, &self.room_id)
+    }
+}
+
+/// Where a [`TantivyIndexProvider`] keeps the indexes it builds.
+#[derive(Clone, Debug)]
+pub enum TantivyIndexLocation {
+    /// One unencrypted directory per room, under this path.
+    UnencryptedDirectory(PathBuf),
+
+    /// One directory per room, under this path, encrypted with this password.
+    EncryptedDirectory(PathBuf, Zeroizing<String>),
+
+    /// In memory, discarded when the client goes away.
+    InMemory,
+}
+
+/// The built-in [`SearchIndexProvider`], backed by Tantivy.
+#[derive(Clone, Debug)]
+pub struct TantivyIndexProvider {
+    location: TantivyIndexLocation,
+}
+
+impl TantivyIndexProvider {
+    /// Build a provider storing its indexes at the given location.
+    pub fn new(location: TantivyIndexLocation) -> Self {
+        Self { location }
+    }
+}
+
+impl SearchIndexProvider for TantivyIndexProvider {
+    fn create_index(&self, room_id: &RoomId) -> Result<Box<dyn RoomSearchIndex>, IndexError> {
+        let index = match &self.location {
+            TantivyIndexLocation::UnencryptedDirectory(path) => {
+                RoomIndexBuilder::new_on_disk(path.clone(), room_id).unencrypted().build()?
+            }
+
+            TantivyIndexLocation::EncryptedDirectory(path, password) => {
+                RoomIndexBuilder::new_on_disk(path.clone(), room_id)
+                    .encrypted(password.as_str())
+                    .build()?
+            }
+
+            TantivyIndexLocation::InMemory => RoomIndexBuilder::new_in_memory(room_id).build(),
+        };
+
+        Ok(Box::new(index))
     }
 }

@@ -159,6 +159,20 @@ pub enum SecretStorageError {
         error: ImportError,
     },
 
+    /// A cross-signing key was present in secret storage but could not be
+    /// imported, usually because its public counterpart on the server doesn't
+    /// match the private key we recovered.
+    ///
+    /// Proceeding with a partial import leaves the account in the same broken
+    /// state it was in, which used to make a user retry the same recovery key
+    /// over and over.
+    #[error("The cross-signing keys {} could not be imported", .missing.join(", "))]
+    IncompleteCrossSigningImport {
+        /// The names of the keys that secret storage held but that we failed
+        /// to import.
+        missing: Vec<String>,
+    },
+
     /// A general storage error.
     #[error(transparent)]
     Storage(#[from] CryptoStoreError),
