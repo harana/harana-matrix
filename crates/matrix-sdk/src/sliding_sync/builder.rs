@@ -318,8 +318,6 @@ impl SlidingSyncBuilder {
             client,
             storage_key: self.storage_key,
             share_pos,
-            #[cfg(feature = "e2e-encryption")]
-            mark_tracked_users_dirty_without_pos: self.mark_tracked_users_dirty_without_pos,
 
             lists,
 

@@ -2588,7 +2588,8 @@ mod builder_tests {
         // Sanity check: the edit really is more recent than what it edits.
         assert!(original_timestamp < timestamp_of(event_id_1));
 
-        let value = Builder::new_remote(&room_event_cache, LatestEventValue::None, user_id, None)
+        let value =
+            Builder::new_remote(&room_event_cache, None, LatestEventValue::None, user_id, None)
             .await
             .unwrap();
 

@@ -2281,7 +2281,7 @@ mod tests {
             .sliding_sync("test-slidingsync")?
             .add_list(SlidingSyncList::builder("new_list"))
             .with_e2ee_extension(assign!(http::request::E2EE::default(), { enabled: Some(true)}))
-            .mark_tracked_users_dirty_without_pos(false)
+            .without_marking_tracked_users_dirty()
             .build()
             .await?;
 

@@ -4048,13 +4048,6 @@ impl Client {
         &self.inner.search_index
     }
 
-    /// The threading support this client was built with.
-    ///
-    /// See [`ClientBuilder::with_threading_support`] for more details.
-    pub fn threading_support(&self) -> ThreadingSupport {
-        self.base_client().threading_support
-    }
-
     /// Whether the client is configured to take thread subscriptions (MSC4306
     /// and MSC4308) into account, and the server enabled the experimental
     /// feature flag for it.
