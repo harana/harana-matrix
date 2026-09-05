@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use matrix_sdk_common::deserialized_responses::{VerificationLevel, WithheldCode};
-use ruma::{CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedRoomId, OwnedUserId};
+use ruma::{CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedUserId};
 use serde::{Serializer, ser::SerializeMap};
 use serde_json::Error as SerdeError;
 use thiserror::Error;
@@ -150,6 +150,14 @@ pub enum MegolmError {
     /// there is nothing to decrypt.
     #[error("the event was redacted before it could be decrypted")]
     RedactedEvent,
+
+    /// The event reuses the Megolm message index of an event we have already
+    /// decrypted, so it is a replay of that event rather than a new message.
+    #[error("the event replays the Megolm message index of the event {original_event_id}")]
+    ReplayedMessageIndex {
+        /// The event which originally used this message index.
+        original_event_id: OwnedEventId,
+    },
 }
 
 /// Decryption failed because of a mismatch between the identity keys of the

@@ -268,6 +268,9 @@ pub struct OlmMachineInner {
     identity_manager: IdentityManager,
     /// A state machine that handles creating room key backups.
     backup_machine: BackupMachine,
+    /// Record of the Megolm message indices we have already decrypted, used to
+    /// detect an event which replays a ciphertext we have seen before.
+    replay_protection: ReplayProtection,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -403,6 +406,7 @@ impl OlmMachine {
             key_request_machine,
             identity_manager,
             backup_machine,
+            replay_protection: Default::default(),
         });
 
         Self { inner }
@@ -2319,7 +2323,25 @@ impl OlmMachine {
 
         let result = session.decrypt(event).await;
         match result {
-            Ok((decrypted_event, _)) => {
+            Ok((decrypted_event, message_index)) => {
+                // A Megolm message index is only ever used once, so the same index turning
+                // up on a second event means somebody re-sent a ciphertext we have already
+                // seen, hoping we would show it again as a new message.
+                if let Some(original_event_id) = self.inner.replay_protection.check_and_record(
+                    session.session_id(),
+                    message_index,
+                    &event.event_id,
+                ) {
+                    ReplayProtection::warn_about_replay(
+                        session.session_id(),
+                        message_index,
+                        &event.event_id,
+                        &original_event_id,
+                    );
+
+                    return Err(MegolmError::ReplayedMessageIndex { original_event_id });
+                }
+
                 let encryption_info = self.get_encryption_info(&session, &event.sender).await?;
 
                 self.check_sender_trust_requirement(
@@ -3455,6 +3477,9 @@ fn megolm_error_to_utd_info(
         MismatchedIdentityKeys(_) => UnableToDecryptReason::MismatchedIdentityKeys,
         SenderIdentityNotTrusted(level) => UnableToDecryptReason::SenderIdentityNotTrusted(level),
         RedactedEvent => UnableToDecryptReason::RedactedEvent,
+        ReplayedMessageIndex { original_event_id } => {
+            UnableToDecryptReason::ReplayedMessageIndex { original_event_id }
+        }
         #[cfg(feature = "experimental-encrypted-state-events")]
         StateKeyVerificationFailed => UnableToDecryptReason::StateKeyVerificationFailed,
 
@@ -3510,6 +3535,10 @@ impl From<DecryptToDeviceError> for OlmError {
         }
     }
 }
+
+mod replay_protection;
+
+use replay_protection::ReplayProtection;
 
 #[cfg(test)]
 pub(crate) mod test_helpers;

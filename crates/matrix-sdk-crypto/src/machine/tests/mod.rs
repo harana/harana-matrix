@@ -779,6 +779,89 @@ async fn test_request_missing_secrets_cross_signed() {
 }
 
 #[async_test]
+async fn test_replayed_megolm_message_index_is_rejected() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+
+    let room_key_event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+    let room_key_event = json_convert(&room_key_event).unwrap();
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let group_session = bob
+        .store()
+        .with_transaction(async |tr| {
+            let res = bob
+                .decrypt_to_device_event(
+                    tr,
+                    &room_key_event,
+                    &mut Changes::default(),
+                    &decryption_settings,
+                )
+                .await?;
+            Ok(res)
+        })
+        .await
+        .unwrap()
+        .inbound_group_session
+        .unwrap();
+    bob.store()
+        .save_inbound_group_sessions(std::slice::from_ref(&group_session))
+        .await
+        .unwrap();
+
+    let content = RoomMessageEventContent::text_plain("It is a secret to everybody");
+    let encrypted = alice
+        .encrypt_room_event(room_id, AnyMessageLikeEventContent::RoomMessage(content))
+        .await
+        .unwrap();
+
+    let event_with_id = |event_id: &str| {
+        json_convert(&json!({
+            "event_id": event_id,
+            "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+            "sender": alice.user_id(),
+            "type": "m.room.encrypted",
+            "content": encrypted.content,
+        }))
+        .unwrap()
+    };
+
+    let event = event_with_id("$original:example.org");
+
+    bob.decrypt_room_event(&event, room_id, &decryption_settings)
+        .await
+        .expect("We should be able to decrypt the event");
+
+    // Decrypting the same event again is not a replay, it happens routinely.
+    bob.decrypt_room_event(&event, room_id, &decryption_settings)
+        .await
+        .expect("We should be able to decrypt the very same event again");
+
+    // The same ciphertext presented as a different event is a replay of the first
+    // one, and must not be shown as a new message.
+    let replayed_event = event_with_id("$replay:example.org");
+
+    let error = bob
+        .decrypt_room_event(&replayed_event, room_id, &decryption_settings)
+        .await
+        .expect_err("We should refuse to decrypt a replayed event");
+
+    assert_let!(MegolmError::ReplayedMessageIndex { original_event_id } = error);
+    assert_eq!(original_event_id, "$original:example.org");
+}
+
+#[async_test]
 async fn test_megolm_encryption() {
     let (alice, bob) =
         get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
