@@ -44,6 +44,19 @@ pub(in crate::event_cache) struct EventLinkedChunk {
 
     /// Tracker of the events ordering in this room.
     pub order_tracker: OrderTracker<Event, Gap>,
+
+    /// Whether [`Self::order_tracker`] was built from the metadata of the
+    /// *whole* linked chunk, i.e. including the chunks that aren't loaded in
+    /// memory.
+    ///
+    /// When it was, lazy-loading a chunk in or out must not be reported to the
+    /// tracker: it already accounts for that chunk, and telling it again would
+    /// make the ordering it computes diverge from the fully-loaded collection.
+    ///
+    /// When it wasn't, the tracker only knows about the chunks that are loaded,
+    /// and must therefore be told about every chunk lazy-loading brings in or
+    /// takes out, or it would fail to order the events of those chunks.
+    order_tracker_knows_unloaded_chunks: bool,
 }
 
 impl Default for EventLinkedChunk {
@@ -71,11 +84,18 @@ impl EventLinkedChunk {
             .as_vector()
             .expect("`LinkedChunk` must have been built with `new_with_update_history`");
 
+        let order_tracker_knows_unloaded_chunks = full_linked_chunk_metadata.is_some();
+
         let order_tracker = linked_chunk
             .order_tracker(full_linked_chunk_metadata)
             .expect("`LinkedChunk` must have been built with `new_with_update_history`");
 
-        Self { chunks: linked_chunk, chunks_updates_as_vectordiffs, order_tracker }
+        Self {
+            chunks: linked_chunk,
+            chunks_updates_as_vectordiffs,
+            order_tracker,
+            order_tracker_knows_unloaded_chunks,
+        }
     }
 
     /// Clear all events.
@@ -213,7 +233,6 @@ impl EventLinkedChunk {
     }
 
     #[cfg(any(test, debug_assertions))]
-    #[allow(dead_code)] // Temporarily, until we figure out why it's crashing production builds.
     fn assert_event_ordering(&self) {
         let mut iter = self.chunks.items().enumerate();
         let Some((i, (first_event_pos, _))) = iter.next() else {
@@ -244,6 +263,9 @@ impl EventLinkedChunk {
         let updates = self.chunks_updates_as_vectordiffs.take();
 
         self.order_tracker.flush_updates(false);
+
+        #[cfg(any(test, debug_assertions))]
+        self.assert_event_ordering();
 
         updates
     }
@@ -542,9 +564,14 @@ impl EventLinkedChunk {
         // Call the function.
         let r = f(self);
 
-        // Now, flush other pending updates which have been caused by the function, and
-        // ignore them.
-        self.order_tracker.flush_updates(true);
+        // Now, flush other pending updates which have been caused by the function.
+        //
+        // They are ignored only if the tracker knows about the chunks that aren't
+        // loaded: it already accounts for the chunk being loaded in or out, so
+        // replaying these updates would make it diverge from the fully-loaded
+        // collection. When it doesn't know about them, it only tracks what is loaded,
+        // and consuming these updates is the only way for it to keep up.
+        self.order_tracker.flush_updates(self.order_tracker_knows_unloaded_chunks);
 
         r
     }
@@ -570,6 +597,8 @@ impl EventLinkedChunk {
             // Don't propagate those updates to the store; this is only for the in-memory
             // representation that we're doing this. Let's drain those store updates.
             let _ = this.store_updates().take();
+
+            this.order_tracker_knows_unloaded_chunks = full_linked_chunk_metadata.is_some();
 
             this.order_tracker = this
                 .chunks
@@ -888,6 +917,57 @@ mod tests {
                 assert_eq!(values[0].event_id(), Some(event_id_3.as_ref()));
             }
         );
+    }
+
+    #[test]
+    fn test_event_ordering_after_lazily_loading_a_previous_chunk() {
+        // A linked chunk that was built without the metadata of the chunks that aren't
+        // loaded has an ordering tracker which only knows about what is loaded. Lazily
+        // loading a previous chunk in must therefore be reported to that tracker, or it
+        // wouldn't be able to order the events of that chunk.
+
+        let (event_id_0, event_0) = new_event("$ev0");
+        let (event_id_1, event_1) = new_event("$ev1");
+
+        // Load the last chunk only. It knows it has a predecessor, which isn't loaded.
+        let last_chunk = lazy_loader::from_last_chunk(
+            Some(RawChunk {
+                content: ChunkContent::Items(vec![event_1]),
+                previous: Some(ChunkIdentifier::new(0)),
+                identifier: ChunkIdentifier::new(1),
+                next: None,
+            }),
+            ChunkIdentifierGenerator::new_from_previous_chunk_identifier(ChunkIdentifier::new(1)),
+        )
+        .unwrap();
+
+        // No metadata for the whole linked chunk is given here.
+        let mut linked_chunk = EventLinkedChunk::with_initial_linked_chunk(last_chunk, None);
+        let _ = linked_chunk.updates_as_vector_diffs();
+
+        assert_eq!(linked_chunk.event_order(Position::new(ChunkIdentifier::new(1), 0)), Some(0));
+
+        // Lazily load the previous chunk.
+        linked_chunk
+            .insert_new_chunk_as_first(RawChunk {
+                content: ChunkContent::Items(vec![event_0]),
+                previous: None,
+                identifier: ChunkIdentifier::new(0),
+                next: Some(ChunkIdentifier::new(1)),
+            })
+            .unwrap();
+
+        // Both events are ordered, and in the right order. Reading the updates also
+        // runs `assert_event_ordering`, which is where this used to blow up.
+        let _ = linked_chunk.updates_as_vector_diffs();
+
+        assert_events_eq!(
+            linked_chunk.events(),
+            [(event_id_0 at (0, 0)), (event_id_1 at (1, 0))]
+        );
+
+        assert_eq!(linked_chunk.event_order(Position::new(ChunkIdentifier::new(0), 0)), Some(0));
+        assert_eq!(linked_chunk.event_order(Position::new(ChunkIdentifier::new(1), 0)), Some(1));
     }
 
     #[test]
