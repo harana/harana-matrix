@@ -291,18 +291,18 @@ pub(crate) struct ClientInner {
     /// All the data related to authentication and authorization.
     pub(crate) auth_ctx: Arc<AuthCtx>,
 
-    /// The URL of the server.
+    /// The Matrix server name this client was built from.
     ///
-    /// Not to be confused with the `Self::homeserver`. `server` is usually
-    /// the server part in a user ID, e.g. with `@mnt_io:matrix.org`, here
-    /// `matrix.org` is the server, whilst `matrix-client.matrix.org` is the
-    /// homeserver (at the time of writing — 2024-08-28).
+    /// Not to be confused with the `Self::homeserver`. The server name is the
+    /// server part in a user ID, e.g. with `@mnt_io:matrix.org`, here
+    /// `matrix.org` is the server name, whilst `matrix-client.matrix.org` is
+    /// the homeserver (at the time of writing — 2024-08-28).
     ///
     /// This value is optional depending on how the `Client` has been built.
     /// If it's been built from a homeserver URL directly, we don't know the
     /// server. However, if the `Client` has been built from a server URL or
     /// name, then the homeserver has been discovered, and we know both.
-    server: StdRwLock<Option<Url>>,
+    server: StdRwLock<Option<OwnedServerName>>,
 
     /// The URL of the homeserver to connect to.
     ///
@@ -458,7 +458,7 @@ impl ClientInner {
     #[allow(clippy::too_many_arguments)]
     async fn new(
         auth_ctx: Arc<AuthCtx>,
-        server: Option<Url>,
+        server: Option<OwnedServerName>,
         homeserver: Url,
         sliding_sync_version: SlidingSyncVersion,
         sync_presence: Arc<StdRwLock<PresenceState>>,
@@ -616,7 +616,7 @@ impl Client {
 
     /// Change the homeserver URL used by this client.
     ///
-    /// Note that this will reset [`Client::server`] to `None`.
+    /// Note that this will reset [`Client::server_name`] to `None`.
     ///
     /// # Arguments
     ///
@@ -715,31 +715,37 @@ impl Client {
         self.inner.base_client.is_active()
     }
 
-    /// The URL built from the server name that was used for `.well-known`
-    /// discovery, if any.
+    /// The Matrix server name this client talks to, e.g. `matrix.org`.
     ///
-    /// This is set when the client was built with [`ClientBuilder::server_name`],
-    /// [`ClientBuilder::insecure_server_name_no_tls`], or
-    /// [`ClientBuilder::server_name_or_homeserver_url`] and a server name (as
-    /// opposed to a homeserver URL) was resolved. It is `None` when the
+    /// This is the server part of the logged-in user's ID: with
+    /// `@mnt_io:matrix.org`, it is `matrix.org`. It is *not* a URL, and it is
+    /// not the host requests are sent to: a server delegating via
+    /// `.well-known` has a different homeserver URL, which
+    /// [`Client::homeserver`] reports.
+    ///
+    /// It is derived from the session's user ID once the client is logged in.
+    /// Before that, it is the name the client was built from with
+    /// [`ClientBuilder::server_name`],
+    /// [`ClientBuilder::insecure_server_name_no_tls`] or
+    /// [`ClientBuilder::server_name_or_homeserver_url`], and `None` when the
     /// client was built directly from a homeserver URL with
-    /// [`ClientBuilder::homeserver_url`], since there is then no separate
-    /// server name to report.
-    ///
-    /// Note that despite the name, this returns a [`Url`], not a Matrix
-    /// server name: it is the server name combined with the scheme (`http`
-    /// or `https`) that was used to reach it. A server delegating to a
-    /// different homeserver via `.well-known` means this can differ from
-    /// [`Client::homeserver`], which is the URL requests are actually sent
-    /// to.
-    pub fn server(&self) -> Option<Url> {
+    /// [`ClientBuilder::homeserver_url`], since a homeserver URL doesn't tell
+    /// us the server name.
+    pub fn server_name(&self) -> Option<OwnedServerName> {
+        // The user ID is authoritative: it's the name other servers use to reach
+        // this one, and it survives a `.well-known` delegation.
+        if let Some(session_meta) = self.session_meta() {
+            return Some(session_meta.user_id.server_name().to_owned());
+        }
+
         self.inner.server.read().unwrap().clone()
     }
 
     /// The URL of the homeserver that this client sends requests to.
     ///
-    /// This may differ from [`Client::server`] when the server delegates to
-    /// another homeserver via `.well-known` discovery.
+    /// This may differ from [`Client::server_name`] when the server delegates
+    /// to another homeserver via `.well-known` discovery. It is also a URL,
+    /// where the server name is a bare Matrix server name.
     pub fn homeserver(&self) -> Url {
         self.inner.homeserver.read().unwrap().clone()
     }
@@ -2256,13 +2262,10 @@ impl Client {
 
     /// Fetches client well_known from network; no caching.
     ///
-    /// 1. If the [`Client::server`] value is available, we use it to fetch the
-    ///    well-known contents.
-    /// 2. If it's not, we try extracting the server name from the
-    ///    [`Client::user_id`] and building the server URL from it.
-    /// 3. If we couldn't get the well-known contents with either the explicit
-    ///    server name or the implicit extracted one, we try the homeserver URL
-    ///    as a last resort.
+    /// 1. If the [`Client::server_name`] value is available, we build the
+    ///    server URL from it and use that to fetch the well-known contents.
+    /// 2. If we couldn't get the well-known contents that way, we try the
+    ///    homeserver URL as a last resort.
     ///
     /// Always returns `None` if well-known lookups were disabled with
     /// [`ClientBuilder::disable_well_known_lookup`].
@@ -2277,13 +2280,11 @@ impl Client {
         // Use the server name, either an explicit one or an implicit one taken from
         // the user id: sometimes we'll have only the homeserver url available and no
         // server name, but the server name can be extracted from the current user id.
-        let server_url = self
-            .server()
-            .map(|server| server.to_string())
-            // If the server name wasn't available, extract it from the user id and build a URL:
-            // Reuse the same scheme as the homeserver url does, assuming if it's `http` there it
-            // will be the same for the public server url, lacking a better candidate.
-            .or_else(|| self.user_id().map(|id| format!("{}://{}", scheme, id.server_name())));
+        //
+        // Reuse the same scheme as the homeserver url does, assuming if it's `http`
+        // there it will be the same for the public server url, lacking a better
+        // candidate.
+        let server_url = self.server_name().map(|name| format!("{scheme}://{name}"));
 
         // If the server name is available, first try using it
         let response = if let Some(server_url) = server_url {
@@ -3642,10 +3643,14 @@ impl Client {
         &self,
         cross_process_lock_config: CrossProcessLockConfig,
     ) -> Result<Client> {
+        // Read the server name out before building the client, so the lock guard isn't
+        // held across an `.await`.
+        let server_name = self.inner.server.read().unwrap().clone();
+
         let client = Client {
             inner: ClientInner::new(
                 self.inner.auth_ctx.clone(),
-                self.server(),
+                server_name,
                 self.homeserver(),
                 self.sliding_sync_version(),
                 self.inner.sync_presence.clone(),
@@ -4299,7 +4304,7 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        assert_eq!(client.server().unwrap(), Url::parse(&server_url).unwrap());
+        assert_eq!(client.server_name().unwrap(), alice.server_name());
         assert_eq!(client.homeserver(), Url::parse(&homeserver_url).unwrap());
         client.server_versions().await.unwrap();
     }
@@ -4320,7 +4325,7 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        assert_eq!(client.server().unwrap(), Url::parse(&homeserver_url).unwrap());
+        assert_eq!(client.server_name().unwrap(), alice.server_name());
         assert_eq!(client.homeserver(), Url::parse(&homeserver_url).unwrap());
 
         let new_server = Url::parse("http://example.org").unwrap();
@@ -4332,7 +4337,7 @@ pub(crate) mod tests {
         assert_eq!(client.homeserver(), new_server);
         // But the server field should be set to empty, since we didn't do any discovery
         // now.
-        assert!(client.server().is_none())
+        assert!(client.server_name().is_none())
     }
 
     #[async_test]

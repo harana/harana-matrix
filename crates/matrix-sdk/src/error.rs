@@ -46,9 +46,9 @@ use thiserror::Error;
 use url::ParseError as UrlParseError;
 
 use crate::{
-    authentication::oauth::OAuthError, cross_process_lock::CrossProcessLockError,
-    event_cache::EventCacheError, media::MediaError, room::reply::ReplyError,
-    sliding_sync::Error as SlidingSyncError,
+    authentication::oauth::OAuthError, client::ClientBuildError,
+    cross_process_lock::CrossProcessLockError, event_cache::EventCacheError, media::MediaError,
+    room::reply::ReplyError, sliding_sync::Error as SlidingSyncError,
 };
 
 /// Result type of the matrix-sdk.
@@ -425,6 +425,12 @@ pub enum Error {
     /// We timed out attempting to complete an operation.
     #[error("timed out")]
     Timeout,
+
+    /// An error occurred while building a [`Client`].
+    ///
+    /// [`Client`]: crate::Client
+    #[error(transparent)]
+    ClientBuild(Box<ClientBuildError>),
 }
 
 #[rustfmt::skip] // stop rustfmt breaking the `<code>` in docs across multiple lines
@@ -469,6 +475,26 @@ impl Error {
 impl From<HttpError> for Error {
     fn from(error: HttpError) -> Self {
         Error::Http(Box::new(error))
+    }
+}
+
+impl From<ClientBuildError> for Error {
+    fn from(error: ClientBuildError) -> Self {
+        Error::ClientBuild(Box::new(error))
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl From<matrix_sdk_sqlite::OpenStoreError> for Error {
+    fn from(error: matrix_sdk_sqlite::OpenStoreError) -> Self {
+        ClientBuildError::from(error).into()
+    }
+}
+
+#[cfg(feature = "indexeddb")]
+impl From<matrix_sdk_indexeddb::OpenStoreError> for Error {
+    fn from(error: matrix_sdk_indexeddb::OpenStoreError) -> Self {
+        ClientBuildError::from(error).into()
     }
 }
 

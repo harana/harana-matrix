@@ -16,6 +16,8 @@
 
 pub mod store;
 
+use std::hash::{Hash, Hasher};
+
 use ruma::{
     MxcUri, UInt,
     api::client::media::get_content_thumbnail::v3::Method,
@@ -42,7 +44,7 @@ pub trait UniqueKey {
 }
 
 /// The requested format of a media file.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum MediaFormat {
     /// The file that was uploaded.
     File,
@@ -61,7 +63,7 @@ impl UniqueKey for MediaFormat {
 }
 
 /// The desired settings of a media thumbnail.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct MediaThumbnailSettings {
     /// The desired resizing method.
     pub method: Method,
@@ -98,6 +100,18 @@ impl MediaThumbnailSettings {
     /// Requests scaling, and a non-animated thumbnail.
     pub fn new(width: UInt, height: UInt) -> Self {
         Self { method: Method::Scale, width, height, animated: false }
+    }
+}
+
+// `Method` is a `StringEnum` and doesn't implement `Hash`, so this can't be
+// derived; hash the string representation instead, which is what its `PartialEq`
+// compares.
+impl Hash for MediaThumbnailSettings {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.method.as_str().hash(state);
+        self.width.hash(state);
+        self.height.hash(state);
+        self.animated.hash(state);
     }
 }
 
