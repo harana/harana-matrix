@@ -24,7 +24,10 @@ crate-type = [
 ]
 
 [features]
-default = ["bundled-sqlite", "unstable-msc4274", "experimental-element-recent-emojis", "experimental-push-secrets", "experimental-search", "rustls-aws-lc-rs"]
+# The rustls crypto provider is not listed here: it is picked per target in the
+# `[target.…]` sections below, aws-lc-rs everywhere but on Android. Both
+# `rustls-aws-lc-rs` and `rustls-ring` remain available to override that.
+default = ["bundled-sqlite", "unstable-msc4274", "experimental-element-recent-emojis", "experimental-push-secrets", "experimental-search"]
 experimental-search = ["matrix-sdk/experimental-search", "matrix-sdk-ui/experimental-search"]
 # Use SQLite for the session storage.
 sqlite = ["matrix-sdk/sqlite"]
@@ -47,6 +50,11 @@ experimental-x509-identity-verification = ["matrix-sdk-base/experimental-x509-id
 _only-for-testing-disable-megolm-minimum-rotation-period-ms = ["dep:matrix-sdk-crypto", "matrix-sdk-crypto/_disable-minimum-rotation-period-ms"]
 
 rustls-aws-lc-rs = ["matrix-sdk/rustls-aws-lc-rs", "matrix-sdk-ui/rustls-aws-lc-rs", "matrix-sdk-contentscanner/rustls-aws-lc-rs"]
+
+# Use ring rather than aws-lc-rs as the rustls crypto provider. This is what
+# Android builds use: aws-lc-rs crashes client initialisation on some Android
+# targets and emulators, 16 KB page size arm64 among them.
+rustls-ring = ["matrix-sdk/rustls-ring", "matrix-sdk-ui/rustls-ring", "matrix-sdk-contentscanner/rustls-ring"]
 
 [dependencies]
 anyhow.workspace = true
@@ -131,7 +139,19 @@ async-compat.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 uniffi = { workspace = true, features = ["tokio"] }
 
+[target.'cfg(not(target_os = "android"))'.dependencies]
+# aws-lc-rs is the rustls crypto provider everywhere but on Android.
+matrix-sdk = { workspace = true, features = ["rustls-aws-lc-rs"] }
+matrix-sdk-contentscanner = { workspace = true, features = ["rustls-aws-lc-rs"] }
+matrix-sdk-ui = { workspace = true, features = ["rustls-aws-lc-rs"] }
+
 [target.'cfg(target_os = "android")'.dependencies]
+# aws-lc-rs crashes client initialisation on some Android targets and
+# emulators (16 KB page size arm64 among them), so Android uses ring instead.
+# See https://github.com/matrix-org/matrix-rust-sdk/issues/6442.
+matrix-sdk = { workspace = true, features = ["rustls-ring"] }
+matrix-sdk-contentscanner = { workspace = true, features = ["rustls-ring"] }
+matrix-sdk-ui = { workspace = true, features = ["rustls-ring"] }
 paranoid-android = { version = "0.2.2", default-features = false }
 # Needed for `rustls-platform-verifier`. Newer versions aren't compatible with it.
 jni = "0.21.1"
@@ -143,10 +163,14 @@ once_cell = "1.21.4"
 jvm-getter = "0.1.0"
 
 [dev-dependencies]
-matrix-sdk = { workspace = true, features = ["testing", "rustls-aws-lc-rs"] }
 similar-asserts.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
+# The tests never run on Android, and pulling aws-lc-rs in through them would
+# put it back into the Android dependency tree.
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+matrix-sdk = { workspace = true, features = ["testing", "rustls-aws-lc-rs"] }
 
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }

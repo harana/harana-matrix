@@ -208,6 +208,8 @@ impl Default for HttpSettings {
 impl HttpSettings {
     /// Build a client with the specified configuration.
     pub(crate) fn make_client(&self) -> Result<reqwest::Client, HttpError> {
+        install_crypto_provider();
+
         let user_agent = self.user_agent.clone().unwrap_or_else(|| "matrix-rust-sdk".to_owned());
         let mut http_client = reqwest::Client::builder()
             .user_agent(user_agent)
@@ -243,6 +245,31 @@ impl HttpSettings {
         Ok(http_client.build()?)
     }
 }
+
+/// Makes ring the process-wide crypto provider for rustls, when the
+/// `rustls-ring` feature asks for it.
+///
+/// aws-lc-rs, the provider `rustls-aws-lc-rs` installs, misbehaves on some
+/// Android targets and emulators (16 KB page size arm64 among them), where it
+/// crashes the process as the client is being built.
+///
+/// Installing is a no-op if a provider is already the default, which is what
+/// happens when both features end up enabled: the first client built wins.
+#[cfg(all(feature = "reqwest-transport", feature = "rustls-ring"))]
+fn install_crypto_provider() {
+    use std::sync::Once;
+
+    static INSTALL: Once = Once::new();
+
+    INSTALL.call_once(|| {
+        if rustls::crypto::ring::default_provider().install_default().is_err() {
+            debug!("A rustls crypto provider was already installed, keeping it");
+        }
+    });
+}
+
+#[cfg(all(feature = "reqwest-transport", not(feature = "rustls-ring")))]
+fn install_crypto_provider() {}
 
 #[cfg(feature = "reqwest-transport")]
 pub(super) async fn execute_request(
