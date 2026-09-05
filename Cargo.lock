@@ -3952,6 +3952,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "matrix-sdk-resolver"
+version = "0.18.0"
+dependencies = [
+ "matrix-sdk-test-macros",
+ "matrix-sdk-test-utils",
+ "ruma",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "matrix-sdk-search"
 version = "0.18.0"
 dependencies = [
