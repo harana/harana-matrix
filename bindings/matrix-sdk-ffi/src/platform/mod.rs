@@ -48,6 +48,7 @@ const DEFAULT_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
 pub mod log_listener;
 pub mod panic;
 mod rolling_writer;
+pub mod telemetry;
 pub mod tracing;
 
 #[cfg(target_os = "android")]
@@ -180,19 +181,28 @@ impl<'writer> FormatFields<'writer> for FieldsFormatterForFiles {
     }
 }
 
+/// The registry with the installed [`telemetry`] layers attached.
+///
+/// The bindings' own layers sit on top of this, so that a telemetry provider
+/// sees the same events the text log does. The type is the same whether or not
+/// any provider was installed, since the vector of layers is simply empty in
+/// that case.
+type TelemetryRegistry = Layered<Vec<telemetry::TelemetryLayer>, Registry>;
+
+/// The subscriber the bindings' own text layers are attached to.
+type BaseSubscriber = Layered<EnvFilter, TelemetryRegistry>;
+
 type ReloadHandle = Handle<
     tracing_subscriber::fmt::Layer<
-        Layered<EnvFilter, Registry>,
+        BaseSubscriber,
         FieldsFormatterForFiles,
         EventFormatter,
         SizeAndDateRollingWriter,
     >,
-    Layered<EnvFilter, Registry>,
+    BaseSubscriber,
 >;
 
-fn text_layers(
-    config: TracingConfiguration,
-) -> (impl Layer<Layered<EnvFilter, Registry>>, Option<ReloadHandle>) {
+fn text_layers(config: TracingConfiguration) -> (impl Layer<BaseSubscriber>, Option<ReloadHandle>) {
     let (file_layer, reload_handle) = config
         .write_to_files
         .map(|c| {
@@ -247,7 +257,7 @@ fn text_layers(
 fn make_file_layer(
     file_configuration: TracingFileConfiguration,
 ) -> tracing_subscriber::fmt::Layer<
-    Layered<EnvFilter, Registry, Registry>,
+    BaseSubscriber,
     FieldsFormatterForFiles,
     EventFormatter,
     SizeAndDateRollingWriter,
@@ -372,13 +382,25 @@ impl LogTarget {
             LogTarget::MatrixSdkEventCache => "matrix_sdk::event_cache",
             LogTarget::MatrixSdkLatestEvents => "matrix_sdk::latest_events",
             LogTarget::MatrixSdkSendQueue => "matrix_sdk::send_queue",
-            LogTarget::MatrixSdkEventCacheStore => "matrix_sdk_sqlite::event_cache_store",
+            LogTarget::MatrixSdkEventCacheStore => EVENT_CACHE_STORE_LOG_TARGET,
             LogTarget::MatrixSdkUiTimeline => "matrix_sdk_ui::timeline",
             LogTarget::MatrixSdkUiNotificationClient => "matrix_sdk_ui::notification_client",
             LogTarget::MatrixSdkSearch => "matrix_sdk_search",
         }
     }
 }
+
+/// The `tracing` target the event cache store logs under.
+///
+/// Store backends are pluggable, so this comes from whichever one the bindings
+/// were built with rather than being a module path spelled out here. An
+/// application running a store backend of its own instead names its target in
+/// [`TracingConfiguration::extra_targets`].
+#[cfg(feature = "sqlite")]
+const EVENT_CACHE_STORE_LOG_TARGET: &str = matrix_sdk::sqlite_log_targets::EVENT_CACHE_STORE;
+
+#[cfg(not(feature = "sqlite"))]
+const EVENT_CACHE_STORE_LOG_TARGET: &str = "matrix_sdk_base::event_cache::store";
 
 const DEFAULT_TARGET_LOG_LEVELS: &[(LogTarget, LogLevel)] = &[
     (LogTarget::Hyper, LogLevel::Warn),
@@ -565,8 +587,9 @@ impl TracingConfiguration {
 
                     // Add a Sentry layer to the tracing subscriber.
                     //
-                    // Pass custom event and span filters, which will ignore anything, if the Sentry
-                    // support has been globally disabled, or if the statement doesn't include a
+                    // Pass custom event and span filters, which will ignore
+                    // anything, if the Sentry support has been
+                    // globally disabled, or if the statement doesn't include a
                     // `sentry` field set to `true`.
                     let sentry_layer = sentry_tracing::layer()
                         .event_filter({
@@ -609,6 +632,7 @@ impl TracingConfiguration {
             let (text_layers, reload_handle) = crate::platform::text_layers(self);
 
             tracing_subscriber::registry()
+                .with(telemetry::layers())
                 .with(tracing_subscriber::EnvFilter::new(&env_filter))
                 .with(text_layers)
                 .with(log_listener::LogEventLayer)
@@ -620,6 +644,7 @@ impl TracingConfiguration {
         {
             let (text_layers, reload_handle) = crate::platform::text_layers(self);
             tracing_subscriber::registry()
+                .with(telemetry::layers())
                 .with(tracing_subscriber::EnvFilter::new(&env_filter))
                 .with(text_layers)
                 .with(log_listener::LogEventLayer)
@@ -635,10 +660,11 @@ impl TracingConfiguration {
 }
 
 fn build_tracing_filter(config: &TracingConfiguration) -> String {
-    // We are intentionally not setting a global log level because we don't want to
-    // risk third party crates logging sensitive information.
+    // We are intentionally not setting a global log level because we don't want
+    // to risk third party crates logging sensitive information.
     // As such we need to make sure that panics will be properly logged.
-    // On 2025-01-08, `log_panics` uses the `panic` target, at the error log level.
+    // On 2025-01-08, `log_panics` uses the `panic` target, at the error log
+    // level.
     let mut filters = vec!["panic=error".to_owned()];
 
     let global_level = config.log_level;
@@ -648,10 +674,12 @@ fn build_tracing_filter(config: &TracingConfiguration) -> String {
             // If the target is immutable, keep the log level.
             *default_level
         } else if config.trace_log_packs.iter().any(|pack| pack.targets().contains(target)) {
-            // If a log pack includes that target, set the associated log level to TRACE.
+            // If a log pack includes that target, set the associated log level
+            // to TRACE.
             LogLevel::Trace
         } else if *default_level > global_level {
-            // If the default level is more verbose than the global level, keep the default.
+            // If the default level is more verbose than the global level, keep
+            // the default.
             *default_level
         } else {
             // Otherwise, use the global level.
@@ -720,7 +748,8 @@ pub fn enable_sentry_logging(enabled: bool) {
             warn!("Sentry logging is not enabled");
         }
     } else {
-        // Can't use log statements here, since logging hasn't been enabled yet 🧠
+        // Can't use log statements here, since logging hasn't been enabled yet
+        // 🧠
         eprintln!("Logging hasn't been enabled yet");
     };
 }
@@ -779,7 +808,8 @@ fn setup_lightweight_tokio_runtime() {
         let num_available_cores =
             std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
 
-        // The number of worker threads will be either that or 4, whichever is smaller.
+        // The number of worker threads will be either that or 4, whichever is
+        // smaller.
         let num_worker_threads = num_available_cores.min(4);
 
         // Chosen by a fair dice roll.

@@ -46,7 +46,7 @@ use ruma::{
 };
 use serde_json::{json, value::to_raw_value};
 use stream_assert::{assert_next_matches, assert_pending};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 
 use super::TestTimeline;
 use crate::{
@@ -234,6 +234,7 @@ async fn test_false_positive_late_decryption_regression() {
         .build()
         .await
         .unwrap();
+    let (_, mut stream) = timeline.subscribe().await;
 
     let event = event_factory
         .event(RoomEncryptedEventContent::new(
@@ -264,7 +265,10 @@ async fn test_false_positive_late_decryption_regression() {
         })
         .await;
 
-    sleep(Duration::from_millis(200)).await;
+    // Wait for the event to reach the timeline before retrying, rather than
+    // sleeping for a duration the machine may not honour under load.
+    let diffs = assert_next_with_timeout!(stream);
+    assert!(diffs.iter().any(|diff| matches!(diff, VectorDiff::PushBack { .. })));
 
     // Simulate a retry decryption.
     // Due to the regression this was marking the event as successfully decrypted on
@@ -275,16 +279,29 @@ async fn test_false_positive_late_decryption_regression() {
         .await;
     assert_eq!(timeline.controller.items().await.len(), 2);
 
-    // Wait past the max delay for utd late decryption detection
-    sleep(Duration::from_secs(2)).await;
+    // `UtdHookManager` holds a UTD back for `max_delay` so that a late decryption
+    // can reclassify it, so the report can only be observed once that delay has
+    // passed. Wait for the report itself instead of for a fixed duration.
+    let utd = timeout(Duration::from_secs(10), async {
+        loop {
+            if let Some(utd) = hook.utds.lock().unwrap().first().cloned() {
+                break utd;
+            }
 
-    {
-        let utds = hook.utds.lock().unwrap();
-        assert_eq!(utds.len(), 1);
-        // This is the main thing we're testing: if this wasn't identified as a definite
-        // UTD, this would be `Some(..)`.
-        assert!(utds[0].time_to_decrypt.is_none());
-    }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the hook should have reported the undecryptable event");
+
+    // This is the main thing we're testing: if this wasn't identified as a definite
+    // UTD, this would be `Some(..)`.
+    assert!(utd.time_to_decrypt.is_none());
+
+    // And it is reported exactly once. Give a late duplicate the same window to
+    // show up in as the report above had.
+    sleep(Duration::from_millis(500)).await;
+    assert_eq!(hook.utds.lock().unwrap().len(), 1);
 }
 
 #[async_test]

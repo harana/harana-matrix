@@ -389,7 +389,7 @@ async fn test_mutual_sas_verification() -> Result<()> {
     assert_eq!(alice_verified_device.user_id(), bob.user_id().unwrap());
     assert_eq!(alice_verified_device.device_id(), bob.device_id().unwrap());
 
-    assert_eq!(alice_verification_request.other_device_id().as_deref(), bob.device_id().as_deref());
+    assert_eq!(alice_verification_request.other_device_id().as_deref(), bob.device_id());
     assert_eq!(
         alice_verification_request.other_device_data().map(|device| device.device_id().to_owned()),
         bob.device_id().map(ToOwned::to_owned)

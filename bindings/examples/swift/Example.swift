@@ -141,11 +141,11 @@ enum Example {
         try await room.setTopic(topic: "Set from the example")
 
         // Any state event can be read as raw JSON, by type and state key.
-        let joinRules = try await room.getStateEvent(eventType: "m.room.join_rules", stateKey: "")
+        let joinRules = try await room.stateEvent(eventType: "m.room.join_rules", stateKey: "")
         print("Join rules: \(joinRules ?? "(none)")")
 
         // As can every state event of a type, for instance the memberships.
-        let members = try await room.getStateEvents(eventType: "m.room.member")
+        let members = try await room.stateEvents(eventType: "m.room.member")
         print("\(members.count) member events")
 
         // Room account data is per-user and per-room, and is not sent to

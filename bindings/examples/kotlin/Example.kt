@@ -184,11 +184,11 @@ object Example {
         room.setTopic(topic = "Set from the example")
 
         // Any state event can be read as raw JSON, by type and state key.
-        val joinRules = room.getStateEvent(eventType = "m.room.join_rules", stateKey = "")
+        val joinRules = room.stateEvent(eventType = "m.room.join_rules", stateKey = "")
         println("Join rules: $joinRules")
 
         // As can every state event of a type, for instance the memberships.
-        println("${room.getStateEvents(eventType = "m.room.member").size} member events")
+        println("${room.stateEvents(eventType = "m.room.member").size} member events")
 
         // Room account data is per-user and per-room, and is not sent to
         // anyone else.

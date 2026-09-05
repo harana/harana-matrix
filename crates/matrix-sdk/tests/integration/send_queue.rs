@@ -13,8 +13,9 @@ use matrix_sdk::{
     media::{MediaFormat, MediaRequestParameters, MediaThumbnailSettings},
     room::reply::Reply,
     send_queue::{
-        AbstractProgress, LocalEcho, LocalEchoContent, RoomSendQueue, RoomSendQueueError,
-        RoomSendQueueStorageError, RoomSendQueueUpdate, SendHandle, SendQueueUpdate,
+        AbstractProgress, EnforceThreadInReply, LocalEcho, LocalEchoContent, RoomSendQueue,
+        RoomSendQueueError, RoomSendQueueStorageError, RoomSendQueueUpdate, SendHandle,
+        SendQueueUpdate,
     },
     test_utils::mocks::{MatrixMock, MatrixMockServer, RoomMessagesResponseTemplate},
 };
@@ -4269,4 +4270,192 @@ async fn test_sending_event_still_saves_sync_gap() {
     assert_eq!(event.event_id().unwrap(), event_id!("$past_msg"));
 
     assert!(stream.is_empty());
+}
+
+#[async_test]
+async fn test_reply_to_a_local_echo() {
+    // Replying to a local echo is the only way to reply to a message of ours that
+    // hasn't been sent yet, and the only way to open a thread on it.
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    mock.mock_room_state_encryption().plain().mount().await;
+
+    let q = room.send_queue();
+    let (local_echoes, mut watch) = q.subscribe().await.unwrap();
+    assert!(local_echoes.is_empty());
+
+    // Nothing is sent while the queue is disabled: both events stay local.
+    q.set_enabled(false);
+
+    let parent_handle = q.send(RoomMessageEventContent::text_plain("root").into()).await.unwrap();
+
+    assert_let_timeout!(Ok(RoomSendQueueUpdate::NewLocalEvent(echo)) = watch.recv());
+    let parent_txn = echo.transaction_id;
+
+    // Reply to it, in a thread.
+    parent_handle
+        .reply(
+            RoomMessageEventContent::text_plain("in the thread").into(),
+            EnforceThreadInReply::Threaded { is_reply: true },
+        )
+        .await
+        .unwrap()
+        .expect("the reply must have been queued");
+
+    // The reply is a local echo of its own, straight away.
+    assert_let_timeout!(Ok(RoomSendQueueUpdate::NewLocalEvent(echo)) = watch.recv());
+    let reply_txn = echo.transaction_id.clone();
+    assert_ne!(reply_txn, parent_txn);
+    assert_let!(LocalEchoContent::Event { serialized_event, .. } = &echo.content);
+    assert_let!(
+        Ok(AnyMessageLikeEventContent::RoomMessage(content)) = serialized_event.deserialize()
+    );
+    assert_eq!(content.body(), "in the thread");
+
+    // Both are reported as local echoes.
+    let (local_echoes, _) = q.subscribe().await.unwrap();
+    assert_eq!(local_echoes.len(), 2);
+    assert_eq!(local_echoes[0].transaction_id, parent_txn);
+    assert_eq!(local_echoes[1].transaction_id, reply_txn);
+
+    // Now let both be sent, capturing what is actually sent to the server.
+    let sent_bodies = Arc::new(Mutex::new(Vec::new()));
+
+    let recorder = sent_bodies.clone();
+    mock.mock_room_send()
+        .respond_with(move |req: &Request| {
+            let recorder = recorder.clone();
+            let body: serde_json::Value = req.body_json().unwrap();
+
+            let index = std::thread::spawn(move || {
+                tokio::runtime::Runtime::new().unwrap().block_on(async {
+                    let mut bodies = recorder.lock().await;
+                    bodies.push(body);
+                    bodies.len()
+                })
+            })
+            .join()
+            .unwrap();
+
+            ResponseTemplate::new(200).set_body_json(json!({ "event_id": format!("${index}") }))
+        })
+        .expect(2)
+        .mount()
+        .await;
+
+    q.set_enabled(true);
+
+    assert_let_timeout!(
+        Ok(RoomSendQueueUpdate::SentEvent { transaction_id, event_id }) = watch.recv()
+    );
+    assert_eq!(transaction_id, parent_txn);
+    assert_eq!(event_id, owned_event_id!("$1"));
+
+    assert_let_timeout!(
+        Ok(RoomSendQueueUpdate::SentEvent { transaction_id, event_id }) = watch.recv()
+    );
+    assert_eq!(transaction_id, reply_txn);
+    assert_eq!(event_id, owned_event_id!("$2"));
+
+    // The reply carries a thread relation rooted at the event it replied to, whose
+    // event id was unknown when the reply was queued.
+    let bodies = sent_bodies.lock().await;
+    assert_eq!(bodies.len(), 2);
+    assert_eq!(bodies[0]["body"], "root");
+    assert_eq!(bodies[1]["body"], "in the thread");
+    assert_eq!(bodies[1]["m.relates_to"]["rel_type"], "m.thread");
+    assert_eq!(bodies[1]["m.relates_to"]["event_id"], "$1");
+    assert_eq!(bodies[1]["m.relates_to"]["m.in_reply_to"]["event_id"], "$1");
+    // `is_falling_back` defaults to `false` and is skipped when serializing: this
+    // is a genuine reply within the thread, not the unthreaded-clients
+    // fallback.
+    assert!(bodies[1]["m.relates_to"]["is_falling_back"].is_null());
+}
+
+#[async_test]
+async fn test_reply_to_a_local_echo_in_an_existing_thread() {
+    // Replying to a local echo that is itself in a thread keeps the reply in that
+    // same thread, rather than opening a new one.
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let thread_root = owned_event_id!("$thread_root");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    mock.mock_room_state_encryption().plain().mount().await;
+
+    let q = room.send_queue();
+    let (_, mut watch) = q.subscribe().await.unwrap();
+
+    q.set_enabled(false);
+
+    // A message already in a thread.
+    let mut parent_content = RoomMessageEventContent::text_plain("in the thread");
+    parent_content.relates_to =
+        Some(Relation::Thread(Thread::plain(thread_root.clone(), thread_root.clone())));
+
+    let parent_handle = q.send(parent_content.into()).await.unwrap();
+    assert_let_timeout!(Ok(RoomSendQueueUpdate::NewLocalEvent(_)) = watch.recv());
+
+    parent_handle
+        .reply(
+            RoomMessageEventContent::text_plain("answering that").into(),
+            EnforceThreadInReply::Threaded { is_reply: true },
+        )
+        .await
+        .unwrap()
+        .expect("the reply must have been queued");
+
+    assert_let_timeout!(Ok(RoomSendQueueUpdate::NewLocalEvent(echo)) = watch.recv());
+    let reply_txn = echo.transaction_id;
+
+    let sent_bodies = Arc::new(Mutex::new(Vec::new()));
+
+    let recorder = sent_bodies.clone();
+    mock.mock_room_send()
+        .respond_with(move |req: &Request| {
+            let recorder = recorder.clone();
+            let body: serde_json::Value = req.body_json().unwrap();
+
+            let index = std::thread::spawn(move || {
+                tokio::runtime::Runtime::new().unwrap().block_on(async {
+                    let mut bodies = recorder.lock().await;
+                    bodies.push(body);
+                    bodies.len()
+                })
+            })
+            .join()
+            .unwrap();
+
+            ResponseTemplate::new(200).set_body_json(json!({ "event_id": format!("${index}") }))
+        })
+        .expect(2)
+        .mount()
+        .await;
+
+    q.set_enabled(true);
+
+    assert_let_timeout!(Ok(RoomSendQueueUpdate::SentEvent { .. }) = watch.recv());
+    assert_let_timeout!(Ok(RoomSendQueueUpdate::SentEvent { transaction_id, .. }) = watch.recv());
+    assert_eq!(transaction_id, reply_txn);
+
+    // The reply is in the *existing* thread, and explicitly answers the event it
+    // replied to.
+    let bodies = sent_bodies.lock().await;
+    assert_eq!(bodies.len(), 2);
+    assert_eq!(bodies[1]["body"], "answering that");
+    assert_eq!(bodies[1]["m.relates_to"]["rel_type"], "m.thread");
+    assert_eq!(bodies[1]["m.relates_to"]["event_id"], thread_root.as_str());
+    assert_eq!(bodies[1]["m.relates_to"]["m.in_reply_to"]["event_id"], "$1");
+    // `is_falling_back` defaults to `false` and is skipped when serializing: this
+    // is a genuine reply within the thread, not the unthreaded-clients
+    // fallback.
+    assert!(bodies[1]["m.relates_to"]["is_falling_back"].is_null());
 }

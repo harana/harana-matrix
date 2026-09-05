@@ -539,6 +539,46 @@ async fn test_thread() {
     assert_eq!(replied_to_event.sender, *ALICE);
 }
 
+/// Subscribing to a timeline that already holds items must hand those items
+/// over exactly once: in the initial snapshot, and never again as a diff on the
+/// stream. See harana/harana-matrix#157.
+#[async_test]
+async fn test_subscribe_does_not_duplicate_the_items_it_already_has() {
+    let timeline = TestTimelineBuilder::new()
+        .provider(TestRoomDataProvider::default())
+        .settings(TimelineSettings::default())
+        .build()
+        .await;
+
+    let f = &timeline.factory;
+
+    for body in ["first", "second", "third"] {
+        timeline.handle_live_event(f.text_msg(body).sender(*ALICE)).await;
+    }
+
+    let (items, mut stream) = timeline.controller.subscribe().await;
+
+    // The three events, preceded by a date divider.
+    assert_eq!(items.len(), 4);
+    assert!(items[0].is_date_divider());
+    assert_eq!(items[3].as_event().unwrap().content().as_message().unwrap().body(), "third");
+
+    // Nothing the snapshot already carries is replayed on the stream. This is
+    // what the duplicates in the issue looked like.
+    assert_pending!(stream);
+
+    // An event that arrives after the subscription is delivered exactly once.
+    timeline.handle_live_event(f.text_msg("fourth").sender(*ALICE)).await;
+
+    let diffs = stream.next().await.unwrap();
+    assert_eq!(diffs.len(), 1);
+    assert_matches!(&diffs[0], VectorDiff::PushBack { value } => {
+        assert_eq!(value.as_event().unwrap().content().as_message().unwrap().body(), "fourth");
+    });
+
+    assert_pending!(stream);
+}
+
 #[async_test]
 async fn test_replace_with_initial_events_when_batched() {
     let timeline = TestTimelineBuilder::new()

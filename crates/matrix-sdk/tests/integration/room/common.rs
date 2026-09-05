@@ -1,28 +1,37 @@
 use std::{collections::BTreeMap, iter, ops::Not, time::Duration};
 
 use assert_matches2::{assert_let, assert_matches};
+use futures_util::{FutureExt, StreamExt, pin_mut};
 use js_int::uint;
 use matrix_sdk::{
     RoomDisplayName, RoomMemberships,
     config::{SyncSettings, SyncToken},
-    room::RoomMember,
+    room::{RoomMember, RoomMemberSortOrder},
     test_utils::mocks::{AnyRoomBuilder, MatrixMockServer},
 };
-use matrix_sdk_base::DmRoomDefinition;
+use matrix_sdk_base::{DmRoomDefinition, RoomMembersUpdate};
 use matrix_sdk_test::{
     BOB, DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
     bulk_room_members, event_factory::EventFactory, sync_state_event, test_json,
 };
 use ruma::{
-    event_id,
+    RoomVersionId, event_id,
     events::{
         AnyGlobalAccountDataEvent, AnySyncStateEvent, AnySyncTimelineEvent, StateEventType,
         direct::DirectUserIdentifier,
-        room::{avatar, member::MembershipState, message::RoomMessageEventContent},
+        room::{
+            avatar,
+            member::{MembershipState, RoomMemberEvent},
+            message::RoomMessageEventContent,
+        },
     },
-    mxc_uri, owned_room_alias_id, room_id, room_version_id, user_id,
+    int, mxc_uri, owned_room_alias_id, room_id, room_version_id,
+    serde::Raw,
+    user_id,
 };
 use serde_json::json;
+use stream_assert::assert_pending;
+use tokio::{task::spawn, time::sleep};
 use wiremock::{
     Mock, ResponseTemplate,
     matchers::{body_json, header, method, path, path_regex},
@@ -52,6 +61,285 @@ async fn test_user_presence() {
 
     assert_eq!(2, members.len());
     // assert!(room.power_levels.is_some())
+}
+
+#[async_test]
+async fn test_banned_member_has_no_profile() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let admin = user_id!("@admin:localhost");
+    let banned = user_id!("@banned:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(
+                    f().sender(banned)
+                        .member(banned)
+                        .display_name("Spammer")
+                        .avatar_url(mxc_uri!("mxc://localhost/spammer")),
+                )
+                .add_state_event(f().sender(admin).member(admin).display_name("Admin")),
+        )
+        .await;
+
+    // While they are joined, the member has the profile they set.
+    let member = room.get_member_no_sync(banned).await.unwrap().expect("the member is known");
+    assert_eq!(member.display_name(), Some("Spammer"));
+    assert_eq!(member.avatar_url(), Some(mxc_uri!("mxc://localhost/spammer")));
+
+    // The ban event carries the profile the member had. A banned member must not
+    // be shown with it.
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_state_event(
+                f().sender(admin)
+                    .member(banned)
+                    .banned(banned)
+                    .display_name("Spammer")
+                    .avatar_url(mxc_uri!("mxc://localhost/spammer"))
+                    .reason("spam"),
+            ),
+        )
+        .await;
+
+    let member = room.get_member_no_sync(banned).await.unwrap().expect("the member is known");
+    assert_eq!(member.membership(), &MembershipState::Ban);
+    assert!(member.is_banned());
+    assert_eq!(member.display_name(), None);
+    assert_eq!(member.avatar_url(), None);
+    assert_eq!(member.name(), "banned");
+    // The raw event is still there for a caller that needs it.
+    assert_eq!(member.event().displayname_value(), Some("Spammer"));
+
+    // The other member is unaffected.
+    let member = room.get_member_no_sync(admin).await.unwrap().expect("the member is known");
+    assert_eq!(member.display_name(), Some("Admin"));
+}
+
+#[async_test]
+async fn test_member_list_filters_sorts_and_paginates() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let admin = user_id!("@admin:localhost");
+    let alice = user_id!("@alice:localhost");
+    let bob = user_id!("@bob:localhost");
+    let carol = user_id!("@carol:localhost");
+    let dave = user_id!("@dave:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(admin).create(admin, RoomVersionId::V11))
+                .add_state_event(f().sender(admin).member(admin).display_name("Zoe the admin"))
+                .add_state_event(f().sender(alice).member(alice).display_name("alice"))
+                .add_state_event(f().sender(bob).member(bob).display_name("Bob"))
+                .add_state_event(
+                    f().sender(admin).member(carol).invited(carol).display_name("Carol"),
+                )
+                .add_state_event(f().sender(admin).member(dave).banned(dave))
+                .add_state_event(
+                    f().sender(admin)
+                        .power_levels(&mut BTreeMap::from([(admin.to_owned(), int!(100))])),
+                ),
+        )
+        .await;
+
+    // Sorted by name, case-insensitively, across every membership.
+    let all = room.member_list().no_sync().all().await.unwrap();
+    assert_eq!(
+        all.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["alice", "Bob", "Carol", "dave", "Zoe the admin"]
+    );
+
+    // Filtered by membership.
+    let joined =
+        room.member_list().no_sync().memberships(RoomMemberships::JOIN).all().await.unwrap();
+    assert_eq!(
+        joined.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["alice", "Bob", "Zoe the admin"]
+    );
+
+    // Sorted by power level first: the admin comes before everyone else despite
+    // their name sorting last.
+    let by_power_level = room
+        .member_list()
+        .no_sync()
+        .memberships(RoomMemberships::JOIN)
+        .sort_by(RoomMemberSortOrder::PowerLevelThenName)
+        .all()
+        .await
+        .unwrap();
+    assert_eq!(
+        by_power_level.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Zoe the admin", "alice", "Bob"]
+    );
+
+    // Searching matches the display name or the user ID, case-insensitively.
+    let searched = room.member_list().no_sync().search("BO").all().await.unwrap();
+    assert_eq!(searched.iter().map(|member| member.name()).collect::<Vec<_>>(), vec!["Bob"]);
+    let searched = room.member_list().no_sync().search("@carol").all().await.unwrap();
+    assert_eq!(searched.iter().map(|member| member.name()).collect::<Vec<_>>(), vec!["Carol"]);
+    // An empty search term is not a filter.
+    assert_eq!(room.member_list().no_sync().search("   ").count().await.unwrap(), 5);
+
+    // Filtering on power level is what showing the admins separately needs.
+    let admins = room.member_list().no_sync().min_power_level(100).all().await.unwrap();
+    assert_eq!(
+        admins.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Zoe the admin"]
+    );
+
+    // Pagination reports the total, so a view knows how far it can scroll.
+    let page = room.member_list().no_sync().page(1, 2).await.unwrap();
+    assert_eq!(page.total, 5);
+    assert_eq!(
+        page.members.iter().map(|member| member.name()).collect::<Vec<_>>(),
+        vec!["Bob", "Carol"]
+    );
+
+    // Scrolling past the end is an empty page, not an error.
+    let page = room.member_list().no_sync().page(50, 2).await.unwrap();
+    assert_eq!(page.total, 5);
+    assert!(page.members.is_empty());
+}
+
+#[async_test]
+async fn test_subscribe_to_member_updates() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let alice = user_id!("@alice:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server.sync_room(&client, JoinedRoomBuilder::new(room_id)).await;
+
+    let updates = room.subscribe_to_member_updates();
+    pin_mut!(updates);
+    assert_pending!(updates);
+
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(alice).member(alice).display_name("Alice")),
+        )
+        .await;
+
+    assert_let!(
+        Some(RoomMembersUpdate::Partial(user_ids)) = updates.next().now_or_never().flatten()
+    );
+    assert!(user_ids.contains(alice));
+}
+
+#[async_test]
+async fn test_sync_members_fills_in_the_member_counts() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let alice = user_id!("@alice:localhost");
+    let bob = user_id!("@bob:localhost");
+    let carol = user_id!("@carol:localhost");
+    let dave = user_id!("@dave:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    // A lazy-loading server may never send a room summary, leaving the counts at
+    // zero even though the member events are known.
+    let room = server.sync_room(&client, JoinedRoomBuilder::new(room_id)).await;
+    assert_eq!(room.active_members_count(), 0);
+
+    let members: Vec<Raw<RoomMemberEvent>> = vec![
+        f().sender(alice).member(alice).into(),
+        f().sender(bob).member(bob).into(),
+        f().sender(alice).member(carol).invited(carol).into(),
+        f().sender(alice).member(dave).banned(dave).into(),
+    ];
+    server.mock_get_members().ok(members).mock_once().mount().await;
+
+    room.sync_members().await.unwrap();
+
+    // The full member list is authoritative, so the counts are now exact.
+    assert_eq!(room.joined_members_count(), 2);
+    assert_eq!(room.invited_members_count(), 1);
+    assert_eq!(room.active_members_count(), 3);
+    assert_eq!(room.members(RoomMemberships::ACTIVE).await.unwrap().len(), 3);
+}
+
+#[async_test]
+async fn test_get_members_does_not_overwrite_newer_sync_state() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let alice = user_id!("@alice:localhost");
+    let bob = user_id!("@bob:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(alice).member(alice).display_name("Alice"))
+                .add_state_event(f().sender(bob).member(bob).display_name("Bob")),
+        )
+        .await;
+
+    // The `/members` response describes the room as it was when the request was
+    // sent: Alice is still there. It is slow enough for a sync to land first.
+    let alice_event: Raw<RoomMemberEvent> =
+        f().sender(alice).member(alice).display_name("Alice").into();
+    let bob_event: Raw<RoomMemberEvent> = f().sender(bob).member(bob).display_name("Bob").into();
+    server
+        .mock_get_members()
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "chunk": [alice_event, bob_event] }))
+                .set_delay(Duration::from_millis(700)),
+        )
+        .mock_once()
+        .mount()
+        .await;
+
+    let members = spawn({
+        let room = room.clone();
+        async move { room.sync_members().await }
+    });
+
+    // Let the request go out before the sync lands.
+    sleep(Duration::from_millis(200)).await;
+
+    // Alice leaves; this is fresher than what the `/members` request will answer.
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_state_event(
+                f().sender(alice).member(alice).membership(MembershipState::Leave),
+            ),
+        )
+        .await;
+
+    members.await.unwrap().unwrap();
+
+    // The outdated `/members` response must not have brought Alice back.
+    let alice_member =
+        room.get_member_no_sync(alice).await.unwrap().expect("Alice is a known member");
+    assert_eq!(alice_member.membership(), &MembershipState::Leave);
+
+    // Everyone else is still updated from the response.
+    let bob_member = room.get_member_no_sync(bob).await.unwrap().expect("Bob is a known member");
+    assert_eq!(bob_member.membership(), &MembershipState::Join);
+    assert_eq!(bob_member.display_name(), Some("Bob"));
 }
 
 #[async_test]

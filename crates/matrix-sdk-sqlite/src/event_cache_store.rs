@@ -39,7 +39,6 @@ use matrix_sdk_base::{
     },
     timer,
 };
-use matrix_sdk_store_encryption::StoreCipher;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, RoomId, events::relation::RelationType,
 };
@@ -50,8 +49,9 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, error, instrument, trace};
 
 use crate::{
-    OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
+    OpenStoreError, RuntimeConfig, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
+    encryption::{EncryptionConfig, StoreEncryption},
     error::{Error, Result},
     fs,
     utils::{
@@ -81,7 +81,7 @@ const CHUNK_TYPE_GAP_TYPE_STRING: &str = "G";
 ///
 /// See the [`SqliteEventCacheStore::encryption`] field.
 struct Encryption {
-    cipher: Option<StoreCipher>,
+    encryption: StoreEncryption,
 }
 
 impl Encryption {
@@ -150,8 +150,8 @@ impl Encryption {
 }
 
 impl EncryptableStore for Encryption {
-    fn get_cypher(&self) -> Option<&StoreCipher> {
-        self.cipher.as_ref()
+    fn encryption(&self) -> &StoreEncryption {
+        &self.encryption
     }
 }
 
@@ -215,9 +215,14 @@ impl SqliteEventCacheStore {
 
         let pool = config.build_pool_of_connections(DATABASE_NAME)?;
 
-        let this =
-            Self::open_with_pool(pool, db_path, pool_config, runtime_config, config.secret.clone())
-                .await?;
+        let this = Self::open_with_pool(
+            pool,
+            db_path,
+            pool_config,
+            runtime_config,
+            config.encryption_config(),
+        )
+        .await?;
 
         // Apply runtime config on the write connection.
         this.write().await?.apply_runtime_config(runtime_config).await?;
@@ -232,7 +237,7 @@ impl SqliteEventCacheStore {
         db_path: PathBuf,
         pool_config: PoolConfig,
         runtime_config: RuntimeConfig,
-        secret: Option<Secret>,
+        encryption_config: EncryptionConfig,
     ) -> Result<Self, OpenStoreError> {
         let conn = pool.get().await?;
 
@@ -242,10 +247,7 @@ impl SqliteEventCacheStore {
 
         conn.wal_checkpoint().await;
 
-        let cipher = match secret {
-            Some(s) => Some(conn.get_or_create_store_cipher(s).await?),
-            None => None,
-        };
+        let encryption = conn.open_store_encryption(&encryption_config).await?;
 
         let connections = SqliteConnections {
             pool,
@@ -254,7 +256,7 @@ impl SqliteEventCacheStore {
         };
 
         Ok(Self {
-            encryption: Arc::new(Encryption { cipher }),
+            encryption: Arc::new(Encryption { encryption }),
             connections: Arc::new(Mutex::new(Some(connections))),
             db_path,
             pool_config,
@@ -434,8 +436,8 @@ impl TransactionExtForLinkedChunks for Transaction<'_> {
         linked_chunk_id: &Key,
         chunk_id: ChunkIdentifier,
     ) -> Result<Gap> {
-        // There's at most one row for it in the database, so a call to `query_one` is
-        // sufficient.
+        // There's at most one row for it in the database, so a call to
+        // `query_one` is sufficient.
         let encoded_prev_token: Vec<u8> = self.query_one(
             "SELECT prev_token FROM gap_chunks WHERE chunk_id = ? AND linked_chunk_id = ?",
             (chunk_id.index(), &linked_chunk_id),
@@ -478,8 +480,9 @@ async fn run_migrations(conn: &SqliteAsyncConn, version: u8) -> Result<()> {
 
     if version < 1 {
         debug!("Creating database");
-        // First turn on WAL mode, this can't be done in the transaction, it fails with
-        // the error message: "cannot change into wal mode from within a transaction".
+        // First turn on WAL mode, this can't be done in the transaction, it
+        // fails with the error message: "cannot change into wal mode
+        // from within a transaction".
         conn.execute_batch("PRAGMA journal_mode = wal;").await?;
         conn.with_transaction(|txn| {
             txn.execute_batch(include_str!("../migrations/event_cache_store/001_init.sql"))?;
@@ -579,8 +582,8 @@ async fn run_migrations(conn: &SqliteAsyncConn, version: u8) -> Result<()> {
         .await?;
 
         if version >= 1 {
-            // Defragment the DB and optimize its size on the filesystem now that we removed
-            // the media cache.
+            // Defragment the DB and optimize its size on the filesystem now
+            // that we removed the media cache.
             conn.vacuum().await?;
         }
     }
@@ -726,8 +729,8 @@ impl EventCacheStore for SqliteEventCacheStore {
             self.encryption.encode_room_id(keys::EVENTS, linked_chunk_id.room_id());
         let encryption = self.encryption.clone();
 
-        // Use a single transaction throughout this function, so that either all updates
-        // work, or none is taken into account.
+        // Use a single transaction throughout this function, so that either all
+        // updates work, or none is taken into account.
         with_immediate_transaction(self, move |txn| {
             for update in updates {
                 match update {
@@ -1153,8 +1156,9 @@ impl EventCacheStore for SqliteEventCacheStore {
         self.read()
             .await?
             .with_transaction(move |txn| -> Result<_> {
-                // We want to collect the metadata about each chunk (id, next, previous), and
-                // for event chunks, the number of events in it. For gaps, the
+                // We want to collect the metadata about each chunk (id, next,
+                // previous), and for event chunks, the number
+                // of events in it. For gaps, the
                 // number of events is 0, by convention.
                 //
                 // We've tried different strategies over time:
@@ -1176,8 +1180,9 @@ impl EventCacheStore for SqliteEventCacheStore {
                 //   database with a `SELECT`, and then use the hashmap to get the number of
                 //   events.
                 //
-                // This strategy minimizes the number of queries to the database, and keeps them
-                // super simple, while doing a bit more processing here, which is much faster.
+                // This strategy minimizes the number of queries to the
+                // database, and keeps them super simple, while
+                // doing a bit more processing here, which is much faster.
 
                 let num_events_by_chunk_ids = txn
                     .prepare(
@@ -1212,10 +1217,12 @@ impl EventCacheStore for SqliteEventCacheStore {
                 .map(|data| -> Result<_> {
                     let (id, previous, next, chunk_type) = data?;
 
-                    // Note: since a gap has 0 events, an alternative could be to *not* retrieve
-                    // the chunk type, and just let the hashmap lookup fail for gaps. However,
-                    // benchmarking shows that this is slightly slower than matching the chunk
-                    // type (around 1%, so in the realm of noise), so we keep the explicit
+                    // Note: since a gap has 0 events, an alternative could be
+                    // to *not* retrieve the chunk type, and
+                    // just let the hashmap lookup fail for gaps. However,
+                    // benchmarking shows that this is slightly slower than
+                    // matching the chunk type (around 1%,
+                    // so in the realm of noise), so we keep the explicit
                     // check instead.
                     let num_items = if chunk_type == CHUNK_TYPE_GAP_TYPE_STRING {
                         0
@@ -1392,8 +1399,8 @@ impl EventCacheStore for SqliteEventCacheStore {
             self.encryption.encode_linked_chunk(keys::LINKED_CHUNKS, &linked_chunk_id);
         let encryption = self.encryption.clone();
 
-        // First off, try by selecting the thread info. It's the most common case. If it
-        // doesn't exist, create an empty one.
+        // First off, try by selecting the thread info. It's the most common
+        // case. If it doesn't exist, create an empty one.
         //
         // We do that with 2 transactions.
         let maybe_thread_info = self
@@ -1481,7 +1488,8 @@ impl EventCacheStore for SqliteEventCacheStore {
                         // Remove all the chunks, and let cascading do its job.
                         txn.execute("DELETE FROM linked_chunks", ())?;
 
-                        // Also clear all the events' contents, and let cascading do its job.
+                        // Also clear all the events' contents, and let
+                        // cascading do its job.
                         txn.execute("DELETE FROM events", ())?;
 
                         Ok(())
@@ -1544,9 +1552,10 @@ impl EventCacheStore for SqliteEventCacheStore {
     ) -> Result<Vec<(OwnedEventId, Position)>, Self::Error> {
         let _timer = timer!("method");
 
-        // If there's no events for which we want to check duplicates, we can return
-        // early. It's not only an optimization to do so: it's required, otherwise the
-        // `host_parameters` call below will panic.
+        // If there's no events for which we want to check duplicates, we can
+        // return early. It's not only an optimization to do so: it's
+        // required, otherwise the `host_parameters` call below will
+        // panic.
         if event_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1621,8 +1630,10 @@ impl EventCacheStore for SqliteEventCacheStore {
                             let (duplicated_hashed_event_id, chunk_identifier, index) =
                                 duplicated_event?;
 
-                            // The event ID is encoded in the database. We can't decode it. However,
-                            // we can find the original event ID with the `event_ids` parameter of
+                            // The event ID is encoded in the database. We can't
+                            // decode it. However,
+                            // we can find the original event ID with the
+                            // `event_ids` parameter of
                             // this method by comparing the encoded event ID!
                             let Some(duplicated_event_id) = event_ids_and_hashed_event_ids
                                 .iter()
@@ -1848,8 +1859,9 @@ fn find_event_relations_transaction(
             let (event, chunk_id, index): (Vec<u8>, Option<u64>, _) = result?;
             let event = encryption.decode_event(&event)?;
 
-            // Only build the position if both the chunk_id and position were present; in
-            // theory, they should either be present at the same time, or not at all.
+            // Only build the position if both the chunk_id and position were
+            // present; in theory, they should either be present at
+            // the same time, or not at all.
             let pos = chunk_id
                 .zip(index)
                 .map(|(chunk_id, index)| Position::new(ChunkIdentifier::new(chunk_id), index));
@@ -1871,10 +1883,10 @@ fn find_event_relations_transaction(
             host_parameters(filters.len())
         );
 
-        // First the filters need to be stringified; because `.to_sql()` will borrow
-        // from them, they also need to be stringified onto the stack, so as to
-        // get a stable address (to avoid returning a temporary reference in the
-        // map closure below).
+        // First the filters need to be stringified; because `.to_sql()` will
+        // borrow from them, they also need to be stringified onto the
+        // stack, so as to get a stable address (to avoid returning a
+        // temporary reference in the map closure below).
         let filter_strings: Vec<_> = filters.iter().map(|f| f.to_string()).collect();
         let filters_params: Vec<_> = filter_strings
             .iter()
@@ -1929,9 +1941,9 @@ async fn with_immediate_transaction<
     this.write()
         .await?
         .interact(move |conn| -> Result<T, Error> {
-            // Start the transaction in IMMEDIATE mode since all updates may cause writes,
-            // to avoid read transactions upgrading to write mode and causing
-            // SQLITE_BUSY errors. See also: https://www.sqlite.org/lang_transaction.html#deferred_immediate_and_exclusive_transactions
+            // Start the transaction in IMMEDIATE mode since all updates may
+            // cause writes, to avoid read transactions upgrading to
+            // write mode and causing SQLITE_BUSY errors. See also: https://www.sqlite.org/lang_transaction.html#deferred_immediate_and_exclusive_transactions
             conn.set_transaction_behavior(TransactionBehavior::Immediate);
 
             let code = || -> Result<T, Error> {
@@ -1943,8 +1955,9 @@ async fn with_immediate_transaction<
 
             let res = code();
 
-            // Reset the transaction behavior to use Deferred, after this transaction has
-            // been run, whether it was successful or not.
+            // Reset the transaction behavior to use Deferred, after this
+            // transaction has been run, whether it was successful
+            // or not.
             conn.set_transaction_behavior(TransactionBehavior::Deferred);
 
             res
@@ -2102,8 +2115,8 @@ mod tests {
             .await
             .unwrap();
 
-        // Check that the gaps match those set up in the corresponding integration test
-        // above
+        // Check that the gaps match those set up in the corresponding
+        // integration test above
         assert_eq!(gaps, vec![42, 44]);
     }
 
@@ -2172,8 +2185,8 @@ mod tests {
         let room_id = *DEFAULT_TEST_ROOM_ID;
         let linked_chunk_id = LinkedChunkId::Room(room_id);
 
-        // Trigger a violation of the unique constraint on the (room id, chunk id)
-        // couple.
+        // Trigger a violation of the unique constraint on the (room id, chunk
+        // id) couple.
         let err = store
             .handle_linked_chunk_updates(
                 linked_chunk_id,
@@ -2198,9 +2211,9 @@ mod tests {
             assert_matches!(err.sqlite_error_code(), Some(rusqlite::ErrorCode::ConstraintViolation));
         });
 
-        // If the updates have been handled transactionally, then no new chunks should
-        // have been added; failure of the second update leads to the first one being
-        // rolled back.
+        // If the updates have been handled transactionally, then no new chunks
+        // should have been added; failure of the second update leads to
+        // the first one being rolled back.
         let chunks = store.load_all_chunks(linked_chunk_id).await.unwrap();
         assert!(chunks.is_empty());
     }
@@ -2294,7 +2307,8 @@ mod encrypted_tests {
             .await
             .expect("We should be able to attempt to find event relations");
 
-        // Ensure that we only got the single related event the first room contains.
+        // Ensure that we only got the single related event the first room
+        // contains.
         similar_asserts::assert_eq!(
             results.len(),
             1,

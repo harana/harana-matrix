@@ -20,11 +20,13 @@ use matrix_sdk::{
     ComposerDraft as SdkComposerDraft, ComposerDraftType as SdkComposerDraftType,
     DraftAttachment as SdkDraftAttachment, DraftAttachmentContent, DraftThumbnail, EncryptionState,
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
-    RoomMemberships, RoomState, SuccessorRoom as SdkSuccessorRoom,
+    RoomMembersUpdate as SdkRoomMembersUpdate, RoomMemberships, RoomState,
+    SuccessorRoom as SdkSuccessorRoom,
     deserialized_responses::{RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent},
     encryption::LocalTrust,
     room::{
-        Room as SdkRoom, RoomMemberRole, edit::EditedContent, power_levels::RoomPowerLevelChanges,
+        Room as SdkRoom, RoomMemberRole, RoomMemberSortOrder, edit::EditedContent,
+        power_levels::RoomPowerLevelChanges,
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
@@ -201,6 +203,28 @@ impl Room {
         self.inner.state().into()
     }
 
+    /// Subscribe to our own membership in this room.
+    ///
+    /// The listener is called with the current membership right away, and then
+    /// on every transition, so a client learns that it was invited, joined,
+    /// kicked or banned without watching the timeline.
+    ///
+    /// Use the returned [`TaskHandle`] to cancel the subscription.
+    pub fn subscribe_to_membership(
+        self: Arc<Self>,
+        listener: Box<dyn MembershipListener>,
+    ) -> Arc<TaskHandle> {
+        let states = self.inner.subscribe_to_state();
+
+        Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
+            pin_mut!(states);
+
+            while let Some(state) = states.next().await {
+                listener.call(state.into());
+            }
+        })))
+    }
+
     /// Returns the room heroes for this room.
     pub async fn heroes(&self) -> Vec<RoomHero> {
         self.inner.heroes().await.into_iter().map(Into::into).collect()
@@ -337,6 +361,73 @@ impl Room {
         Ok(Arc::new(RoomMembersIterator::new(
             self.inner.members_no_sync(RoomMemberships::empty()).await?,
         )))
+    }
+
+    /// Get one page of the members of this room, filtered and sorted.
+    ///
+    /// Only `limit` members are handed across this boundary, whatever the size
+    /// of the room, and the returned page also carries how many members match
+    /// the query in total. Members are read from the local store; set
+    /// `sync_first` to fetch the member list from the homeserver first when it
+    /// may be incomplete.
+    ///
+    /// See `Room::subscribe_to_member_updates` to know when to ask again.
+    pub async fn paginated_members(
+        &self,
+        query: RoomMemberListQuery,
+        offset: u32,
+        limit: u32,
+    ) -> Result<RoomMemberListPage, ClientError> {
+        let mut request = self.inner.member_list().sort_by(query.sort);
+
+        if !query.sync_first {
+            request = request.no_sync();
+        }
+
+        if let Some(memberships) = query.memberships {
+            request = request.memberships(memberships.into());
+        }
+
+        if let Some(search_term) = query.search_term {
+            request = request.search(search_term);
+        }
+
+        if let Some(min_power_level) = query.min_power_level {
+            request = request.min_power_level(min_power_level);
+        }
+
+        let page = request.page(offset as usize, limit as usize).await?;
+
+        Ok(RoomMemberListPage {
+            members: page
+                .members
+                .into_iter()
+                .map(|member| member.try_into())
+                .collect::<Result<Vec<_>, _>>()?,
+            total: page.total as u32,
+        })
+    }
+
+    /// Subscribe to the member list of this room.
+    ///
+    /// The listener is called every time members join, leave or change their
+    /// profile, so a member list built with `Room::paginated_members` knows
+    /// when to ask again.
+    ///
+    /// Use the returned [`TaskHandle`] to cancel the subscription.
+    pub fn subscribe_to_member_updates(
+        self: Arc<Self>,
+        listener: Box<dyn RoomMemberUpdatesListener>,
+    ) -> Arc<TaskHandle> {
+        let updates = self.inner.subscribe_to_member_updates();
+
+        Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
+            pin_mut!(updates);
+
+            while let Some(update) = updates.next().await {
+                listener.call(update.into());
+            }
+        })))
     }
 
     /// Get the user IDs of the joined and invited members, without the service
@@ -500,36 +591,39 @@ impl Room {
         Ok(response.event_id.to_string())
     }
 
-    /// Get a state event of the given type out of this room's state.
+    /// Get the state event of this room with exactly the given type and state
+    /// key, as a JSON string.
+    ///
+    /// Returns `None` when the room has no such event, which for an exact
+    /// `(type, state key)` pair is the only other possibility: a room holds at
+    /// most one state event per pair. To tell apart zero, one and several
+    /// *rooms* carrying an event, see `Client::rooms_with_state_event`.
     ///
     /// # Arguments
     ///
-    /// * `event_type` - The type of the state event to read (e.g.
-    ///   `"m.room.name"` or a custom type).
+    /// * `event_type` - The type of the state event (e.g. `"m.room.name"` or a
+    ///   custom type).
     ///
-    /// * `state_key` - The state key of the event to read. This is often an
-    ///   empty string.
-    ///
-    /// Returns the event encoded as a JSON string, or `None` if this room's
-    /// state holds no such event.
-    pub async fn get_state_event(
+    /// * `state_key` - The state key of the event. This is often an empty
+    ///   string.
+    pub async fn state_event(
         &self,
         event_type: String,
         state_key: String,
     ) -> Result<Option<String>, ClientError> {
         let event = self.inner.get_state_event(event_type.into(), &state_key).await?;
+
         Ok(event.map(state_event_json))
     }
 
-    /// Get all the state events of the given type out of this room's state.
+    /// Get every state event of this room with the given type, whatever its
+    /// state key, as JSON strings in no particular order.
     ///
     /// # Arguments
     ///
-    /// * `event_type` - The type of the state events to read (e.g.
-    ///   `"m.room.member"` or a custom type).
-    ///
-    /// Returns the events encoded as JSON strings, in no particular order.
-    pub async fn get_state_events(&self, event_type: String) -> Result<Vec<String>, ClientError> {
+    /// * `event_type` - The type of the state events (e.g. `"m.room.member"` or
+    ///   a custom type).
+    pub async fn state_events(&self, event_type: String) -> Result<Vec<String>, ClientError> {
         let events = self.inner.get_state_events(event_type.into()).await?;
         Ok(events.into_iter().map(state_event_json).collect())
     }
@@ -1583,6 +1677,109 @@ pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
+pub trait MembershipListener: SyncOutsideWasm + SendOutsideWasm {
+    fn call(&self, membership: Membership);
+}
+
+#[matrix_sdk_ffi_macros::export(callback_interface)]
+pub trait RoomMemberUpdatesListener: SyncOutsideWasm + SendOutsideWasm {
+    fn call(&self, update: RoomMemberUpdate);
+}
+
+/// What changed in the member list of a room.
+#[derive(uniffi::Enum)]
+pub enum RoomMemberUpdate {
+    /// The whole member list was reloaded, so anything shown from it is stale.
+    FullReload,
+    /// These members changed.
+    Partial { user_ids: Vec<String> },
+}
+
+impl From<SdkRoomMembersUpdate> for RoomMemberUpdate {
+    fn from(value: SdkRoomMembersUpdate) -> Self {
+        match value {
+            SdkRoomMembersUpdate::FullReload => Self::FullReload,
+            SdkRoomMembersUpdate::Partial(user_ids) => {
+                Self::Partial { user_ids: user_ids.into_iter().map(String::from).collect() }
+            }
+        }
+    }
+}
+
+/// Which members of a room to return, in what order. See
+/// `Room::paginated_members`.
+#[derive(uniffi::Record)]
+pub struct RoomMemberListQuery {
+    /// Only keep the members with one of these memberships. `None` keeps all
+    /// of them.
+    #[uniffi(default = None)]
+    pub memberships: Option<RoomMembershipFilter>,
+    /// Only keep the members whose display name or user ID contains this term,
+    /// case-insensitively.
+    #[uniffi(default = None)]
+    pub search_term: Option<String>,
+    /// Only keep the members whose power level is at least this high. This is
+    /// what showing the administrators of a room separately needs.
+    #[uniffi(default = None)]
+    pub min_power_level: Option<i64>,
+    /// How to order the members.
+    pub sort: RoomMemberSortOrder,
+    /// Fetch the member list from the homeserver first, in case the local one
+    /// is incomplete.
+    #[uniffi(default = true)]
+    pub sync_first: bool,
+}
+
+/// Which memberships to keep. Empty keeps all of them.
+#[derive(uniffi::Record)]
+pub struct RoomMembershipFilter {
+    #[uniffi(default = false)]
+    pub join: bool,
+    #[uniffi(default = false)]
+    pub invite: bool,
+    #[uniffi(default = false)]
+    pub knock: bool,
+    #[uniffi(default = false)]
+    pub leave: bool,
+    #[uniffi(default = false)]
+    pub ban: bool,
+}
+
+impl From<RoomMembershipFilter> for RoomMemberships {
+    fn from(value: RoomMembershipFilter) -> Self {
+        let mut memberships = RoomMemberships::empty();
+
+        if value.join {
+            memberships |= RoomMemberships::JOIN;
+        }
+        if value.invite {
+            memberships |= RoomMemberships::INVITE;
+        }
+        if value.knock {
+            memberships |= RoomMemberships::KNOCK;
+        }
+        if value.leave {
+            memberships |= RoomMemberships::LEAVE;
+        }
+        if value.ban {
+            memberships |= RoomMemberships::BAN;
+        }
+
+        memberships
+    }
+}
+
+/// One page of the member list of a room. See `Room::paginated_members`.
+#[derive(uniffi::Record)]
+pub struct RoomMemberListPage {
+    /// The members in this page.
+    pub members: Vec<RoomMember>,
+    /// How many members match the query in total, ignoring the bounds of this
+    /// page.
+    pub total: u32,
+}
+
+#[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait TypingNotificationsListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, typing_user_ids: Vec<String>);
 }
@@ -2048,11 +2245,23 @@ pub struct SuccessorRoom {
 
     /// The message explaining why the room has been tombstoned.
     pub reason: Option<String>,
+
+    /// Candidate servers to pass as `via` when previewing or joining the
+    /// replacement room.
+    ///
+    /// A room ID is not routable on its own, so without these a user whose own
+    /// server has never seen the replacement room cannot follow the tombstone.
+    /// This is a best-effort hint and may be empty.
+    pub via: Vec<String>,
 }
 
 impl From<SdkSuccessorRoom> for SuccessorRoom {
     fn from(value: SdkSuccessorRoom) -> Self {
-        Self { room_id: value.room_id.to_string(), reason: value.reason }
+        Self {
+            room_id: value.room_id.to_string(),
+            reason: value.reason,
+            via: value.via.into_iter().map(|server| server.to_string()).collect(),
+        }
     }
 }
 
@@ -2068,11 +2277,18 @@ impl From<SdkSuccessorRoom> for SuccessorRoom {
 pub struct PredecessorRoom {
     /// The ID of the replacement room.
     pub room_id: String,
+
+    /// Candidate servers to pass as `via` when previewing or joining the old
+    /// room. See [`SuccessorRoom::via`].
+    pub via: Vec<String>,
 }
 
 impl From<SdkPredecessorRoom> for PredecessorRoom {
     fn from(value: SdkPredecessorRoom) -> Self {
-        Self { room_id: value.room_id.to_string() }
+        Self {
+            room_id: value.room_id.to_string(),
+            via: value.via.into_iter().map(|server| server.to_string()).collect(),
+        }
     }
 }
 
@@ -2201,7 +2417,7 @@ impl TryFrom<SdkRoomSendQueueUpdate> for RoomSendQueueUpdate {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::time::Duration;
+    use std::{collections::BTreeSet, time::Duration};
 
     use matrix_sdk::{
         ruma::{events::RoomAccountDataEventType, room_id, user_id},
@@ -2212,6 +2428,72 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn test_room_membership_filter_maps_to_room_memberships() {
+        // Nothing selected means no filtering, which is what
+        // `RoomMemberships::empty()` does.
+        let none = RoomMembershipFilter {
+            join: false,
+            invite: false,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(none), RoomMemberships::empty());
+
+        let joined = RoomMembershipFilter {
+            join: true,
+            invite: false,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(joined), RoomMemberships::JOIN);
+
+        // Several memberships combine rather than overwrite one another.
+        let active = RoomMembershipFilter {
+            join: true,
+            invite: true,
+            knock: false,
+            leave: false,
+            ban: false,
+        };
+        assert_eq!(RoomMemberships::from(active), RoomMemberships::JOIN | RoomMemberships::INVITE);
+
+        let all =
+            RoomMembershipFilter { join: true, invite: true, knock: true, leave: true, ban: true };
+        let all = RoomMemberships::from(all);
+        for membership in [
+            RoomMemberships::JOIN,
+            RoomMemberships::INVITE,
+            RoomMemberships::KNOCK,
+            RoomMemberships::LEAVE,
+            RoomMemberships::BAN,
+        ] {
+            assert!(all.contains(membership), "{membership:?} is missing");
+        }
+    }
+
+    #[test]
+    fn test_room_member_update_conversion() {
+        assert!(matches!(
+            RoomMemberUpdate::from(SdkRoomMembersUpdate::FullReload),
+            RoomMemberUpdate::FullReload
+        ));
+
+        let alice = user_id!("@alice:example.org");
+        let bob = user_id!("@bob:example.org");
+        let update =
+            SdkRoomMembersUpdate::Partial(BTreeSet::from([alice.to_owned(), bob.to_owned()]));
+
+        match RoomMemberUpdate::from(update) {
+            RoomMemberUpdate::Partial { user_ids } => {
+                assert_eq!(user_ids, vec![alice.to_string(), bob.to_string()]);
+            }
+            RoomMemberUpdate::FullReload => panic!("expected a partial update"),
+        }
+    }
 
     /// Dropping an FFI [`Room`] on a non-tokio thread must not panic.
     ///
@@ -2277,7 +2559,7 @@ mod tests {
         let room = Room::new(sdk_room, None);
 
         let topic = room
-            .get_state_event("m.room.topic".to_owned(), String::new())
+            .state_event("m.room.topic".to_owned(), String::new())
             .await
             .unwrap()
             .expect("the topic is in the room state");
@@ -2287,20 +2569,17 @@ mod tests {
 
         // A state key that isn't there is not an error.
         assert!(
-            room.get_state_event("m.room.topic".to_owned(), "nope".to_owned())
-                .await
-                .unwrap()
-                .is_none()
+            room.state_event("m.room.topic".to_owned(), "nope".to_owned()).await.unwrap().is_none()
         );
         assert!(
-            room.get_state_event("com.example.nothing".to_owned(), String::new())
+            room.state_event("com.example.nothing".to_owned(), String::new())
                 .await
                 .unwrap()
                 .is_none()
         );
 
         // Every event of a type, whatever its state key.
-        let members = room.get_state_events("m.room.member".to_owned()).await.unwrap();
+        let members = room.state_events("m.room.member".to_owned()).await.unwrap();
         assert_eq!(members.len(), 2);
 
         let mut senders: Vec<String> = members
@@ -2313,7 +2592,7 @@ mod tests {
         senders.sort();
         assert_eq!(senders, [alice.as_str(), bob.as_str()]);
 
-        assert!(room.get_state_events("com.example.nothing".to_owned()).await.unwrap().is_empty());
+        assert!(room.state_events("com.example.nothing".to_owned()).await.unwrap().is_empty());
     }
 
     /// Room account data is written to the homeserver and read back out of the
