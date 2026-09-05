@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 
 use assert_matches2::assert_matches;
+use futures_util::StreamExt as _;
 use matrix_sdk::{
+    config::SyncSettings,
     deserialized_responses::RawSyncOrStrippedState,
     test_utils::mocks::{AnyRoomBuilder, MatrixMockServer},
 };
@@ -2686,4 +2688,36 @@ async fn test_cached_active_service_members_updates_on_sync_members() {
     // We got some computed values after sync_members
     assert!(room.active_service_members_count().is_some());
     assert_eq!(room.active_service_members_count().unwrap(), 2);
+}
+
+#[async_test]
+async fn test_sync_once_is_rejected_while_a_sync_loop_is_running() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    server.mock_sync().ok(|_| {}).mount().await;
+
+    // Start a sync loop, and make sure it has actually started by waiting for its
+    // first response.
+    let mut sync_stream = Box::pin(client.sync_stream(SyncSettings::default()).await);
+    assert!(sync_stream.next().await.expect("the sync loop yields a response").is_ok());
+
+    // While the sync loop owns the sync session, `sync_once` must refuse to run
+    // instead of silently interleaving with it.
+    assert_matches!(
+        client.sync_once(SyncSettings::default()).await,
+        Err(matrix_sdk::Error::ConcurrentSync)
+    );
+
+    // Two sync loops are equally forbidden.
+    let mut other_stream = Box::pin(client.sync_stream(SyncSettings::default()).await);
+    assert_matches!(
+        other_stream.next().await.expect("the second sync loop yields an error"),
+        Err(matrix_sdk::Error::ConcurrentSync)
+    );
+    assert!(other_stream.next().await.is_none(), "the second sync loop stops immediately");
+
+    // Once the sync loop is dropped, the sync session is free again.
+    drop(sync_stream);
+    client.sync_once(SyncSettings::default()).await.unwrap();
 }
