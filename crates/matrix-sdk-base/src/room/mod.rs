@@ -258,7 +258,7 @@ impl Room {
     /// [`Self::num_unread_messages`], [`Self::num_unread_notifications`] and
     /// [`Self::num_unread_mentions`].
     pub fn unread_notification_counts(&self) -> UnreadNotificationsCount {
-        self.info.read().notification_counts
+        self.info.read().unread_notification_counts()
     }
 
     /// Get the number of unread messages (computed client-side).
@@ -266,7 +266,7 @@ impl Room {
     /// This might be more precise than [`Self::unread_notification_counts`] for
     /// encrypted rooms.
     pub fn num_unread_messages(&self) -> u64 {
-        self.info.read().read_receipts.num_unread
+        self.info.read().num_unread_messages()
     }
 
     /// Get the number of unread notifications (computed client-side).
@@ -274,7 +274,7 @@ impl Room {
     /// This might be more precise than [`Self::unread_notification_counts`] for
     /// encrypted rooms.
     pub fn num_unread_notifications(&self) -> u64 {
-        self.info.read().read_receipts.num_notifications
+        self.info.read().num_unread_notifications()
     }
 
     /// Get the number of unread mentions (computed client-side), that is,
@@ -283,12 +283,12 @@ impl Room {
     /// This might be more precise than [`Self::unread_notification_counts`] for
     /// encrypted rooms.
     pub fn num_unread_mentions(&self) -> u64 {
-        self.info.read().read_receipts.num_mentions
+        self.info.read().num_unread_mentions()
     }
 
     /// Get the detailed information about read receipts for the room.
     pub fn read_receipts(&self) -> ReadReceipts {
-        self.info.read().read_receipts.clone()
+        self.info.read().read_receipts().clone()
     }
 
     /// Check if the room states have been synced
@@ -299,20 +299,20 @@ impl Room {
     ///
     /// Returns true if the state is fully synced, false otherwise.
     pub fn is_state_fully_synced(&self) -> bool {
-        self.info.read().sync_info == SyncInfo::FullySynced
+        self.info.read().is_state_fully_synced()
     }
 
     /// Check if the room state has been at least partially synced.
     ///
     /// See [`Room::is_state_fully_synced`] for more info.
     pub fn is_state_partially_or_fully_synced(&self) -> bool {
-        self.info.read().sync_info != SyncInfo::NoState
+        self.info.read().is_state_partially_or_fully_synced()
     }
 
     /// Get the `prev_batch` token that was received from the last sync. May be
     /// `None` if the last sync contained the full room history.
     pub fn last_prev_batch(&self) -> Option<String> {
-        self.info.read().last_prev_batch.clone()
+        self.info.read().last_prev_batch().map(ToOwned::to_owned)
     }
 
     /// Get the avatar url of this room.
@@ -345,7 +345,7 @@ impl Room {
     /// redacted, all fields except `creator` will be set to their default
     /// value.
     pub fn create_content(&self) -> Option<RoomCreateWithCreatorEventContent> {
-        Some(self.info.read().base_info.create.as_ref()?.content.clone())
+        self.info.read().create().cloned()
     }
 
     /// Is this room considered a direct message.
@@ -355,7 +355,7 @@ impl Room {
     pub async fn is_direct(&self) -> StoreResult<bool> {
         match self.state() {
             RoomState::Joined | RoomState::Left | RoomState::Banned => {
-                Ok(!self.info.read().base_info.dm_targets.is_empty())
+                Ok(!self.info.read().direct_targets().is_empty())
             }
 
             RoomState::Invited => {
@@ -412,13 +412,13 @@ impl Room {
     /// us to re-find a DM with a user even if they have left, since we may
     /// want to re-invite them.
     pub fn direct_targets(&self) -> HashSet<OwnedDirectUserIdentifier> {
-        self.info.read().base_info.dm_targets.clone()
+        self.info.read().direct_targets().clone()
     }
 
     /// If this room is a direct message, returns the number of members that
     /// we're sharing the room with.
     pub fn direct_targets_length(&self) -> usize {
-        self.info.read().base_info.dm_targets.len()
+        self.info.read().direct_targets().len()
     }
 
     /// Get the guest access policy of this room.
@@ -454,7 +454,7 @@ impl Room {
     /// This is useful if one wishes to normalize the power levels, e.g. from
     /// 0-100 where 100 would be the max power level.
     pub fn max_power_level(&self) -> i64 {
-        self.info.read().base_info.max_power_level
+        self.info.read().max_power_level()
     }
 
     /// Get the message retention policy of this room, if set.
@@ -532,7 +532,7 @@ impl Room {
     /// This cache is refilled every time we call
     /// [`Self::update_cached_user_defined_notification_mode`].
     pub fn cached_user_defined_notification_mode(&self) -> Option<RoomNotificationMode> {
-        self.info.read().cached_user_defined_notification_mode
+        self.info.read().cached_user_defined_notification_mode()
     }
 
     /// Removes any existing cached value for the user defined notification
@@ -659,7 +659,7 @@ impl Room {
     /// Returns a boolean indicating if this room has been manually marked as
     /// unread
     pub fn is_marked_unread(&self) -> bool {
-        self.info.read().base_info.is_marked_unread
+        self.info.read().is_marked_unread()
     }
 
     /// Returns the event ID of the user's `m.fully_read` marker for this room,
@@ -677,7 +677,7 @@ impl Room {
     ///
     /// Please read `RoomInfo::recency_stamp` to learn more.
     pub fn recency_stamp(&self) -> Option<RoomRecencyStamp> {
-        self.info.read().recency_stamp
+        self.info.read().recency_stamp()
     }
 
     /// Get a `Stream` of loaded pinned events for this room.
@@ -777,7 +777,7 @@ impl Room {
     /// Returns a cached value containing the active (joined/invited) service
     /// member count, if known.
     pub fn active_service_members_count(&self) -> Option<u64> {
-        self.info.read().summary.active_service_members
+        self.info.read().active_service_member_count()
     }
 }
 

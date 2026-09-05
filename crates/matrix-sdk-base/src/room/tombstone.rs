@@ -35,7 +35,7 @@ impl Room {
     ///
     /// [`m.room.tombstone`]: https://spec.matrix.org/v1.14/client-server-api/#mroomtombstone
     pub fn is_tombstoned(&self) -> bool {
-        self.info.read().base_info.tombstone.is_some()
+        self.info.read().is_tombstoned()
     }
 
     /// Get the [`m.room.tombstone`] state event's content of this room if one

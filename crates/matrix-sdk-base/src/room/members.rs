@@ -51,7 +51,7 @@ impl Room {
     ///
     /// Returns true if no members are missing, false otherwise.
     pub fn are_members_synced(&self) -> bool {
-        self.info.read().members_synced
+        self.info.read().are_members_synced()
     }
 
     /// Mark this Room as holding all member information.

@@ -25,7 +25,7 @@ impl Room {
     /// Get the `m.room.encryption` content that enabled end to end encryption
     /// in the room.
     pub fn encryption_settings(&self) -> Option<PossiblyRedactedRoomEncryptionEventContent> {
-        self.info.read().base_info.encryption.clone()
+        self.info.read().encryption_settings().cloned()
     }
 }
 

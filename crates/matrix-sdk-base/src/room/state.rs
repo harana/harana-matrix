@@ -22,7 +22,7 @@ use super::Room;
 impl Room {
     /// Get the state of the room.
     pub fn state(&self) -> RoomState {
-        self.info.read().room_state
+        self.info.read().state()
     }
 
     /// Subscribe to the state of the room, i.e. to the membership of our own
