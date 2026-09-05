@@ -908,6 +908,95 @@ async fn test_megolm_encryption() {
     }
 }
 
+/// A Megolm ciphertext says nothing about the event it arrived in, so a
+/// homeserver can take one it has seen and hand it back under a new event ID.
+/// The second copy must be refused, while a genuine second look at the *same*
+/// event must still decrypt.
+#[async_test]
+async fn test_a_replayed_megolm_ciphertext_is_rejected() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+
+    let to_device_event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let group_session = bob
+        .store()
+        .with_transaction(async |tr| {
+            let res = bob
+                .decrypt_to_device_event(
+                    tr,
+                    &to_device_event,
+                    &mut Changes::default(),
+                    &decryption_settings,
+                )
+                .await?;
+            Ok(res)
+        })
+        .await
+        .unwrap()
+        .inbound_group_session
+        .unwrap();
+    bob.store().save_inbound_group_sessions(&[group_session]).await.unwrap();
+
+    let content = RoomMessageEventContent::text_plain("It is a secret to everybody");
+    let result = alice
+        .encrypt_room_event(room_id, AnyMessageLikeEventContent::RoomMessage(content))
+        .await
+        .unwrap();
+
+    let origin_server_ts = MilliSecondsSinceUnixEpoch::now();
+    let encrypted_event = |event_id: &str| {
+        json_convert(&json!({
+            "event_id": event_id,
+            "origin_server_ts": origin_server_ts,
+            "sender": alice.user_id(),
+            "type": "m.room.encrypted",
+            "content": result.content,
+        }))
+        .unwrap()
+    };
+
+    let original = encrypted_event("$original:example.org");
+
+    bob.decrypt_room_event(&original, room_id, &decryption_settings)
+        .await
+        .expect("The first sighting of the event should decrypt");
+
+    // Decrypting the very same event again is not a replay: that happens
+    // whenever a timeline is rebuilt.
+    bob.decrypt_room_event(&original, room_id, &decryption_settings)
+        .await
+        .expect("Decrypting the same event a second time should still work");
+
+    // The same ciphertext under a different event ID is one.
+    let replay = encrypted_event("$replay:example.org");
+    assert_let!(
+        Err(MegolmError::ReplayedMessage { original_event_id, message_index, .. }) =
+            bob.decrypt_room_event(&replay, room_id, &decryption_settings).await
+    );
+    assert_eq!(original_event_id, ruma::event_id!("$original:example.org"));
+    assert_eq!(message_index, 0);
+
+    // `try_decrypt_room_event` reports it as a UTD rather than an error.
+    assert_let!(
+        RoomEventDecryptionResult::UnableToDecrypt(utd_info) =
+            bob.try_decrypt_room_event(&replay, room_id, &decryption_settings).await.unwrap()
+    );
+    assert_eq!(utd_info.reason, UnableToDecryptReason::ReplayedMessageIndex);
+}
+
 /// Helper function to set up end-to-end Megolm encryption between two devices.
 ///
 /// Creates two devices, Alice and Bob, and has Alice create an outgoing Megolm

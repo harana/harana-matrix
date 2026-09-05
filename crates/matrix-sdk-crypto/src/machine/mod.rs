@@ -68,6 +68,7 @@ use vodozemac::{Curve25519PublicKey, Ed25519Signature, megolm::DecryptionError};
 
 #[cfg(feature = "experimental-push-secrets")]
 use crate::error::SecretPushError;
+use crate::machine::replay_protection::{ReplayCheck, ReplayProtection};
 #[cfg(feature = "experimental-send-custom-to-device")]
 use crate::session_manager::split_devices_for_share_strategy;
 #[cfg(feature = "experimental-x509-identity-verification")]
@@ -278,6 +279,10 @@ pub struct OlmMachineInner {
     /// and the collision reproduces on every retry. Handing back the same
     /// request keeps that from happening.
     outgoing_keys_upload_request: StdRwLock<Option<(OwnedTransactionId, UploadKeysRequest)>>,
+    /// Which event each Megolm ratchet index was first decrypted in, so that a
+    /// ciphertext replayed under a different event ID or timestamp can be
+    /// rejected rather than shown twice.
+    replay_protection: StdRwLock<ReplayProtection>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -414,6 +419,7 @@ impl OlmMachine {
             identity_manager,
             backup_machine,
             outgoing_keys_upload_request: Default::default(),
+            replay_protection: Default::default(),
         });
 
         Self { inner }
@@ -2369,7 +2375,9 @@ impl OlmMachine {
 
         let result = session.decrypt(event).await;
         match result {
-            Ok((decrypted_event, _)) => {
+            Ok((decrypted_event, message_index)) => {
+                self.check_for_replay(event, content.session_id(), message_index)?;
+
                 let encryption_info = self.get_encryption_info(&session, &event.sender).await?;
 
                 self.check_sender_trust_requirement(
@@ -2399,6 +2407,51 @@ impl OlmMachine {
                     error
                 },
             ),
+        }
+    }
+
+    /// Check that the ratchet index this event decrypted at has not already
+    /// been decrypted in a different event.
+    ///
+    /// A Megolm ciphertext says nothing about the event it belongs to, so a
+    /// homeserver, or anyone else who can inject events into the room, can take
+    /// a ciphertext it has seen and send it again under a new event ID or with
+    /// a different timestamp. It decrypts perfectly well, and without this
+    /// check the message is shown a second time, attributed to its original
+    /// sender, at a point in the timeline the sender never chose.
+    ///
+    /// Decrypting the *same* event again is not a replay: that happens
+    /// routinely when a timeline is rebuilt, or when an event is retried after
+    /// its room key arrives.
+    fn check_for_replay(
+        &self,
+        event: &EncryptedEvent,
+        session_id: &str,
+        message_index: u32,
+    ) -> MegolmResult<()> {
+        let check = self.inner.replay_protection.write().check(
+            session_id,
+            message_index,
+            &event.event_id,
+            event.origin_server_ts,
+        );
+
+        match check {
+            ReplayCheck::Ok => Ok(()),
+            ReplayCheck::Replayed { original_event_id } => {
+                warn!(
+                    session_id,
+                    message_index,
+                    ?original_event_id,
+                    "Refusing to decrypt a replayed Megolm message"
+                );
+
+                Err(MegolmError::ReplayedMessage {
+                    session_id: session_id.to_owned(),
+                    message_index,
+                    original_event_id,
+                })
+            }
         }
     }
 
@@ -3510,6 +3563,7 @@ fn megolm_error_to_utd_info(
         SenderIdentityNotTrusted(level) => UnableToDecryptReason::SenderIdentityNotTrusted(level),
         #[cfg(feature = "experimental-encrypted-state-events")]
         StateKeyVerificationFailed => UnableToDecryptReason::StateKeyVerificationFailed,
+        ReplayedMessage { .. } => UnableToDecryptReason::ReplayedMessageIndex,
 
         // Pass through crypto store errors, which indicate a problem with our
         // application, rather than a UTD.
@@ -3563,6 +3617,8 @@ impl From<DecryptToDeviceError> for OlmError {
         }
     }
 }
+
+mod replay_protection;
 
 #[cfg(test)]
 pub(crate) mod test_helpers;
