@@ -970,3 +970,107 @@ mod tests {
     }
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))] // This uses the cross-process lock, so needs time support.
+mod timed_tests {
+    use std::ops::Not;
+
+    use matrix_sdk_base::event_cache::store::{EventCacheStoreLock, MemoryStore};
+    use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use matrix_sdk_test::{ALICE, async_test, event_factory::EventFactory};
+    use ruma::{event_id, room_id, room_version_rules::RoomVersionRules};
+    use tokio::sync::broadcast::Sender;
+
+    use super::*;
+    use crate::event_cache::states::{StateLock, selectors::PinnedEventsStateSelector};
+
+    /// A `PinnedEventsCacheState`, holding two events, and the `StateLock` it
+    /// lives in.
+    async fn state_with_two_pinned_events() -> (StateLock, CacheStateLock<PinnedEventsStateSelector>)
+    {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id).sender(*ALICE);
+
+        let state_lock = StateLock::new(EventCacheStoreLock::new(
+            MemoryStore::new(),
+            CrossProcessLockConfig::multi_process("hodor"),
+        ));
+
+        let cache_state = state_lock
+            .try_insert_once_with(
+                PinnedEventsStateSelector::new(room_id.to_owned()),
+                |_store_guard| async {
+                    let mut chunk = EventLinkedChunk::new();
+                    chunk.push_live_events(
+                        None,
+                        &[
+                            f.text_msg("first").event_id(event_id!("$ev0")).into(),
+                            f.text_msg("second").event_id(event_id!("$ev1")).into(),
+                        ],
+                    );
+
+                    Ok(PinnedEventsCacheState {
+                        room_id: room_id.to_owned(),
+                        own_user_id: ALICE.to_owned(),
+                        room_version_rules: RoomVersionRules::V1,
+                        chunk,
+                        update_sender: PinnedEventsCacheUpdateSender::new(),
+                        linked_chunk_update_sender: Sender::new(32),
+                        subscribers_handle: SubscribersHandle::default(),
+                        unloaded: false,
+                    })
+                },
+            )
+            .await
+            .unwrap();
+
+        (state_lock, cache_state)
+    }
+
+    #[async_test]
+    async fn test_unload_if_no_subscribers_keeps_the_events_while_someone_listens() {
+        let (_state_lock, cache_state) = state_with_two_pinned_events().await;
+
+        // Someone is listening to this cache.
+        let subscriber_handle = {
+            let guard = cache_state.read().await.unwrap();
+            guard.state.subscribers_handle.new_subscriber_handle()
+        };
+
+        {
+            let mut guard = cache_state.write().await.unwrap();
+
+            assert!(guard.unload_if_no_subscribers().not());
+            assert_eq!(guard.state.chunk.events().count(), 2);
+            assert!(guard.state.unloaded.not());
+        }
+
+        // Once the last subscriber is gone, the events can be dropped.
+        drop(subscriber_handle);
+
+        let mut guard = cache_state.write().await.unwrap();
+
+        assert!(guard.unload_if_no_subscribers());
+        assert_eq!(guard.state.chunk.events().count(), 0);
+        assert!(guard.state.unloaded);
+    }
+
+    #[async_test]
+    async fn test_unload_if_no_subscribers_doesnt_touch_the_store() {
+        let (_state_lock, cache_state) = state_with_two_pinned_events().await;
+
+        let mut guard = cache_state.write().await.unwrap();
+
+        // Forget the updates of the events that were pushed above, as the test is
+        // interested in what unloading produces.
+        let _ = guard.state.chunk.store_updates().take();
+        let _ = guard.state.chunk.updates_as_vector_diffs();
+
+        assert!(guard.unload_if_no_subscribers());
+
+        // The events must stay in the store: no update may reach it, and no observer
+        // may be told the events are gone, since they are only gone from memory.
+        assert!(guard.state.chunk.store_updates().take().is_empty());
+        assert!(guard.state.chunk.updates_as_vector_diffs().is_empty());
+    }
+}

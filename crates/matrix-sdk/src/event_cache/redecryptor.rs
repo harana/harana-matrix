@@ -1461,7 +1461,7 @@ mod tests {
         store::StoreConfig,
     };
     use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
-    use matrix_sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+    use matrix_sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
         EventId, OwnedEventId, RoomId, RoomVersionId, device_id, event_id,
         events::{AnySyncTimelineEvent, relation::RelationType},
@@ -1807,6 +1807,68 @@ mod tests {
         let room_key = room_key.await;
 
         (event, room_key)
+    }
+
+    #[test]
+    fn test_undecryptable_bundled_locations() {
+        use std::collections::BTreeMap;
+
+        use matrix_sdk_base::deserialized_responses::{
+            AlgorithmInfo, EncryptionInfo, UnableToDecryptInfo, UnableToDecryptReason,
+        };
+
+        use super::undecryptable_bundled_locations;
+
+        fn utd() -> UnsignedDecryptionResult {
+            UnsignedDecryptionResult::UnableToDecrypt(UnableToDecryptInfo {
+                session_id: Some("session".to_owned()),
+                reason: UnableToDecryptReason::MissingMegolmSession { withheld_code: None },
+            })
+        }
+
+        fn decrypted() -> UnsignedDecryptionResult {
+            UnsignedDecryptionResult::Decrypted(Arc::new(EncryptionInfo {
+                sender: (*ALICE).into(),
+                sender_device: None,
+                forwarder: None,
+                algorithm_info: AlgorithmInfo::MegolmV1AesSha2 {
+                    curve25519_key: "fake_key".to_owned(),
+                    sender_claimed_keys: BTreeMap::new(),
+                    session_id: Some("session".to_owned()),
+                },
+                verification_state: VerificationState::Verified,
+            }))
+        }
+
+        // No bundled event was encrypted at all.
+        assert!(undecryptable_bundled_locations(None).is_empty());
+
+        // Every bundled event was decrypted.
+        let all_decrypted =
+            BTreeMap::from([(UnsignedEventLocation::RelationsReplace, decrypted())]);
+        assert!(undecryptable_bundled_locations(Some(&all_decrypted)).is_empty());
+
+        // Only the locations that are still UTDs are reported.
+        let mixed = BTreeMap::from([
+            (UnsignedEventLocation::RelationsReplace, utd()),
+            (UnsignedEventLocation::RelationsThreadLatestEvent, decrypted()),
+        ]);
+        assert_eq!(
+            undecryptable_bundled_locations(Some(&mixed)),
+            BTreeSet::from([UnsignedEventLocation::RelationsReplace])
+        );
+
+        let all_utds = BTreeMap::from([
+            (UnsignedEventLocation::RelationsReplace, utd()),
+            (UnsignedEventLocation::RelationsThreadLatestEvent, utd()),
+        ]);
+        assert_eq!(
+            undecryptable_bundled_locations(Some(&all_utds)),
+            BTreeSet::from([
+                UnsignedEventLocation::RelationsReplace,
+                UnsignedEventLocation::RelationsThreadLatestEvent,
+            ])
+        );
     }
 
     #[async_test]
