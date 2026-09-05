@@ -45,6 +45,8 @@ const DEFAULT_MAX_TOTAL_SIZE_BYTES: u64 = 10 * 1024 * 1024;
 /// Default maximum age of log files in seconds (1 week).
 const DEFAULT_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
 
+pub mod log_listener;
+pub mod panic;
 mod rolling_writer;
 pub mod tracing;
 
@@ -609,6 +611,7 @@ impl TracingConfiguration {
             tracing_subscriber::registry()
                 .with(tracing_subscriber::EnvFilter::new(&env_filter))
                 .with(text_layers)
+                .with(log_listener::LogEventLayer)
                 .with(sentry_layer)
                 .init();
             logging_ctx = LoggingCtx { reload_handle, sentry: sentry_logging_ctx };
@@ -619,6 +622,7 @@ impl TracingConfiguration {
             tracing_subscriber::registry()
                 .with(tracing_subscriber::EnvFilter::new(&env_filter))
                 .with(text_layers)
+                .with(log_listener::LogEventLayer)
                 .init();
             logging_ctx = LoggingCtx { reload_handle };
         }
@@ -696,6 +700,10 @@ pub fn init_platform(
 
     #[cfg(target_os = "android")]
     android_platform::init();
+
+    // Installed last, so it chains to the panic hooks set up above and any
+    // registered `PanicListener` is notified after they have run.
+    panic::install_hook();
 
     Ok(())
 }
