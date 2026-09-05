@@ -361,10 +361,27 @@ impl PendingIndexeddbChanges {
     }
 }
 
-/// Transaction options asking IndexedDB to confirm the write reached
-/// persistent storage before reporting the transaction as committed.
-fn strict_durability() -> TransactionOptions {
-    TransactionOptions::new().with_durability(TransactionDurability::Strict)
+/// Pick the durability for a read-write transaction touching `stores`.
+///
+/// IndexedDB acknowledges a write as soon as the browser has handed it to the
+/// operating system, which is not enough for Olm state: if the machine crashes
+/// or loses power after we have used a session but before the write lands on
+/// disk, the persisted session is behind the one our peer has already ratcheted
+/// past. The session is then wedged and every message in it becomes a UTD.
+///
+/// So ask IndexedDB to confirm the write reached persistent storage before
+/// reporting the transaction committed, but only for the batches that carry
+/// session or account state: everything else keeps the browser default, where
+/// the cost is not worth paying. See issue #99.
+fn transaction_options(stores: &[&str]) -> TransactionOptions {
+    let carries_olm_state =
+        stores.iter().any(|store| *store == keys::SESSION || *store == keys::CORE);
+
+    if carries_olm_state {
+        TransactionOptions::new().with_durability(TransactionDurability::Strict)
+    } else {
+        TransactionOptions::new()
+    }
 }
 
 impl IndexeddbCryptoStore {
@@ -850,11 +867,12 @@ impl_crypto_store! {
             return Ok(());
         }
 
+        let options = transaction_options(&stores);
         let tx = self
             .inner
             .transaction(stores)
             .with_mode(TransactionMode::Readwrite)
-            .with_options(strict_durability())
+            .with_options(options)
             .build()?;
 
         let account_pickle = if let Some(account) = changes.account {
@@ -892,20 +910,7 @@ impl_crypto_store! {
             return Ok(());
         }
 
-        // IndexedDB acknowledges a write as soon as the browser has handed it to the
-        // operating system, which is not enough for Olm state: if the machine crashes
-        // or loses power after we have used a session but before the write lands on
-        // disk, the persisted session is behind the one our peer has already ratcheted
-        // past. The session is then wedged and every message in it becomes a UTD.
-        // Ask for a strict commit whenever session or account state is in the batch.
-        // See issue #99.
-        let options = if stores.iter().any(|store| *store == keys::SESSION || *store == keys::CORE)
-        {
-            strict_durability()
-        } else {
-            TransactionOptions::new()
-        };
-
+        let options = transaction_options(&stores);
         let tx = self
             .inner
             .transaction(stores)
@@ -2119,6 +2124,51 @@ impl InboundGroupSessionIndexedDbObject {
             sender_key: Some(sender_key),
             sender_data_type: Some(session.sender_data_type() as u8),
         })
+    }
+}
+
+#[cfg(test)]
+mod durability_tests {
+    use indexed_db_futures::transaction::TransactionDurability;
+
+    use super::{keys, transaction_options};
+
+    /// Regression test for issue #99: a batch carrying Olm session or account
+    /// state has to be committed with strict durability, or a crash can leave
+    /// the persisted session behind the one the peer has ratcheted past.
+    #[test]
+    fn test_olm_state_is_committed_with_strict_durability() {
+        for stores in [
+            vec![keys::SESSION],
+            vec![keys::CORE],
+            // Mixed batches count: the session state in them still has to land.
+            vec![keys::INBOUND_GROUP_SESSIONS_V3, keys::SESSION],
+            vec![keys::DEVICES, keys::CORE, keys::IDENTITIES],
+        ] {
+            assert_eq!(
+                transaction_options(&stores).durability(),
+                Some(TransactionDurability::Strict),
+                "{stores:?} carries Olm state and must be committed strictly",
+            );
+        }
+    }
+
+    /// Everything else keeps the browser default: the extra flush is not worth
+    /// paying for data we can fetch again.
+    #[test]
+    fn test_other_writes_keep_the_default_durability() {
+        for stores in [
+            vec![keys::INBOUND_GROUP_SESSIONS_V3],
+            vec![keys::DEVICES, keys::IDENTITIES],
+            vec![keys::TRACKED_USERS],
+            vec![],
+        ] {
+            assert_eq!(
+                transaction_options(&stores).durability(),
+                None,
+                "{stores:?} carries no Olm state and should keep the default",
+            );
+        }
     }
 }
 

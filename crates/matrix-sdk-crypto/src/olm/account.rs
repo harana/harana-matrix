@@ -2042,6 +2042,215 @@ mod tests {
         device_id!("DEVICEID")
     }
 
+    /// A `tracing` subscriber that keeps the events emitted while it is
+    /// installed, so a test can assert on what was logged.
+    ///
+    /// The crate installs a global subscriber for tests; `set_default` layers
+    /// this one over it for the current thread, which is where the whole of a
+    /// `#[tokio::test]` runs.
+    mod log_capture {
+        use std::{
+            collections::BTreeMap,
+            fmt,
+            sync::{Arc, Mutex},
+        };
+
+        use tracing::{
+            Event, Level, Metadata,
+            field::{Field, Visit},
+            span,
+        };
+
+        #[derive(Debug)]
+        pub(super) struct RecordedEvent {
+            pub level: Level,
+            pub fields: BTreeMap<String, String>,
+        }
+
+        impl RecordedEvent {
+            /// The value of a field, as it was formatted into the event.
+            pub fn field(&self, name: &str) -> Option<&str> {
+                self.fields.get(name).map(String::as_str)
+            }
+        }
+
+        #[derive(Clone, Default)]
+        pub(super) struct Recorder(Arc<Mutex<Vec<RecordedEvent>>>);
+
+        impl Recorder {
+            /// Run `f` with this recorder installed, and return what it logged.
+            pub fn capture(f: impl FnOnce()) -> Vec<RecordedEvent> {
+                let recorder = Self::default();
+                {
+                    let _guard = tracing::subscriber::set_default(recorder.clone());
+                    f();
+                }
+
+                Arc::into_inner(recorder.0)
+                    .expect("the subscriber should have been dropped with the guard")
+                    .into_inner()
+                    .unwrap()
+            }
+        }
+
+        struct FieldCollector<'a>(&'a mut BTreeMap<String, String>);
+
+        impl Visit for FieldCollector<'_> {
+            fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+                self.0.insert(field.name().to_owned(), format!("{value:?}"));
+            }
+
+            fn record_str(&mut self, field: &Field, value: &str) {
+                self.0.insert(field.name().to_owned(), value.to_owned());
+            }
+        }
+
+        impl tracing::Subscriber for Recorder {
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                true
+            }
+
+            fn new_span(&self, _: &span::Attributes<'_>) -> span::Id {
+                span::Id::from_u64(1)
+            }
+
+            fn record(&self, _: &span::Id, _: &span::Record<'_>) {}
+
+            fn record_follows_from(&self, _: &span::Id, _: &span::Id) {}
+
+            fn event(&self, event: &Event<'_>) {
+                let mut fields = BTreeMap::new();
+                event.record(&mut FieldCollector(&mut fields));
+
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(RecordedEvent { level: *event.metadata().level(), fields });
+            }
+
+            fn enter(&self, _: &span::Id) {}
+
+            fn exit(&self, _: &span::Id) {}
+        }
+    }
+
+    /// Regression test for issue #101: generating one-time keys reports the
+    /// resulting stock against the maximum.
+    #[test]
+    fn test_generating_one_time_keys_is_logged() {
+        let mut account = Account::with_device_id(user_id(), device_id());
+        account.mark_keys_as_published();
+
+        let events = log_capture::Recorder::capture(|| {
+            account.generate_one_time_keys(3);
+        });
+
+        let event = events
+            .iter()
+            .find(|event| event.field("created").is_some())
+            .expect("generating one-time keys should be logged");
+
+        assert_eq!(event.level, tracing::Level::DEBUG);
+        assert_eq!(event.field("requested"), Some("3"));
+        assert_eq!(event.field("created"), Some("3"));
+        assert_eq!(
+            event.field("max_on_server"),
+            Some(account.max_one_time_keys().to_string().as_str())
+        );
+        // Nothing was dropped, so the event does not claim otherwise.
+        assert_eq!(event.field("trimmed"), None);
+    }
+
+    /// Regression test for issue #101: dropping older one-time keys to make
+    /// room is a warning, since a pre-key message for a dropped key will not
+    /// decrypt.
+    #[test]
+    fn test_trimming_one_time_keys_is_logged_as_a_warning() {
+        // vodozemac keeps the private part of at most `100 *
+        // max_number_of_one_time_keys` one-time keys. Fill that up...
+        let mut account = Account::with_device_id(user_id(), device_id());
+        account.generate_one_time_keys(100 * account.max_one_time_keys());
+
+        // ... so that the next key generated has to evict one.
+        let events = log_capture::Recorder::capture(|| {
+            account.generate_one_time_keys(1);
+        });
+
+        let event = events
+            .iter()
+            .find(|event| event.field("trimmed").is_some())
+            .expect("trimming one-time keys should be logged");
+
+        assert_eq!(event.level, tracing::Level::WARN);
+        assert_eq!(event.field("trimmed"), Some("1"));
+        assert_eq!(event.field("created"), Some("1"));
+        assert!(event.field("trimmed_keys").is_some());
+    }
+
+    /// Regression test for issue #101: consuming a one-time key to create an
+    /// inbound session names the key and what is left.
+    #[async_test]
+    async fn test_consuming_a_one_time_key_is_logged() {
+        let alice = Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICEDEV"));
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEV"));
+
+        bob.generate_one_time_keys(1);
+        let one_time_key = *bob.one_time_keys().values().next().unwrap();
+
+        let mut session = alice
+            .create_outbound_session_helper(
+                vodozemac::olm::SessionConfig::version_1(),
+                bob.identity_keys().curve25519,
+                one_time_key,
+                false,
+                alice.device_keys(),
+            )
+            .unwrap();
+
+        let alice_device = DeviceData::from_account(&alice);
+        let message = session
+            .encrypt(
+                &alice_device,
+                "m.dummy",
+                ruma::events::dummy::ToDeviceDummyEventContent::new(),
+                None,
+            )
+            .await
+            .unwrap()
+            .deserialize()
+            .unwrap();
+
+        let content = as_variant::as_variant!(
+            message,
+            crate::types::events::room::encrypted::ToDeviceEncryptedEventContent::OlmV1Curve25519AesSha2
+        )
+        .expect("we encrypt with the v1 algorithm by default");
+
+        let vodozemac::olm::OlmMessage::PreKey(prekey) = content.ciphertext else {
+            panic!("the first message in a session is a pre-key message");
+        };
+
+        let bob_device_keys = bob.device_keys();
+        let events = log_capture::Recorder::capture(|| {
+            bob.create_inbound_session(
+                alice_device.curve25519_key().unwrap(),
+                bob_device_keys,
+                &prekey,
+            )
+            .unwrap();
+        });
+
+        let event = events
+            .iter()
+            .find(|event| event.field("one_time_key").is_some())
+            .expect("consuming a one-time key should be logged");
+
+        assert_eq!(event.level, tracing::Level::DEBUG);
+        assert!(event.field("stored_one_time_keys").is_some());
+        assert!(event.field("uploaded_one_time_keys").is_some());
+        assert!(event.field("max_on_server").is_some());
+    }
+
     #[test]
     fn test_dirty_flag_tracks_real_changes() {
         // A freshly unpickled account has nothing outstanding.
