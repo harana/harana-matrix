@@ -886,7 +886,22 @@ impl RoomInfo {
         &mut self,
         raw_event: &mut RawStateEventWithKeys<AnyStrippedStateEvent>,
     ) -> bool {
-        self.base_info.handle_state_event(raw_event)
+        let base_info_has_been_modified = self.base_info.handle_state_event(raw_event);
+
+        if raw_event.event_type == StateEventType::RoomEncryption && raw_event.state_key.is_empty()
+        {
+            // The stripped state of an invite carries an `m.room.encryption` event, so
+            // the room _is_ encrypted. As for the non-stripped case in
+            // `Self::handle_state_event`, the reverse doesn't hold: a stripped state
+            // without that event doesn't mean the room is not encrypted, it only means
+            // the server didn't include it.
+            //
+            // This matters because we cannot ask the server: `/state` is forbidden for a
+            // room we are only invited to.
+            self.mark_encryption_state_synced();
+        }
+
+        base_info_has_been_modified
     }
 
     /// Handle the given redaction.

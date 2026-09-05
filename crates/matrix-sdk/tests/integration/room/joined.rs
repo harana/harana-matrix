@@ -1065,6 +1065,46 @@ async fn test_enable_encryption_doesnt_stay_unknown() {
     assert_matches!(room.encryption_state(), EncryptionState::Encrypted);
 }
 
+#[async_test]
+async fn test_encryption_state_of_an_invited_room_comes_from_the_stripped_state() {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let user = user_id!("@example:localhost");
+
+    // The server answers `/state` with `M_FORBIDDEN` for a room we are only invited
+    // to, so no `/state` mock is mounted here: the request must never be sent.
+    let room = mock
+        .sync_room(
+            &client,
+            InvitedRoomBuilder::new(room_id).add_state_event(
+                EventFactory::new().sender(user).room(room_id).room_encryption(),
+            ),
+        )
+        .await;
+
+    assert_eq!(room.state(), RoomState::Invited);
+    assert!(room.latest_encryption_state().await.unwrap().is_encrypted());
+}
+
+#[async_test]
+async fn test_encryption_state_of_an_invited_room_stays_unknown_without_stripped_state() {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+
+    // The stripped state of the invite doesn't carry `m.room.encryption`, so the
+    // encryption state cannot be known. Asking the server is not an option, it
+    // would answer `M_FORBIDDEN`, so this must resolve to `Unknown` rather than
+    // fail.
+    let room = mock.sync_room(&client, InvitedRoomBuilder::new(room_id)).await;
+
+    assert_eq!(room.state(), RoomState::Invited);
+    assert_matches!(room.latest_encryption_state().await.unwrap(), EncryptionState::Unknown);
+}
+
 #[cfg(feature = "experimental-encrypted-state-events")]
 #[async_test]
 async fn test_enable_state_encryption_doesnt_stay_unknown() {

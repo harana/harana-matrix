@@ -1049,8 +1049,22 @@ impl Room {
     ///
     /// It does nothing if the encryption state is already
     /// [`EncryptionState::Encrypted`] or [`EncryptionState::NotEncrypted`].
+    ///
+    /// It also does nothing for a room we are only invited to: the server
+    /// answers `/state` with a `M_FORBIDDEN` error in that case. The encryption
+    /// state of such a room is known only if its stripped state carried an
+    /// `m.room.encryption` event, and stays [`EncryptionState::Unknown`]
+    /// otherwise, until the room is joined.
     pub async fn request_encryption_state(&self) -> Result<()> {
         if !self.inner.encryption_state().is_unknown() {
+            return Ok(());
+        }
+
+        if self.state() == RoomState::Invited {
+            debug!(
+                room_id = ?self.room_id(),
+                "Not requesting the encryption state of a room we are only invited to,                  the server would deny it"
+            );
             return Ok(());
         }
 
