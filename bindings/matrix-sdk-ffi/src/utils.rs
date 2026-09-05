@@ -35,14 +35,6 @@ impl From<u64> for Timestamp {
     }
 }
 
-impl Timestamp {
-    /// The number of milliseconds since the Unix epoch.
-    #[cfg(test)]
-    pub(crate) fn millis(&self) -> u64 {
-        self.0
-    }
-}
-
 uniffi::custom_newtype!(Timestamp, u64);
 
 pub(crate) fn u64_to_uint(u: u64) -> UInt {
