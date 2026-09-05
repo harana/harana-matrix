@@ -5,6 +5,8 @@
 //!  “fast start”.
 
 use matrix_sdk_base::{StateStore, StoreError};
+#[cfg(feature = "e2e-encryption")]
+use matrix_sdk_base::to_device_token;
 use matrix_sdk_common::timer;
 use ruma::UserId;
 use tracing::{trace, warn};
@@ -177,9 +179,17 @@ pub(super) async fn restore_sliding_sync_state(
 
         if let Some(olm_machine) = &*_client.olm_machine().await {
             match olm_machine.store().next_batch_token().await? {
-                Some(token) => {
-                    restored_fields.to_device_token = Some(token);
-                }
+                // Only resume from a token that a sliding sync response produced. An
+                // untagged value is a sync v2 `next_batch` (or a token stored before
+                // the tagging existed), and sending it as the to-device `since` makes
+                // the server reject every sync.
+                Some(stored_value) => match to_device_token::untag(&stored_value) {
+                    Some(token) => restored_fields.to_device_token = Some(token.to_owned()),
+                    None => trace!(
+                        "Ignoring the to-device token from the crypto store: it doesn't come \
+                         from a sliding sync response"
+                    ),
+                },
                 None => trace!("Couldn't read the previous to-device token from the crypto store"),
             }
 

@@ -44,7 +44,12 @@ pub async fn from_msc4186(
         &e2ee.device_lists,
         &e2ee.device_one_time_keys_count,
         e2ee.device_unused_fallback_key_types.as_deref(),
-        to_device.as_ref().map(|to_device| to_device.next_batch.clone()),
+        // Tag the token, so that the sliding sync code can tell it apart from a sync
+        // v2 `next_batch` that an older version of the SDK may have left in the same
+        // slot of the crypto store.
+        to_device
+            .as_ref()
+            .map(|to_device| crate::to_device_token::tag(&to_device.next_batch)),
         decryption_settings,
         true,
     )
@@ -67,7 +72,11 @@ pub async fn from_sync_v2(
         &response.device_lists,
         &response.device_one_time_keys_count,
         response.device_unused_fallback_key_types.as_deref(),
-        Some(response.next_batch.clone()),
+        // Sync v2 has no separate to-device stream token: to-device events are
+        // acknowledged by the main sync token, which lives in the state store. Writing
+        // it into the crypto store's to-device token slot would make the sliding sync
+        // to-device extension resume from a sync v2 token, which servers reject.
+        None,
         decryption_settings,
         false,
     )

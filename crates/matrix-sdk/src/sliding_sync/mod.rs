@@ -1959,7 +1959,30 @@ mod tests {
             assert!(to_device.since.is_none());
         }
 
-        // Define a `since` token.
+        // A token left in the store by sync v2 must be ignored: it isn't a to-device
+        // stream token, and the server would reject it.
+        {
+            if let Some(olm_machine) = &*client.olm_machine().await {
+                olm_machine
+                    .store()
+                    .save_changes(Changes {
+                        next_batch_token: Some("s72594_4483_1934".to_owned()),
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap();
+            } else {
+                panic!("Where is the Olm machine?");
+            }
+        }
+
+        {
+            let (request, _, _) = sliding_sync.generate_sync_request().await.unwrap();
+
+            assert!(request.extensions.to_device.since.is_none());
+        }
+
+        // Define a `since` token, as a sliding sync response would.
         let since_token = "depuis".to_owned();
 
         {
@@ -1967,7 +1990,9 @@ mod tests {
                 olm_machine
                     .store()
                     .save_changes(Changes {
-                        next_batch_token: Some(since_token.clone()),
+                        next_batch_token: Some(matrix_sdk_base::to_device_token::tag(
+                            &since_token,
+                        )),
                         ..Default::default()
                     })
                     .await
@@ -2780,7 +2805,16 @@ mod tests {
         {
             let olm_machine = &*client.olm_machine_for_testing().await;
             assert_eq!(
-                olm_machine.as_ref().unwrap().store().next_batch_token().await?.as_deref(),
+                olm_machine
+                    .as_ref()
+                    .unwrap()
+                    .store()
+                    .next_batch_token()
+                    .await?
+                    .as_deref()
+                    // The stored token is tagged, so that it can't be confused with a
+                    // sync v2 `next_batch` living in the same slot.
+                    .and_then(matrix_sdk_base::to_device_token::untag),
                 Some("to-device-token")
             );
         }
@@ -2857,7 +2891,16 @@ mod tests {
         {
             let olm_machine = &*client.olm_machine_for_testing().await;
             assert_eq!(
-                olm_machine.as_ref().unwrap().store().next_batch_token().await?.as_deref(),
+                olm_machine
+                    .as_ref()
+                    .unwrap()
+                    .store()
+                    .next_batch_token()
+                    .await?
+                    .as_deref()
+                    // The stored token is tagged, so that it can't be confused with a
+                    // sync v2 `next_batch` living in the same slot.
+                    .and_then(matrix_sdk_base::to_device_token::untag),
                 Some("to-device-token")
             );
         }
