@@ -21,7 +21,7 @@ use matrix_sdk::{
     DraftAttachment as SdkDraftAttachment, DraftAttachmentContent, DraftThumbnail, EncryptionState,
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
     RoomMemberships, RoomState, SuccessorRoom as SdkSuccessorRoom,
-    deserialized_responses::TimelineEvent as SdkTimelineEvent,
+    deserialized_responses::{RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent},
     encryption::LocalTrust,
     room::{
         Room as SdkRoom, RoomMemberRole, edit::EditedContent, power_levels::RoomPowerLevelChanges,
@@ -37,6 +37,7 @@ use mime::Mime;
 use ruma::{
     EventId, Int, OwnedDeviceId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId, RoomAliasId,
     ServerName, UserId, assign,
+    serde::Raw,
     events::{
         AnyMessageLikeEventContent, AnySyncTimelineEvent,
         receipt::ReceiptThread as RumaReceiptThread,
@@ -110,6 +111,14 @@ pub struct Room {
 impl Room {
     pub(crate) fn new(inner: SdkRoom, utd_hook_manager: Option<Arc<UtdHookManager>>) -> Self {
         Room { inner: AsyncRuntimeDropped::new(inner), utd_hook_manager }
+    }
+}
+
+/// The raw JSON of a state event, whichever room state it comes from.
+fn state_event_json(event: &RawAnySyncOrStrippedState) -> String {
+    match event {
+        RawAnySyncOrStrippedState::Sync(raw) => raw.json().get().to_owned(),
+        RawAnySyncOrStrippedState::Stripped(raw) => raw.json().get().to_owned(),
     }
 }
 
@@ -497,6 +506,81 @@ impl Room {
             self.inner.send_state_event_raw(&event_type, &state_key, content_json).await?;
 
         Ok(response.event_id.to_string())
+    }
+
+    /// Get a state event of the given type and state key from this room's
+    /// state, as a JSON string.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver. Returns `None` when the room has no such state event.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state event, e.g. `m.room.topic`.
+    ///
+    /// * `state_key` - The state key of the event. This is often an empty
+    ///   string.
+    pub async fn get_state_event(
+        &self,
+        event_type: String,
+        state_key: String,
+    ) -> Result<Option<String>, ClientError> {
+        let event = self.inner.get_state_event(event_type.into(), &state_key).await?;
+        Ok(event.map(|event| state_event_json(&event)))
+    }
+
+    /// Get every state event of the given type in this room's state, as JSON
+    /// strings.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state events, e.g. `m.room.member`.
+    pub async fn get_state_events(
+        &self,
+        event_type: String,
+    ) -> Result<Vec<String>, ClientError> {
+        let events = self.inner.get_state_events(event_type.into()).await?;
+        Ok(events.iter().map(state_event_json).collect())
+    }
+
+    /// Get the content of the room account data event of the given type, as a
+    /// JSON string.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver. For global account data, see `Client::accountData`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the account data event, e.g.
+    ///   `m.fully_read`.
+    pub async fn account_data(&self, event_type: String) -> Result<Option<String>, ClientError> {
+        let event = self.inner.account_data(event_type.into()).await?;
+        Ok(event.map(|event| event.json().get().to_owned()))
+    }
+
+    /// Set the room account data content for the given event type.
+    ///
+    /// The content should be supplied as a JSON string. For global account
+    /// data, see `Client::setAccountData`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the account data event, e.g.
+    ///   `m.fully_read`.
+    ///
+    /// * `content` - The content of the account data event encoded as a JSON
+    ///   string.
+    pub async fn set_account_data(
+        &self,
+        event_type: String,
+        content: String,
+    ) -> Result<(), ClientError> {
+        let raw_content = Raw::from_json_string(content)?;
+        self.inner.set_account_data_raw(event_type.into(), raw_content).await?;
+        Ok(())
     }
 
     /// Redacts an event from the room.
