@@ -2123,12 +2123,7 @@ impl Client {
         for<'a> <Request::PathBuilder as PathBuilder>::Input<'a>: SendOutsideWasm + SyncOutsideWasm,
         HttpError: From<FromHttpResponseError<Request::EndpointError>>,
     {
-        SendRequest {
-            client: self.clone(),
-            request,
-            config: None,
-            progress: Default::default(),
-        }
+        SendRequest { client: self.clone(), request, config: None, progress: Default::default() }
     }
 
     pub(crate) async fn send_inner<Request>(

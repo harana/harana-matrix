@@ -190,8 +190,7 @@ where
         let Self { client, request, config, progress } = self;
 
         Box::pin(async move {
-            let res =
-                Box::pin(client.send_inner(request.clone(), config, progress.clone())).await;
+            let res = Box::pin(client.send_inner(request.clone(), config, progress.clone())).await;
 
             if let Err(e) = &res
                 && let RetryRequest::Yes = handle_unknown_token_error(e, &client).await?

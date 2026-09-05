@@ -472,7 +472,10 @@ mod tests {
         let mut jpeg = vec![0xFF, 0xD8];
         jpeg.extend_from_slice(&jpeg_segment(0xE0, b"JFIF\0secretless"));
         jpeg.extend_from_slice(&jpeg_segment(0xE1, &exif));
-        jpeg.extend_from_slice(&jpeg_segment(0xE1, b"http://ns.adobe.com/xap/1.0/\0<xmp>gps</xmp>"));
+        jpeg.extend_from_slice(&jpeg_segment(
+            0xE1,
+            b"http://ns.adobe.com/xap/1.0/\0<xmp>gps</xmp>",
+        ));
         jpeg.extend_from_slice(&jpeg_segment(0xED, b"Photoshop 3.0\0IPTC city name"));
         jpeg.extend_from_slice(&jpeg_segment(0xFE, b"taken at home"));
         jpeg.extend_from_slice(&jpeg_segment(0xE2, b"ICC_PROFILE\0colours"));

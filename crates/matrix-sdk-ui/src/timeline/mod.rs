@@ -20,6 +20,7 @@ use std::{fs, iter, path::PathBuf, sync::Arc};
 
 use algorithms::rfind_event_by_item_id;
 use event_item::TimelineItemHandle;
+use eyeball::SharedObservable;
 use eyeball_im::VectorDiff;
 #[cfg(feature = "unstable-msc4274")]
 use futures::SendGallery;
@@ -29,7 +30,6 @@ use futures_util::{
     pin_mut,
 };
 use imbl::Vector;
-use eyeball::SharedObservable;
 use matrix_sdk::{
     Result, TransmissionProgress,
     attachment::{AttachmentInfo, Thumbnail},
@@ -841,8 +841,7 @@ impl Timeline {
         let mut subscriber = progress.subscribe();
 
         let media = self.room().client().media();
-        let download =
-            media.get_media_content_with_progress(&request, use_cache, progress.clone());
+        let download = media.get_media_content_with_progress(&request, use_cache, progress.clone());
         pin_mut!(download);
 
         // Mirror the observable onto the timeline item until the download

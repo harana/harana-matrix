@@ -216,9 +216,13 @@ impl RoomSendQueue {
 
         // Remove the image's metadata, if the caller asked for it, before it is
         // cached: what is cached is what will be uploaded.
-        let (data, thumbnail) =
-            crate::attachment::preprocess(&content_type, data, config.thumbnail.take(), &mut config)
-                .await;
+        let (data, thumbnail) = crate::attachment::preprocess(
+            &content_type,
+            data,
+            config.thumbnail.take(),
+            &mut config,
+        )
+        .await;
 
         let upload_file_txn = TransactionId::new();
         let send_event_txn = config.txn_id.map_or_else(ChildTransactionId::new, Into::into);

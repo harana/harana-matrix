@@ -204,8 +204,7 @@ impl SqliteEventCacheStore {
     ///
     /// If the database turns out to be corrupted, it is deleted and recreated
     /// from scratch: this store is a cache, and an unreadable database file
-    /// would otherwise leave the client permanently broken. See
-    /// [`crate::recovery`].
+    /// would otherwise leave the client permanently broken.
     #[instrument(skip(config), fields(path = ?config.path))]
     pub async fn open_with_config(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         debug!(?config);
@@ -2077,11 +2076,7 @@ mod tests {
         let tmpdir_path = new_event_cache_store_workspace();
         let linked_chunk_id = LinkedChunkId::Room(&DEFAULT_TEST_ROOM_ID);
         let new_chunk = || {
-            vec![Update::NewItemsChunk {
-                previous: None,
-                new: ChunkIdentifier::new(0),
-                next: None,
-            }]
+            vec![Update::NewItemsChunk { previous: None, new: ChunkIdentifier::new(0), next: None }]
         };
 
         // Open a store, put something in it, and close it.

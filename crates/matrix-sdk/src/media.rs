@@ -954,11 +954,11 @@ impl MediaFetcher for DefaultMediaFetcher {
                             request.animated = Some(settings.animated);
 
                             Ok(client
-                            .send(request)
-                            .with_request_config(request_config)
-                            .with_receive_progress_observable(progress.clone())
-                            .await?
-                            .file)
+                                .send(request)
+                                .with_request_config(request_config)
+                                .with_receive_progress_observable(progress.clone())
+                                .await?
+                                .file)
                         } else {
                             #[allow(deprecated)]
                             let request = {
@@ -974,11 +974,11 @@ impl MediaFetcher for DefaultMediaFetcher {
                             };
 
                             Ok(client
-                            .send(request)
-                            .with_request_config(request_config)
-                            .with_receive_progress_observable(progress.clone())
-                            .await?
-                            .file)
+                                .send(request)
+                                .with_request_config(request_config)
+                                .with_receive_progress_observable(progress.clone())
+                                .await?
+                                .file)
                         }
                     } else if use_auth {
                         let request = authenticated_media::get_content::v1::Request::from_uri(uri)?;

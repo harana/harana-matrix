@@ -118,8 +118,7 @@ impl SqliteMediaStore {
     ///
     /// If the database turns out to be corrupted, it is deleted and recreated
     /// from scratch: this store is a cache, and an unreadable database file
-    /// would otherwise leave the client permanently broken. See
-    /// [`crate::recovery`].
+    /// would otherwise leave the client permanently broken.
     #[instrument(skip(config), fields(path = ?config.path))]
     pub async fn open_with_config(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         debug!(?config);
@@ -130,10 +129,8 @@ impl SqliteMediaStore {
 
         let db_path = config.path.join(DATABASE_NAME);
 
-        recovery::open_or_recreate("media store", &db_path, || {
-            Self::open_with_config_inner(config)
-        })
-        .await
+        recovery::open_or_recreate("media store", &db_path, || Self::open_with_config_inner(config))
+            .await
     }
 
     /// Open the store, assuming its database is readable.

@@ -31,7 +31,11 @@ use ruma::profile::{CallProfileField, StatusProfileField};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedTransactionId,
     OwnedUserId, TransactionId, UserId,
-    events::{AnySyncTimelineEvent, receipt::Receipt, room::MediaSource, room::message::MessageType},
+    events::{
+        AnySyncTimelineEvent,
+        receipt::Receipt,
+        room::{MediaSource, message::MessageType},
+    },
     room_version_rules::RedactionRules,
     serde::Raw,
 };
