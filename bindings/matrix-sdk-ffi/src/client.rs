@@ -144,7 +144,10 @@ use crate::{
     },
     notification_settings::NotificationSettings,
     qr_code::{GrantLoginWithQrCodeHandler, LoginWithQrCodeHandler},
-    room::{RoomHistoryVisibility, RoomInfoListener, RoomSendQueueUpdate},
+    room::{
+        RoomHistoryVisibility, RoomInfoListener, RoomSendQueueUpdate,
+        room_info::RoomInfoUpdateReason,
+    },
     room_directory_search::RoomDirectorySearch,
     room_preview::RoomPreview,
     ruma::{
@@ -1697,21 +1700,20 @@ impl Client {
         self.inner.homeserver().to_string()
     }
 
-    /// The URL built from the server name used for `.well-known` discovery,
-    /// as a string.
+    /// The Matrix server name this client talks to, e.g. `matrix.org`.
     ///
-    /// Not to be confused with `Self::homeserver`. This is the server part
-    /// in a user ID turned into a URL, e.g. with `@mnt_io:matrix.org`, this
-    /// would be `https://matrix.org/`, whilst the homeserver it delegates to
-    /// could be e.g. `https://matrix-client.matrix.org/`. Despite the name,
-    /// this is a URL, not a bare Matrix server name.
+    /// Not to be confused with `Self::homeserver`. This is the server part in
+    /// a user ID: with `@mnt_io:matrix.org`, this is `matrix.org`, whilst the
+    /// homeserver it delegates to could be e.g.
+    /// `https://matrix-client.matrix.org/`. This is a bare server name, not a
+    /// URL.
     ///
     /// This value is optional depending on how the `Client` has been built.
-    /// If it's been built from a homeserver URL directly, we don't know the
-    /// server. However, if the `Client` has been built from a server URL or
-    /// name, then the homeserver has been discovered, and we know both.
-    pub fn server(&self) -> Option<String> {
-        self.inner.server().map(|s| s.to_string())
+    /// If it's been built from a homeserver URL directly and no session has
+    /// been restored yet, we don't know the server name. Once logged in, it is
+    /// derived from the user ID.
+    pub fn server_name(&self) -> Option<String> {
+        self.inner.server_name().map(|s| s.to_string())
     }
 
     pub fn rooms(&self) -> Vec<Arc<Room>> {
@@ -2430,11 +2432,12 @@ impl Client {
     ) -> Result<Arc<TaskHandle>, ClientError> {
         let room_id = RoomId::parse(room_id)?;
 
-        // Emit the initial event, if present
+        // Emit the initial event, if present. It is the current state rather than a
+        // change, so it carries no reason.
         if let Some(room) = self.inner.get_room(&room_id)
             && let Ok(room_info) = RoomInfo::new(&room).await
         {
-            listener.call(room_info);
+            listener.call(room_info, Vec::new());
         }
 
         Ok(Arc::new(TaskHandle::new(get_runtime_handle().spawn({
@@ -2449,7 +2452,10 @@ impl Client {
                     if let Some(room) = client.get_room(&room_id)
                         && let Ok(room_info) = RoomInfo::new(&room).await
                     {
-                        listener.call(room_info);
+                        listener.call(
+                            room_info,
+                            RoomInfoUpdateReason::from_reasons(room_update.reasons),
+                        );
                     }
                 }
             }

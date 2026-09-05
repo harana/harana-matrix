@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use matrix_sdk::{CallIntentConsensus, EncryptionState, RoomState};
+use matrix_sdk_base::RoomInfoNotableUpdateReasons;
 use tracing::warn;
 
 use crate::{
@@ -27,6 +28,61 @@ use crate::{
     room_member::RoomMember,
     ruma::RtcCallIntent,
 };
+
+/// Why a [`RoomInfo`] update was emitted.
+///
+/// A single update can carry several reasons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum RoomInfoUpdateReason {
+    /// The recency stamp of the room has changed.
+    RecencyStamp,
+    /// The latest event of the room has changed.
+    LatestEvent,
+    /// A read receipt has changed.
+    ReadReceipt,
+    /// The user-controlled unread marker value has changed.
+    UnreadMarker,
+    /// A membership change happened for the current user.
+    Membership,
+    /// The display name has changed.
+    DisplayName,
+    /// The active service members have changed.
+    ActiveServiceMembers,
+    /// The user's `m.fully_read` marker has changed.
+    FullyRead,
+    /// A room hero's global profile changed.
+    Heroes,
+    /// Something else about the room changed.
+    ///
+    /// The SDK doesn't identify every kind of update yet, so this covers the
+    /// rest. Treat it as "re-read whatever you display".
+    Unknown,
+}
+
+impl RoomInfoUpdateReason {
+    /// Split the SDK's bitflags into the reasons they stand for.
+    pub(crate) fn from_reasons(reasons: RoomInfoNotableUpdateReasons) -> Vec<Self> {
+        // `RoomInfoNotableUpdateReasons::NONE` is the SDK's placeholder for an
+        // update it hasn't classified, which is exactly `Unknown` here.
+        let mapping = [
+            (RoomInfoNotableUpdateReasons::RECENCY_STAMP, Self::RecencyStamp),
+            (RoomInfoNotableUpdateReasons::LATEST_EVENT, Self::LatestEvent),
+            (RoomInfoNotableUpdateReasons::READ_RECEIPT, Self::ReadReceipt),
+            (RoomInfoNotableUpdateReasons::UNREAD_MARKER, Self::UnreadMarker),
+            (RoomInfoNotableUpdateReasons::MEMBERSHIP, Self::Membership),
+            (RoomInfoNotableUpdateReasons::DISPLAY_NAME, Self::DisplayName),
+            (RoomInfoNotableUpdateReasons::ACTIVE_SERVICE_MEMBERS, Self::ActiveServiceMembers),
+            (RoomInfoNotableUpdateReasons::FULLY_READ, Self::FullyRead),
+            (RoomInfoNotableUpdateReasons::HEROES, Self::Heroes),
+            (RoomInfoNotableUpdateReasons::NONE, Self::Unknown),
+        ];
+
+        mapping
+            .into_iter()
+            .filter_map(|(flag, reason)| reasons.contains(flag).then_some(reason))
+            .collect()
+    }
+}
 
 #[derive(Clone, uniffi::Enum)]
 pub enum RtcCallIntentConsensus {
@@ -220,5 +276,66 @@ impl RoomInfo {
                 .map(|rules| rules.authorization.explicitly_privilege_room_creators)
                 .unwrap_or_default(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use matrix_sdk_base::RoomInfoNotableUpdateReasons;
+
+    use super::RoomInfoUpdateReason;
+
+    #[test]
+    fn test_a_single_reason_maps_to_its_counterpart() {
+        assert_eq!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::LATEST_EVENT),
+            vec![RoomInfoUpdateReason::LatestEvent]
+        );
+
+        assert_eq!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::MEMBERSHIP),
+            vec![RoomInfoUpdateReason::Membership]
+        );
+
+        // `NONE` is the SDK's placeholder for an update it hasn't classified, which
+        // is what `Unknown` means here. It is a reason, not the absence of one.
+        assert_eq!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::NONE),
+            vec![RoomInfoUpdateReason::Unknown]
+        );
+    }
+
+    #[test]
+    fn test_several_reasons_are_all_reported() {
+        let reasons = RoomInfoUpdateReason::from_reasons(
+            RoomInfoNotableUpdateReasons::READ_RECEIPT
+                | RoomInfoNotableUpdateReasons::UNREAD_MARKER
+                | RoomInfoNotableUpdateReasons::FULLY_READ,
+        );
+
+        assert_eq!(
+            reasons,
+            vec![
+                RoomInfoUpdateReason::ReadReceipt,
+                RoomInfoUpdateReason::UnreadMarker,
+                RoomInfoUpdateReason::FullyRead,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_every_reason_is_mapped() {
+        // A flag added to the SDK without a counterpart here would silently be
+        // dropped from the callback, so check that all of them come through.
+        let all = RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::all());
+
+        assert_eq!(all.len(), RoomInfoNotableUpdateReasons::all().iter().count());
+    }
+
+    #[test]
+    fn test_no_reason_maps_to_nothing() {
+        assert!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::empty()).is_empty()
+        );
     }
 }

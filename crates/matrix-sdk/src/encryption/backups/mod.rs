@@ -301,9 +301,13 @@ impl Backups {
 
     /// Returns a future to wait for room keys to be uploaded.
     ///
-    /// Awaiting the future will wake up a task to upload room keys which have
-    /// not yet been uploaded to the homeserver. It will then wait for the task
-    /// to finish uploading.
+    /// Awaiting the future only observes the upload task; it does not start
+    /// one. Call [`Backups::trigger_upload()`] first if you want the keys that
+    /// are not backed up yet to be uploaded now.
+    ///
+    /// The future resolves once every room key known at that point has been
+    /// uploaded, not merely when the upload task reports that it is done: keys
+    /// queued while waiting are waited for too.
     ///
     /// # Examples
     ///
@@ -317,6 +321,8 @@ impl Backups {
     ///
     /// let backups = client.encryption().backups();
     /// let wait_for_steady_state = backups.wait_for_steady_state();
+    ///
+    /// backups.trigger_upload();
     ///
     /// let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
     ///
@@ -343,9 +349,14 @@ impl Backups {
     /// # anyhow::Ok(()) };
     /// ```
     pub fn wait_for_steady_state(&self) -> WaitForSteadyState<'_> {
+        let progress = self.client.inner.e2ee.backup_state.upload_progress.clone();
+
         WaitForSteadyState {
             backups: self,
-            progress: self.client.inner.e2ee.backup_state.upload_progress.clone(),
+            // Subscribe now rather than when awaited, so that an upload triggered between
+            // creating this future and awaiting it can't finish unnoticed.
+            receiver: progress.subscribe_receiver(),
+            progress,
             timeout: None,
         }
     }
@@ -1095,6 +1106,35 @@ impl Backups {
 
     /// Send a notification to the task which is responsible for uploading room
     /// keys to the backup that it might have new room keys to back up.
+    /// Whether we know about room keys that have not been uploaded yet.
+    ///
+    /// Returns `false` when we can't tell, i.e. when there is no olm machine or
+    /// the store can't be read: the caller then treats the upload as finished
+    /// rather than waiting forever.
+    pub(super) async fn has_room_keys_to_upload(&self) -> bool {
+        let olm_machine = self.client.olm_machine().await;
+
+        let Some(machine) = olm_machine.as_ref() else {
+            return false;
+        };
+
+        match machine.backup_machine().room_key_counts().await {
+            Ok(counts) => counts.backed_up < counts.total,
+            Err(error) => {
+                warn!(?error, "Couldn't read the room key counts, assuming the upload is done");
+                false
+            }
+        }
+    }
+
+    /// Wake the task that uploads room keys to the homeserver.
+    ///
+    /// Returns immediately: uploading happens in the background. Use
+    /// [`Backups::wait_for_steady_state()`] to wait for it to finish.
+    pub fn trigger_upload(&self) {
+        self.maybe_trigger_backup();
+    }
+
     pub(crate) fn maybe_trigger_backup(&self) {
         let tasks = self.client.inner.e2ee.tasks.lock();
 
@@ -1582,6 +1622,8 @@ mod test {
             backups.wait_for_steady_state().with_delay(Duration::from_nanos(100));
 
         let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
+
+        backups.trigger_upload();
 
         let task = matrix_sdk_common::executor::spawn({
             let client = client.to_owned();

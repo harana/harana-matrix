@@ -103,6 +103,15 @@ impl<T: 'static + Send + Clone> ChannelObservable<T> {
     pub(crate) fn get(&self) -> T {
         self.value.read().unwrap().to_owned()
     }
+
+    /// Subscribe to updates without consuming them as a stream yet.
+    ///
+    /// Unlike [`Self::subscribe()`], this starts buffering updates as soon as
+    /// it is called, so a caller that subscribes now and reads later doesn't
+    /// miss what happened in between. The current value is not included.
+    pub(crate) fn subscribe_receiver(&self) -> broadcast::Receiver<T> {
+        self.channel.subscribe()
+    }
 }
 
 /// The set of types that can be used with [`Room::send_raw`].

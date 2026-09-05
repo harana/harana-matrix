@@ -60,10 +60,10 @@ use matrix_sdk_base::{
 };
 use matrix_sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use pin_project_lite::pin_project;
-use ruma::{OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
+use ruma::{EventId, OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::value::RawValue as RawJsonValue;
-use tracing::{debug, error, field::debug, instrument, warn};
+use tracing::{debug, error, field::debug, instrument, trace, warn};
 
 use self::maps::EventHandlerMaps;
 use crate::{Client, Room};
@@ -354,13 +354,19 @@ impl Client {
         events: &[Raw<T>],
     ) -> serde_json::Result<()> {
         #[derive(Deserialize)]
-        struct ExtractType<'a> {
+        struct ExtractDetails<'a> {
             #[serde(borrow, rename = "type")]
             event_type: Cow<'a, str>,
+            // Account data, presence and ephemeral events don't have one.
+            event_id: Option<OwnedEventId>,
         }
 
         for raw_event in events {
-            let event_type = raw_event.deserialize_as_unchecked::<ExtractType<'_>>()?.event_type;
+            let ExtractDetails { event_type, event_id } =
+                raw_event.deserialize_as_unchecked::<ExtractDetails<'_>>()?;
+
+            trace_received_event(kind, room, &event_type, event_id.as_deref());
+
             self.call_event_handlers(room, raw_event.json(), kind, &event_type, None, &[]).await;
         }
 
@@ -385,6 +391,9 @@ impl Client {
                 other => (&other.to_raw(), None),
             };
             let event_type = raw_event.deserialize_as_unchecked::<ExtractType<'_>>()?.event_type;
+
+            trace_received_event(HandlerKind::ToDevice, None, &event_type, None);
+
             self.call_event_handlers(
                 None,
                 raw_event.json(),
@@ -479,6 +488,9 @@ impl Client {
                 item.raw().deserialize_as_unchecked()?;
 
             let redacted = unsigned.and_then(|u| u.redacted_because).is_some();
+
+            trace_received_event(HandlerKind::Timeline, room, &event_type, event_id.as_deref());
+
             let (handler_kind_g, handler_kind_r) = match state_key {
                 Some(_) => (HandlerKind::State, HandlerKind::state_redacted(redacted)),
                 None => (HandlerKind::MessageLike, HandlerKind::message_like_redacted(redacted)),
@@ -578,6 +590,26 @@ impl Client {
             while let Some(()) = futures.next().await {}
         }
     }
+}
+
+/// Log an event the SDK received in a sync response.
+///
+/// One line per event, at `TRACE` on the `matrix_sdk::event_handler` target, so
+/// that it can be turned on to see what a sync actually delivered without
+/// flooding normal logs.
+fn trace_received_event(
+    kind: HandlerKind,
+    room: Option<&Room>,
+    event_type: &str,
+    event_id: Option<&EventId>,
+) {
+    trace!(
+        ?kind,
+        event_type,
+        event_id = event_id.map(debug),
+        room_id = room.map(|room| debug(room.room_id())),
+        "Received an event",
+    );
 }
 
 /// A guard type that removes an event handler when it drops (goes out of
@@ -887,6 +919,95 @@ mod tests {
         assert_eq!(invited_member_count.load(SeqCst), 1);
 
         Ok(())
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[async_test]
+    async fn test_each_received_event_is_logged() {
+        use std::sync::Mutex as StdMutex;
+
+        use tracing::{Level, Subscriber, field::Visit};
+        use tracing_subscriber::{
+            layer::{Context, SubscriberExt as _},
+            registry::LookupSpan,
+        };
+
+        /// Collects the `event_type` field of every trace event on the
+        /// `matrix_sdk::event_handler` target.
+        #[derive(Clone, Default)]
+        struct Collector(Arc<StdMutex<Vec<String>>>);
+
+        impl<S> tracing_subscriber::Layer<S> for Collector
+        where
+            S: Subscriber + for<'a> LookupSpan<'a>,
+        {
+            fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+                let metadata = event.metadata();
+
+                if *metadata.level() != Level::TRACE
+                    || metadata.target() != "matrix_sdk::event_handler"
+                {
+                    return;
+                }
+
+                struct EventTypeVisitor<'a>(&'a mut Option<String>);
+
+                impl Visit for EventTypeVisitor<'_> {
+                    fn record_debug(
+                        &mut self,
+                        _field: &tracing::field::Field,
+                        _value: &dyn std::fmt::Debug,
+                    ) {
+                    }
+
+                    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                        if field.name() == "event_type" {
+                            *self.0 = Some(value.to_owned());
+                        }
+                    }
+                }
+
+                let mut event_type = None;
+                event.record(&mut EventTypeVisitor(&mut event_type));
+
+                if let Some(event_type) = event_type {
+                    self.0.lock().unwrap().push(event_type);
+                }
+            }
+        }
+
+        let collector = Collector::default();
+        let subscriber = tracing_subscriber::registry().with(collector.clone());
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let client = logged_in_client(None).await;
+
+        let f = EventFactory::new().sender(user_id!("@example:localhost"));
+        let response = SyncResponseBuilder::default()
+            .add_joined_room(
+                JoinedRoomBuilder::default()
+                    .add_timeline_event(MEMBER_EVENT.clone())
+                    .add_typing(f.typing(vec![user_id!("@alice:matrix.org")]))
+                    .add_state_event(f.default_power_levels()),
+            )
+            .build_sync_response();
+
+        client.process_sync(response).await.unwrap();
+
+        let logged = collector.0.lock().unwrap().clone();
+
+        // Every event of the sync response shows up, whichever section it came in.
+        assert!(logged.contains(&"m.room.member".to_owned()), "logged: {logged:?}");
+        assert!(logged.contains(&"m.typing".to_owned()), "logged: {logged:?}");
+        assert!(logged.contains(&"m.room.power_levels".to_owned()), "logged: {logged:?}");
+
+        // A state event that is also in the timeline is dispatched through two
+        // passes, but is only reported once by each of them.
+        assert_eq!(
+            logged.iter().filter(|event_type| *event_type == "m.typing").count(),
+            1,
+            "logged: {logged:?}"
+        );
     }
 
     #[async_test]

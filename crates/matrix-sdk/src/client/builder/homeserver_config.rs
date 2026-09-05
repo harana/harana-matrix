@@ -47,7 +47,7 @@ pub(super) enum UrlScheme {
 
 /// The `Ok` result for `HomeserverConfig::discover`.
 pub(super) struct HomeserverDiscoveryResult {
-    pub server: Option<Url>,
+    pub server: Option<OwnedServerName>,
     pub homeserver: Url,
     pub supported_versions: Option<get_supported_versions::Response>,
     pub well_known: Option<discover_homeserver::Response>,
@@ -123,7 +123,7 @@ async fn discover_homeserver_from_server_name_or_url(
     well_known_lookup_disabled: bool,
 ) -> Result<
     (
-        Option<Url>,
+        Option<OwnedServerName>,
         Url,
         Option<get_supported_versions::Response>,
         Option<discover_homeserver::Response>,
@@ -194,10 +194,10 @@ async fn discover_homeserver(
     server_name: &ServerName,
     protocol: &UrlScheme,
     http_client: &HttpClient,
-) -> Result<(Url, discover_homeserver::Response), ClientBuildError> {
+) -> Result<(OwnedServerName, discover_homeserver::Response), ClientBuildError> {
     debug!("Trying to discover the homeserver");
 
-    let server = Url::parse(&match protocol {
+    let server_url = Url::parse(&match protocol {
         UrlScheme::Http => format!("http://{server_name}"),
         UrlScheme::Https => format!("https://{server_name}"),
     })?;
@@ -206,7 +206,7 @@ async fn discover_homeserver(
         .send(
             discover_homeserver::Request::new(),
             Some(RequestConfig::short_retry()),
-            server.to_string(),
+            server_url.to_string(),
             None,
             (),
             Default::default(),
@@ -219,7 +219,7 @@ async fn discover_homeserver(
 
     debug!(homeserver_url = well_known.homeserver.base_url, "Discovered the homeserver");
 
-    Ok((server, well_known))
+    Ok((server_name.to_owned(), well_known))
 }
 
 pub(super) async fn get_supported_versions(
@@ -297,7 +297,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(result.server, Some(Url::parse(&server.uri()).unwrap()));
+        assert_eq!(
+            result.server,
+            Some(OwnedServerName::try_from(server.address().to_string()).unwrap())
+        );
         assert_eq!(result.homeserver, Url::parse(&homeserver.uri()).unwrap());
         assert!(result.supported_versions.is_none());
     }
@@ -327,7 +330,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(result.server, Some(Url::parse(&server.uri()).unwrap()));
+        assert_eq!(
+            result.server,
+            Some(OwnedServerName::try_from(server.address().to_string()).unwrap())
+        );
         assert_eq!(result.homeserver, Url::parse(&homeserver.uri()).unwrap());
         assert!(result.supported_versions.is_none());
     }

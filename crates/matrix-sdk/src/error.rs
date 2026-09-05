@@ -46,9 +46,9 @@ use thiserror::Error;
 use url::ParseError as UrlParseError;
 
 use crate::{
-    authentication::oauth::OAuthError, cross_process_lock::CrossProcessLockError,
-    event_cache::EventCacheError, media::MediaError, room::reply::ReplyError,
-    sliding_sync::Error as SlidingSyncError,
+    authentication::oauth::OAuthError, client::ClientBuildError,
+    cross_process_lock::CrossProcessLockError, event_cache::EventCacheError, media::MediaError,
+    room::reply::ReplyError, sliding_sync::Error as SlidingSyncError,
 };
 
 /// Result type of the matrix-sdk.
@@ -425,6 +425,20 @@ pub enum Error {
     /// We timed out attempting to complete an operation.
     #[error("timed out")]
     Timeout,
+
+    /// An error occurred while building a [`Client`].
+    ///
+    /// [`Client`]: crate::Client
+    #[error(transparent)]
+    ClientBuild(Box<ClientBuildError>),
+
+    /// A session couldn't be restored from an access token because the
+    /// homeserver's `whoami` response carried no device ID.
+    ///
+    /// The field is optional in the specification, but the SDK needs one: it
+    /// identifies the device that owns the end-to-end encryption keys.
+    #[error("the homeserver's whoami response didn't include a device ID")]
+    MissingDeviceId,
 }
 
 #[rustfmt::skip] // stop rustfmt breaking the `<code>` in docs across multiple lines
@@ -469,6 +483,26 @@ impl Error {
 impl From<HttpError> for Error {
     fn from(error: HttpError) -> Self {
         Error::Http(Box::new(error))
+    }
+}
+
+impl From<ClientBuildError> for Error {
+    fn from(error: ClientBuildError) -> Self {
+        Error::ClientBuild(Box::new(error))
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl From<matrix_sdk_sqlite::OpenStoreError> for Error {
+    fn from(error: matrix_sdk_sqlite::OpenStoreError) -> Self {
+        ClientBuildError::from(error).into()
+    }
+}
+
+#[cfg(feature = "indexeddb")]
+impl From<matrix_sdk_indexeddb::OpenStoreError> for Error {
+    fn from(error: matrix_sdk_indexeddb::OpenStoreError) -> Self {
+        ClientBuildError::from(error).into()
     }
 }
 
@@ -751,5 +785,54 @@ pub struct WrongRoomState {
 impl WrongRoomState {
     pub(crate) fn new(expected: &'static str, got: RoomState) -> Self {
         Self { expected, got }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_matches::assert_matches;
+
+    use super::Error;
+    use crate::ClientBuildError;
+
+    #[test]
+    fn test_client_build_error_propagates_with_the_question_mark_operator() {
+        // The point of the conversion: a function returning `matrix_sdk::Error` can
+        // propagate the errors of `ClientBuilder::build` and of the store crates'
+        // constructors without unwrapping them by hand.
+        fn build() -> Result<(), ClientBuildError> {
+            Err(ClientBuildError::MissingHomeserver)
+        }
+
+        fn caller() -> Result<(), Error> {
+            build()?;
+            Ok(())
+        }
+
+        let error = caller().unwrap_err();
+
+        assert_matches!(&error, Error::ClientBuild(inner) => {
+            assert_matches!(**inner, ClientBuildError::MissingHomeserver);
+        });
+
+        // The variant is transparent, so it reads as the error it wraps.
+        assert_eq!(error.to_string(), ClientBuildError::MissingHomeserver.to_string());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test]
+    fn test_open_store_error_propagates_with_the_question_mark_operator() {
+        fn open() -> Result<(), matrix_sdk_sqlite::OpenStoreError> {
+            Err(matrix_sdk_sqlite::OpenStoreError::MissingVersion)
+        }
+
+        fn caller() -> Result<(), Error> {
+            open()?;
+            Ok(())
+        }
+
+        assert_matches!(caller().unwrap_err(), Error::ClientBuild(inner) => {
+            assert_matches!(*inner, ClientBuildError::SqliteStore(_));
+        });
     }
 }

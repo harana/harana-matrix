@@ -49,10 +49,15 @@ use ruma::{
             join_rules::JoinRule as RumaJoinRule, message::RoomMessageEventContentWithoutRelation,
         },
     },
+    serde::Raw,
 };
+use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
 
-use self::{power_levels::RoomPowerLevels, room_info::RoomInfo};
+use self::{
+    power_levels::RoomPowerLevels,
+    room_info::{RoomInfo, RoomInfoUpdateReason},
+};
 use crate::{
     TaskHandle,
     chunk_iterator::ChunkIterator,
@@ -112,6 +117,14 @@ pub struct Room {
 impl Room {
     pub(crate) fn new(inner: SdkRoom, utd_hook_manager: Option<Arc<UtdHookManager>>) -> Self {
         Room { inner: AsyncRuntimeDropped::new(inner), utd_hook_manager }
+    }
+}
+
+/// The raw JSON of a state event, whichever room state it comes from.
+fn state_event_json(event: &RawAnySyncOrStrippedState) -> String {
+    match event {
+        RawAnySyncOrStrippedState::Sync(raw) => raw.json().get().to_owned(),
+        RawAnySyncOrStrippedState::Stripped(raw) => raw.json().get().to_owned(),
     }
 }
 
@@ -509,11 +522,24 @@ impl Room {
         self: Arc<Self>,
         listener: Box<dyn RoomInfoListener>,
     ) -> Arc<TaskHandle> {
-        let mut subscriber = self.inner.subscribe_info();
+        // Listen to the notable updates rather than to `RoomInfo` itself: they are
+        // emitted for the same changes, but they also say what changed.
+        let mut receiver = self.inner.client().room_info_notable_update_receiver();
+        let room_id = self.inner.room_id().to_owned();
+
         Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
-            while subscriber.next().await.is_some() {
+            loop {
+                let reasons = match receiver.recv().await {
+                    Ok(update) if update.room_id != room_id => continue,
+                    Ok(update) => RoomInfoUpdateReason::from_reasons(update.reasons),
+                    // We missed updates, so we no longer know what changed. Report the
+                    // current state with no identified reason rather than stopping.
+                    Err(RecvError::Lagged(_)) => vec![RoomInfoUpdateReason::Unknown],
+                    Err(RecvError::Closed) => break,
+                };
+
                 match self.room_info().await {
-                    Ok(room_info) => listener.call(room_info),
+                    Ok(room_info) => listener.call(room_info, reasons),
                     Err(e) => {
                         error!("Failed to compute new RoomInfo: {e}");
                     }
@@ -593,10 +619,11 @@ impl Room {
     /// Get the state event of this room with exactly the given type and state
     /// key, as a JSON string.
     ///
-    /// Returns `None` when the room has no such event, which for an exact
-    /// `(type, state key)` pair is the only other possibility: a room holds at
-    /// most one state event per pair. To tell apart zero, one and several
-    /// *rooms* carrying an event, see `Client::rooms_with_state_event`.
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver. Returns `None` when the room has no such event, which for
+    /// an exact `(type, state key)` pair is the only other possibility: a room
+    /// holds at most one state event per pair. To tell apart zero, one and
+    /// several *rooms* carrying an event, see `Client::rooms_with_state_event`.
     ///
     /// # Arguments
     ///
@@ -611,11 +638,58 @@ impl Room {
         state_key: String,
     ) -> Result<Option<String>, ClientError> {
         let event = self.inner.get_state_event(event_type.into(), &state_key).await?;
+        Ok(event.map(|event| state_event_json(&event)))
+    }
 
-        Ok(event.map(|event| match event {
-            RawAnySyncOrStrippedState::Sync(raw) => raw.json().get().to_owned(),
-            RawAnySyncOrStrippedState::Stripped(raw) => raw.json().get().to_owned(),
-        }))
+    /// Get every state event of the given type in this room's state, as JSON
+    /// strings.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the state events, e.g. `m.room.member`.
+    pub async fn state_events(&self, event_type: String) -> Result<Vec<String>, ClientError> {
+        let events = self.inner.get_state_events(event_type.into()).await?;
+        Ok(events.iter().map(state_event_json).collect())
+    }
+
+    /// Get the content of the room account data event of the given type, as a
+    /// JSON string.
+    ///
+    /// Reads what the SDK already holds in its state store; it doesn't hit the
+    /// homeserver. For global account data, see `Client::accountData`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the account data event, e.g.
+    ///   `m.fully_read`.
+    pub async fn account_data(&self, event_type: String) -> Result<Option<String>, ClientError> {
+        let event = self.inner.account_data(event_type.into()).await?;
+        Ok(event.map(|event| event.json().get().to_owned()))
+    }
+
+    /// Set the room account data content for the given event type.
+    ///
+    /// The content should be supplied as a JSON string. For global account
+    /// data, see `Client::setAccountData`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the account data event, e.g.
+    ///   `m.fully_read`.
+    ///
+    /// * `content` - The content of the account data event encoded as a JSON
+    ///   string.
+    pub async fn set_account_data(
+        &self,
+        event_type: String,
+        content: String,
+    ) -> Result<(), ClientError> {
+        let raw_content = Raw::from_json_string(content)?;
+        self.inner.set_account_data_raw(event_type.into(), raw_content).await?;
+        Ok(())
     }
 
     /// Redacts an event from the room.
@@ -1633,7 +1707,11 @@ pub fn matrix_to_room_alias_permalink(
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
-    fn call(&self, room_info: RoomInfo);
+    /// A new [`RoomInfo`], and what about the room changed to produce it.
+    ///
+    /// `reasons` is empty for the initial value delivered on subscription,
+    /// which reflects the current state rather than a change.
+    fn call(&self, room_info: RoomInfo, reasons: Vec<RoomInfoUpdateReason>);
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
@@ -2380,7 +2458,7 @@ mod tests {
     use std::{collections::BTreeSet, time::Duration};
 
     use matrix_sdk::{
-        ruma::{room_id, user_id},
+        ruma::{event_id, room_id, user_id},
         test_utils::mocks::MatrixMockServer,
     };
     use tempfile::tempdir;
@@ -2451,6 +2529,83 @@ mod tests {
             }
             RoomMemberUpdate::FullReload => panic!("expected a partial update"),
         }
+    }
+
+    /// The bindings can read the state events and room account data the SDK
+    /// already holds, without going to the homeserver for them.
+    #[tokio::test]
+    async fn test_state_events_and_account_data_are_readable() {
+        use matrix_sdk::ruma::{
+            events::{RoomAccountDataEventType, StateEventType},
+            user_id,
+        };
+        use matrix_sdk_test::{JoinedRoomBuilder, event_factory::EventFactory};
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let room_id = room_id!("!test:example.com");
+        let f = EventFactory::new().room(room_id).sender(user_id!("@alice:example.com"));
+
+        let sdk_room = server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id)
+                    .add_state_event(f.room_topic("the topic"))
+                    .add_account_data(f.fully_read(event_id!("$1"))),
+            )
+            .await;
+        let room = Room::new(sdk_room, None);
+
+        // A state event we know about comes back as its JSON.
+        let topic = room
+            .state_event(StateEventType::RoomTopic.to_string(), String::new())
+            .await
+            .unwrap()
+            .expect("the room has a topic");
+
+        let topic: serde_json::Value = serde_json::from_str(&topic).unwrap();
+        assert_eq!(topic["content"]["topic"], "the topic");
+        assert_eq!(topic["type"], "m.room.topic");
+
+        // So do all the events of a type.
+        let topics = room.state_events(StateEventType::RoomTopic.to_string()).await.unwrap();
+        assert_eq!(topics.len(), 1);
+
+        // One we don't have comes back as nothing, rather than as an error.
+        assert!(
+            room.state_event(StateEventType::RoomAvatar.to_string(), String::new())
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Room account data is readable too.
+        let fully_read = room
+            .account_data("m.fully_read".to_owned())
+            .await
+            .unwrap()
+            .expect("the room has a fully-read marker");
+
+        let fully_read: serde_json::Value = serde_json::from_str(&fully_read).unwrap();
+        assert_eq!(fully_read["content"]["event_id"], "$1");
+
+        assert!(room.account_data("m.tag".to_owned()).await.unwrap().is_none());
+
+        // And writable: the content reaches the homeserver as given.
+        server
+            .mock_set_room_account_data(RoomAccountDataEventType::FullyRead)
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        room.set_account_data(
+            "m.fully_read".to_owned(),
+            serde_json::to_string(&serde_json::json!({ "event_id": "$2" })).unwrap(),
+        )
+        .await
+        .unwrap();
     }
 
     /// Dropping an FFI [`Room`] on a non-tokio thread must not panic.

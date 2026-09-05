@@ -1467,7 +1467,7 @@ pub(crate) mod tests {
             "A connection was attempted to an unexpected host: {resolved_hosts:?}"
         );
         assert_eq!(client.homeserver(), Url::parse(&format!("http://{homeserver_name}")).unwrap());
-        assert_eq!(client.server(), None);
+        assert_eq!(client.server_name(), None);
     }
 
     #[async_test]

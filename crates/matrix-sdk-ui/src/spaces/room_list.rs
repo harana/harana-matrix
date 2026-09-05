@@ -12,7 +12,11 @@
 // See the License for that specific language governing permissions and
 // limitations under the License.
 
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use eyeball::{ObservableWriteGuard, SharedObservable, Subscriber};
 use eyeball_im::{ObservableVector, VectorSubscriberBatchedStream};
@@ -332,6 +336,13 @@ impl SpaceRoomList {
                 let children_state = (*self.children_state.lock()).clone().unwrap_or_default();
                 let mut rooms = self.rooms.lock().await;
 
+                // `/hierarchy` can report the same room again: a later page can repeat one,
+                // and a `reset()` racing an in-flight pagination replays the first page.
+                // Publishing the same room twice breaks consumers that key their list by
+                // room ID, so keep track of what the list already holds.
+                let mut known_room_ids: HashSet<OwnedRoomId> =
+                    rooms.iter().map(|room| room.room_id.clone()).collect();
+
                 join_all(children.into_iter().map(|room| {
                     let children_state = children_state.clone();
                     async move {
@@ -353,7 +364,11 @@ impl SpaceRoomList {
                 .await
                 .into_iter()
                 .sorted_by(|a, b| Self::compare_rooms(a, b, &children_state))
-                .for_each(|room| rooms.push_back(room));
+                .for_each(|room| {
+                    if known_room_ids.insert(room.room_id.clone()) {
+                        rooms.push_back(room);
+                    }
+                });
 
                 self.pagination_state.set(SpaceRoomListPaginationState::Idle {
                     end_reached: result.next_batch.is_none(),
@@ -1049,6 +1064,45 @@ mod tests {
         // Allows paginating again
         room_list.paginate().await.unwrap();
         assert_eq!(room_list.rooms().await.len(), 1);
+    }
+
+    #[async_test]
+    async fn test_repeated_rooms_are_not_added_twice() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let space_service = SpaceService::new(client.clone()).await;
+
+        let parent_space_id = room_id!("!parent_space:example.org");
+        let child_id_1 = room_id!("!1:example.org");
+        let child_id_2 = room_id!("!2:example.org");
+
+        // The first page reports one room and asks for another page.
+        server
+            .mock_get_hierarchy()
+            .ok_with_room_ids_and_next_batch(vec![child_id_1], "next_batch_token")
+            .mock_once()
+            .mount()
+            .await;
+
+        // The second page repeats it, alongside a new one.
+        server
+            .mock_get_hierarchy()
+            .ok_with_room_ids(vec![child_id_1, child_id_2])
+            .mock_once()
+            .mount()
+            .await;
+
+        let room_list = space_service.space_room_list(parent_space_id.to_owned()).await;
+
+        room_list.paginate().await.unwrap();
+        assert_eq!(room_list.rooms().await.len(), 1);
+
+        room_list.paginate().await.unwrap();
+
+        let rooms = room_list.rooms().await;
+        assert_eq!(rooms.len(), 2, "the repeated room should not have been added twice");
+        assert_eq!(rooms[0].room_id, child_id_1);
+        assert_eq!(rooms[1].room_id, child_id_2);
     }
 
     fn make_space_room(
