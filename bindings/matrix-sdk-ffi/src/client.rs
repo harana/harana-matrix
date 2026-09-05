@@ -813,7 +813,22 @@ impl Client {
                     .map_err(|error| ClientError::from_str(error, None))?,
             )
             .await?;
-        self.inner.set_sliding_sync_version(sliding_sync_version.try_into()?);
+
+        // A session persisted before the sliding sync version was discovered carries
+        // `None`. Restoring it must not undo the discovery the client builder just did,
+        // otherwise starting the sync service fails with "sliding sync version is
+        // missing" on a client that does support it.
+        let sliding_sync_version: SdkSlidingSyncVersion = sliding_sync_version.try_into()?;
+
+        if !matches!(sliding_sync_version, SdkSlidingSyncVersion::None) {
+            self.inner.set_sliding_sync_version(sliding_sync_version);
+        } else {
+            tracing::info!(
+                current_version = ?self.inner.sliding_sync_version(),
+                "The restored session carries no sliding sync version; keeping the one \
+                 the client was built with"
+            );
+        }
 
         Ok(())
     }
