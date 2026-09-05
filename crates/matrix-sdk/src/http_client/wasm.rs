@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, time::Duration};
+use std::fmt::Debug;
+#[cfg(feature = "reqwest-transport")]
+use std::time::Duration;
 
 use bytes::Bytes;
 use bytesize::ByteSize;
 use eyeball::SharedObservable;
 use ruma::api::{IncomingResponseExt as _, OutgoingRequest, error::FromHttpResponseError};
 
-use super::{HttpClient, TransmissionProgress, response_to_http_response};
+#[cfg(feature = "reqwest-transport")]
+use super::response_to_http_response;
+use super::{HttpClient, TransmissionProgress};
 use crate::{config::RequestConfig, error::HttpError};
 
 #[cfg(feature = "reqwest-transport")]

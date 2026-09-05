@@ -18,11 +18,13 @@
 
 #[cfg(feature = "experimental-send-custom-to-device")]
 use std::ops::Deref;
+#[cfg(feature = "sqlite")]
+use std::path::Path;
 use std::{
     collections::{BTreeMap, HashSet},
     io::{Cursor, Read, Write},
     iter,
-    path::{Path, PathBuf},
+    path::PathBuf,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -84,7 +86,7 @@ use ruma::{
 #[cfg(feature = "experimental-send-custom-to-device")]
 use ruma::{events::AnyToDeviceEventContent, serde::Raw, to_device::DeviceIdOrAllDevices};
 use serde::{Deserialize, de::Error as _};
-use tasks::BundleReceiverTask;
+use tasks::{BundleReceiverTask, RecoveryStateUpdateTask};
 use tokio::sync::{Mutex, RwLockReadGuard};
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::{Instrument, Span, debug, error, instrument, warn};
@@ -117,6 +119,7 @@ pub mod secret_storage;
 pub(crate) mod tasks;
 pub mod verification;
 
+#[cfg(feature = "sqlite")]
 use matrix_sdk_base::crypto::OlmMachineBuilder;
 pub use matrix_sdk_base::crypto::{
     CrossSigningStatus, CryptoStoreError, DecryptorError, EventError, KeyExportError, LocalTrust,
@@ -232,13 +235,15 @@ impl EncryptionData {
     pub fn initialize_tasks(&self, client: &Arc<ClientInner>) {
         let weak_client = WeakClient::from_inner(client);
 
+        let task_monitor = &client.task_monitor;
+
         let mut tasks = self.tasks.lock();
-        tasks.upload_room_keys = Some(BackupUploadingTask::new(weak_client.clone()));
+        tasks.upload_room_keys = Some(BackupUploadingTask::new(task_monitor, weak_client.clone()));
 
         if self.encryption_settings.backup_download_strategy
             == BackupDownloadStrategy::AfterDecryptionFailure
         {
-            tasks.download_room_keys = Some(BackupDownloadTask::new(weak_client));
+            tasks.download_room_keys = Some(BackupDownloadTask::new(task_monitor, weak_client));
         }
     }
 
@@ -254,6 +259,8 @@ impl EncryptionData {
         let join_handle = spawn(future);
 
         guard.update_recovery_state_after_backup = Some(join_handle);
+        guard.update_recovery_state =
+            Some(RecoveryStateUpdateTask::new(WeakClient::from_client(client)));
     }
 }
 
@@ -2279,15 +2286,14 @@ mod tests {
         matchers::{header, method, path_regex},
     };
 
+    #[cfg(feature = "sqlite")]
+    use crate::{Client, config::RequestConfig, test_utils::client::mock_matrix_session};
     use crate::{
-        Client, assert_next_matches_with_timeout,
-        config::RequestConfig,
+        assert_next_matches_with_timeout,
         encryption::{
             DuplicateOneTimeKeyErrorMessage, OAuthCrossSigningResetInfo, VerificationState,
         },
-        test_utils::{
-            client::mock_matrix_session, logged_in_client, no_retry_test_client, set_client_session,
-        },
+        test_utils::{logged_in_client, no_retry_test_client, set_client_session},
     };
 
     #[async_test]

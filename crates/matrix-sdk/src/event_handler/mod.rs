@@ -35,6 +35,7 @@
 use std::any::TypeId;
 use std::{
     borrow::Cow,
+    collections::BTreeSet,
     fmt,
     future::Future,
     pin::Pin,
@@ -59,7 +60,7 @@ use matrix_sdk_base::{
 };
 use matrix_sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use pin_project_lite::pin_project;
-use ruma::{OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
+use ruma::{OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::value::RawValue as RawJsonValue;
 use tracing::{debug, error, field::debug, instrument, warn};
@@ -398,55 +399,83 @@ impl Client {
         Ok(())
     }
 
+    /// Call the event handlers for the state events of a sync response.
+    ///
+    /// Returns the IDs of the events that were dispatched and can also appear
+    /// in the room's timeline, so that [`Self::handle_sync_timeline_events`]
+    /// doesn't dispatch them a second time. That's the case for
+    /// [`State::After`], which carries the full list of state changes since
+    /// the previous sync, including the ones in the timeline.
     pub(crate) async fn handle_sync_state_events(
         &self,
         room: Option<&Room>,
         state: &State,
-    ) -> serde_json::Result<()> {
+    ) -> serde_json::Result<BTreeSet<OwnedEventId>> {
         #[derive(Deserialize)]
         struct StateEventDetails<'a> {
             #[serde(borrow, rename = "type")]
             event_type: Cow<'a, str>,
+            event_id: Option<OwnedEventId>,
             unsigned: Option<UnsignedDetails>,
         }
 
-        let state_events = match state {
-            State::Before(events) => events,
-            State::After(events) => events,
+        let (state_events, overlaps_with_timeline) = match state {
+            // State changes that happened *before* the timeline: they can't also be in
+            // it.
+            State::Before(events) => (events, false),
+            // State changes that happened up to the *end* of the timeline: the ones
+            // that are part of the timeline appear in both places.
+            State::After(events) => (events, true),
         };
 
         // Event handlers for possibly-redacted state events
         self.handle_sync_events(HandlerKind::State, room, state_events).await?;
 
+        let mut dispatched_event_ids = BTreeSet::new();
+
         // Event handlers specifically for redacted OR unredacted state events
         for raw_event in state_events {
-            let StateEventDetails { event_type, unsigned } =
+            let StateEventDetails { event_type, event_id, unsigned } =
                 raw_event.deserialize_as_unchecked()?;
             let redacted = unsigned.and_then(|u| u.redacted_because).is_some();
             let handler_kind = HandlerKind::state_redacted(redacted);
+
+            if overlaps_with_timeline && let Some(event_id) = event_id {
+                dispatched_event_ids.insert(event_id);
+            }
 
             self.call_event_handlers(room, raw_event.json(), handler_kind, &event_type, None, &[])
                 .await;
         }
 
-        Ok(())
+        Ok(dispatched_event_ids)
     }
 
+    /// Call the event handlers for the timeline events of a sync response.
+    ///
+    /// `already_dispatched_state_events` holds the IDs of the state events that
+    /// [`Self::handle_sync_state_events`] has already dispatched for this room;
+    /// they are skipped here, so that a state event that is both a state change
+    /// and part of the timeline only reaches its handler once. It is still
+    /// dispatched as an `AnySyncTimelineEvent`, which the state pass doesn't
+    /// do.
     pub(crate) async fn handle_sync_timeline_events(
         &self,
         room: Option<&Room>,
         timeline_events: &[TimelineEvent],
+        already_dispatched_state_events: &BTreeSet<OwnedEventId>,
     ) -> serde_json::Result<()> {
         #[derive(Deserialize)]
         struct TimelineEventDetails<'a> {
             #[serde(borrow, rename = "type")]
             event_type: Cow<'a, str>,
+            event_id: Option<OwnedEventId>,
             state_key: Option<serde::de::IgnoredAny>,
             unsigned: Option<UnsignedDetails>,
         }
 
         for item in timeline_events {
-            let TimelineEventDetails { event_type, state_key, unsigned } =
+            let TimelineEventDetails { event_type, event_id, state_key, unsigned } =
                 item.raw().deserialize_as_unchecked()?;
 
             let redacted = unsigned.and_then(|u| u.redacted_because).is_some();
@@ -455,31 +484,38 @@ impl Client {
                 None => (HandlerKind::MessageLike, HandlerKind::message_like_redacted(redacted)),
             };
 
+            let already_dispatched = state_key.is_some()
+                && event_id
+                    .as_ref()
+                    .is_some_and(|event_id| already_dispatched_state_events.contains(event_id));
+
             let raw_event = item.raw().json();
             let encryption_info = item.encryption_info().map(|i| &**i);
             let push_actions = item.push_actions().unwrap_or(&[]);
 
-            // Event handlers for possibly-redacted timeline events
-            self.call_event_handlers(
-                room,
-                raw_event,
-                handler_kind_g,
-                &event_type,
-                encryption_info,
-                push_actions,
-            )
-            .await;
+            if !already_dispatched {
+                // Event handlers for possibly-redacted timeline events
+                self.call_event_handlers(
+                    room,
+                    raw_event,
+                    handler_kind_g,
+                    &event_type,
+                    encryption_info,
+                    push_actions,
+                )
+                .await;
 
-            // Event handlers specifically for redacted OR unredacted timeline events
-            self.call_event_handlers(
-                room,
-                raw_event,
-                handler_kind_r,
-                &event_type,
-                encryption_info,
-                push_actions,
-            )
-            .await;
+                // Event handlers specifically for redacted OR unredacted timeline events
+                self.call_event_handlers(
+                    room,
+                    raw_event,
+                    handler_kind_r,
+                    &event_type,
+                    encryption_info,
+                    push_actions,
+                )
+                .await;
+            }
 
             // Event handlers for `AnySyncTimelineEvent`
             let kind = HandlerKind::Timeline;

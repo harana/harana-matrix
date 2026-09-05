@@ -17,6 +17,45 @@ pub mod mocks;
 use self::client::mock_matrix_session;
 use crate::{Client, ClientBuilder, config::RequestConfig};
 
+/// An [`HttpSend`](crate::HttpSend) that refuses every request.
+///
+/// [`ensure_transport`] installs this when the crate is built without the
+/// `reqwest-transport` feature, where there is no default transport and
+/// [`ClientBuilder::build`] would fail outright.
+#[cfg(not(feature = "reqwest-transport"))]
+#[derive(Debug)]
+struct NoTransport;
+
+#[cfg(not(feature = "reqwest-transport"))]
+impl crate::HttpSend for NoTransport {
+    fn send_request<'a>(
+        &'a self,
+        _request: http::Request<bytes::Bytes>,
+        _timeout: Option<std::time::Duration>,
+        _send_progress: eyeball::SharedObservable<crate::TransmissionProgress>,
+    ) -> matrix_sdk_common::BoxFuture<'a, Result<http::Response<bytes::Bytes>, crate::HttpError>>
+    {
+        Box::pin(std::future::ready(Err(crate::HttpError::Transport(
+            "this test client was built without an HTTP transport".into(),
+        ))))
+    }
+}
+
+/// Make sure the builder has a transport, so that [`ClientBuilder::build`]
+/// doesn't fail with `ClientBuildError::MissingHttpTransport`.
+///
+/// With the `reqwest-transport` feature this is a no-op, since `reqwest` is
+/// then the default. Without it, tests get a transport that errors on every
+/// request: enough for the many tests that build a client and never send
+/// anything, while one that does send a request still has to install a
+/// transport of its own.
+pub fn ensure_transport(builder: ClientBuilder) -> ClientBuilder {
+    #[cfg(not(feature = "reqwest-transport"))]
+    let builder = builder.http_transport(std::sync::Arc::new(NoTransport));
+
+    builder
+}
+
 /// Checks that an event is a message-like text event with the given text.
 #[track_caller]
 pub fn assert_event_matches_msg<E: Clone + Into<TimelineEvent>>(event: &E, expected: &str) {
@@ -36,7 +75,9 @@ pub fn test_client_builder(homeserver_url: Option<String>) -> ClientBuilder {
     let homeserver = homeserver_url
         .map(|url| Url::try_from(url.as_str()).unwrap())
         .unwrap_or_else(|| Url::try_from("http://localhost:1234").unwrap());
-    Client::builder().homeserver_url(homeserver).server_versions([MatrixVersion::V1_0])
+    ensure_transport(
+        Client::builder().homeserver_url(homeserver).server_versions([MatrixVersion::V1_0]),
+    )
 }
 
 /// A [`Client`] using the given `homeserver_url` (or localhost:1234), that will

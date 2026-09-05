@@ -36,6 +36,8 @@ pub enum SyncServiceState {
     Terminated,
     Error,
     Offline,
+    /// The syncs failed and the service is waiting before restarting them.
+    Backoff,
 }
 
 impl From<MatrixSyncServiceState> for SyncServiceState {
@@ -46,6 +48,7 @@ impl From<MatrixSyncServiceState> for SyncServiceState {
             MatrixSyncServiceState::Terminated => Self::Terminated,
             MatrixSyncServiceState::Error(_error) => Self::Error,
             MatrixSyncServiceState::Offline => Self::Offline,
+            MatrixSyncServiceState::Backoff => Self::Backoff,
         }
     }
 }

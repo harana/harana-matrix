@@ -813,7 +813,22 @@ impl Client {
                     .map_err(|error| ClientError::from_str(error, None))?,
             )
             .await?;
-        self.inner.set_sliding_sync_version(sliding_sync_version.try_into()?);
+
+        // A session persisted before the sliding sync version was discovered carries
+        // `None`. Restoring it must not undo the discovery the client builder just did,
+        // otherwise starting the sync service fails with "sliding sync version is
+        // missing" on a client that does support it.
+        let sliding_sync_version: SdkSlidingSyncVersion = sliding_sync_version.try_into()?;
+
+        if !matches!(sliding_sync_version, SdkSlidingSyncVersion::None) {
+            self.inner.set_sliding_sync_version(sliding_sync_version);
+        } else {
+            tracing::info!(
+                current_version = ?self.inner.sliding_sync_version(),
+                "The restored session carries no sliding sync version; keeping the one \
+                 the client was built with"
+            );
+        }
 
         Ok(())
     }
@@ -1644,12 +1659,14 @@ impl Client {
         self.inner.homeserver().to_string()
     }
 
-    /// The URL of the server.
+    /// The URL built from the server name used for `.well-known` discovery,
+    /// as a string.
     ///
-    /// Not to be confused with the `Self::homeserver`. `server` is usually
-    /// the server part in a user ID, e.g. with `@mnt_io:matrix.org`, here
-    /// `matrix.org` is the server, whilst `matrix-client.matrix.org` is the
-    /// homeserver (at the time of writing — 2024-08-28).
+    /// Not to be confused with `Self::homeserver`. This is the server part
+    /// in a user ID turned into a URL, e.g. with `@mnt_io:matrix.org`, this
+    /// would be `https://matrix.org/`, whilst the homeserver it delegates to
+    /// could be e.g. `https://matrix-client.matrix.org/`. Despite the name,
+    /// this is a URL, not a bare Matrix server name.
     ///
     /// This value is optional depending on how the `Client` has been built.
     /// If it's been built from a homeserver URL directly, we don't know the

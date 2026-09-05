@@ -74,8 +74,8 @@ pub use client::homeserver_capabilities::HomeserverCapabilities;
 #[cfg(feature = "experimental-search")]
 pub mod search_index;
 pub use client::{
-    Client, ClientBuildError, ClientBuilder, LoopCtrl, ServerVendorInfo, SessionChange, StoreSizes,
-    TileServerInfo, sanitize_server_name,
+    Client, ClientBuildError, ClientBuilder, LoopCtrl, ServerVendorInfo, SessionChange,
+    StoreProvider, StoreProviderError, StoreSizes, TileServerInfo, sanitize_server_name,
 };
 pub use error::{
     BeaconError, Error, HttpError, HttpResult, NotificationSettingsError, RefreshTokenError,

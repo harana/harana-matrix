@@ -335,7 +335,7 @@ async fn test_encryption_sync_always_reloads_todevice_token() -> anyhow::Result<
         olm_machine
             .store()
             .save_changes(Changes {
-                next_batch_token: Some("nb2".to_owned()),
+                next_batch_token: Some(matrix_sdk_base::to_device_token::tag("nb2")),
                 ..Default::default()
             })
             .await?;
@@ -522,13 +522,15 @@ async fn test_notification_client_does_not_upload_duplicate_one_time_keys() -> a
 
     info!("Back to the main sync");
 
+    // The notification client's sync v2 `next_batch` is not a to-device stream
+    // token, so the encryption sync keeps resuming from its own one.
     sliding_sync_then_assert_request_and_fake_response! {
         [server, stream]
         assert request >= {
             "conn_id": "encryption",
             "extensions": {
                 "to_device": {
-                    "since": "foo",
+                    "since": "nb2",
                 },
             }
         },

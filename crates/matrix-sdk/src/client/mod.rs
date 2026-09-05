@@ -19,7 +19,7 @@ use std::{
     fmt::{self, Debug},
     future::{Future, ready},
     pin::Pin,
-    sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock, Weak},
+    sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock, Weak, atomic::AtomicBool},
     time::Duration,
 };
 
@@ -116,7 +116,7 @@ use crate::{
     room_preview::RoomPreview,
     send_queue::{SendQueue, SendQueueData},
     sliding_sync::Version as SlidingSyncVersion,
-    sync::{RoomUpdate, SyncResponse},
+    sync::{RoomUpdate, SyncGuard, SyncResponse},
 };
 #[cfg(feature = "e2e-encryption")]
 use crate::{
@@ -133,7 +133,9 @@ pub(crate) mod futures;
 pub(crate) mod homeserver_capabilities;
 pub(crate) mod thread_subscriptions;
 
-pub use self::builder::{ClientBuildError, ClientBuilder, sanitize_server_name};
+pub use self::builder::{
+    ClientBuildError, ClientBuilder, StoreProvider, StoreProviderError, sanitize_server_name,
+};
 #[cfg(feature = "experimental-search")]
 use crate::search_index::SearchIndex;
 
@@ -373,6 +375,14 @@ pub(crate) struct ClientInner {
     /// store.
     pub(crate) sync_beat: event_listener::Event,
 
+    /// Whether a `/sync` session is currently running for this client.
+    ///
+    /// Guarded by [`SyncGuard`], this makes concurrent calls to
+    /// [`Client::sync_once`] and the sync loops fail with
+    /// [`Error::ConcurrentSync`] instead of silently interleaving, which
+    /// would drop syncs and let an older response overwrite newer state.
+    pub(crate) is_syncing: Arc<AtomicBool>,
+
     /// A central cache for events, inactive first.
     ///
     /// It becomes active when [`EventCache::subscribe`] is called.
@@ -498,6 +508,7 @@ impl ClientInner {
             respect_login_well_known,
             well_known_lookup_disabled: StdRwLock::new(well_known_lookup_disabled),
             sync_beat: event_listener::Event::new(),
+            is_syncing: Arc::new(AtomicBool::new(false)),
             event_cache,
             send_queue_data: send_queue,
             latest_events,
@@ -704,14 +715,31 @@ impl Client {
         self.inner.base_client.is_active()
     }
 
-    /// The server used by the client.
+    /// The URL built from the server name that was used for `.well-known`
+    /// discovery, if any.
     ///
-    /// See `Self::server` to learn more.
+    /// This is set when the client was built with [`ClientBuilder::server_name`],
+    /// [`ClientBuilder::insecure_server_name_no_tls`], or
+    /// [`ClientBuilder::server_name_or_homeserver_url`] and a server name (as
+    /// opposed to a homeserver URL) was resolved. It is `None` when the
+    /// client was built directly from a homeserver URL with
+    /// [`ClientBuilder::homeserver_url`], since there is then no separate
+    /// server name to report.
+    ///
+    /// Note that despite the name, this returns a [`Url`], not a Matrix
+    /// server name: it is the server name combined with the scheme (`http`
+    /// or `https`) that was used to reach it. A server delegating to a
+    /// different homeserver via `.well-known` means this can differ from
+    /// [`Client::homeserver`], which is the URL requests are actually sent
+    /// to.
     pub fn server(&self) -> Option<Url> {
         self.inner.server.read().unwrap().clone()
     }
 
-    /// The homeserver of the client.
+    /// The URL of the homeserver that this client sends requests to.
+    ///
+    /// This may differ from [`Client::server`] when the server delegates to
+    /// another homeserver via `.well-known` discovery.
     pub fn homeserver(&self) -> Url {
         self.inner.homeserver.read().unwrap().clone()
     }
@@ -3171,8 +3199,29 @@ impl Client {
     /// [`get_or_upload_filter()`]: #method.get_or_upload_filter
     /// [long polling]: #long-polling
     /// [filtered]: #filtering-events
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::ConcurrentSync`] if a sync loop ([`Client::sync`],
+    /// [`Client::sync_stream`], …) or another [`Client::sync_once`] call is
+    /// already running for this client. Mixing them is not supported: syncs
+    /// would be dropped, and an older response could overwrite the state built
+    /// from a newer one.
     #[instrument(skip(self))]
     pub async fn sync_once(
+        &self,
+        sync_settings: crate::config::SyncSettings,
+    ) -> Result<SyncResponse> {
+        let _sync_guard = SyncGuard::try_new(&self.inner.is_syncing)?;
+
+        self.sync_once_inner(sync_settings).await
+    }
+
+    /// Same as [`Client::sync_once`], but without taking the sync guard.
+    ///
+    /// The caller must hold a [`SyncGuard`] for the whole duration of the sync
+    /// session it runs.
+    pub(crate) async fn sync_once_inner(
         &self,
         sync_settings: crate::config::SyncSettings,
     ) -> Result<SyncResponse> {
@@ -3483,6 +3532,12 @@ impl Client {
     ///
     /// # anyhow::Ok(()) };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// The stream yields a single [`Error::ConcurrentSync`] item, and then
+    /// ends, if another sync (a sync loop, or a [`Client::sync_once`] call) is
+    /// already running for this client.
     #[allow(unknown_lints, clippy::let_with_type_underscore)] // triggered by instrument macro
     #[instrument(skip(self))]
     pub async fn sync_stream(
@@ -3496,6 +3551,16 @@ impl Client {
         let parent_span = Span::current();
 
         async_stream::stream!({
+            // Hold the guard for the whole lifetime of the stream: this sync loop owns
+            // the client's sync session until it is dropped.
+            let _sync_guard = match SyncGuard::try_new(&self.inner.is_syncing) {
+                Ok(guard) => guard,
+                Err(error) => {
+                    yield Err(error);
+                    return;
+                }
+            };
+
             loop {
                 trace!("Syncing");
 
@@ -3625,6 +3690,7 @@ impl Client {
             .latest_events
             .get_or_init(|| async {
                 LatestEvents::new(
+                    self.task_monitor(),
                     WeakClient::from_client(self),
                     self.event_cache().clone(),
                     SendQueue::new(self.clone()),

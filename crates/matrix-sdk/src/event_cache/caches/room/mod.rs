@@ -26,7 +26,7 @@ use matrix_sdk_base::{
 };
 use ruma::{
     EventId, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId,
-    events::{AnyRoomAccountDataEvent, AnySyncEphemeralRoomEvent, relation::RelationType},
+    events::{AnyRoomAccountDataEvent, relation::RelationType},
     serde::Raw,
 };
 use tokio::sync::{Notify, mpsc};
@@ -45,7 +45,7 @@ use super::{
         EventsOrigin, Result,
         states::{CacheStateLock, StateLockWriteGuard, selectors::RoomStateSelector},
     },
-    TimelineVectorDiffs,
+    EphemeralEvents, TimelineVectorDiffs,
     event_linked_chunk::sort_positions_descending,
     pagination::SharedPaginationStatus,
     subscriber::{AutoShrinkMessage, Subscriber},
@@ -233,11 +233,15 @@ impl RoomEventCache {
 
     /// Handle a [`JoinedRoomUpdate`].
     #[instrument(skip_all, fields(room_id = %self.room_id()))]
-    pub(super) async fn handle_joined_room_update(&self, updates: JoinedRoomUpdate) -> Result<()> {
+    pub(super) async fn handle_joined_room_update(
+        &self,
+        updates: JoinedRoomUpdate,
+        ephemeral: EphemeralEvents,
+    ) -> Result<()> {
         self.inner
             .handle_timeline(
                 updates.timeline,
-                updates.ephemeral,
+                ephemeral,
                 updates.ambiguity_changes,
                 updates.avatar_changes,
             )
@@ -251,7 +255,12 @@ impl RoomEventCache {
     #[instrument(skip_all, fields(room_id = %self.room_id()))]
     pub(super) async fn handle_left_room_update(&self, updates: LeftRoomUpdate) -> Result<()> {
         self.inner
-            .handle_timeline(updates.timeline, Vec::new(), updates.ambiguity_changes, None)
+            .handle_timeline(
+                updates.timeline,
+                EphemeralEvents::default(),
+                updates.ambiguity_changes,
+                None,
+            )
             .await?;
 
         Ok(())
@@ -381,14 +390,14 @@ impl RoomEventCacheInner {
     async fn handle_timeline(
         &self,
         timeline: Timeline,
-        ephemeral_events: Vec<Raw<AnySyncEphemeralRoomEvent>>,
+        ephemeral: EphemeralEvents,
         ambiguity_changes: BTreeMap<OwnedEventId, AmbiguityChange>,
         avatar_changes: Option<BTreeMap<OwnedUserId, Option<OwnedMxcUri>>>,
     ) -> Result<()> {
         self.handle_timeline_inner(
             self.state.write().await?,
             timeline,
-            ephemeral_events,
+            ephemeral,
             ambiguity_changes,
             avatar_changes,
         )
@@ -409,7 +418,7 @@ impl RoomEventCacheInner {
                 .handle_timeline_inner(
                     state,
                     Timeline { limited: false, prev_batch: None, events: vec![event] },
-                    Vec::new(),
+                    EphemeralEvents::default(),
                     BTreeMap::new(),
                     None,
                 )
@@ -423,13 +432,13 @@ impl RoomEventCacheInner {
         &self,
         mut state: StateLockWriteGuard<'_, RoomEventCacheState>,
         timeline: Timeline,
-        ephemeral_events: Vec<Raw<AnySyncEphemeralRoomEvent>>,
+        ephemeral: EphemeralEvents,
         ambiguity_changes: BTreeMap<OwnedEventId, AmbiguityChange>,
         avatar_changes: Option<BTreeMap<OwnedUserId, Option<OwnedMxcUri>>>,
     ) -> Result<()> {
         if timeline.events.is_empty()
             && timeline.prev_batch.is_none()
-            && ephemeral_events.is_empty()
+            && ephemeral.raw.is_empty()
             && ambiguity_changes.is_empty()
             && avatar_changes.as_ref().is_none_or(|avatars| avatars.is_empty())
         {
@@ -439,7 +448,7 @@ impl RoomEventCacheInner {
         trace!("adding new events");
 
         let (stored_prev_batch_token, timeline_event_diffs) =
-            state.handle_sync(timeline, &ephemeral_events).await?;
+            state.handle_sync(timeline, &ephemeral.receipts).await?;
 
         drop(state);
 
@@ -461,9 +470,9 @@ impl RoomEventCacheInner {
             );
         }
 
-        if !ephemeral_events.is_empty() {
+        if !ephemeral.raw.is_empty() {
             self.update_sender
-                .send(RoomEventCacheUpdate::AddEphemeralEvents { events: ephemeral_events }, None);
+                .send(RoomEventCacheUpdate::AddEphemeralEvents { events: ephemeral.raw }, None);
         }
 
         if !ambiguity_changes.is_empty() || avatar_changes.as_ref().is_some_and(|c| !c.is_empty()) {
@@ -797,7 +806,7 @@ mod timed_tests {
 
     use super::{
         super::{super::TimelineVectorDiffs, pagination::LoadMoreEventsBackwardsOutcome},
-        RoomEventCache, RoomEventCacheGenericUpdate, RoomEventCacheUpdate,
+        EphemeralEvents, RoomEventCache, RoomEventCacheGenericUpdate, RoomEventCacheUpdate,
     };
     use crate::{assert_let_timeout, test_utils::client::MockClientBuilder};
 
@@ -838,7 +847,10 @@ mod timed_tests {
         };
 
         room_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() })
+            .handle_joined_room_update(
+                JoinedRoomUpdate { timeline, ..Default::default() },
+                EphemeralEvents::default(),
+            )
             .await
             .unwrap();
 
@@ -915,7 +927,10 @@ mod timed_tests {
         let timeline = Timeline { limited: false, prev_batch: None, events: vec![ev] };
 
         room_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() })
+            .handle_joined_room_update(
+                JoinedRoomUpdate { timeline, ..Default::default() },
+                EphemeralEvents::default(),
+            )
             .await
             .unwrap();
 
@@ -1252,7 +1267,10 @@ mod timed_tests {
         let timeline = Timeline { limited: false, prev_batch: None, events: vec![ev2] };
 
         room_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() })
+            .handle_joined_room_update(
+                JoinedRoomUpdate { timeline, ..Default::default() },
+                EphemeralEvents::default(),
+            )
             .await
             .unwrap();
 
@@ -1358,14 +1376,17 @@ mod timed_tests {
         // Propagate an update including a limited timeline with one message and a
         // prev-batch token.
         room_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate {
-                timeline: Timeline {
-                    limited: true,
-                    prev_batch: Some("raclette".to_owned()),
-                    events: vec![f.text_msg("hey yo").into_event()],
+            .handle_joined_room_update(
+                JoinedRoomUpdate {
+                    timeline: Timeline {
+                        limited: true,
+                        prev_batch: Some("raclette".to_owned()),
+                        events: vec![f.text_msg("hey yo").into_event()],
+                    },
+                    ..Default::default()
                 },
-                ..Default::default()
-            })
+                EphemeralEvents::default(),
+            )
             .await
             .unwrap();
 
@@ -1424,14 +1445,17 @@ mod timed_tests {
         // Now, propagate an update for another message, but the timeline isn't limited
         // this time.
         room_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate {
-                timeline: Timeline {
-                    limited: false,
-                    prev_batch: Some("fondue".to_owned()),
-                    events: vec![f.text_msg("sup").into_event()],
+            .handle_joined_room_update(
+                JoinedRoomUpdate {
+                    timeline: Timeline {
+                        limited: false,
+                        prev_batch: Some("fondue".to_owned()),
+                        events: vec![f.text_msg("sup").into_event()],
+                    },
+                    ..Default::default()
                 },
-                ..Default::default()
-            })
+                EphemeralEvents::default(),
+            )
             .await
             .unwrap();
 
@@ -1704,14 +1728,17 @@ mod timed_tests {
         // events.
         let evid4 = event_id!("$4");
         room_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate {
-                timeline: Timeline {
-                    limited: true,
-                    prev_batch: Some("fondue".to_owned()),
-                    events: vec![ev3, f.text_msg("sup").event_id(evid4).into_event()],
+            .handle_joined_room_update(
+                JoinedRoomUpdate {
+                    timeline: Timeline {
+                        limited: true,
+                        prev_batch: Some("fondue".to_owned()),
+                        events: vec![ev3, f.text_msg("sup").event_id(evid4).into_event()],
+                    },
+                    ..Default::default()
                 },
-                ..Default::default()
-            })
+                EphemeralEvents::default(),
+            )
             .await
             .unwrap();
 
@@ -2600,7 +2627,10 @@ mod timed_tests {
         let account_data = vec![read_marker_event; 100];
 
         room_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate { account_data, ..Default::default() })
+            .handle_joined_room_update(
+                JoinedRoomUpdate { account_data, ..Default::default() },
+                EphemeralEvents::default(),
+            )
             .await
             .unwrap();
 

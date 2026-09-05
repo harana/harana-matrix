@@ -309,7 +309,7 @@ impl NotificationClient {
             }
         };
 
-        let encryption_sync = EncryptionSyncService::new(
+        let encryption_sync = EncryptionSyncService::new_for_notifications(
             self.client.clone(),
             Some((Duration::from_secs(3), Duration::from_secs(4))),
         )
@@ -435,6 +435,7 @@ impl NotificationClient {
         let stripped_member_handler = self.client.add_event_handler({
             let requests = requests.clone();
             let room_ids: Vec<_> = room_ids.clone();
+            let user_id = user_id.clone();
             move |raw: Raw<StrippedRoomMemberEvent>, room: Room| async move {
                 if !room_ids.contains(&room.room_id().to_owned()) {
                     return;
@@ -497,10 +498,13 @@ impl NotificationClient {
         });
 
         // Room power levels are necessary to build the push context.
+        //
+        // Note: MSC4186 dropped the `$ME` magic state key, so the current user is
+        // requested with its full user ID instead.
         let required_state = vec![
             (StateEventType::RoomEncryption, "".to_owned()),
             (StateEventType::RoomMember, "$LAZY".to_owned()),
-            (StateEventType::RoomMember, "$ME".to_owned()),
+            (StateEventType::RoomMember, user_id.to_string()),
             (StateEventType::RoomCanonicalAlias, "".to_owned()),
             (StateEventType::RoomName, "".to_owned()),
             (StateEventType::RoomAvatar, "".to_owned()),

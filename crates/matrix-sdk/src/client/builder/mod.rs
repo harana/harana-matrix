@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod homeserver_config;
+mod store_provider;
 
 #[cfg(feature = "experimental-search")]
 use std::collections::HashMap;
@@ -55,6 +56,7 @@ use tokio::sync::Mutex;
 use tokio::sync::OnceCell;
 use tracing::{Span, debug, field::debug, instrument};
 
+pub use self::store_provider::{StoreProvider, StoreProviderError};
 use super::{Client, ClientInner};
 #[cfg(feature = "e2e-encryption")]
 use crate::encryption::EncryptionSettings;
@@ -375,6 +377,50 @@ impl ClientBuilder {
     /// ```
     pub fn store_config(mut self, store_config: StoreConfig) -> Self {
         self.store_config = BuilderStoreConfig::Custom(store_config);
+        self
+    }
+
+    /// Set up the store configuration with a custom storage backend.
+    ///
+    /// Unlike [`Self::store_config`], which takes stores that are already
+    /// open, the given [`StoreProvider`] is called while the [`Client`] is
+    /// being built, so it can open its stores asynchronously and report a
+    /// failure as [`ClientBuildError::StoreProvider`].
+    ///
+    /// This overrides any store configuration previously set on this builder,
+    /// including [`Self::sqlite_store`] and [`Self::store_config`].
+    ///
+    /// # Arguments
+    ///
+    /// * `store_provider` - The backend to open the client's stores with.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use matrix_sdk::{
+    /// #     BoxFuture, Client, StoreProvider, StoreProviderError,
+    /// #     config::StoreConfig, cross_process_lock::CrossProcessLockConfig,
+    /// #     store::MemoryStore,
+    /// # };
+    /// #[derive(Debug)]
+    /// struct MyBackend;
+    ///
+    /// impl StoreProvider for MyBackend {
+    ///     fn open_stores<'a>(
+    ///         &'a self,
+    ///         cross_process_lock_config: &'a CrossProcessLockConfig,
+    ///     ) -> BoxFuture<'a, Result<StoreConfig, StoreProviderError>> {
+    ///         Box::pin(async move {
+    ///             Ok(StoreConfig::new(cross_process_lock_config.clone())
+    ///                 .state_store(MemoryStore::new()))
+    ///         })
+    ///     }
+    /// }
+    ///
+    /// let client_builder = Client::builder().store_provider(MyBackend);
+    /// ```
+    pub fn store_provider(mut self, store_provider: impl StoreProvider) -> Self {
+        self.store_config = BuilderStoreConfig::Provider(Arc::new(store_provider));
         self
     }
 
@@ -864,6 +910,11 @@ async fn build_store_config(
             .await?
         }
 
+        BuilderStoreConfig::Provider(store_provider) => store_provider
+            .open_stores(cross_process_store_config)
+            .await
+            .map_err(ClientBuildError::StoreProvider)?,
+
         BuilderStoreConfig::Custom(config) => config,
     };
     Ok(store_config)
@@ -947,6 +998,7 @@ enum BuilderStoreConfig {
         name: String,
         passphrase: Option<String>,
     },
+    Provider(Arc<dyn StoreProvider>),
     Custom(StoreConfig),
 }
 
@@ -965,6 +1017,10 @@ impl fmt::Debug for BuilderStoreConfig {
             #[cfg(feature = "indexeddb")]
             Self::IndexedDb { name, .. } => {
                 f.debug_struct("IndexedDb").field("name", name).finish_non_exhaustive()
+            }
+
+            Self::Provider(store_provider) => {
+                f.debug_tuple("Provider").field(store_provider).finish()
             }
 
             Self::Custom(store_config) => f.debug_tuple("Custom").field(store_config).finish(),
@@ -1026,15 +1082,28 @@ pub enum ClientBuildError {
     #[cfg(feature = "sqlite")]
     #[error(transparent)]
     SqliteStore(#[from] matrix_sdk_sqlite::OpenStoreError),
+
+    /// Error opening the stores of a custom storage backend, reported by the
+    /// [`StoreProvider`] given to [`ClientBuilder::store_provider`].
+    #[error(transparent)]
+    StoreProvider(StoreProviderError),
 }
 
 // The http mocking library is not supported for wasm32
 #[cfg(all(test, not(target_family = "wasm")))]
 pub(crate) mod tests {
-    use std::{future, iter, net::SocketAddr, sync::Mutex as StdMutex};
+    use std::{
+        future, iter,
+        net::SocketAddr,
+        sync::{
+            Mutex as StdMutex,
+            atomic::{AtomicBool, Ordering},
+        },
+    };
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
+    use matrix_sdk_base::store::MemoryStore;
     use matrix_sdk_test::{async_test, test_json};
     use reqwest::dns::{Addrs, Name, Resolve, Resolving};
     use serde_json::{Value as JsonValue, json_internal};
@@ -1046,6 +1115,62 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::sliding_sync::Version as SlidingSyncVersion;
+
+    #[derive(Debug)]
+    struct TestStoreProvider {
+        /// Set to `true` when [`StoreProvider::open_stores`] is called.
+        called: Arc<AtomicBool>,
+        /// Whether opening the stores should fail.
+        fail: bool,
+    }
+
+    impl StoreProvider for TestStoreProvider {
+        fn open_stores<'a>(
+            &'a self,
+            cross_process_lock_config: &'a CrossProcessLockConfig,
+        ) -> matrix_sdk_common::BoxFuture<'a, Result<StoreConfig, StoreProviderError>> {
+            Box::pin(async move {
+                self.called.store(true, Ordering::SeqCst);
+
+                if self.fail {
+                    return Err("cannot open the stores".into());
+                }
+
+                Ok(StoreConfig::new(cross_process_lock_config.clone())
+                    .state_store(MemoryStore::new()))
+            })
+        }
+    }
+
+    #[async_test]
+    async fn test_store_provider_is_used() {
+        let called = Arc::new(AtomicBool::new(false));
+
+        let _client = ClientBuilder::new()
+            .homeserver_url("http://localhost:1234")
+            .store_provider(TestStoreProvider { called: called.clone(), fail: false })
+            .build()
+            .await
+            .unwrap();
+
+        assert!(called.load(Ordering::SeqCst), "the store provider should have been called");
+    }
+
+    #[async_test]
+    async fn test_store_provider_error_is_reported() {
+        let called = Arc::new(AtomicBool::new(false));
+
+        let error = ClientBuilder::new()
+            .homeserver_url("http://localhost:1234")
+            .store_provider(TestStoreProvider { called: called.clone(), fail: true })
+            .build()
+            .await
+            .unwrap_err();
+
+        assert!(called.load(Ordering::SeqCst), "the store provider should have been called");
+        assert_let!(ClientBuildError::StoreProvider(error) = error);
+        assert_eq!(error.to_string(), "cannot open the stores");
+    }
 
     #[test]
     fn test_sanitize_server_name() {

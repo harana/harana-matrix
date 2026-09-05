@@ -215,6 +215,29 @@ impl SqliteStoreConfig {
         self
     }
 
+    /// Define the `synchronous` behaviour of the database, i.e. how
+    /// aggressively SQLite flushes data to disk.
+    ///
+    /// The database is always opened in [WAL mode][wal]. With
+    /// [`Synchronous::Full`], every commit triggers an `fsync`, which can
+    /// be a significant performance bottleneck, in particular on spinning
+    /// disks or RAID arrays. [`Synchronous::Normal`] only syncs at
+    /// checkpoints, which is a lot cheaper while still being safe against
+    /// application crashes; data can only be lost after an OS crash or a
+    /// power loss, and even then, only the store cache is affected: it will
+    /// simply be resynchronized from the homeserver.
+    ///
+    /// See [`PRAGMA synchronous`] to learn more.
+    ///
+    /// The default value is [`Synchronous::Normal`].
+    ///
+    /// [wal]: https://www.sqlite.org/wal.html
+    /// [`PRAGMA synchronous`]: https://www.sqlite.org/pragma.html#pragma_synchronous
+    pub fn synchronous(mut self, synchronous: Synchronous) -> Self {
+        self.runtime_config.synchronous = synchronous;
+        self
+    }
+
     /// Returns the pool configuration.
     pub(crate) fn pool_config(&self) -> PoolConfig {
         self.pool_config
@@ -257,6 +280,11 @@ struct RuntimeConfig {
     /// [`utils::SqliteAsyncConnExt::journal_size_limit`] will always be called
     /// with this value.
     journal_size_limit: u32,
+
+    /// Regardless of the value,
+    /// [`utils::SqliteAsyncConnExt::synchronous`] will always be called with
+    /// this value.
+    synchronous: Synchronous,
 }
 
 impl Default for RuntimeConfig {
@@ -268,6 +296,54 @@ impl Default for RuntimeConfig {
             cache_size: 2_000_000,
             // A limit of 10Mib.
             journal_size_limit: 10_000_000,
+            // Only sync at checkpoints; avoid an `fsync` on every commit.
+            synchronous: Synchronous::Normal,
+        }
+    }
+}
+
+/// The value of [`PRAGMA synchronous`][pragma], controlling how aggressively
+/// SQLite flushes data to disk.
+///
+/// [pragma]: https://www.sqlite.org/pragma.html#pragma_synchronous
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Synchronous {
+    /// `PRAGMA synchronous = OFF`. SQLite continues without syncing as soon
+    /// as it has handed data off to the operating system. This is the
+    /// fastest option, but the database can be corrupted if the
+    /// application crashes during a transaction, or on a power loss or OS
+    /// crash.
+    Off,
+
+    /// `PRAGMA synchronous = NORMAL`. In [WAL mode][wal], the database is
+    /// synced at checkpoints rather than on every commit. This is a lot
+    /// cheaper than [`Synchronous::Full`], and the database cannot be
+    /// corrupted, though a transaction can be rolled back after a power
+    /// loss or an OS crash (not after an application crash).
+    ///
+    /// [wal]: https://www.sqlite.org/wal.html
+    Normal,
+
+    /// `PRAGMA synchronous = FULL`. The database engine syncs at every
+    /// commit, guaranteeing that the database is durable across an
+    /// application crash, an OS crash, or a power loss, at the cost of an
+    /// `fsync` on every commit.
+    Full,
+
+    /// `PRAGMA synchronous = EXTRA`. Like [`Synchronous::Full`], but with
+    /// an additional sync after data is sent to disk before the WAL file
+    /// is checkpointed, for a small additional cost.
+    Extra,
+}
+
+impl Synchronous {
+    /// Returns the associated `PRAGMA synchronous` value.
+    fn as_pragma_str(self) -> &'static str {
+        match self {
+            Self::Off => "OFF",
+            Self::Normal => "NORMAL",
+            Self::Full => "FULL",
+            Self::Extra => "EXTRA",
         }
     }
 }
@@ -279,7 +355,7 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use super::{POOL_MINIMUM_SIZE, Secret, SqliteStoreConfig};
+    use super::{POOL_MINIMUM_SIZE, Secret, SqliteStoreConfig, Synchronous};
 
     #[test]
     fn test_new() {
@@ -289,6 +365,7 @@ mod tests {
         assert!(store_config.runtime_config.optimize);
         assert_eq!(store_config.runtime_config.cache_size, 2_000_000);
         assert_eq!(store_config.runtime_config.journal_size_limit, 10_000_000);
+        assert_eq!(store_config.runtime_config.synchronous, Synchronous::Normal);
     }
 
     #[test]
@@ -308,7 +385,8 @@ mod tests {
             .pool_max_size(42)
             .optimize(false)
             .cache_size(43)
-            .journal_size_limit(44);
+            .journal_size_limit(44)
+            .synchronous(Synchronous::Full);
 
         assert_eq!(store_config.path, PathBuf::from("foo"));
         assert_eq!(store_config.secret, Some(Secret::PassPhrase("bar".to_owned().into())));
@@ -316,6 +394,7 @@ mod tests {
         assert!(store_config.runtime_config.optimize.not());
         assert_eq!(store_config.runtime_config.cache_size, 43);
         assert_eq!(store_config.runtime_config.journal_size_limit, 44);
+        assert_eq!(store_config.runtime_config.synchronous, Synchronous::Full);
     }
 
     #[test]
@@ -328,7 +407,8 @@ mod tests {
             .pool_max_size(42)
             .optimize(false)
             .cache_size(43)
-            .journal_size_limit(44);
+            .journal_size_limit(44)
+            .synchronous(Synchronous::Off);
 
         assert_eq!(store_config.path, PathBuf::from("foo"));
         assert_eq!(
@@ -342,6 +422,7 @@ mod tests {
         assert!(store_config.runtime_config.optimize.not());
         assert_eq!(store_config.runtime_config.cache_size, 43);
         assert_eq!(store_config.runtime_config.journal_size_limit, 44);
+        assert_eq!(store_config.runtime_config.synchronous, Synchronous::Off);
     }
 
     #[test]

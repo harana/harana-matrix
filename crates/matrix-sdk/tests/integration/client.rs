@@ -19,8 +19,10 @@ use matrix_sdk::{
 };
 use matrix_sdk_base::{RoomState, sync::RoomUpdates};
 use matrix_sdk_common::{cross_process_lock::CrossProcessLockConfig, executor::spawn};
+#[cfg(feature = "sqlite")]
+use matrix_sdk_test::InvitedRoomBuilder;
 use matrix_sdk_test::{
-    DEFAULT_TEST_ROOM_ID, InvitedRoomBuilder, JoinedRoomBuilder, SyncResponseBuilder, async_test,
+    DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, async_test,
     event_factory::EventFactory,
     sync_state_event,
     test_json::{
@@ -64,6 +66,7 @@ use ruma::{
 };
 use serde_json::{Value as JsonValue, json};
 use stream_assert::{assert_next_matches, assert_pending};
+#[cfg(feature = "sqlite")]
 use tempfile::tempdir;
 #[cfg(feature = "sqlite")]
 use tokio::time::timeout;
