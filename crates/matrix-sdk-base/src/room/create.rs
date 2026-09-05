@@ -165,3 +165,233 @@ impl PossiblyRedactedStateEventContent for RoomCreateWithCreatorEventContent {
         RoomCreateWithCreatorEventContent::TYPE.into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use assert_matches2::assert_let;
+    use ruma::{
+        RoomVersionId,
+        events::{RedactContent, room::create::RoomCreateEventContent},
+        owned_room_id, owned_user_id,
+        room::RoomType,
+        room_version_rules::RedactionRules,
+    };
+    use serde_json::json;
+
+    use super::RoomCreateWithCreatorEventContent;
+
+    /// Deserializing an `m.room.create` content must apply the defaults
+    /// mandated by the spec: `room_version` defaults to `1`, `m.federate`
+    /// defaults to `true`, and every other field is optional.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomcreate>.
+    #[test]
+    fn test_deserialization_applies_the_spec_defaults() {
+        let content: RoomCreateWithCreatorEventContent =
+            serde_json::from_value(json!({ "creator": "@alice:localhost" })).unwrap();
+
+        assert_eq!(content.creator, owned_user_id!("@alice:localhost"));
+        assert_eq!(content.room_version, RoomVersionId::V1);
+        assert!(content.federate);
+        assert!(content.predecessor.is_none());
+        assert!(content.room_type.is_none());
+        assert!(content.additional_creators.is_empty());
+    }
+
+    /// `m.federate` set to `false` must be round-tripped, and the default
+    /// (`true`) must not be serialized.
+    #[test]
+    fn test_federate_is_round_tripped() {
+        let content: RoomCreateWithCreatorEventContent = serde_json::from_value(json!({
+            "creator": "@alice:localhost",
+            "m.federate": false,
+        }))
+        .unwrap();
+
+        assert!(!content.federate);
+        assert_eq!(
+            serde_json::to_value(&content).unwrap(),
+            json!({
+                "creator": "@alice:localhost",
+                "m.federate": false,
+                "room_version": "1",
+            })
+        );
+
+        let content: RoomCreateWithCreatorEventContent = serde_json::from_value(json!({
+            "creator": "@alice:localhost",
+            "room_version": "11",
+        }))
+        .unwrap();
+
+        assert!(content.federate);
+        // `m.federate: true` is the default, so it is skipped.
+        assert_eq!(
+            serde_json::to_value(&content).unwrap(),
+            json!({
+                "creator": "@alice:localhost",
+                "room_version": "11",
+            })
+        );
+    }
+
+    /// A room created by upgrading another one carries a `predecessor`.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#room-upgrades>.
+    #[test]
+    fn test_predecessor_is_deserialized() {
+        let content: RoomCreateWithCreatorEventContent = serde_json::from_value(json!({
+            "creator": "@alice:localhost",
+            "room_version": "11",
+            "predecessor": {
+                "room_id": "!old:localhost",
+                "event_id": "$tombstone",
+            },
+        }))
+        .unwrap();
+
+        assert_let!(Some(predecessor) = &content.predecessor);
+        assert_eq!(predecessor.room_id, owned_room_id!("!old:localhost"));
+    }
+
+    /// A space is an `m.room.create` event with a `type` of `m.space`.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mspace>.
+    #[test]
+    fn test_space_room_type_is_deserialized() {
+        let content: RoomCreateWithCreatorEventContent = serde_json::from_value(json!({
+            "creator": "@alice:localhost",
+            "room_version": "11",
+            "type": "m.space",
+        }))
+        .unwrap();
+
+        assert_eq!(content.room_type, Some(RoomType::Space));
+    }
+
+    /// Starting with room version 11 the `creator` field is gone from the
+    /// content, and the `sender` of the event must be used instead.
+    ///
+    /// See <https://spec.matrix.org/v1.16/rooms/v11/#mroomcreate-schema>.
+    #[test]
+    fn test_creator_is_taken_from_the_sender() {
+        let sender = owned_user_id!("@alice:localhost");
+        let content = RoomCreateWithCreatorEventContent::from_event_content(
+            RoomCreateEventContent::new_v11(),
+            sender.clone(),
+        );
+
+        assert_eq!(content.creator, sender);
+        assert_eq!(content.room_version, RoomVersionId::V11);
+    }
+
+    /// Before room version 12, only the single `creator` is privileged;
+    /// `additional_creators` must be ignored.
+    #[test]
+    fn test_creators_before_room_version_12() {
+        let content = RoomCreateWithCreatorEventContent {
+            creator: owned_user_id!("@alice:localhost"),
+            federate: true,
+            room_version: RoomVersionId::V11,
+            predecessor: None,
+            room_type: None,
+            additional_creators: vec![owned_user_id!("@bob:localhost")],
+        };
+
+        assert_eq!(content.creators(), vec![owned_user_id!("@alice:localhost")]);
+    }
+
+    /// From room version 12, the creator and the `additional_creators` are all
+    /// privileged.
+    ///
+    /// See <https://spec.matrix.org/v1.16/rooms/v12/#creators>.
+    #[test]
+    fn test_creators_from_room_version_12() {
+        let content = RoomCreateWithCreatorEventContent {
+            creator: owned_user_id!("@alice:localhost"),
+            federate: true,
+            room_version: RoomVersionId::V12,
+            predecessor: None,
+            room_type: None,
+            additional_creators: vec![
+                owned_user_id!("@bob:localhost"),
+                owned_user_id!("@carol:localhost"),
+            ],
+        };
+
+        assert_eq!(
+            content.creators(),
+            vec![
+                owned_user_id!("@alice:localhost"),
+                owned_user_id!("@bob:localhost"),
+                owned_user_id!("@carol:localhost"),
+            ]
+        );
+    }
+
+    /// An unknown room version has no rules; we fall back to the room version
+    /// 11 rules, where only the single creator is privileged.
+    #[test]
+    fn test_creators_with_an_unknown_room_version() {
+        let content = RoomCreateWithCreatorEventContent {
+            creator: owned_user_id!("@alice:localhost"),
+            federate: true,
+            room_version: "org.example.unknown".parse().unwrap(),
+            predecessor: None,
+            room_type: None,
+            additional_creators: vec![owned_user_id!("@bob:localhost")],
+        };
+
+        assert_eq!(content.creators(), vec![owned_user_id!("@alice:localhost")]);
+    }
+
+    /// Before room version 11, redacting an `m.room.create` event keeps only
+    /// the `creator` key of its content.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#redactions>.
+    #[test]
+    fn test_redaction_before_room_version_11_keeps_only_the_creator() {
+        let content = RoomCreateWithCreatorEventContent {
+            creator: owned_user_id!("@alice:localhost"),
+            federate: false,
+            room_version: RoomVersionId::V10,
+            predecessor: None,
+            room_type: Some(RoomType::Space),
+            additional_creators: vec![owned_user_id!("@bob:localhost")],
+        };
+
+        let redacted = content.redact(&RedactionRules::V1);
+
+        // The creator survives the redaction…
+        assert_eq!(redacted.creator, owned_user_id!("@alice:localhost"));
+        // …everything else is reset to its default.
+        assert!(redacted.federate);
+        assert_eq!(redacted.room_version, RoomVersionId::V1);
+        assert!(redacted.room_type.is_none());
+        assert!(redacted.additional_creators.is_empty());
+    }
+
+    /// From room version 11, the whole content of an `m.room.create` event is
+    /// kept when it is redacted.
+    ///
+    /// See <https://spec.matrix.org/v1.16/rooms/v11/#redactions>.
+    #[test]
+    fn test_redaction_from_room_version_11_keeps_the_whole_content() {
+        let content = RoomCreateWithCreatorEventContent {
+            creator: owned_user_id!("@alice:localhost"),
+            federate: false,
+            room_version: RoomVersionId::V11,
+            predecessor: None,
+            room_type: Some(RoomType::Space),
+            additional_creators: vec![owned_user_id!("@bob:localhost")],
+        };
+
+        let redacted = content.clone().redact(&RedactionRules::V11);
+
+        assert_eq!(redacted.creator, content.creator);
+        assert_eq!(redacted.federate, content.federate);
+        assert_eq!(redacted.room_version, content.room_version);
+        assert_eq!(redacted.room_type, content.room_type);
+        assert_eq!(redacted.additional_creators, content.additional_creators);
+    }
+}
