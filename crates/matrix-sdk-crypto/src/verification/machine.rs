@@ -20,7 +20,10 @@ use ruma::{
     SecondsSinceUnixEpoch, TransactionId, UInt, UserId,
     events::{
         AnyToDeviceEvent, AnyToDeviceEventContent, ToDeviceEvent,
-        key::verification::VerificationMethod,
+        key::verification::{
+            VerificationMethod, request::ToDeviceKeyVerificationRequestEventContent,
+        },
+        room::message::KeyVerificationRequestEventContent,
     },
     serde::Raw,
     uint,
@@ -31,7 +34,7 @@ use tracing::{Span, debug, info, instrument, trace, warn};
 use super::{
     FlowId, Verification, VerificationResult, VerificationStore,
     cache::{RequestInfo, VerificationCache},
-    event_enums::{AnyEvent, AnyVerificationContent, OutgoingContent},
+    event_enums::{AnyEvent, AnyVerificationContent, OutgoingContent, RequestContent},
     requests::VerificationRequest,
     sas::Sas,
 };
@@ -44,11 +47,64 @@ use crate::{
     },
 };
 
+/// A verification request received for a device we don't know about yet.
+///
+/// See [`VerificationMachine::pending_requests`].
+#[derive(Clone, Debug)]
+struct PendingRequest {
+    sender: OwnedUserId,
+    flow_id: FlowId,
+    content: OwnedRequestContent,
+    timestamp: MilliSecondsSinceUnixEpoch,
+}
+
+/// An owned version of [`RequestContent`], so that a verification request can
+/// be kept around until the sending device is known.
+///
+/// [`RequestContent`]: super::event_enums::RequestContent
+#[derive(Clone, Debug)]
+enum OwnedRequestContent {
+    ToDevice(ToDeviceKeyVerificationRequestEventContent),
+    Room(KeyVerificationRequestEventContent),
+}
+
+impl OwnedRequestContent {
+    fn borrow(&self) -> RequestContent<'_> {
+        match self {
+            Self::ToDevice(content) => RequestContent::ToDevice(content),
+            Self::Room(content) => RequestContent::Room(content),
+        }
+    }
+}
+
+impl From<&RequestContent<'_>> for OwnedRequestContent {
+    fn from(value: &RequestContent<'_>) -> Self {
+        match value {
+            RequestContent::ToDevice(content) => Self::ToDevice((*content).clone()),
+            RequestContent::Room(content) => Self::Room((*content).clone()),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct VerificationMachine {
     pub(crate) store: VerificationStore,
     verifications: VerificationCache,
     requests: Arc<StdRwLock<HashMap<OwnedUserId, HashMap<String, VerificationRequest>>>>,
+
+    /// Verification requests received from a device we didn't know about yet.
+    ///
+    /// A verification request is a to-device event, and it can arrive in the
+    /// same sync response as the device list update that tells us about the
+    /// sending device — or even before it. The device only lands in the store
+    /// once the `/keys/query` that update triggers has been answered, which is
+    /// after the to-device event has been processed. This is common after the
+    /// app has been backgrounded.
+    ///
+    /// Rather than dropping such a request, it waits here until the device
+    /// list catches up; see
+    /// [`VerificationMachine::retry_pending_requests()`].
+    pending_requests: Arc<StdRwLock<Vec<PendingRequest>>>,
 }
 
 impl VerificationMachine {
@@ -61,6 +117,7 @@ impl VerificationMachine {
             store: VerificationStore { account, private_identity: identity, inner: store },
             verifications: VerificationCache::new(),
             requests: Default::default(),
+            pending_requests: Default::default(),
         }
     }
 
@@ -300,6 +357,92 @@ impl VerificationMachine {
         Ok(())
     }
 
+    /// The maximum number of verification requests kept while waiting for the
+    /// device list to catch up.
+    ///
+    /// Verification requests expire after 10 minutes anyway (see
+    /// [`Self::is_timestamp_valid`]), this is only there to bound the memory a
+    /// misbehaving server can make us use.
+    const MAX_PENDING_REQUESTS: usize = 20;
+
+    fn remember_pending_request(&self, pending_request: PendingRequest) {
+        let mut pending_requests = self.pending_requests.write();
+
+        // Replace a request for the same flow, if there is one, so that a repeated
+        // request doesn't pile up.
+        pending_requests.retain(|request| {
+            request.flow_id != pending_request.flow_id || request.sender != pending_request.sender
+        });
+
+        if pending_requests.len() >= Self::MAX_PENDING_REQUESTS {
+            pending_requests.remove(0);
+        }
+
+        pending_requests.push(pending_request);
+    }
+
+    /// Retry the verification requests that arrived before we knew about the
+    /// device that sent them.
+    ///
+    /// This is called once the device list has caught up, i.e. after a
+    /// `/keys/query` response has been processed. Requests whose device is
+    /// still unknown are kept for the next round, until they expire.
+    pub(crate) async fn retry_pending_requests(&self) -> Result<(), CryptoStoreError> {
+        let pending_requests = {
+            let mut guard = self.pending_requests.write();
+
+            if guard.is_empty() {
+                return Ok(());
+            }
+
+            std::mem::take(&mut *guard)
+        };
+
+        let mut still_pending = Vec::new();
+
+        for pending_request in pending_requests {
+            if !Self::is_timestamp_valid(pending_request.timestamp) {
+                debug!(
+                    ?pending_request,
+                    "Dropping a pending verification request, it is too old now"
+                );
+                continue;
+            }
+
+            let content = pending_request.content.borrow();
+
+            let Some(device_data) = self
+                .store
+                .get_device(&pending_request.sender, content.from_device())
+                .await?
+            else {
+                still_pending.push(pending_request.clone());
+                continue;
+            };
+
+            info!(
+                sender = ?pending_request.sender,
+                from_device = content.from_device().as_str(),
+                "The device list caught up with a verification request we had put aside",
+            );
+
+            let request = VerificationRequest::from_request(
+                self.verifications.clone(),
+                self.store.clone(),
+                &pending_request.sender,
+                pending_request.flow_id.clone(),
+                &content,
+                device_data,
+            );
+
+            self.insert_request(request);
+        }
+
+        self.pending_requests.write().extend(still_pending);
+
+        Ok(())
+    }
+
     #[instrument(skip_all, fields(flow_id))]
     pub async fn receive_any_event(
         &self,
@@ -368,10 +511,24 @@ impl VerificationMachine {
                 let Some(device_data) =
                     self.store.get_device(event.sender(), r.from_device()).await?
                 else {
-                    warn!(
-                        "Could not retrieve the device data for the incoming verification request, \
-                         ignoring it"
+                    // We don't know that device yet. The device list update announcing
+                    // it may well be in this very sync response, in which case the
+                    // `/keys/query` it triggers hasn't been answered yet. Keep the
+                    // request around instead of dropping it, and retry once the device
+                    // list has caught up.
+                    debug!(
+                        from_device = r.from_device().as_str(),
+                        "Don't know the device the verification request came from yet; \
+                         waiting for the device list to catch up"
                     );
+
+                    self.remember_pending_request(PendingRequest {
+                        sender: event.sender().to_owned(),
+                        flow_id,
+                        content: r.into(),
+                        timestamp,
+                    });
+
                     return Ok(());
                 };
 
@@ -573,6 +730,7 @@ mod tests {
             store,
             verifications: VerificationCache::new(),
             requests: Default::default(),
+            pending_requests: Default::default(),
         };
 
         (machine, bob_store)
@@ -605,6 +763,62 @@ mod tests {
             identity,
             Arc::new(CryptoStoreWrapper::new(alice_id(), alice_device_id(), MemoryStore::new())),
         );
+    }
+
+    #[async_test]
+    async fn test_verification_request_from_an_unknown_device_is_retried() {
+        use ruma::{
+            MilliSecondsSinceUnixEpoch, device_id,
+            events::{ToDeviceEvent, key::verification::VerificationMethod},
+            user_id,
+        };
+
+        use crate::{
+            DeviceData,
+            store::types::{Changes, DeviceChanges},
+            types::events::ToDeviceEvents,
+        };
+
+        let (machine, _bob_store) = verification_machine().await;
+
+        // A device the machine doesn't know about yet: this is what the sending device
+        // of a verification request looks like when the request arrives before, or in
+        // the same sync response as, the device list update announcing it.
+        let carol = Account::with_device_id(user_id!("@carol:example.org"), device_id!("CAROLDEV"));
+        let carol_device = DeviceData::from_account(&carol);
+
+        let flow_id = TransactionId::new();
+        let content = ruma::events::key::verification::request::ToDeviceKeyVerificationRequestEventContent::new(
+            carol.device_id().to_owned(),
+            flow_id.clone(),
+            vec![VerificationMethod::SasV1],
+            MilliSecondsSinceUnixEpoch::now(),
+        );
+        let event = ToDeviceEvents::KeyVerificationRequest(ToDeviceEvent::new(
+            carol.user_id().to_owned(),
+            content,
+        ));
+
+        machine.receive_any_event(&event).await.unwrap();
+
+        // The request isn't visible yet, we don't know the device it came from.
+        assert!(machine.get_request(carol.user_id(), flow_id.as_str()).is_none());
+
+        // The `/keys/query` triggered by the device list update is answered…
+        machine
+            .store
+            .inner
+            .save_changes(Changes {
+                devices: DeviceChanges { new: vec![carol_device], ..Default::default() },
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        machine.retry_pending_requests().await.unwrap();
+
+        // … and the request we had put aside is picked up instead of being lost.
+        assert!(machine.get_request(carol.user_id(), flow_id.as_str()).is_some());
     }
 
     #[async_test]
