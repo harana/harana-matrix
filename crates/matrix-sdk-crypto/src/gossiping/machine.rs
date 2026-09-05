@@ -43,7 +43,10 @@ use ruma::{
 use tracing::{Span, debug, field::debug, info, instrument, trace, warn};
 use vodozemac::Curve25519PublicKey;
 
-use super::{GossipRequest, GossippedSecret, RequestEvent, RequestInfo, SecretInfo, WaitQueue};
+use super::{
+    GossipRequest, GossippedSecret, RequestEvent, RequestInfo, SecretInfo, ServedSecretRequests,
+    WaitQueue,
+};
 use crate::{
     Device, MegolmError,
     error::{EventError, OlmError, OlmResult},
@@ -84,6 +87,15 @@ pub(crate) struct GossipMachineInner {
     wait_queue: WaitQueue,
     users_for_key_claim: Arc<StdRwLock<BTreeMap<OwnedUserId, BTreeSet<OwnedDeviceId>>>>,
 
+    /// The secret requests we have already answered.
+    ///
+    /// A request which arrived while we had no Olm session with the requesting
+    /// device is put on the wait queue, but the homeserver keeps redelivering
+    /// the to-device event until we have acknowledged the sync it came in.
+    /// Once a key claim gives us a session, the queued copy and the redelivered
+    /// one would both be served, and the secret sent twice.
+    served_secret_requests: StdRwLock<ServedSecretRequests>,
+
     /// Whether we should respond to incoming `m.room_key_request` messages.
     room_key_forwarding_enabled: AtomicBool,
 
@@ -115,6 +127,7 @@ impl GossipMachine {
                 incoming_key_requests: Default::default(),
                 wait_queue: WaitQueue::new(),
                 users_for_key_claim,
+                served_secret_requests: Default::default(),
                 room_key_forwarding_enabled,
                 room_key_requests_enabled,
                 identity_manager,
@@ -414,7 +427,22 @@ impl GossipMachine {
 
         if let Some(device) = device {
             if device.user_id() == self.user_id() {
-                if device.is_verified() {
+                if self.inner.served_secret_requests.read().contains(
+                    device.user_id(),
+                    device.device_id(),
+                    &event.content.request_id,
+                ) {
+                    trace!(
+                        user_id = ?device.user_id(),
+                        device_id = ?device.device_id(),
+                        ?secret_name,
+                        request_id = ?event.content.request_id,
+                        "We have already answered this secret request, not sending the \
+                         secret a second time",
+                    );
+
+                    Ok(None)
+                } else if device.is_verified() {
                     info!(
                         user_id = ?device.user_id(),
                         device_id = ?device.device_id(),
@@ -423,7 +451,15 @@ impl GossipMachine {
                     );
 
                     match self.share_secret(&device, content, secret_name).await {
-                        Ok(s) => Ok(Some(s)),
+                        Ok(s) => {
+                            self.inner.served_secret_requests.write().insert(
+                                device.user_id().to_owned(),
+                                device.device_id().to_owned(),
+                                event.content.request_id.to_owned(),
+                            );
+
+                            Ok(Some(s))
+                        }
                         Err(OlmError::MissingSession) => {
                             info!(
                                 user_id = ?device.user_id(),

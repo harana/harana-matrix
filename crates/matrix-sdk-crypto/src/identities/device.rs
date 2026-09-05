@@ -626,7 +626,18 @@ impl UserDevices {
 pub enum LocalTrust {
     /// The device has been verified and is trusted.
     Verified = 0,
-    /// The device been blacklisted from communicating.
+    /// The device has been blacklisted from communicating.
+    ///
+    /// Blacklisting is driven entirely by the consumer of this crate: nothing
+    /// in the SDK ever sets this state on its own. A client sets it with
+    /// [`Device::set_local_trust`] when the user chooses to stop sending to a
+    /// device.
+    ///
+    /// A blacklisted device is left out of every room key sharing strategy and
+    /// is told so with an `m.room_key.withheld` message carrying the
+    /// `m.blacklisted` code, so its owner can see why their messages do not
+    /// decrypt. The state is local to this device: it is not published to the
+    /// homeserver and other devices of ours do not learn about it.
     BlackListed = 1,
     /// The trust state of the device is being ignored.
     Ignored = 2,
@@ -713,7 +724,9 @@ impl DeviceData {
 
     /// Is the device locally marked as blacklisted.
     ///
-    /// Blacklisted devices won't receive any group sessions.
+    /// Blacklisted devices are excluded from every room key sharing strategy
+    /// and receive an `m.room_key.withheld` message with the `m.blacklisted`
+    /// code instead of the room key. See [`LocalTrust::BlackListed`].
     pub fn is_blacklisted(&self) -> bool {
         self.local_trust_state() == LocalTrust::BlackListed
     }
