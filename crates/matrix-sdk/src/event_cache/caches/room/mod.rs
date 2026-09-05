@@ -31,10 +31,13 @@ use matrix_sdk_base::{
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
 };
 use ruma::{
-    EventId, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId,
+    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
+    RoomId,
     events::{
         AnyRoomAccountDataEvent,
-        receipt::{ReceiptEventContent, ReceiptThread, ReceiptType, Receipts, UserReceipts},
+        receipt::{
+            Receipt, ReceiptEventContent, ReceiptThread, ReceiptType, Receipts, UserReceipts,
+        },
         relation::RelationType,
     },
     serde::Raw,

@@ -369,11 +369,6 @@ impl Backups {
     ///
     /// # anyhow::Ok(()) };
     /// ```
-    #[deprecated(
-        since = "0.18.0",
-        note = "this both triggers an upload and waits for it; use `Backups::trigger_upload` \
-                and `Backups::wait_for_steady_state` instead"
-    )]
     pub fn wait_for_steady_state(&self) -> WaitForSteadyState<'_> {
         let progress = self.client.inner.e2ee.backup_state.upload_progress.clone();
 

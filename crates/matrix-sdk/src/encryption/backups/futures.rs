@@ -166,6 +166,8 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
                 }
 
                 ret
+            } else {
+                Err(SteadyStateError::BackupDisabled)
             };
 
             if let Some(old_delay) = old_delay {
