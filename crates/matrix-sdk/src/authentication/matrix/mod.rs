@@ -639,7 +639,15 @@ impl MatrixAuth {
         self.client.stop_background_tasks();
 
         let request = logout::v3::Request::new();
-        self.client.send(request).await
+        let response = self.client.send(request).await;
+
+        // Whatever is still waiting for the homeserver was sent under a session that
+        // no longer exists, so nothing can come of it. This happens whether or not the
+        // logout request itself succeeded: the caller is done with the session either
+        // way.
+        self.client.cancel_in_flight_requests();
+
+        response
     }
 
     /// Get the whole native Matrix authentication session info of this client.

@@ -1371,6 +1371,17 @@ impl OAuth {
         // have queued belongs to this session.
         self.client.stop_background_tasks();
 
+        let result = self.logout_inner(client_id).await;
+
+        // Whatever is still waiting for the homeserver was sent under a session that
+        // no longer exists, so nothing can come of it. This happens whether or not the
+        // revocation succeeded: the caller is done with the session either way.
+        self.client.cancel_in_flight_requests();
+
+        result
+    }
+
+    async fn logout_inner(&self, client_id: ClientId) -> Result<(), OAuthError> {
         let server_metadata = self.server_metadata().await?;
         let revocation_url = RevocationUrl::from_url(server_metadata.revocation_endpoint);
 

@@ -1814,6 +1814,17 @@ impl Client {
         }
     }
 
+    /// Abort the requests this client still has in flight.
+    ///
+    /// Called at the end of logging out, together with
+    /// [`Client::stop_background_tasks`]: a request that is still waiting for
+    /// an answer belongs to the session that just ended, and there is nothing
+    /// useful the answer can be used for. Requests made after this are
+    /// unaffected: this ends a session, it doesn't close the client.
+    pub(crate) fn cancel_in_flight_requests(&self) {
+        self.inner.http_client.cancel_in_flight_requests();
+    }
+
     /// Refresh the access token if it is about to expire.
     ///
     /// The homeserver tells us how long an access token is valid for when it

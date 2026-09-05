@@ -1,10 +1,11 @@
-use std::{collections::BTreeMap, sync::Mutex};
+use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 
 use assert_matches::assert_matches;
 use matrix_sdk::{
-    AuthApi, AuthSession, Client, SessionTokens,
+    AuthApi, AuthSession, Client, HttpError, SessionTokens,
     authentication::matrix::MatrixSession,
     config::RequestConfig,
+    executor::spawn,
     test_utils::{
         logged_in_client_with_server, mocks::MatrixMockServer, no_retry_test_client_with_server,
     },
@@ -61,6 +62,54 @@ async fn test_logout_stops_the_send_queue() {
     // Queued requests belong to the session that queued them, so nothing more is
     // sent under the token we just invalidated.
     assert!(!client.send_queue().is_enabled());
+}
+
+#[async_test]
+async fn test_logout_cancels_the_requests_in_flight() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    // A request the homeserver takes its time answering. The test never waits for
+    // that answer: logging out is what ends the request.
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(&*test_json::WHOAMI)
+                .set_delay(Duration::from_secs(60)),
+        )
+        .mount(server.server())
+        .await;
+    server.mock_logout().ok().mock_once().mount().await;
+
+    let whoami = spawn({
+        let client = client.clone();
+        async move { client.whoami().await }
+    });
+
+    // Wait for the request to reach the homeserver, so it is really in flight when
+    // the logout happens.
+    while !server
+        .server()
+        .received_requests()
+        .await
+        .expect("the mock server records the requests it receives")
+        .iter()
+        .any(|request| request.url.path().ends_with("/account/whoami"))
+    {
+        tokio::task::yield_now().await;
+    }
+
+    client.matrix_auth().logout().await.unwrap();
+
+    // The session is over, so waiting for that answer is pointless: the request is
+    // dropped rather than left to finish under an invalidated token.
+    assert_matches!(whoami.await.unwrap(), Err(HttpError::Cancelled));
+
+    // Requests made after the logout are not cancelled: this ends a session, it
+    // doesn't close the client.
+    server.mock_versions().ok().mock_once().named("versions").mount().await;
+    client.fetch_server_versions(None).await.unwrap();
 }
 
 #[async_test]
