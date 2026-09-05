@@ -41,17 +41,14 @@ impl crate::HttpSend for NoTransport {
     }
 }
 
-/// Make sure the builder has a transport, so that
-/// [`ClientBuilder::build`] doesn't fail with
-/// [`ClientBuildError::MissingHttpTransport`].
+/// Make sure the builder has a transport, so that [`ClientBuilder::build`]
+/// doesn't fail with `ClientBuildError::MissingHttpTransport`.
 ///
 /// With the `reqwest-transport` feature this is a no-op, since `reqwest` is
 /// then the default. Without it, tests get a transport that errors on every
 /// request: enough for the many tests that build a client and never send
 /// anything, while one that does send a request still has to install a
 /// transport of its own.
-///
-/// [`ClientBuildError::MissingHttpTransport`]: crate::ClientBuildError::MissingHttpTransport
 pub fn ensure_transport(builder: ClientBuilder) -> ClientBuilder {
     #[cfg(not(feature = "reqwest-transport"))]
     let builder = builder.http_transport(std::sync::Arc::new(NoTransport));
