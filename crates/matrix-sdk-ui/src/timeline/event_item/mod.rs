@@ -91,6 +91,9 @@ pub struct EventTimelineItem {
     /// before redaction. This applies to all sorts of timeline items, including
     /// state events. If no redaction is in flight, None.
     pub(super) unredacted_item: Option<UnredactedEventTimelineItem>,
+    /// If an edit is currently applied to this item, what it looked like
+    /// before that edit. `None` when no edit is applied.
+    pub(super) unedited_item: Option<Box<UneditedEventTimelineItem>>,
     /// The kind of event timeline item, local or remote.
     pub(super) kind: EventTimelineItemKind,
     /// Whether or not the event belongs to an encrypted room.
@@ -139,6 +142,20 @@ pub struct EditRevision {
     pub timestamp: Option<MilliSecondsSinceUnixEpoch>,
 }
 
+/// A container holding what an item looked like before an edit was applied to
+/// it, so the edit can be undone: either because the local echo of the edit
+/// was cancelled, or because the edit event was redacted.
+#[derive(Clone, Debug)]
+pub(super) struct UneditedEventTimelineItem {
+    /// The content of the item before any edit was applied.
+    pub(crate) content: TimelineItemContent,
+
+    /// JSON of the latest edit to this item before any edit was applied, i.e.
+    /// `None` unless the item was already carrying an edit from a bundled
+    /// relation.
+    pub(crate) latest_edit_json: Option<Raw<AnySyncTimelineEvent>>,
+}
+
 /// A container for temporarily holding onto data that is going to be erased by
 /// a redaction once the server plays it back.
 #[derive(Clone, Debug)]
@@ -173,6 +190,7 @@ impl EventTimelineItem {
             timestamp,
             content,
             unredacted_item: None,
+            unedited_item: None,
             kind,
             is_room_encrypted,
         }
@@ -521,11 +539,39 @@ impl EventTimelineItem {
         edit_json: Option<Raw<AnySyncTimelineEvent>>,
     ) -> Self {
         let mut new = self.clone();
+
+        // Remember what the item looked like before the first edit, so the edit can
+        // be undone if it's cancelled or redacted. Later edits are applied on top of
+        // the content of the previous one, so only the first stash is kept.
+        if new.unedited_item.is_none() {
+            new.unedited_item = Some(Box::new(UneditedEventTimelineItem {
+                content: new.content.clone(),
+                latest_edit_json: new.latest_edit_json().cloned(),
+            }));
+        }
+
         new.content = new_content;
         if let EventTimelineItemKind::Remote(r) = &mut new.kind {
             r.latest_edit_json = edit_json;
         }
         new
+    }
+
+    /// Create a clone of the current item with every edit undone, restoring
+    /// what it looked like before the first edit was applied.
+    ///
+    /// Returns `None` if no edit is currently applied to this item.
+    pub(super) fn unedit(&self) -> Option<Self> {
+        let unedited_item = self.unedited_item.as_deref()?;
+
+        let mut new = self.clone();
+        new.content = unedited_item.content.clone();
+        if let EventTimelineItemKind::Remote(r) = &mut new.kind {
+            r.latest_edit_json = unedited_item.latest_edit_json.clone();
+        }
+        new.unedited_item = None;
+
+        Some(new)
     }
 
     /// Clone the current event item, and update its `sender_profile`.
@@ -571,6 +617,7 @@ impl EventTimelineItem {
             timestamp: self.timestamp,
             content,
             unredacted_item,
+            unedited_item: self.unedited_item.clone(),
             kind,
             is_room_encrypted: self.is_room_encrypted,
         }
@@ -599,6 +646,7 @@ impl EventTimelineItem {
             timestamp: self.timestamp,
             content: unredacted_item.content.clone(),
             unredacted_item: None,
+            unedited_item: self.unedited_item.clone(),
             kind,
             is_room_encrypted: self.is_room_encrypted,
         }

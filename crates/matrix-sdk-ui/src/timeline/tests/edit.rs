@@ -422,3 +422,43 @@ async fn test_updated_reply_doesnt_lose_latest_edit() {
 
     assert_pending!(stream);
 }
+
+#[async_test]
+async fn test_redacting_an_edit_restores_the_original_content() {
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe_events().await;
+
+    let f = &timeline.factory;
+    let edit_event_id = event_id!("$edit");
+
+    timeline.handle_live_event(f.text_msg("original").sender(&ALICE)).await;
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    let original_event_id = item.event_id().unwrap().to_owned();
+    assert!(!item.content().as_message().unwrap().is_edited());
+
+    // The message is edited.
+    timeline
+        .handle_live_event(
+            f.text_msg(" * edited")
+                .sender(&ALICE)
+                .event_id(edit_event_id)
+                .edit(&original_event_id, MessageType::text_plain("edited").into()),
+        )
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    let message = item.content().as_message().unwrap();
+    assert_eq!(message.body(), "edited");
+    assert!(message.is_edited());
+    assert!(item.latest_edit_json().is_some());
+
+    // Then the edit event itself is redacted: the message goes back to what it
+    // was before the edit.
+    timeline.handle_live_event(f.redaction(edit_event_id).sender(&ALICE)).await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    let message = item.content().as_message().unwrap();
+    assert_eq!(message.body(), "original");
+    assert!(!message.is_edited());
+    assert!(item.latest_edit_json().is_none());
+}

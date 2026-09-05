@@ -649,21 +649,31 @@ impl Aggregations {
                     warn!("error when unapplying aggregation: {err}");
                 }
                 ApplyAggregationResult::Edit => {
-                    // This edit has been removed; try to find another that still applies.
-                    if let Some(aggregations) = self.related_events.get(found) {
-                        if resolve_edits(aggregations, items, &mut cowed) {
-                            items.replace(
-                                item_pos,
-                                TimelineItem::new(cowed.into_owned(), item.internal_id.to_owned()),
-                            );
-                        } else {
-                            // No other edit was found, leave the item as is.
-                            // TODO likely need to change the item to indicate
-                            // it's been un-edited etc.
+                    // This edit has been removed; try to find another that still applies,
+                    // and if there is none, restore what the item looked like before it
+                    // was edited.
+                    let applied_another_edit = self
+                        .related_events
+                        .get(found)
+                        .is_some_and(|aggregations| resolve_edits(aggregations, items, &mut cowed));
+
+                    if !applied_another_edit {
+                        match cowed.unedit() {
+                            Some(unedited) => {
+                                trace!("no edit applies anymore, restoring the original content");
+                                cowed = Cow::Owned(unedited);
+                            }
+                            None => {
+                                // The item wasn't edited in the first place, nothing to undo.
+                                return Ok(true);
+                            }
                         }
-                    } else {
-                        // No other edits apply.
                     }
+
+                    items.replace(
+                        item_pos,
+                        TimelineItem::new(cowed.into_owned(), item.internal_id.to_owned()),
+                    );
                 }
             }
         } else {
