@@ -26,7 +26,7 @@
 //! [`UserId`], and its owned counterpart [`OwnedUserId`], in the same way as
 //! [`str`] and [`String`]. Parse one from a string with `UserId::parse`, or
 //! build one at compile time with the `user_id!` macro from
-//! [`ruma`][crate::ruma].
+//! [`crate::ruma`].
 //!
 //! ```
 //! use matrix_sdk_common::{ruma::user_id, types::UserId};

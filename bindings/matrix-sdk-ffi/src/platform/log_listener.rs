@@ -35,7 +35,7 @@ use super::tracing::LogLevel;
 
 /// A log statement emitted by the SDK.
 #[derive(Clone, uniffi::Record)]
-pub struct LogEvent {
+pub struct LogRecord {
     /// How severe the statement is.
     pub level: LogLevel,
 
@@ -58,10 +58,10 @@ pub struct LogEvent {
     pub timestamp: u64,
 }
 
-/// A consumer of [`LogEvent`]s.
+/// A consumer of [`LogRecord`]s.
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait LogEventListener: SyncOutsideWasm + SendOutsideWasm {
-    fn call(&self, event: LogEvent);
+    fn call(&self, event: LogRecord);
 }
 
 static LISTENER: RwLock<Option<Arc<dyn LogEventListener>>> = RwLock::new(None);
@@ -114,7 +114,7 @@ where
         let mut visitor = MessageVisitor::default();
         event.record(&mut visitor);
 
-        let log_event = LogEvent {
+        let log_event = LogRecord {
             level: level_to_log_level(*metadata.level()),
             target: metadata.target().to_owned(),
             message: visitor.message,
@@ -193,16 +193,16 @@ mod tests {
     use tracing_subscriber::{Layer as _, layer::SubscriberExt as _};
 
     use super::{
-        LogEvent, LogEventListener, LogEventListenerLayer, clear_log_event_listener,
+        LogEventListener, LogEventListenerLayer, LogRecord, clear_log_event_listener,
         set_log_event_listener,
     };
     use crate::platform::tracing::LogLevel;
 
     #[derive(Default)]
-    struct Collector(Arc<Mutex<Vec<LogEvent>>>);
+    struct Collector(Arc<Mutex<Vec<LogRecord>>>);
 
     impl LogEventListener for Collector {
-        fn call(&self, event: LogEvent) {
+        fn call(&self, event: LogRecord) {
             self.0.lock().unwrap().push(event);
         }
     }
@@ -240,7 +240,7 @@ mod tests {
         struct Logging;
 
         impl LogEventListener for Logging {
-            fn call(&self, _event: LogEvent) {
+            fn call(&self, _event: LogRecord) {
                 tracing::info!(target: "test_target", "from the listener");
             }
         }
