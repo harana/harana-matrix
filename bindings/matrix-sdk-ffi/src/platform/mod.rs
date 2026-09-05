@@ -45,6 +45,7 @@ const DEFAULT_MAX_TOTAL_SIZE_BYTES: u64 = 10 * 1024 * 1024;
 /// Default maximum age of log files in seconds (1 week).
 const DEFAULT_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
 
+mod log_listener;
 mod rolling_writer;
 pub mod tracing;
 
@@ -55,7 +56,7 @@ use rolling_writer::SizeAndDateRollingWriter;
 
 #[cfg(feature = "sentry")]
 use self::tracing::BRIDGE_SPAN_NAME;
-use self::tracing::LogLevel;
+use self::{log_listener::LogEventListenerLayer, tracing::LogLevel};
 
 // Adjusted version of tracing_subscriber::fmt::Format
 struct EventFormatter {
@@ -609,6 +610,7 @@ impl TracingConfiguration {
             tracing_subscriber::registry()
                 .with(tracing_subscriber::EnvFilter::new(&env_filter))
                 .with(text_layers)
+                .with(LogEventListenerLayer)
                 .with(sentry_layer)
                 .init();
             logging_ctx = LoggingCtx { reload_handle, sentry: sentry_logging_ctx };
@@ -619,6 +621,7 @@ impl TracingConfiguration {
             tracing_subscriber::registry()
                 .with(tracing_subscriber::EnvFilter::new(&env_filter))
                 .with(text_layers)
+                .with(LogEventListenerLayer)
                 .init();
             logging_ctx = LoggingCtx { reload_handle };
         }
