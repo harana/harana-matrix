@@ -52,7 +52,7 @@ use super::{
 };
 use crate::{
     RoomInfo, RoomMemberships, RoomState, StateChanges, StateStoreDataKey, StateStoreDataValue,
-    deserialized_responses::MemberEvent,
+    deserialized_responses::{MemberEvent, RawAnySyncOrStrippedState},
     store::{
         ChildTransactionId, QueueWedgeError, SerializableEventContent, StateStoreExt,
         StoredThreadSubscription, ThreadSubscriptionStatus,
@@ -70,6 +70,8 @@ pub trait StateStoreIntegrationTests {
     async fn populate(&self) -> TestResult;
     /// Test room topic redaction.
     async fn test_topic_redaction(&self) -> TestResult;
+    /// Test the redaction of a state event whose content doesn't deserialize.
+    async fn test_invalid_state_event_redaction(&self) -> TestResult;
     /// Test populating the store.
     async fn test_populate_store(&self) -> TestResult;
     /// Test room member saving.
@@ -304,6 +306,63 @@ impl StateStoreIntegrationTests for DynStateStore {
             .expect("can deserialize room topic after redaction");
 
         assert_matches!(redacted_event.as_sync(), Some(SyncStateEvent::Redacted(_)));
+
+        Ok(())
+    }
+
+    async fn test_invalid_state_event_redaction(&self) -> TestResult {
+        let room_id = room_id();
+        let child_room_id = "!child:localhost";
+        let event_id = event_id!("$space_child_event");
+        let f = EventFactory::new();
+        self.populate().await?;
+
+        // A homeserver accepts any content for any event type, so a state event whose
+        // content doesn't match its type can legitimately end up in the store. Here,
+        // an `m.space.child` without the required `via` field, which is what a client
+        // sends to remove a child from a space.
+        let invalid_raw: Raw<AnySyncStateEvent> = Raw::new(&json!({
+            "event_id": event_id,
+            "content": {},
+            "sender": user_id(),
+            "type": "m.space.child",
+            "origin_server_ts": 0u64,
+            "state_key": child_room_id,
+        }))?
+        .cast_unchecked();
+        assert!(invalid_raw.deserialize().is_err(), "the event content should not deserialize");
+
+        let mut changes = StateChanges::default();
+        changes
+            .state
+            .entry(room_id.to_owned())
+            .or_default()
+            .entry(StateEventType::SpaceChild)
+            .or_default()
+            .insert(child_room_id.to_owned(), invalid_raw);
+        self.save_changes(&changes).await?;
+
+        // Redacting it must not fail: a single undeserializable event may not take the
+        // whole set of changes, and with it the sync, down with it.
+        let mut changes = StateChanges::default();
+        let redaction_evt: Raw<SyncRoomRedactionEvent> =
+            f.room(room_id).sender(user_id()).redaction(event_id).into_raw();
+        changes.add_redaction(room_id, event_id, redaction_evt);
+        self.save_changes(&changes).await?;
+
+        // And the event is now redacted in the store.
+        let raw_event = self
+            .get_state_event(room_id, StateEventType::SpaceChild, child_room_id)
+            .await?
+            .expect("space child event found after redaction");
+        assert_matches!(raw_event, RawAnySyncOrStrippedState::Sync(raw) => {
+            assert!(
+                raw.get_field::<serde_json::Value>("unsigned")?
+                    .and_then(|unsigned| unsigned.get("redacted_because").cloned())
+                    .is_some(),
+                "the event should have been redacted"
+            );
+        });
 
         Ok(())
     }
@@ -2401,6 +2460,12 @@ macro_rules! statestore_integration_tests {
             async fn test_topic_redaction() -> TestResult {
                 let store = get_store().await?.into_state_store();
                 store.test_topic_redaction().await
+            }
+
+            #[async_test]
+            async fn test_invalid_state_event_redaction() -> TestResult {
+                let store = get_store().await?.into_state_store();
+                store.test_invalid_state_event_redaction().await
             }
 
             #[async_test]

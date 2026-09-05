@@ -1547,7 +1547,17 @@ impl StateStore for SqliteStateStore {
                             .get_state_event_by_id(&encoded_room_id, &event_id)?
                             .map(|value| this.deserialize_json::<Raw<AnySyncStateEvent>>(&value))
                         {
-                            let event = raw_event.deserialize()?;
+                            // Read the `type` and `state_key` out of the raw JSON rather than
+                            // deserializing the whole event: an event whose content doesn't
+                            // match its type (for example an `m.space.child` without the
+                            // required `via` field) must still be redactable, otherwise the
+                            // whole set of changes, and with it the sync, fails forever.
+                            let Some(StateEventKeys { event_type, state_key }) =
+                                state_event_keys(&raw_event)
+                            else {
+                                continue;
+                            };
+
                             let redacted = redact(
                                 raw_event.deserialize_as::<CanonicalJsonObject>()?,
                                 redaction_rules.get_or_insert_with(make_redaction_rules),
@@ -1556,9 +1566,8 @@ impl StateStore for SqliteStateStore {
                             .map_err(Error::Redaction)?;
                             let data = this.serialize_json(&redacted)?;
 
-                            let event_type =
-                                this.encode_key(keys::STATE_EVENT, event.event_type().to_string());
-                            let state_key = this.encode_key(keys::STATE_EVENT, event.state_key());
+                            let event_type = this.encode_key(keys::STATE_EVENT, event_type);
+                            let state_key = this.encode_key(keys::STATE_EVENT, state_key);
 
                             txn.set_state_event(
                                 &encoded_room_id,
@@ -2542,6 +2551,34 @@ struct ReceiptData {
     receipt: Receipt,
     event_id: OwnedEventId,
     user_id: OwnedUserId,
+}
+
+/// The `type` and `state_key` of a state event, read from its raw JSON.
+#[derive(Debug, Deserialize)]
+struct StateEventKeys {
+    #[serde(rename = "type")]
+    event_type: String,
+    state_key: String,
+}
+
+/// Read the `type` and `state_key` of a state event without deserializing its
+/// content.
+///
+/// The content of a state event can fail to deserialize while the event is
+/// still perfectly usable as a state event: the homeserver accepts any content
+/// for any event type, so for example an `m.space.child` without the required
+/// `via` field can legitimately be in the store. Anything that only needs to
+/// address the event by its keys must not choke on that.
+///
+/// Returns `None` if the raw event has no `type` or no `state_key`.
+fn state_event_keys(raw_event: &Raw<AnySyncStateEvent>) -> Option<StateEventKeys> {
+    match raw_event.deserialize_as_unchecked::<StateEventKeys>() {
+        Ok(keys) => Some(keys),
+        Err(error) => {
+            warn!(?error, "Couldn't read the type and state key of a state event");
+            None
+        }
+    }
 }
 
 #[cfg(test)]
