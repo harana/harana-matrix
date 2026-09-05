@@ -28,12 +28,7 @@ sha2 = { workspace =  true, features = ["alloc", "zeroize"] }
 tantivy = { version = "0.26.1", default-features = false, features = ["mmap", "stopwords", "stemmer", "lz4-compression", "columnar-zstd-compression"] }
 tracing = { workspace = true, features = ["attributes"] }
 thiserror.workspace = true
-ruma = { workspace = true , features = [
-    "client-api-c",
-    "events",
-    "rand",
-    "unstable-msc1767"
-] }
+ruma = { workspace = true, features = ["client", "rand", "unstable-msc1767"] }
 zeroize.workspace = true
 
 [dev-dependencies]
