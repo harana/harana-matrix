@@ -100,6 +100,48 @@ use crate::{
 pub enum AuthData {
     /// Password-based authentication (`m.login.password`).
     Password { password_details: AuthDataPasswordDetails },
+
+    /// Authentication that only acknowledges the stage (`m.login.dummy`).
+    Dummy {
+        /// The session identifier of the flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: Option<String>,
+    },
+
+    /// Token-based registration (`m.login.registration_token`).
+    RegistrationToken {
+        /// The token the homeserver handed the user out of band.
+        token: String,
+
+        /// The session identifier of the flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: Option<String>,
+    },
+
+    /// Email-based authentication (`m.login.email.identity`).
+    ///
+    /// Answers the stage with the credentials of an email address whose
+    /// ownership the user has already proven, by following the link the
+    /// homeserver sent after [`Client::request_registration_email_token`].
+    EmailIdentity {
+        /// The session identifier the token request returned.
+        email_session_id: String,
+
+        /// The client secret used for that token request.
+        client_secret: String,
+
+        /// The session identifier of the UIAA flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: Option<String>,
+    },
+
+    /// Acknowledgement that a stage was completed through the homeserver's
+    /// fallback web page.
+    FallbackAcknowledgement {
+        /// The session identifier of the flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: String,
+    },
 }
 
 #[derive(uniffi::Record)]
@@ -122,17 +164,48 @@ impl TryFrom<AuthData> for ruma::api::client::uiaa::AuthData {
     type Error = ClientError;
 
     fn try_from(value: AuthData) -> Result<ruma::api::client::uiaa::AuthData, Self::Error> {
+        use ruma::api::client::uiaa;
+
         match value {
             AuthData::Password { password_details } => {
                 let user_id = ruma::UserId::parse(password_details.identifier)?;
 
-                let mut password = ruma::api::client::uiaa::Password::new(
-                    user_id.into(),
-                    password_details.password,
-                );
+                let mut password = uiaa::Password::new(user_id.into(), password_details.password);
                 password.session = password_details.session;
 
-                Ok(ruma::api::client::uiaa::AuthData::Password(password))
+                Ok(uiaa::AuthData::Password(password))
+            }
+
+            AuthData::Dummy { session } => {
+                let mut dummy = uiaa::Dummy::new();
+                dummy.session = session;
+
+                Ok(uiaa::AuthData::Dummy(dummy))
+            }
+
+            AuthData::RegistrationToken { token, session } => {
+                let mut registration_token = uiaa::RegistrationToken::new(token);
+                registration_token.session = session;
+
+                Ok(uiaa::AuthData::RegistrationToken(registration_token))
+            }
+
+            AuthData::EmailIdentity { email_session_id, client_secret, session } => {
+                // `EmailIdentity` is non-exhaustive and has no constructor, so it is
+                // built the way ruma builds it from a UIAA response.
+                let credentials = uiaa::ThirdpartyIdCredentials::new(
+                    ruma::SessionId::parse(email_session_id)?,
+                    ruma::ClientSecret::parse(client_secret)?,
+                );
+
+                let mut data = serde_json::Map::new();
+                data.insert("threepid_creds".to_owned(), serde_json::to_value(credentials)?);
+
+                Ok(uiaa::AuthData::new("m.login.email.identity", session, data)?)
+            }
+
+            AuthData::FallbackAcknowledgement { session } => {
+                Ok(uiaa::AuthData::fallback_acknowledgement(session))
             }
         }
     }
@@ -2071,6 +2144,41 @@ mod uiaa_tests {
             panic!("expected a password auth data");
         };
         assert_eq!(password.session.as_deref(), Some("a-session"));
+    }
+
+    #[test]
+    fn test_the_registration_stages_map_to_their_ruma_types() {
+        let dummy: uiaa::AuthData = AuthData::Dummy { session: Some("s".to_owned()) }
+            .try_into()
+            .expect("a dummy stage always converts");
+        let uiaa::AuthData::Dummy(dummy) = dummy else { panic!("expected a dummy stage") };
+        assert_eq!(dummy.session.as_deref(), Some("s"));
+
+        let token: uiaa::AuthData = AuthData::RegistrationToken {
+            token: "a-token".to_owned(),
+            session: Some("s".to_owned()),
+        }
+        .try_into()
+        .expect("a registration token always converts");
+        let uiaa::AuthData::RegistrationToken(token) = token else {
+            panic!("expected a registration token stage")
+        };
+        assert_eq!(token.token, "a-token");
+        assert_eq!(token.session.as_deref(), Some("s"));
+
+        let email: uiaa::AuthData = AuthData::EmailIdentity {
+            email_session_id: "an-sid".to_owned(),
+            client_secret: "a-secret".to_owned(),
+            session: Some("s".to_owned()),
+        }
+        .try_into()
+        .expect("valid identifiers convert");
+        let uiaa::AuthData::EmailIdentity(email) = email else {
+            panic!("expected an email identity stage")
+        };
+        assert_eq!(email.thirdparty_id_creds.sid, "an-sid");
+        assert_eq!(email.thirdparty_id_creds.client_secret, "a-secret");
+        assert_eq!(email.session.as_deref(), Some("s"));
     }
 
     #[test]

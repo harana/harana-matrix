@@ -40,7 +40,7 @@ use matrix_sdk::{
     ruma::{
         EventEncryptionAlgorithm, RoomId, TransactionId, UInt, UserId,
         api::client::{
-            account::request_openid_token,
+            account::{register, request_openid_token, request_registration_token_via_email},
             discovery::get_authorization_server_metadata::v1::Prompt as RumaOAuthPrompt,
             push::{EmailPusherData, PusherIds, PusherInit, PusherKind as RumaPusherKind},
             room::{Visibility, create_room},
@@ -159,7 +159,7 @@ use crate::{
     sync_v2::{SyncListenerV2, SyncResponseV2, SyncSettingsV2},
     task_handle::TaskHandle,
     utd::{UnableToDecryptDelegate, UtdHook},
-    utils::AsyncRuntimeDropped,
+    utils::{AsyncRuntimeDropped, u64_to_uint},
 };
 
 #[derive(Clone, uniffi::Record)]
@@ -2070,6 +2070,110 @@ impl Client {
         matches!(self.inner.auth_api(), Some(AuthApi::Matrix(_)))
     }
 
+    /// Registers a new account on the homeserver the client was built for, and
+    /// logs in with it.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - The localpart of the desired user ID. Leave it unset to
+    ///   let the homeserver pick one.
+    ///
+    /// * `password` - The password for the new account. It is zeroized once the
+    ///   request has been sent, and never appears in the logs or in the
+    ///   returned value. Leave it unset for an account that cannot log in with
+    ///   a password.
+    ///
+    /// * `initial_device_name` - The display name of the device the
+    ///   registration creates.
+    ///
+    /// * `device_id` - Reuse this device rather than creating one.
+    ///
+    /// * `auth_data` - The homeserver protects registration with the
+    ///   [User-Interactive Authentication API][uiaa]. Leave this unset for the
+    ///   first attempt: the call then reports
+    ///   [`RegistrationOutcome::AuthenticationRequired`] with the challenge to
+    ///   answer, and it should be made again with the matching `auth_data`,
+    ///   carrying the session from the challenge. A flow usually takes several
+    ///   rounds, one per stage.
+    ///
+    /// For homeservers that authenticate through OAuth 2.0 instead,
+    /// registration is a `Create` prompt on [`Client::url_for_oauth`], per
+    /// [MSC2965].
+    ///
+    /// [uiaa]: https://spec.matrix.org/latest/client-server-api/#user-interactive-authentication-api
+    /// [MSC2965]: https://github.com/matrix-org/matrix-spec-proposals/pull/2965
+    pub async fn register(
+        &self,
+        username: Option<String>,
+        mut password: Option<String>,
+        initial_device_name: Option<String>,
+        device_id: Option<String>,
+        auth_data: Option<AuthData>,
+    ) -> Result<RegistrationOutcome, ClientError> {
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        let mut request = register::v3::Request::new();
+        request.username = username;
+        request.password = password.clone();
+        request.initial_device_display_name = initial_device_name;
+        request.device_id = device_id.map(Into::into);
+        request.auth = auth_data;
+
+        let result = self.inner.matrix_auth().register(request).await;
+
+        if let Some(password) = password.as_mut() {
+            password.zeroize();
+        }
+
+        match result {
+            Ok(_) => Ok(RegistrationOutcome::Registered),
+
+            Err(error) => {
+                if let Some(uiaa_info) = error.as_uiaa_response() {
+                    return Ok(RegistrationOutcome::AuthenticationRequired {
+                        challenge: uiaa_info.into(),
+                    });
+                }
+
+                Err(ClientError::from_err(error))
+            }
+        }
+    }
+
+    /// Asks the homeserver to send a validation email to `email`, so the
+    /// address can answer the `m.login.email.identity` stage of a registration
+    /// flow.
+    ///
+    /// # Arguments
+    ///
+    /// * `email` - The address to validate.
+    ///
+    /// * `client_secret` - A secret string the client generates, which ties
+    ///   this request to the [`AuthData::EmailIdentity`] that answers with it.
+    ///   The same secret must be used for every attempt at one address.
+    ///
+    /// * `send_attempt` - Increase this to have the homeserver send the email
+    ///   again; repeating a value only retries the request itself.
+    ///
+    /// Returns the session identifier to pass to [`AuthData::EmailIdentity`],
+    /// once the user has followed the link in the email.
+    pub async fn request_registration_email_token(
+        &self,
+        email: String,
+        client_secret: String,
+        send_attempt: u64,
+    ) -> Result<String, ClientError> {
+        let request = request_registration_token_via_email::v3::Request::new(
+            ruma::ClientSecret::parse(client_secret)?,
+            email,
+            u64_to_uint(send_attempt),
+        );
+
+        let response = self.inner.send(request).await?;
+
+        Ok(response.sid.to_string())
+    }
+
     /// Change the password of the logged-in account.
     ///
     /// # Arguments
@@ -3580,6 +3684,21 @@ pub struct ExtendedProfileFields {
     pub enabled: bool,
     pub allowed: Vec<String>,
     pub disallowed: Vec<String>,
+}
+
+/// The outcome of a call to [`Client::register`].
+#[derive(uniffi::Enum)]
+pub enum RegistrationOutcome {
+    /// The account was created, and the client is now logged in with it.
+    Registered,
+
+    /// The homeserver wants the user to complete an authentication stage
+    /// before it creates the account. Answer `challenge` and call again with
+    /// the matching authentication data.
+    AuthenticationRequired {
+        /// The challenge the homeserver posed.
+        challenge: UiaaChallenge,
+    },
 }
 
 /// The outcome of a call to [`Client::change_password`].
