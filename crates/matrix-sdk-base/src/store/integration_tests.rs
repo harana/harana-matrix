@@ -1060,6 +1060,38 @@ impl StateStoreIntegrationTests for DynStateStore {
 
         assert_eq!(Some(value.as_ref()), read.as_deref());
 
+        // The same, through the serializing helpers.
+        #[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+        struct Structured {
+            name: String,
+            count: u32,
+        }
+
+        let key = b"my_structured_key";
+        let first = Structured { name: "first".to_owned(), count: 1 };
+        let second = Structured { name: "second".to_owned(), count: 2 };
+
+        assert_eq!(self.get_serialized_custom_value::<Structured>(key).await?, None);
+
+        assert_eq!(self.set_serialized_custom_value(key, &first).await?, None);
+        assert_eq!(
+            self.get_serialized_custom_value::<Structured>(key).await?.as_ref(),
+            Some(&first)
+        );
+
+        // Writing over a value hands the previous one back, deserialized.
+        assert_eq!(
+            self.set_serialized_custom_value(key, &second).await?,
+            Some(Structured { name: "first".to_owned(), count: 1 })
+        );
+
+        self.set_serialized_custom_value_no_read(key, &first).await?;
+        assert_eq!(
+            self.remove_serialized_custom_value::<Structured>(key).await?,
+            Some(Structured { name: "first".to_owned(), count: 1 })
+        );
+        assert_eq!(self.get_serialized_custom_value::<Structured>(key).await?, None);
+
         Ok(())
     }
 
