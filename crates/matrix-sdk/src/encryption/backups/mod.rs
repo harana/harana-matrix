@@ -192,8 +192,13 @@ impl Backups {
     /// Disable and delete the currently active backup only if previously
     /// enabled before, otherwise an error will be returned.
     ///
+    /// If we have no backup key locally but the server holds a backup version,
+    /// that version is deleted as well: a backup that can no longer be read
+    /// still has to be removable.
+    ///
     /// For a more aggressive variant see [`Backups::disable_and_delete`] which
-    /// will delete the remote backup without checking the local state.
+    /// will delete every remote backup version without checking the local
+    /// state.
     ///
     /// # Examples
     ///
@@ -232,6 +237,19 @@ impl Backups {
                 olm_machine.backup_machine().disable_backup().await?;
 
                 info!("Backup successfully disabled and deleted");
+
+                Ok(())
+            } else if let Some(response) = self.get_current_version().await? {
+                // We have no backup key locally, e.g. because the recovery key was lost,
+                // but the server still holds a backup. Deleting it is the whole point of
+                // this call, so do that rather than refusing.
+                Span::current().record("version", &response.version);
+                info!("Deleting a backup which only exists on the server");
+
+                self.delete_backup_from_server(response.version).await?;
+                olm_machine.backup_machine().disable_backup().await?;
+
+                info!("Server-side backup successfully deleted");
 
                 Ok(())
             } else {

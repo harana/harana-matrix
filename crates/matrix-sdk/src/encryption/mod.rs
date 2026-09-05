@@ -776,8 +776,15 @@ impl Client {
                 let response = self.keys_upload(r.request_id(), request).await;
 
                 if let Err(e) = &response {
+                    let mut is_terminal_failure = false;
+
                     match e.as_client_api_error() {
                         Some(e) if e.status_code == 400 => {
+                            // Whatever the detail, a 400 means the server will keep
+                            // rejecting this exact upload: retrying it forever only
+                            // burns requests, so treat it as terminal below.
+                            is_terminal_failure = true;
+
                             if let ErrorBody::Standard(StandardErrorBody { message, .. }) = &e.body
                             {
                                 // This is one of the nastiest errors we can have. The server
@@ -833,7 +840,23 @@ impl Client {
                         _ => {}
                     }
 
-                    response?;
+                    if is_terminal_failure {
+                        // The keys we tried to upload are already on the server, so mark
+                        // the request as sent: the alternative is to generate the same
+                        // request on every sync forever, which is what used to happen
+                        // when a restored session had lost its crypto store.
+                        error!(
+                            "The homeserver rejected our key upload because it already has \
+                             these keys; marking the request as sent to avoid retrying it \
+                             forever. This usually means our crypto store no longer holds \
+                             the account for this device."
+                        );
+
+                        let response = upload_keys::v3::Response::new(BTreeMap::new());
+                        self.mark_request_as_sent(r.request_id(), &response).await?;
+                    } else {
+                        response?;
+                    }
                 }
             }
             AnyOutgoingRequest::ToDeviceRequest(request) => {

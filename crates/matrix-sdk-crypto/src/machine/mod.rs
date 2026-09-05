@@ -954,6 +954,43 @@ impl OlmMachine {
         Ok(changes)
     }
 
+    /// Handle a `/keys/query` response that was not requested by the
+    /// [`OlmMachine`] itself.
+    ///
+    /// Device list tracking, and the `/keys/query` requests that go with it,
+    /// are driven by room membership: a user we do not share an encrypted room
+    /// with is never queried. A consumer that needs the keys of such a user has
+    /// to make the request itself, and this is how it feeds the answer back in.
+    ///
+    /// Users we are already tracking are skipped, so that this cannot race the
+    /// [`OlmMachine`]'s own key queries and mark a user as up to date on the
+    /// strength of a response the machine did not ask for. Feed responses to
+    /// the machine's own requests back with
+    /// [`OlmMachine::mark_request_as_sent`] instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The response of a `/keys/query` request the caller
+    ///   performed.
+    pub async fn receive_keys_query(
+        &self,
+        response: &KeysQueryResponse,
+    ) -> OlmResult<(DeviceChanges, IdentityChanges)> {
+        let tracked_users = self.tracked_users().await?;
+
+        let mut response = response.clone();
+        response.device_keys.retain(|user_id, _| !tracked_users.contains(user_id));
+        response.master_keys.retain(|user_id, _| !tracked_users.contains(user_id));
+        response.self_signing_keys.retain(|user_id, _| !tracked_users.contains(user_id));
+        response.user_signing_keys.retain(|user_id, _| !tracked_users.contains(user_id));
+
+        // The request ID is not one the machine has in flight, so no user is marked as
+        // up to date because of this response.
+        let request_id = TransactionId::new();
+
+        self.receive_keys_query_response(&request_id, &response).await
+    }
+
     /// Get a request to upload E2EE keys to the server.
     ///
     /// Returns None if no keys need to be uploaded.
