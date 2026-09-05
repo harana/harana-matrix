@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     iter::once,
     ops::{ControlFlow, Deref},
 };
@@ -24,9 +24,11 @@ use matrix_sdk_base::{
     store::SerializableEventContent,
 };
 use ruma::{
-    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, TransactionId, UserId,
+    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId, TransactionId,
+    UserId,
     events::{
         AnyMessageLikeEventContent, AnySyncStateEvent, AnySyncTimelineEvent, SyncStateEvent,
+        ignored_user_list::IgnoredUserListEventContent,
         relation::Replacement,
         room::{
             member::MembershipChange,
@@ -36,7 +38,7 @@ use ruma::{
         },
     },
 };
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::{Room, event_cache::RoomEventCache, room::Invite, send_queue::RoomSendQueueUpdate};
 
@@ -61,6 +63,11 @@ impl Builder {
         let mut room_has_been_emptied = true;
         let mut current_value_must_be_erased = false;
 
+        let ignored_users = match room_event_cache.weak_room().get() {
+            Some(room) => ignored_users(&room).await,
+            None => BTreeSet::new(),
+        };
+
         // Track the most recent edit for each event.
         let mut latest_edit_for_event: HashMap<OwnedEventId, TimelineEvent> = HashMap::new();
 
@@ -74,6 +81,7 @@ impl Builder {
                     current_event.event_id().as_ref(),
                     own_user_id,
                     power_levels,
+                    &ignored_users,
                 ) {
                     // Let's continue, event is not suitable.
                     ControlFlow::Continue(FilterContinue {
@@ -656,6 +664,31 @@ fn filter_continue_with_edit(edited_event_id: OwnedEventId) -> ControlFlow<(), F
     })
 }
 
+/// Read the list of users the current user has ignored, from the state store.
+///
+/// Returns an empty set if it can't be read, so that a transient error doesn't
+/// erase the latest event of every room.
+pub(in crate::latest_events) async fn ignored_users(room: &Room) -> BTreeSet<OwnedUserId> {
+    match room.client().account().account_data::<IgnoredUserListEventContent>().await {
+        Ok(Some(raw_content)) => match raw_content.deserialize() {
+            Ok(content) => content.ignored_users.into_keys().collect(),
+            Err(error) => {
+                warn!(?error, "Failed to deserialize the ignored user list");
+
+                BTreeSet::new()
+            }
+        },
+
+        Ok(None) => BTreeSet::new(),
+
+        Err(error) => {
+            warn!(?error, "Failed to read the ignored user list");
+
+            BTreeSet::new()
+        }
+    }
+}
+
 /// Filter a [`TimelineEvent`].
 ///
 /// Be careful:
@@ -663,12 +696,25 @@ fn filter_continue_with_edit(edited_event_id: OwnedEventId) -> ControlFlow<(), F
 /// - `event` is the current event in the collection of events that is scanned.
 /// - `current_value_event_id` is the event ID of the current
 ///   [`LatestEventValue`].
+/// - `ignored_users` are the users the current user has ignored: nothing they
+///   send is suitable.
 pub fn filter_timeline_event(
     event: &TimelineEvent,
     current_value_event_id: Option<&OwnedEventId>,
     own_user_id: &UserId,
     power_levels: Option<&RoomPowerLevels>,
+    ignored_users: &BTreeSet<OwnedUserId>,
 ) -> ControlFlow<(), FilterContinue> {
+    // An event sent by an ignored user must not be shown anywhere, so it can't be
+    // a latest event. Note this doesn't erase a current value: a message of a user
+    // that has just been ignored is skipped by this very filter when the values
+    // are recomputed.
+    if !ignored_users.is_empty()
+        && event.sender().is_some_and(|sender| ignored_users.contains::<UserId>(&sender))
+    {
+        return filter_continue();
+    }
+
     // Cast the event into an `AnySyncTimelineEvent`. If deserializing fails, we
     // ignore the event.
     let event = match event.raw().deserialize() {
@@ -842,7 +888,7 @@ mod filter_tests {
         owned_event_id, owned_user_id, user_id,
     };
 
-    use super::{ControlFlow, FilterContinue, filter_timeline_event};
+    use super::{BTreeSet, ControlFlow, FilterContinue, filter_timeline_event};
 
     macro_rules! assert_latest_event_content {
         ( event | $event_factory:ident | $event_builder:block
@@ -864,7 +910,7 @@ mod filter_tests {
             };
 
             assert_matches!(
-                filter_timeline_event(&event, None, user_id!("@mnt_io:matrix.org"), None),
+                filter_timeline_event(&event, None, user_id!("@mnt_io:matrix.org"), None, &BTreeSet::new()),
                 $expect
             );
         };
@@ -879,6 +925,24 @@ mod filter_tests {
     }
 
     #[test]
+    fn test_event_from_an_ignored_user_is_not_a_candidate() {
+        let user_id = user_id!("@mnt_io:matrix.org");
+        let ignored_user_id = owned_user_id!("@spammer:matrix.org");
+        let event =
+            EventFactory::new().sender(&ignored_user_id).text_msg("buy my coin").into_event();
+
+        // Without the ignore list, it would be a perfectly fine candidate.
+        assert!(filter_timeline_event(&event, None, user_id, None, &BTreeSet::new()).is_break());
+
+        // Nothing sent by an ignored user is suitable.
+        assert!(
+            filter_timeline_event(&event, None, user_id, None, &BTreeSet::from([ignored_user_id]))
+                .is_break()
+                .not()
+        );
+    }
+
+    #[test]
     fn test_room_message_replacement() {
         let user_id = user_id!("@mnt_io:matrix.org");
         let event_factory = EventFactory::new().sender(user_id);
@@ -888,7 +952,7 @@ mod filter_tests {
             .edit(event_id, RoomMessageEventContent::text_plain("hello").into())
             .into_event();
 
-        assert_matches!(filter_timeline_event(&event, None, user_id, None), ControlFlow::Continue(FilterContinue { current_value_must_be_erased, edited_event_id }) => {
+        assert_matches!(filter_timeline_event(&event, None, user_id, None, &BTreeSet::new()), ControlFlow::Continue(FilterContinue { current_value_must_be_erased, edited_event_id }) => {
                     assert!(current_value_must_be_erased.not());
                     assert_eq!(edited_event_id, Some(event_id.to_owned()));
                 }
@@ -908,7 +972,7 @@ mod filter_tests {
             let current_value_event_id = None;
 
             assert_matches!(
-                filter_timeline_event(&event, current_value_event_id, user_id, None),
+                filter_timeline_event(&event, current_value_event_id, user_id, None, &BTreeSet::new()),
                 ControlFlow::Continue(FilterContinue { current_value_must_be_erased, edited_event_id }) => {
                     assert!(current_value_must_be_erased.not());
                     assert!(edited_event_id.is_none());
@@ -922,7 +986,7 @@ mod filter_tests {
             let current_value_event_id = Some(owned_event_id!("$ev1"));
 
             assert_matches!(
-                filter_timeline_event(&event, current_value_event_id.as_ref(), user_id, None),
+                filter_timeline_event(&event, current_value_event_id.as_ref(), user_id, None, &BTreeSet::new()),
                 ControlFlow::Continue(FilterContinue { current_value_must_be_erased, edited_event_id }) => {
                     assert!(current_value_must_be_erased.not());
                     assert!(edited_event_id.is_none());
@@ -936,7 +1000,7 @@ mod filter_tests {
             let current_value_event_id = Some(event_id.to_owned());
 
             assert_matches!(
-                filter_timeline_event(&event, current_value_event_id.as_ref(), user_id, None),
+                filter_timeline_event(&event, current_value_event_id.as_ref(), user_id, None, &BTreeSet::new()),
                 ControlFlow::Continue(FilterContinue { current_value_must_be_erased, edited_event_id }) => {
                     assert!(current_value_must_be_erased);
                     assert!(edited_event_id.is_none());
@@ -1102,8 +1166,14 @@ mod filter_tests {
             room_power_levels.invite = 10.into();
             room_power_levels.kick = 10.into();
             assert!(
-                filter_timeline_event(&event, None, user_id, Some(&room_power_levels))
-                    .is_continue(),
+                filter_timeline_event(
+                    &event,
+                    None,
+                    user_id,
+                    Some(&room_power_levels),
+                    &BTreeSet::new()
+                )
+                .is_continue(),
                 "cannot accept, cannot decline",
             );
         }
@@ -1113,7 +1183,14 @@ mod filter_tests {
             room_power_levels.invite = 0.into();
             room_power_levels.kick = 10.into();
             assert!(
-                filter_timeline_event(&event, None, user_id, Some(&room_power_levels)).is_break(),
+                filter_timeline_event(
+                    &event,
+                    None,
+                    user_id,
+                    Some(&room_power_levels),
+                    &BTreeSet::new()
+                )
+                .is_break(),
                 "can accept, cannot decline",
             );
         }
@@ -1123,7 +1200,14 @@ mod filter_tests {
             room_power_levels.invite = 10.into();
             room_power_levels.kick = 0.into();
             assert!(
-                filter_timeline_event(&event, None, user_id, Some(&room_power_levels)).is_break(),
+                filter_timeline_event(
+                    &event,
+                    None,
+                    user_id,
+                    Some(&room_power_levels),
+                    &BTreeSet::new()
+                )
+                .is_break(),
                 "cannot accept, can decline",
             );
         }
@@ -1133,7 +1217,14 @@ mod filter_tests {
             room_power_levels.invite = 0.into();
             room_power_levels.kick = 0.into();
             assert!(
-                filter_timeline_event(&event, None, user_id, Some(&room_power_levels)).is_break(),
+                filter_timeline_event(
+                    &event,
+                    None,
+                    user_id,
+                    Some(&room_power_levels),
+                    &BTreeSet::new()
+                )
+                .is_break(),
                 "can accept, can decline",
             );
         }
@@ -1149,8 +1240,14 @@ mod filter_tests {
             room_power_levels.kick = 0.into();
 
             assert!(
-                filter_timeline_event(&event, None, user_id, Some(&room_power_levels))
-                    .is_continue(),
+                filter_timeline_event(
+                    &event,
+                    None,
+                    user_id,
+                    Some(&room_power_levels),
+                    &BTreeSet::new()
+                )
+                .is_continue(),
                 "cannot accept, can decline, at least same user levels",
             );
         }

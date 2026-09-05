@@ -16,7 +16,11 @@ pub mod pagination;
 mod state;
 mod updates;
 
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    sync::Arc,
+};
 
 use eyeball::SharedObservable;
 use matrix_sdk_base::{
@@ -102,7 +106,7 @@ impl RoomEventCache {
     }
 
     /// Get the weak room of this [`RoomEventCache`].
-    pub(super) fn weak_room(&self) -> &WeakRoom {
+    pub(crate) fn weak_room(&self) -> &WeakRoom {
         &self.inner.weak_room
     }
 
@@ -284,6 +288,28 @@ impl RoomEventCache {
                 RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs {
                     diffs: timeline_event_diffs,
                     origin: EventsOrigin::Sync,
+                }),
+                Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Remove every event sent by one of the given users, from memory and from
+    /// the store, and notify the observers of this cache.
+    pub(in super::super) async fn remove_events_sent_by(
+        &self,
+        senders: &BTreeSet<OwnedUserId>,
+    ) -> Result<()> {
+        let timeline_event_diffs =
+            self.inner.state.write().await?.remove_events_sent_by(senders).await?;
+
+        if !timeline_event_diffs.is_empty() {
+            self.inner.update_sender.send(
+                RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs {
+                    diffs: timeline_event_diffs,
+                    origin: EventsOrigin::Cache,
                 }),
                 Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
             );

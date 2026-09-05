@@ -273,6 +273,13 @@ impl Caches {
             .await
     }
 
+    /// Get all the [`ThreadEventCache`]s that have been created already.
+    ///
+    /// [`ThreadEventCache`]: thread::ThreadEventCache
+    pub async fn loaded_threads(&self) -> Vec<thread::ThreadEventCache> {
+        self.threads.read().await.values().cloned().collect()
+    }
+
     /// Get the [`PinnedEventsCache`] if it has been created already.
     ///
     /// [`PinnedEventsCache`]: pinned_events::PinnedEventsCache

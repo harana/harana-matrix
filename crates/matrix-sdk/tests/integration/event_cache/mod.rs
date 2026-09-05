@@ -178,14 +178,15 @@ async fn test_ignored_unignored() {
         })
         .await;
 
-    // We do receive a clear.
+    // Only the event sent by `dexter` is removed; the other events are kept, so
+    // that the room list keeps its ordering.
     {
         assert_let_timeout!(
             Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) =
                 room_stream.recv()
         );
         assert_eq!(diffs.len(), 1);
-        assert_let!(VectorDiff::Clear = &diffs[0]);
+        assert_let!(VectorDiff::Remove { index: 0 } = &diffs[0]);
     }
 
     // We do receive the new event.
@@ -201,12 +202,21 @@ async fn test_ignored_unignored() {
         assert_event_matches_msg(&events[0], "i don't like this dexter");
     }
 
-    // The other room has been cleared too.
+    // `ivan`'s event is still there, and so is the new one.
+    {
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+        assert_event_matches_msg(&events[0], "hoy!");
+        assert_event_matches_msg(&events[1], "i don't like this dexter");
+    }
+
+    // The other room has no event from `dexter`: it is left untouched.
     {
         let room = client.get_room(other_room_id).unwrap();
         let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
         let events = room_event_cache.events().await.unwrap();
-        assert!(events.is_empty());
+        assert_eq!(events.len(), 1);
+        assert_event_matches_msg(&events[0], "demat!");
     }
 
     // That's all, folks!

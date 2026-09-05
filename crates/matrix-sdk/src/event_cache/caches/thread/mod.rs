@@ -18,7 +18,7 @@ pub mod pagination;
 mod state;
 mod updates;
 
-use std::{fmt, sync::Arc};
+use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use matrix_sdk_base::{
     event_cache::Event,
@@ -147,6 +147,26 @@ impl ThreadEventCache {
         }
 
         Ok(cache)
+    }
+
+    /// Remove every event sent by one of the given users, from memory and from
+    /// the store, and notify the observers of this cache.
+    pub(in super::super) async fn remove_events_sent_by(
+        &self,
+        senders: &BTreeSet<OwnedUserId>,
+    ) -> Result<()> {
+        let mut state = self.inner.state.write().await?;
+
+        let timeline_event_diffs = state.remove_events_sent_by(senders).await?;
+
+        if !timeline_event_diffs.is_empty() {
+            state.update_sender.send(
+                TimelineVectorDiffs { diffs: timeline_event_diffs, origin: EventsOrigin::Cache },
+                Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
+            );
+        }
+
+        Ok(())
     }
 
     /// Get the room ID for this room.

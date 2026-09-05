@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     ops::ControlFlow,
     sync::{Arc, Weak},
 };
@@ -91,8 +91,9 @@ pub(super) async fn room_updates_task(
     }
 }
 
-/// Listen to _ignore user list update changes_ to clear the rooms when a user
-/// is ignored or unignored.
+/// Listen to _ignore user list update changes_ to drop the events of the
+/// ignored users, and to recompute what the other rooms derive from their
+/// events.
 #[instrument(skip_all)]
 pub(super) async fn ignore_user_list_update_task(
     inner: Arc<EventCacheInner>,
@@ -102,11 +103,16 @@ pub(super) async fn ignore_user_list_update_task(
     span.follows_from(Span::current());
 
     async move {
-        while ignore_user_list_stream.next().await.is_some() {
+        while let Some(ignored_users) = ignore_user_list_stream.next().await {
             info!("Received an ignore user list change");
 
-            if let Err(err) = inner.clear_all_rooms().await {
-                error!("when clearing room storage after ignore user list change: {err}");
+            let ignored_users = ignored_users
+                .iter()
+                .filter_map(|user_id| UserId::parse(user_id).ok())
+                .collect::<BTreeSet<_>>();
+
+            if let Err(err) = inner.handle_ignore_user_list_change(&ignored_users).await {
+                error!("when handling an ignore user list change: {err}");
             }
         }
 
