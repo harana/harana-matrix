@@ -253,6 +253,8 @@ use self::error::{FromHttpRequestError, FromHttpResponseError, IntoHttpError};
 pub use crate::metadata;
 use crate::{DeviceId, UserId};
 
+#[cfg(feature = "appservice-api-s")]
+pub mod appservice;
 pub mod auth_scheme;
 mod body;
 // These two modules only contain endpoint definitions, which are empty without a direction.

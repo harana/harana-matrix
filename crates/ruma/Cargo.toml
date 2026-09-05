@@ -21,8 +21,13 @@ ignored = [
 [features]
 default = []
 
+# The application service registration file. Not an endpoint definition, so it
+# needs neither `client` nor `server`.
+appservice-api-s = []
+
 # Everything the vendored test suite needs. Not meant for downstream use.
 full = [
+    "appservice-api-s",
     "client",
     "server",
     "federation-api",
