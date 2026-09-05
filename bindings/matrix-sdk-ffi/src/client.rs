@@ -240,9 +240,19 @@ pub trait ClientDelegate: SyncOutsideWasm + SendOutsideWasm {
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
+#[async_trait::async_trait]
 pub trait ClientSessionDelegate: SyncOutsideWasm + SendOutsideWasm {
-    fn retrieve_session_from_keychain(&self, user_id: String) -> Result<Session, ClientError>;
-    fn save_session_in_keychain(&self, session: Session);
+    /// Reads the session of `user_id` back from the host's storage.
+    ///
+    /// Async, so a host whose storage is reached asynchronously (a keychain
+    /// behind a bridge, for instance) does not have to block a thread here.
+    async fn retrieve_session_from_keychain(&self, user_id: String)
+    -> Result<Session, ClientError>;
+
+    /// Hands the session to the host to store. See
+    /// [`ClientSessionDelegate::retrieve_session_from_keychain`] for why this
+    /// is async.
+    async fn save_session_in_keychain(&self, session: Session);
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
@@ -487,15 +497,20 @@ impl Client {
                     let session_delegate = session_delegate.clone();
                     Box::new(move |client| {
                         let session_delegate = session_delegate.clone();
-                        let user_id = client.user_id().context("user isn't logged in")?;
-                        Ok(Self::retrieve_session(session_delegate, user_id)?)
+                        Box::pin(async move {
+                            let user_id =
+                                client.user_id().context("user isn't logged in")?.to_owned();
+                            Ok(Self::retrieve_session(session_delegate, &user_id).await?)
+                        })
                     })
                 },
                 {
                     let session_delegate = session_delegate.clone();
                     Box::new(move |client| {
                         let session_delegate = session_delegate.clone();
-                        Ok(Self::save_session(session_delegate, client)?)
+                        Box::pin(
+                            async move { Ok(Self::save_session(session_delegate, client).await?) },
+                        )
                     })
                 },
             )?;
@@ -2889,11 +2904,14 @@ impl Client {
         }
     }
 
-    fn retrieve_session(
+    async fn retrieve_session(
         session_delegate: Arc<dyn ClientSessionDelegate>,
         user_id: &UserId,
     ) -> anyhow::Result<SessionTokens> {
-        Ok(session_delegate.retrieve_session_from_keychain(user_id.to_string())?.into_tokens())
+        Ok(session_delegate
+            .retrieve_session_from_keychain(user_id.to_string())
+            .await?
+            .into_tokens())
     }
 
     fn session_inner(client: matrix_sdk::Client) -> Result<Session, ClientError> {
@@ -2905,12 +2923,12 @@ impl Client {
         Session::new(auth_api, homeserver_url, sliding_sync_version.into())
     }
 
-    fn save_session(
+    async fn save_session(
         session_delegate: Arc<dyn ClientSessionDelegate>,
         client: matrix_sdk::Client,
     ) -> anyhow::Result<()> {
         let session = Self::session_inner(client)?;
-        session_delegate.save_session_in_keychain(session);
+        session_delegate.save_session_in_keychain(session).await;
         Ok(())
     }
 }

@@ -185,7 +185,7 @@ async fn test_refresh_token() {
             let num_save_session_callback_calls = num_save_session_callback_calls.clone();
             Box::new(move |_client| {
                 *num_save_session_callback_calls.lock().unwrap() += 1;
-                Ok(())
+                Box::pin(async { Ok(()) })
             })
         })
         .unwrap();
@@ -709,7 +709,7 @@ async fn test_oauth_handle_refresh_tokens() {
             let num_save_session_callback_calls = num_save_session_callback_calls.clone();
             Box::new(move |_client| {
                 *num_save_session_callback_calls.lock().unwrap() += 1;
-                Ok(())
+                Box::pin(async { Ok(()) })
             })
         })
         .unwrap();

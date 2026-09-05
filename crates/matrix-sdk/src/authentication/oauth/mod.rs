@@ -809,7 +809,7 @@ impl OAuth {
             .get()
             .ok_or(CrossProcessRefreshLockError::MissingReloadSession)?;
 
-        match callback(self.client.clone()) {
+        match callback(self.client.clone()).await {
             Ok(tokens) => {
                 guard.handle_mismatch(&tokens).await?;
 
@@ -1202,7 +1202,7 @@ impl OAuth {
             // Satisfies the save_session_callback invariant: set_session_tokens has
             // been called just above.
             tracing::debug!("call save_session_callback");
-            if let Err(err) = save_session_callback(self.client.clone()) {
+            if let Err(err) = save_session_callback(self.client.clone()).await {
                 error!("when saving session after refresh: {err}");
             }
         }

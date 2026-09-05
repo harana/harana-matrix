@@ -292,7 +292,10 @@ mod tests {
             Box::new({
                 // This is only called because of extra checks in the code.
                 let tokens = tokens.clone();
-                move |_| Ok(tokens.clone())
+                move |_| {
+                    let tokens = tokens.clone();
+                    Box::pin(async move { Ok(tokens) })
+                }
             }),
             Box::new(|_| panic!("save_session_callback shouldn't be called here")),
         )?;
@@ -502,7 +505,10 @@ mod tests {
                 Box::new({
                     // This is only called because of extra checks in the code.
                     let tokens = next_tokens.clone();
-                    move |_| Ok(tokens.clone())
+                    move |_| {
+                        let tokens = tokens.clone();
+                        Box::pin(async move { Ok(tokens) })
+                    }
                 }),
                 Box::new(|_| panic!("save_session_callback shouldn't be called here")),
             )?;
@@ -541,7 +547,10 @@ mod tests {
             Box::new({
                 // This is only called because of extra checks in the code.
                 let tokens = next_tokens.clone();
-                move |_| Ok(tokens.clone())
+                move |_| {
+                    let tokens = tokens.clone();
+                    Box::pin(async move { Ok(tokens) })
+                }
             }),
             Box::new(|_| panic!("save_session_callback shouldn't be called here")),
         )?;
@@ -680,8 +689,8 @@ mod tests {
             .await
             .unwrap();
         app.set_session_callbacks(
-            Box::new(|_| Ok(mock_session_tokens_with_refresh())),
-            Box::new(|_| Ok(())),
+            Box::new(|_| Box::pin(async { Ok(mock_session_tokens_with_refresh()) })),
+            Box::new(|_| Box::pin(async { Ok(()) })),
         )
         .unwrap();
 
@@ -700,8 +709,8 @@ mod tests {
             .await
             .unwrap();
         nse.set_session_callbacks(
-            Box::new(|_| Ok(mock_session_tokens_with_refresh())),
-            Box::new(|_| Ok(())),
+            Box::new(|_| Box::pin(async { Ok(mock_session_tokens_with_refresh()) })),
+            Box::new(|_| Box::pin(async { Ok(()) })),
         )
         .unwrap();
 

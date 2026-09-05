@@ -58,6 +58,8 @@ rustls-ring = ["matrix-sdk/rustls-ring", "matrix-sdk-ui/rustls-ring", "matrix-sd
 
 [dependencies]
 anyhow.workspace = true
+# Required by uniffi for the async methods of callback interfaces.
+async-trait.workspace = true
 chrono.workspace = true
 extension-trait = "1.0.2"
 eyeball-im.workspace = true
