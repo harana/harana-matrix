@@ -124,6 +124,7 @@ use serde_json::{Value, json};
 use tokio::sync::{RwLock, broadcast::error::RecvError};
 use tracing::{debug, error, warn};
 use url::Url;
+use zeroize::Zeroize as _;
 
 use super::{
     room::{Room, room_info::RoomInfo},
@@ -149,7 +150,8 @@ use crate::{
     room_preview::RoomPreview,
     ruma::{
         AccountDataEvent, AccountDataEventType, AuthData, InviteAvatars, MediaPreviewConfig,
-        MediaPreviews, MediaSource, PresenceState, RoomAccountDataEvent, UserCall, UserStatus,
+        MediaPreviews, MediaSource, PresenceState, RoomAccountDataEvent, UiaaChallenge, UserCall,
+        UserStatus,
     },
     runtime::get_runtime_handle,
     spaces::SpaceService,
@@ -2068,6 +2070,46 @@ impl Client {
         matches!(self.inner.auth_api(), Some(AuthApi::Matrix(_)))
     }
 
+    /// Change the password of the logged-in account.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_password` - The password to set. It is zeroized once the request
+    ///   has been sent, and never appears in the logs or in the returned value.
+    ///
+    /// * `auth_data` - The homeserver protects this endpoint with the
+    ///   [User-Interactive Authentication API][uiaa]. Leave this unset for the
+    ///   first attempt: the call then reports
+    ///   [`PasswordChangeOutcome::AuthenticationRequired`] with the challenge
+    ///   to answer, and it should be made again with the matching `auth_data`,
+    ///   carrying the session from the challenge.
+    ///
+    /// [uiaa]: https://spec.matrix.org/latest/client-server-api/#user-interactive-authentication-api
+    pub async fn change_password(
+        &self,
+        mut new_password: String,
+        auth_data: Option<AuthData>,
+    ) -> Result<PasswordChangeOutcome, ClientError> {
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        let result = self.inner.account().change_password(&new_password, auth_data).await;
+        new_password.zeroize();
+
+        match result {
+            Ok(_) => Ok(PasswordChangeOutcome::Changed),
+
+            Err(error) => {
+                if let Some(uiaa_info) = error.as_uiaa_response() {
+                    return Ok(PasswordChangeOutcome::AuthenticationRequired {
+                        challenge: uiaa_info.into(),
+                    });
+                }
+
+                Err(ClientError::from_err(error))
+            }
+        }
+    }
+
     /// Deactivate this account definitively.
     /// Similarly to `encryption::reset_identity` this
     /// will only work with password-based authentication (`m.login.password`)
@@ -2083,11 +2125,8 @@ impl Client {
         auth_data: Option<AuthData>,
         erase_data: bool,
     ) -> Result<(), ClientError> {
-        if let Some(auth_data) = auth_data {
-            _ = self.inner.account().deactivate(None, Some(auth_data.into()), erase_data).await?;
-        } else {
-            _ = self.inner.account().deactivate(None, None, erase_data).await?;
-        }
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+        _ = self.inner.account().deactivate(None, auth_data, erase_data).await?;
 
         Ok(())
     }
@@ -3541,6 +3580,21 @@ pub struct ExtendedProfileFields {
     pub enabled: bool,
     pub allowed: Vec<String>,
     pub disallowed: Vec<String>,
+}
+
+/// The outcome of a call to [`Client::change_password`].
+#[derive(uniffi::Enum)]
+pub enum PasswordChangeOutcome {
+    /// The password was changed.
+    Changed,
+
+    /// The homeserver wants the user to authenticate before it changes the
+    /// password. Answer `challenge` and call again with the matching
+    /// authentication data.
+    AuthenticationRequired {
+        /// The challenge the homeserver posed.
+        challenge: UiaaChallenge,
+    },
 }
 
 #[cfg(test)]

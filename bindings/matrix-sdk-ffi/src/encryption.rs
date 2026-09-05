@@ -28,7 +28,10 @@ use tracing::{error, info};
 use zeroize::Zeroize;
 
 use crate::{
-    client::Client, error::ClientError, ruma::AuthData, runtime::get_runtime_handle,
+    client::Client,
+    error::ClientError,
+    ruma::{AuthData, UiaaChallenge},
+    runtime::get_runtime_handle,
     task_handle::TaskHandle,
 };
 
@@ -42,6 +45,32 @@ pub struct Encryption {
     /// the FFI `Client` and thus the SDK `Client` alive. Otherwise, we
     /// would need to repeat the hack done in the FFI `Client::drop` method.
     pub(crate) _client: Arc<Client>,
+}
+
+/// The outcome of an explicit call to [`Encryption::bootstrap_cross_signing`].
+#[derive(uniffi::Enum)]
+pub enum CrossSigningBootstrapOutcome {
+    /// A cross-signing identity was created and published.
+    Bootstrapped,
+
+    /// The account already had a cross-signing identity, which was left
+    /// untouched.
+    AlreadyBootstrapped,
+
+    /// The homeserver wants the user to authenticate before it accepts the
+    /// cross-signing keys. Answer `challenge` and call again with the matching
+    /// authentication data.
+    AuthenticationRequired {
+        /// The challenge the homeserver posed.
+        challenge: UiaaChallenge,
+    },
+
+    /// Cross-signing cannot be bootstrapped for this client, for instance
+    /// because it is not logged in or has no encryption support.
+    Unavailable {
+        /// Why it is unavailable.
+        message: String,
+    },
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
@@ -889,6 +918,67 @@ impl Encryption {
         }
     }
 
+    /// Bootstrap cross-signing for the logged-in account.
+    ///
+    /// Cross-signing is otherwise only set up implicitly, when the client is
+    /// built with `auto_enable_cross_signing`. This lets a client that
+    /// authenticates first and offers a security setup step afterwards trigger
+    /// it explicitly.
+    ///
+    /// An identity that already exists is never reset: the call reports
+    /// [`CrossSigningBootstrapOutcome::AlreadyBootstrapped`] and leaves it
+    /// alone. Use [`Encryption::reset_identity`] to replace one.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth_data` - The homeserver protects the upload of cross-signing keys
+    ///   with the [User-Interactive Authentication API][uiaa]. Leave this unset
+    ///   for the first attempt: the call then reports
+    ///   [`CrossSigningBootstrapOutcome::AuthenticationRequired`] with the
+    ///   challenge to answer, and it should be made again with the matching
+    ///   `auth_data`, carrying the session from the challenge.
+    ///
+    /// No private key material is returned, whatever the outcome.
+    ///
+    /// [uiaa]: https://spec.matrix.org/latest/client-server-api/#user-interactive-authentication-api
+    pub async fn bootstrap_cross_signing(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<CrossSigningBootstrapOutcome, ClientError> {
+        let Some(user_id) = self._client.inner.user_id() else {
+            return Ok(CrossSigningBootstrapOutcome::Unavailable {
+                message: "The client is not logged in".to_owned(),
+            });
+        };
+
+        // Never reset an identity that is already there.
+        if self.inner.get_user_identity(user_id).await?.is_some() {
+            return Ok(CrossSigningBootstrapOutcome::AlreadyBootstrapped);
+        }
+
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        match self.inner.bootstrap_cross_signing(auth_data).await {
+            Ok(()) => Ok(CrossSigningBootstrapOutcome::Bootstrapped),
+
+            Err(error) => {
+                if let Some(uiaa_info) = error.as_uiaa_response() {
+                    return Ok(CrossSigningBootstrapOutcome::AuthenticationRequired {
+                        challenge: uiaa_info.into(),
+                    });
+                }
+
+                if matches!(error, matrix_sdk::Error::NoOlmMachine) {
+                    return Ok(CrossSigningBootstrapOutcome::Unavailable {
+                        message: "Encryption is not set up for this client".to_owned(),
+                    });
+                }
+
+                Err(ClientError::from_err(error))
+            }
+        }
+    }
+
     /// Return whether the homeserver advertises support for MSC3814
     /// dehydrated devices.
     pub async fn is_dehydrated_device_supported(&self) -> Result<bool, DehydratedDeviceError> {
@@ -1077,7 +1167,8 @@ impl IdentityResetHandle {
     /// 3. Go through the cross-signing key reset flow
     /// 4. Finally, re-enable key backups only if they were enabled before
     pub async fn reset(&self, auth: Option<AuthData>) -> Result<(), ClientError> {
-        self.inner.reset(auth.map(Into::into)).await.map_err(ClientError::from_err)
+        let auth = auth.map(TryInto::try_into).transpose()?;
+        self.inner.reset(auth).await.map_err(ClientError::from_err)
     }
 
     pub async fn cancel(&self) {
