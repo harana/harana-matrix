@@ -49,9 +49,13 @@ use ruma::{
         },
     },
 };
+use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
 
-use self::{power_levels::RoomPowerLevels, room_info::RoomInfo};
+use self::{
+    power_levels::RoomPowerLevels,
+    room_info::{RoomInfo, RoomInfoUpdateReason},
+};
 use crate::{
     TaskHandle,
     chunk_iterator::ChunkIterator,
@@ -427,11 +431,24 @@ impl Room {
         self: Arc<Self>,
         listener: Box<dyn RoomInfoListener>,
     ) -> Arc<TaskHandle> {
-        let mut subscriber = self.inner.subscribe_info();
+        // Listen to the notable updates rather than to `RoomInfo` itself: they are
+        // emitted for the same changes, but they also say what changed.
+        let mut receiver = self.inner.client().room_info_notable_update_receiver();
+        let room_id = self.inner.room_id().to_owned();
+
         Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
-            while subscriber.next().await.is_some() {
+            loop {
+                let reasons = match receiver.recv().await {
+                    Ok(update) if update.room_id != room_id => continue,
+                    Ok(update) => RoomInfoUpdateReason::from_reasons(update.reasons),
+                    // We missed updates, so we no longer know what changed. Report the
+                    // current state with no identified reason rather than stopping.
+                    Err(RecvError::Lagged(_)) => vec![RoomInfoUpdateReason::Unknown],
+                    Err(RecvError::Closed) => break,
+                };
+
                 match self.room_info().await {
-                    Ok(room_info) => listener.call(room_info),
+                    Ok(room_info) => listener.call(room_info, reasons),
                     Err(e) => {
                         error!("Failed to compute new RoomInfo: {e}");
                     }
@@ -1598,7 +1615,11 @@ pub fn matrix_to_room_alias_permalink(
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
-    fn call(&self, room_info: RoomInfo);
+    /// A new [`RoomInfo`], and what about the room changed to produce it.
+    ///
+    /// `reasons` is empty for the initial value delivered on subscription,
+    /// which reflects the current state rather than a change.
+    fn call(&self, room_info: RoomInfo, reasons: Vec<RoomInfoUpdateReason>);
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]

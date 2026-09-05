@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use matrix_sdk::{CallIntentConsensus, EncryptionState, RoomState};
+use matrix_sdk_base::RoomInfoNotableUpdateReasons;
 use tracing::warn;
 
 use crate::{
@@ -27,6 +28,61 @@ use crate::{
     room_member::RoomMember,
     ruma::RtcCallIntent,
 };
+
+/// Why a [`RoomInfo`] update was emitted.
+///
+/// A single update can carry several reasons.
+#[derive(Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum RoomInfoUpdateReason {
+    /// The recency stamp of the room has changed.
+    RecencyStamp,
+    /// The latest event of the room has changed.
+    LatestEvent,
+    /// A read receipt has changed.
+    ReadReceipt,
+    /// The user-controlled unread marker value has changed.
+    UnreadMarker,
+    /// A membership change happened for the current user.
+    Membership,
+    /// The display name has changed.
+    DisplayName,
+    /// The active service members have changed.
+    ActiveServiceMembers,
+    /// The user's `m.fully_read` marker has changed.
+    FullyRead,
+    /// A room hero's global profile changed.
+    Heroes,
+    /// Something else about the room changed.
+    ///
+    /// The SDK doesn't identify every kind of update yet, so this covers the
+    /// rest. Treat it as "re-read whatever you display".
+    Unknown,
+}
+
+impl RoomInfoUpdateReason {
+    /// Split the SDK's bitflags into the reasons they stand for.
+    pub(crate) fn from_reasons(reasons: RoomInfoNotableUpdateReasons) -> Vec<Self> {
+        // `RoomInfoNotableUpdateReasons::NONE` is the SDK's placeholder for an
+        // update it hasn't classified, which is exactly `Unknown` here.
+        let mapping = [
+            (RoomInfoNotableUpdateReasons::RECENCY_STAMP, Self::RecencyStamp),
+            (RoomInfoNotableUpdateReasons::LATEST_EVENT, Self::LatestEvent),
+            (RoomInfoNotableUpdateReasons::READ_RECEIPT, Self::ReadReceipt),
+            (RoomInfoNotableUpdateReasons::UNREAD_MARKER, Self::UnreadMarker),
+            (RoomInfoNotableUpdateReasons::MEMBERSHIP, Self::Membership),
+            (RoomInfoNotableUpdateReasons::DISPLAY_NAME, Self::DisplayName),
+            (RoomInfoNotableUpdateReasons::ACTIVE_SERVICE_MEMBERS, Self::ActiveServiceMembers),
+            (RoomInfoNotableUpdateReasons::FULLY_READ, Self::FullyRead),
+            (RoomInfoNotableUpdateReasons::HEROES, Self::Heroes),
+            (RoomInfoNotableUpdateReasons::NONE, Self::Unknown),
+        ];
+
+        mapping
+            .into_iter()
+            .filter_map(|(flag, reason)| reasons.contains(flag).then_some(reason))
+            .collect()
+    }
+}
 
 #[derive(Clone, uniffi::Enum)]
 pub enum RtcCallIntentConsensus {
