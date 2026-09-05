@@ -27,9 +27,8 @@ use matrix_sdk_base::{
 };
 use ruma::{
     EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId,
-    events::{AnySyncEphemeralRoomEvent, relation::RelationType},
+    events::{receipt::ReceiptEventContent, relation::RelationType},
     room_version_rules::RoomVersionRules,
-    serde::Raw,
 };
 use tokio::sync::{Notify, broadcast::Sender, mpsc};
 use tracing::{instrument, trace};
@@ -230,8 +229,12 @@ impl ThreadEventCache {
 
     /// Handle a [`JoinedRoomUpdate`].
     #[instrument(skip_all, fields(room_id = %self.inner.room_id, thread_root = %self.inner.thread_id))]
-    pub(super) async fn handle_joined_room_update(&self, updates: JoinedRoomUpdate) -> Result<()> {
-        self.handle_timeline(updates.timeline, updates.ephemeral).await?;
+    pub(super) async fn handle_joined_room_update(
+        &self,
+        updates: JoinedRoomUpdate,
+        receipt_events: &[ReceiptEventContent],
+    ) -> Result<()> {
+        self.handle_timeline(updates.timeline, receipt_events).await?;
 
         Ok(())
     }
@@ -239,7 +242,7 @@ impl ThreadEventCache {
     /// Handle a [`LeftRoomUpdate`].
     #[instrument(skip_all, fields(room_id = %self.inner.room_id, thread_root = %self.inner.thread_id))]
     pub(super) async fn handle_left_room_update(&self, updates: LeftRoomUpdate) -> Result<()> {
-        self.handle_timeline(updates.timeline, Vec::new()).await?;
+        self.handle_timeline(updates.timeline, &[]).await?;
 
         Ok(())
     }
@@ -249,11 +252,9 @@ impl ThreadEventCache {
     async fn handle_timeline(
         &self,
         timeline: Timeline,
-        ephemeral_events: Vec<Raw<AnySyncEphemeralRoomEvent>>,
+        receipt_events: &[ReceiptEventContent],
     ) -> Result<()> {
-        if timeline.events.is_empty()
-            && timeline.prev_batch.is_none()
-            && ephemeral_events.is_empty()
+        if timeline.events.is_empty() && timeline.prev_batch.is_none() && receipt_events.is_empty()
         {
             return Ok(());
         }
@@ -263,7 +264,7 @@ impl ThreadEventCache {
         let mut state = self.inner.state.write().await?;
 
         let (stored_prev_batch_token, timeline_event_diffs) =
-            state.handle_sync(timeline, ephemeral_events).await?;
+            state.handle_sync(timeline, receipt_events).await?;
 
         // Now that all events have been added, we can trigger the
         // `pagination_token_notifier`.
@@ -346,12 +347,12 @@ impl ThreadEventCache {
                 resolved_events.iter().filter_map(|resolved_event| resolved_event.as_resolved()),
                 // Read receipt events aren't encrypted, so we can't have decrypted a new
                 // one here. As a result, we don't have any new receipt events to
-                // post-process, so we can just pass `None` here.
+                // post-process, so we can just pass an empty slice here.
                 //
                 // Note: read receipts may be updated anyhow in the post-processing step,
                 // as the redecryption may have decrypted some events that don't count as
                 // unreads.
-                None,
+                &[],
             )
             .await?;
 
@@ -453,7 +454,7 @@ mod timed_tests {
         };
 
         thread_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() })
+            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() }, &[])
             .await
             .unwrap();
 
@@ -544,7 +545,7 @@ mod timed_tests {
         };
 
         thread_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() })
+            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() }, &[])
             .await
             .unwrap();
 
@@ -907,7 +908,7 @@ mod timed_tests {
         let timeline = Timeline { limited: false, prev_batch: None, events: vec![thread_event_1] };
 
         thread_event_cache
-            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() })
+            .handle_joined_room_update(JoinedRoomUpdate { timeline, ..Default::default() }, &[])
             .await
             .unwrap();
 

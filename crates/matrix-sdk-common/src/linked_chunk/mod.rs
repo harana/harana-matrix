@@ -973,18 +973,46 @@ impl<const CAP: usize, Item, Gap> LinkedChunk<CAP, Item, Gap> {
     ///
     /// It iterates from the last to the first item.
     pub fn ritems(&self) -> impl Iterator<Item = (Position, &Item)> {
-        self.ritems_from(self.links.latest_chunk().last_position())
-            .expect("`ritems_from` cannot fail because at least one empty chunk must exist")
+        // Walk the chunks backwards directly, rather than going through
+        // `ritems_from`. The latter resolves a chunk by identifier, which walks the
+        // chain backwards from the last chunk; if the ends bookkeeping is ever
+        // inconsistent, that lookup fails and there is nothing sensible to do with the
+        // error at this point. Iterating the chain we already hold cannot fail.
+        self.rchunks()
+            .filter_map(|chunk| match &chunk.content {
+                ChunkContent::Gap(..) => None,
+                ChunkContent::Items(items) => {
+                    let identifier = chunk.identifier();
+
+                    Some(
+                        items.iter().enumerate().rev().map(move |(item_index, item)| {
+                            (Position(identifier, item_index), item)
+                        }),
+                    )
+                }
+            })
+            .flatten()
     }
 
     /// Iterate over the items, forward.
     ///
     /// It iterates from the first to the last item.
     pub fn items(&self) -> impl Iterator<Item = (Position, &Item)> {
-        let first_chunk = self.links.first_chunk();
+        // See the comment in `ritems` about why the chunk chain is walked directly.
+        self.chunks()
+            .filter_map(|chunk| match &chunk.content {
+                ChunkContent::Gap(..) => None,
+                ChunkContent::Items(items) => {
+                    let identifier = chunk.identifier();
 
-        self.items_from(first_chunk.first_position())
-            .expect("`items` cannot fail because at least one empty chunk must exist")
+                    Some(
+                        items.iter().enumerate().map(move |(item_index, item)| {
+                            (Position(identifier, item_index), item)
+                        }),
+                    )
+                }
+            })
+            .flatten()
     }
 
     /// Iterate over the items, starting from `position`, backward.

@@ -235,13 +235,15 @@ impl EncryptionData {
     pub fn initialize_tasks(&self, client: &Arc<ClientInner>) {
         let weak_client = WeakClient::from_inner(client);
 
+        let task_monitor = &client.task_monitor;
+
         let mut tasks = self.tasks.lock();
-        tasks.upload_room_keys = Some(BackupUploadingTask::new(weak_client.clone()));
+        tasks.upload_room_keys = Some(BackupUploadingTask::new(task_monitor, weak_client.clone()));
 
         if self.encryption_settings.backup_download_strategy
             == BackupDownloadStrategy::AfterDecryptionFailure
         {
-            tasks.download_room_keys = Some(BackupDownloadTask::new(weak_client));
+            tasks.download_room_keys = Some(BackupDownloadTask::new(task_monitor, weak_client));
         }
     }
 

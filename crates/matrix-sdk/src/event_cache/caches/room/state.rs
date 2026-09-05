@@ -23,18 +23,17 @@ use matrix_sdk_base::{
     linked_chunk::{
         ChunkIdentifierGenerator, LinkedChunkId, OwnedLinkedChunkId, Position, Update, lazy_loader,
     },
-    serde_helpers::{extract_read_receipt, extract_redaction_target},
+    serde_helpers::extract_redaction_target,
     sync::Timeline,
 };
 use matrix_sdk_common::executor::spawn;
 use ruma::{
     EventId, OwnedEventId, OwnedRoomId, OwnedUserId,
     events::{
-        AnySyncEphemeralRoomEvent, receipt::ReceiptEventContent, relation::RelationType,
+        receipt::ReceiptEventContent, relation::RelationType,
         room::redaction::SyncRoomRedactionEvent,
     },
     room_version_rules::RoomVersionRules,
-    serde::Raw,
 };
 use tokio::sync::broadcast::Sender;
 use tracing::{debug, error, instrument, trace};
@@ -517,7 +516,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
     pub async fn handle_sync(
         &mut self,
         mut timeline: Timeline,
-        ephemeral_events: &[Raw<AnySyncEphemeralRoomEvent>],
+        receipt_events: &[ReceiptEventContent],
     ) -> Result<(bool, Vec<VectorDiff<Event>>), EventCacheError> {
         let mut prev_batch_token = timeline.prev_batch.take();
 
@@ -561,8 +560,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
             // unread counts tracking.
             //
             // Post-process the ephemeral events.
-            self.post_process_upserted_events(empty(), extract_read_receipt(ephemeral_events))
-                .await?;
+            self.post_process_upserted_events(empty(), receipt_events).await?;
 
             return Ok((false, Vec::new()));
         }
@@ -590,8 +588,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
         self.propagate_changes().await?;
 
         // Post-process newly inserted events.
-        self.post_process_upserted_events(events.iter(), extract_read_receipt(ephemeral_events))
-            .await?;
+        self.post_process_upserted_events(events.iter(), receipt_events).await?;
 
         if timeline.limited && has_new_gap {
             // If there was a previous batch token for a limited timeline, unload the chunks
@@ -615,7 +612,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
     pub(super) async fn post_process_upserted_events<'i, I>(
         &mut self,
         events: I,
-        receipt_event: Option<ReceiptEventContent>,
+        receipt_events: &[ReceiptEventContent],
     ) -> Result<(), EventCacheError>
     where
         I: Iterator<Item = &'i Event>,
@@ -629,7 +626,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
             }
         }
 
-        self.update_read_receipts(receipt_event.as_ref()).await?;
+        self.update_read_receipts(receipt_events).await?;
 
         Ok(())
     }
@@ -638,7 +635,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
     /// state of the in-memory linked chunk.
     pub async fn update_read_receipts(
         &mut self,
-        receipt_event: Option<&ReceiptEventContent>,
+        receipt_events: &[ReceiptEventContent],
     ) -> Result<(), EventCacheError> {
         let Some(room) = self.state.weak_room.get() else {
             debug!("can't update read receipts: client's closing");
@@ -653,7 +650,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
 
         compute_unread_counts(
             &self.state.own_user_id,
-            receipt_event,
+            receipt_events,
             &self.state.room_linked_chunk,
             &event_filter,
             &mut read_receipts,
@@ -791,12 +788,12 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
                 resolved_events.iter().filter_map(|resolved_event| resolved_event.as_resolved()),
                 // Read receipt events aren't encrypted, so we can't have decrypted a new
                 // one here. As a result, we don't have any new receipt events to
-                // post-process, so we can just pass `None` here.
+                // post-process, so we can just pass an empty slice here.
                 //
                 // Note: read receipts may be updated anyhow in the post-processing step,
                 // as the redecryption may have decrypted some events that don't count as
                 // unreads.
-                None,
+                &[],
             )
             .await?;
 

@@ -62,7 +62,7 @@ pub(crate) use latest_event::filter_timeline_event;
 use latest_event::{LatestEvent, With};
 pub use latest_event::{LatestEventValue, LocalLatestEventValue, RemoteLatestEventValue};
 use matrix_sdk_base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons, timer};
-use matrix_sdk_common::executor::{AbortOnDrop, JoinHandleExt as _, spawn};
+use matrix_sdk_common::task_monitor::{BackgroundTaskHandle, TaskMonitor};
 use room_latest_events::{RoomLatestEvents, RoomLatestEventsWriteGuard};
 use ruma::{EventId, OwnedRoomId, RoomId};
 use tokio::{
@@ -91,15 +91,16 @@ struct LatestEventsState {
     registered_rooms: Arc<RegisteredRooms>,
 
     /// The task handle of the [`listen_to_updates_task`].
-    _listen_task_handle: AbortOnDrop<()>,
+    _listen_task_handle: BackgroundTaskHandle,
 
     /// The task handle of the [`compute_latest_events_task`].
-    _computation_task_handle: AbortOnDrop<()>,
+    _computation_task_handle: BackgroundTaskHandle,
 }
 
 impl LatestEvents {
     /// Create a new [`LatestEvents`].
     pub(crate) fn new(
+        task_monitor: &TaskMonitor,
         weak_client: WeakClient,
         event_cache: EventCache,
         send_queue: SendQueue,
@@ -112,21 +113,26 @@ impl LatestEvents {
 
         // The task listening to the event cache, the send queue, and the room infos
         // updates.
-        let listen_task_handle = spawn(listen_to_updates_task(
-            registered_rooms.clone(),
-            event_cache,
-            send_queue,
-            room_info_updates,
-            latest_event_queue_sender,
-        ))
-        .abort_on_drop();
+        let listen_task_handle = task_monitor
+            .spawn_infinite_task(
+                "latest_events::listen_to_updates_task",
+                listen_to_updates_task(
+                    registered_rooms.clone(),
+                    event_cache,
+                    send_queue,
+                    room_info_updates,
+                    latest_event_queue_sender,
+                ),
+            )
+            .abort_on_drop();
 
         // The task computing the new latest events.
-        let computation_task_handle = spawn(compute_latest_events_task(
-            registered_rooms.clone(),
-            latest_event_queue_receiver,
-        ))
-        .abort_on_drop();
+        let computation_task_handle = task_monitor
+            .spawn_infinite_task(
+                "latest_events::compute_latest_events_task",
+                compute_latest_events_task(registered_rooms.clone(), latest_event_queue_receiver),
+            )
+            .abort_on_drop();
 
         Self {
             state: Arc::new(LatestEventsState {
