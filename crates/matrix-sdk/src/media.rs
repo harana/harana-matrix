@@ -479,7 +479,10 @@ impl Media {
     ///
     /// ```no_run
     /// # use eyeball::SharedObservable;
-    /// # use matrix_sdk::{Client, media::{MediaFormat, MediaRequestParameters}};
+    /// # use matrix_sdk::{
+    /// #     Client, TransmissionProgress,
+    /// #     media::{MediaFormat, MediaRequestParameters},
+    /// # };
     /// # use matrix_sdk::ruma::{events::room::MediaSource, owned_mxc_uri};
     /// # async {
     /// # let client: Client = unimplemented!();
@@ -488,7 +491,9 @@ impl Media {
     ///     format: MediaFormat::File,
     /// };
     ///
-    /// let progress = SharedObservable::default();
+    /// // The type is spelled out because `SharedObservable` has both a
+    /// // synchronous and an async-lock flavour, and `subscribe` on each.
+    /// let progress = SharedObservable::<TransmissionProgress>::default();
     /// let mut subscriber = progress.subscribe();
     ///
     /// tokio::spawn(async move {
