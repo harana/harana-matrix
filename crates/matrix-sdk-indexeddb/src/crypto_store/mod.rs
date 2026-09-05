@@ -27,7 +27,7 @@ use indexed_db_futures::{
     internals::SystemRepr,
     object_store::ObjectStore,
     prelude::*,
-    transaction::{Transaction, TransactionMode},
+    transaction::{Transaction, TransactionDurability, TransactionMode, TransactionOptions},
 };
 use js_sys::Array;
 use matrix_sdk_base::cross_process_lock::{
@@ -359,6 +359,12 @@ impl PendingIndexeddbChanges {
         }
         Ok(())
     }
+}
+
+/// Transaction options asking IndexedDB to confirm the write reached
+/// persistent storage before reporting the transaction as committed.
+fn strict_durability() -> TransactionOptions {
+    TransactionOptions::new().with_durability(TransactionDurability::Strict)
 }
 
 impl IndexeddbCryptoStore {
@@ -844,7 +850,12 @@ impl_crypto_store! {
             return Ok(());
         }
 
-        let tx = self.inner.transaction(stores).with_mode(TransactionMode::Readwrite).build()?;
+        let tx = self
+            .inner
+            .transaction(stores)
+            .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
+            .build()?;
 
         let account_pickle = if let Some(account) = changes.account {
             *self.static_account.write().unwrap() = Some(account.static_data().clone());
@@ -881,7 +892,26 @@ impl_crypto_store! {
             return Ok(());
         }
 
-        let tx = self.inner.transaction(stores).with_mode(TransactionMode::Readwrite).build()?;
+        // IndexedDB acknowledges a write as soon as the browser has handed it to the
+        // operating system, which is not enough for Olm state: if the machine crashes
+        // or loses power after we have used a session but before the write lands on
+        // disk, the persisted session is behind the one our peer has already ratcheted
+        // past. The session is then wedged and every message in it becomes a UTD.
+        // Ask for a strict commit whenever session or account state is in the batch.
+        // See issue #99.
+        let options = if stores.iter().any(|store| *store == keys::SESSION || *store == keys::CORE)
+        {
+            strict_durability()
+        } else {
+            TransactionOptions::new()
+        };
+
+        let tx = self
+            .inner
+            .transaction(stores)
+            .with_mode(TransactionMode::Readwrite)
+            .with_options(options)
+            .build()?;
 
         indexeddb_changes.apply(&tx).await?;
 
