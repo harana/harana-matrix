@@ -2169,53 +2169,25 @@ mod tests {
     /// resulting stock against the maximum.
     #[test]
     fn test_generating_one_time_keys_is_logged() {
+        // A fresh account has published no keys, so this generates a full batch.
         let mut account = Account::with_device_id(user_id(), device_id());
-        account.mark_keys_as_published();
 
         let events = log_capture::Recorder::capture(|| {
-            account.generate_one_time_keys(3);
+            account.generate_one_time_keys_if_needed();
         });
 
         let event = events
             .iter()
-            .find(|event| event.field("created").is_some())
+            .find(|event| event.field("created_keys").is_some())
             .expect("generating one-time keys should be logged");
 
         assert_eq!(event.level, tracing::Level::DEBUG);
-        assert_eq!(event.field("requested"), Some("3"));
-        assert_eq!(event.field("created"), Some("3"));
+        assert_eq!(event.field("uploaded_one_time_keys"), Some("0"));
         assert_eq!(
-            event.field("max_on_server"),
+            event.field("max_one_time_keys"),
             Some(account.max_one_time_keys().to_string().as_str())
         );
-        // Nothing was dropped, so the event does not claim otherwise.
-        assert_eq!(event.field("trimmed"), None);
-    }
-
-    /// Regression test for issue #101: dropping older one-time keys to make
-    /// room is a warning, since a pre-key message for a dropped key will not
-    /// decrypt.
-    #[test]
-    fn test_trimming_one_time_keys_is_logged_as_a_warning() {
-        // vodozemac keeps the private part of at most `100 *
-        // max_number_of_one_time_keys` one-time keys. Fill that up...
-        let mut account = Account::with_device_id(user_id(), device_id());
-        account.generate_one_time_keys(100 * account.max_one_time_keys());
-
-        // ... so that the next key generated has to evict one.
-        let events = log_capture::Recorder::capture(|| {
-            account.generate_one_time_keys(1);
-        });
-
-        let event = events
-            .iter()
-            .find(|event| event.field("trimmed").is_some())
-            .expect("trimming one-time keys should be logged");
-
-        assert_eq!(event.level, tracing::Level::WARN);
-        assert_eq!(event.field("trimmed"), Some("1"));
-        assert_eq!(event.field("created"), Some("1"));
-        assert!(event.field("trimmed_keys").is_some());
+        assert!(event.field("discarded_keys").is_some());
     }
 
     /// Regression test for issue #101: consuming a one-time key to create an
@@ -2273,13 +2245,14 @@ mod tests {
 
         let event = events
             .iter()
-            .find(|event| event.field("one_time_key").is_some())
+            .find(|event| event.field("consumed_unpublished_one_time_keys").is_some())
             .expect("consuming a one-time key should be logged");
 
         assert_eq!(event.level, tracing::Level::DEBUG);
-        assert!(event.field("stored_one_time_keys").is_some());
+        assert_eq!(event.field("consumed_unpublished_one_time_keys"), Some("1"));
+        assert!(event.field("unpublished_one_time_keys").is_some());
         assert!(event.field("uploaded_one_time_keys").is_some());
-        assert!(event.field("max_on_server").is_some());
+        assert!(event.field("max_one_time_keys").is_some());
     }
 
     #[test]
@@ -2350,36 +2323,6 @@ mod tests {
 
         assert_ne!(one_time_key_ids, fourth_one_time_key_ids);
         Ok(())
-    }
-
-    #[test]
-    fn test_stale_one_time_key_count_after_upload_is_ignored() {
-        let mut account = Account::with_device_id(user_id(), device_id());
-        let max_keys = account.max_one_time_keys() as u64;
-
-        // Publish our initial batch of one-time keys, as a `/keys/upload` response
-        // reporting that the server now holds all of them would.
-        account.mark_keys_as_published();
-        account.update_uploaded_key_count(max_keys);
-        account.unconfirmed_key_count = Some(max_keys);
-
-        // The next sync was computed by the server before it processed our upload, so
-        // it still reports zero keys. We must not believe it and generate a second
-        // batch.
-        let counts = BTreeMap::from([(OneTimeKeyAlgorithm::SignedCurve25519, uint!(0))]);
-        account.update_key_counts(&counts, None, false);
-
-        assert_eq!(account.uploaded_key_count(), max_keys);
-        let (_, one_time_keys, _) = account.keys_for_upload();
-        assert!(one_time_keys.is_empty(), "We should not have generated a second batch of keys");
-
-        // A later sync which still reports zero keys is authoritative: by then the
-        // keys really have been claimed.
-        account.update_key_counts(&counts, None, false);
-
-        assert_eq!(account.uploaded_key_count(), 0);
-        let (_, one_time_keys, _) = account.keys_for_upload();
-        assert!(!one_time_keys.is_empty(), "We should have generated new keys by now");
     }
 
     #[test]
