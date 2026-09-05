@@ -110,7 +110,7 @@ use crate::encryption::{
     secret_storage::{SecretStorage, SecretStore},
 };
 use crate::{
-    Client,
+    Client, Error as BackupError,
     client::WeakClient,
     encryption::{backups::BackupState, secret_storage::SecretStorageError},
 };
@@ -259,11 +259,28 @@ impl Recovery {
     /// ```
     #[instrument(skip_all)]
     pub async fn enable_backup(&self) -> Result<()> {
-        if !self.client.encryption().backups().fetch_exists_on_server().await? {
+        let backups = self.client.encryption().backups();
+
+        // Our local view of the backup can be stale: another client may have deleted
+        // the version we know about and created a new one. Reconciling first
+        // stops us from reporting a backup as enabled when it is gone, and from
+        // refusing to set one up because of a version we can no longer use.
+        let server_version = backups.reconcile_with_server().await?;
+
+        if server_version.is_none() {
             self.mark_backup_as_enabled().await?;
 
-            self.client.encryption().backups().create().await?;
-            self.client.encryption().backups().maybe_trigger_backup();
+            backups.create().await?;
+            backups.trigger_upload();
+
+            Ok(())
+        } else if backups.are_enabled().await {
+            // The version on the server is the one we already hold the key for; there is
+            // nothing left to do, and reporting an error here made a re-enable look like
+            // a failure.
+            info!("A backup already exists on the server and we are connected to it");
+
+            self.mark_backup_as_enabled().await?;
 
             Ok(())
         } else {
@@ -300,7 +317,25 @@ impl Recovery {
     /// ```
     #[instrument(skip_all)]
     pub async fn disable(&self) -> Result<()> {
-        self.client.encryption().backups().disable().await?;
+        let backups = self.client.encryption().backups();
+
+        match backups.disable().await {
+            Ok(()) => (),
+            Err(BackupError::BackupNotEnabled) => {
+                // We have no backup key locally, which is what happens when the backup
+                // was set up on another device and we never received the key, or after
+                // the local key material was lost. There may well still be a backup
+                // version on the server, and until now there was no way to get rid of
+                // it: `disable()` refused because backups looked disabled. Delete
+                // whatever the server holds instead of giving up.
+                info!(
+                    "No backup is enabled locally, deleting any backup versions the server                      still has"
+                );
+
+                backups.disable_and_delete().await?;
+            }
+            Err(error) => return Err(error.into()),
+        }
 
         // Why oh why, can't we delete account data events?
         //

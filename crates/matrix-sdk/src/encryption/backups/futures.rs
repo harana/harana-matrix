@@ -57,7 +57,9 @@ pub enum SteadyStateError {
 pub struct WaitForSteadyState<'a> {
     pub(super) backups: &'a Backups,
     pub(super) progress: ChannelObservable<UploadState>,
-    pub(super) timeout: Option<Duration>,
+    /// The upload delay that was in place before [`Self::with_delay()`]
+    /// replaced it, to be put back once we are done waiting.
+    pub(super) old_delay: Option<Duration>,
 }
 
 impl WaitForSteadyState<'_> {
@@ -77,9 +79,25 @@ impl WaitForSteadyState<'_> {
     /// This method allows you to override how long the [`Client`] will wait.
     /// The default value is 100 ms.
     ///
+    /// The delay takes effect immediately, not when the future is awaited, so
+    /// an upload started right after this call already uses it. It is put back
+    /// to its previous value once the future resolves.
+    ///
     /// [`Client`]: crate::Client
     pub fn with_delay(mut self, delay: Duration) -> Self {
-        self.timeout = Some(delay);
+        let old_delay = {
+            let mut lock =
+                self.backups.client.inner.e2ee.backup_state.upload_delay.write().unwrap();
+            let old_delay = lock.to_owned();
+
+            *lock = delay;
+
+            old_delay
+        };
+
+        // Keep the value from before the first override, so repeated calls still
+        // restore the delay the client actually started with.
+        self.old_delay.get_or_insert(old_delay);
 
         self
     }
@@ -91,40 +109,45 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let Self { backups, timeout, progress } = self;
+            let Self { backups, old_delay, progress } = self;
 
             trace!("Creating a stream to wait for the steady state");
 
             let mut progress_stream = progress.subscribe();
 
-            let old_delay = if let Some(delay) = timeout {
-                let mut lock = backups.client.inner.e2ee.backup_state.upload_delay.write().unwrap();
-                let old_delay = Some(lock.to_owned());
-
-                *lock = delay;
-
-                old_delay
-            } else {
-                None
-            };
-
             trace!("Waiting for the upload steady state");
 
-            let ret = if backups.are_enabled().await {
-                backups.maybe_trigger_backup();
-
+            let ret = if !backups.are_enabled().await {
+                Err(SteadyStateError::BackupDisabled)
+            } else {
                 let mut ret = Ok(());
 
-                // TODO: Do we want to be smart here and remember the count when we started
-                // waiting and prevent the total from increasing, in case new room
-                // keys arrive after we started waiting.
                 while let Some(state) = progress_stream.next().await {
                     trace!(?state, "Update state while waiting for the backup steady state");
 
                     match state {
                         Ok(UploadState::Done) => {
-                            ret = Ok(());
-                            break;
+                            // A `Done` can belong to an upload that was already running
+                            // when we started waiting, and that didn't include the room
+                            // keys queued since. Only stop once the store agrees that
+                            // there is nothing left to upload.
+                            match backups.all_room_keys_backed_up().await {
+                                Ok(true) => {
+                                    ret = Ok(());
+                                    break;
+                                }
+                                Ok(false) => {
+                                    trace!(
+                                        "The upload task is done, but more room keys have been \
+                                         queued since; waiting for those too"
+                                    );
+                                    backups.maybe_trigger_backup();
+                                }
+                                Err(_) => {
+                                    ret = Ok(());
+                                    break;
+                                }
+                            }
                         }
                         Ok(UploadState::Error) => {
                             if backups.are_enabled().await {
@@ -144,8 +167,6 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
                 }
 
                 ret
-            } else {
-                Err(SteadyStateError::BackupDisabled)
             };
 
             if let Some(old_delay) = old_delay {

@@ -68,7 +68,7 @@ use vodozemac::{Curve25519PublicKey, megolm::SessionOrdering};
 
 use self::types::{
     Changes, CrossSigningKeyExport, DeviceChanges, DeviceUpdates, IdentityChanges, IdentityUpdates,
-    PendingChanges, RoomKeyInfo, RoomKeyWithheldInfo, RoomPendingKeyBundleDetails,
+    PendingChanges, RoomKeyInfo, RoomKeyWithheldInfo, RoomPendingKeyBundleDetails, RoomSettings,
     UserKeyQueryResult,
 };
 use crate::{
@@ -701,6 +701,16 @@ impl Store {
         sender_key: &str,
     ) -> Result<Option<Arc<Mutex<Vec<Session>>>>> {
         self.inner.store.get_sessions(sender_key).await
+    }
+
+    /// Get the encryption settings for a room.
+    ///
+    /// Goes through the wrapper's cache rather than straight to the backing
+    /// store: a client asks for these on the critical path of showing a room's
+    /// encryption state, and the store lookup plus deserialization behind them
+    /// is expensive enough to be noticeable.
+    pub async fn get_room_settings(&self, room_id: &RoomId) -> Result<Option<RoomSettings>> {
+        self.inner.store.get_room_settings(room_id).await
     }
 
     pub(crate) async fn save_changes(&self, changes: Changes) -> Result<()> {
