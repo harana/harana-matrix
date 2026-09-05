@@ -355,6 +355,38 @@ mod tests {
 
     use super::BytesChunks;
 
+    /// The ring provider must actually end up installed, and installing it
+    /// twice must not panic: `install_default` fails when a provider is
+    /// already there, which is the normal case for the second client built in
+    /// a process.
+    ///
+    /// Regression test for the aws-lc-rs crash on Android: with `rustls-ring`
+    /// on, no aws-lc-rs code may be reached.
+    #[cfg(all(feature = "reqwest-transport", feature = "rustls-ring"))]
+    #[test]
+    fn test_ring_is_installed_as_the_rustls_provider() {
+        use rustls::crypto::CryptoProvider;
+
+        super::install_crypto_provider();
+        super::install_crypto_provider();
+
+        let installed = CryptoProvider::get_default().expect("a provider is installed");
+
+        // With aws-lc-rs also compiled in, whichever provider got there first
+        // wins, so only assert the identity when ring is the only one.
+        #[cfg(not(feature = "rustls-aws-lc-rs"))]
+        {
+            let suites = |provider: &CryptoProvider| {
+                provider.cipher_suites.iter().map(|suite| suite.suite()).collect::<Vec<_>>()
+            };
+
+            assert_eq!(suites(installed), suites(&rustls::crypto::ring::default_provider()));
+        }
+
+        #[cfg(feature = "rustls-aws-lc-rs")]
+        let _ = installed;
+    }
+
     #[test]
     fn test_bytes_chunks() {
         let bytes = Bytes::new();

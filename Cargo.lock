@@ -8350,6 +8350,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "tempfile",
  "uniffi_bindgen",
  "url",
  "xshell",

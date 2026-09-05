@@ -468,6 +468,25 @@ fn build_xcframework(
     Ok(())
 }
 
+/// The targets the crypto framework is built for.
+///
+/// The watchOS targets the full SDK builds for are left out: the crypto
+/// framework has never shipped for them, and they need nightly and
+/// `-Zbuild-std`. With `--only-ios`, only the device itself is built, which is
+/// what a client that ships nothing else uses.
+fn crypto_targets(only_ios: bool) -> Vec<&'static Target> {
+    TARGETS
+        .iter()
+        .filter(|target| {
+            if only_ios {
+                target.platform == Platform::Ios
+            } else {
+                matches!(target.platform, Platform::Ios | Platform::Macos | Platform::IosSimulator)
+            }
+        })
+        .collect()
+}
+
 /// Builds the Crypto SDK into an XCFramework, zipped up with its Swift sources
 /// and the licence, ready to be attached to a GitHub release and consumed by
 /// `MatrixSDKCrypto.podspec`.
@@ -493,16 +512,7 @@ fn build_crypto_xcframework(
     create_dir_all(&headers_dir)?;
     create_dir_all(&swift_dir)?;
 
-    let targets = TARGETS
-        .iter()
-        .filter(|target| {
-            if only_ios {
-                target.platform == Platform::Ios
-            } else {
-                matches!(target.platform, Platform::Ios | Platform::Macos | Platform::IosSimulator)
-            }
-        })
-        .collect::<Vec<_>>();
+    let targets = crypto_targets(only_ios);
 
     let platform_build_paths = build_targets(
         targets,
@@ -796,4 +806,107 @@ fn consolidate_modulemap_files(source: &Utf8Path, destination: &Utf8Path) -> Res
     let modulemap = lines.join("\n") + "\n";
     std::fs::write(destination.join("module.modulemap"), modulemap)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8Path;
+
+    use super::{
+        CRYPTO_SDK, FULL_SDK, Platform, build_path_for_target, crypto_targets,
+        update_swift_module_imports,
+    };
+
+    fn triples(only_ios: bool) -> Vec<&'static str> {
+        crypto_targets(only_ios).iter().map(|target| target.triple).collect()
+    }
+
+    /// The set the shell script this replaced built: the device, both macOS
+    /// architectures and both simulators, and no watchOS.
+    #[test]
+    fn the_crypto_framework_is_built_for_the_platforms_the_script_built_for() {
+        let targets = triples(false);
+
+        assert_eq!(
+            targets,
+            [
+                "aarch64-apple-ios",
+                "aarch64-apple-darwin",
+                "x86_64-apple-darwin",
+                "aarch64-apple-ios-sim",
+                "x86_64-apple-ios",
+            ]
+        );
+
+        assert!(
+            crypto_targets(false).iter().all(|target| target.platform != Platform::Watchos),
+            "watchOS needs nightly and -Zbuild-std, and the crypto framework never shipped for it"
+        );
+    }
+
+    #[test]
+    fn only_ios_builds_the_device_alone() {
+        assert_eq!(triples(true), ["aarch64-apple-ios"]);
+    }
+
+    /// The two packages must not write to the same path, or a build of one
+    /// would pick up the other's library.
+    #[test]
+    fn each_package_has_its_own_library_path() {
+        let target = super::TARGETS.first().expect("there is at least one target");
+
+        let full = build_path_for_target(target, "release", &FULL_SDK).unwrap();
+        let crypto = build_path_for_target(target, "release", &CRYPTO_SDK).unwrap();
+
+        assert!(full.as_str().ends_with("aarch64-apple-ios/release/libmatrix_sdk_ffi.a"), "{full}");
+        assert!(
+            crypto.as_str().ends_with("aarch64-apple-ios/release/libmatrix_sdk_crypto_ffi.a"),
+            "{crypto}"
+        );
+    }
+
+    /// Cargo's builtin dev profile writes to `target/debug`; every other
+    /// profile has a directory of its own name.
+    #[test]
+    fn the_dev_profile_reads_from_the_debug_directory() {
+        let target = super::TARGETS.first().expect("there is at least one target");
+
+        let dev = build_path_for_target(target, "dev", &FULL_SDK).unwrap();
+        assert!(dev.as_str().contains("/debug/"), "{dev}");
+
+        let custom = build_path_for_target(target, "reldbg", &FULL_SDK).unwrap();
+        assert!(custom.as_str().contains("/reldbg/"), "{custom}");
+    }
+
+    /// The generated Swift sources import the module by name, so the crypto
+    /// framework's sources must import `MatrixSDKCryptoFFI`, not the full
+    /// SDK's module. Getting this wrong only shows up when Xcode compiles the
+    /// package.
+    #[test]
+    fn the_swift_sources_import_the_framework_they_belong_to() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = Utf8Path::from_path(dir.path()).unwrap();
+
+        let generated = dir.join("Generated.swift");
+        std::fs::write(
+            &generated,
+            "#if canImport(MatrixSDKCryptoFFIFFI)\nimport MatrixSDKCryptoFFIFFI\n#endif\nlet x = 1\n",
+        )
+        .unwrap();
+
+        // A file of another type is left alone.
+        let untouched = dir.join("module.modulemap");
+        std::fs::write(&untouched, "header \"MatrixSDKCryptoFFIFFI.h\"\n").unwrap();
+
+        update_swift_module_imports(dir, CRYPTO_SDK.framework_name).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&generated).unwrap(),
+            "#if canImport(MatrixSDKCryptoFFI)\nimport MatrixSDKCryptoFFI\n#endif\nlet x = 1\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&untouched).unwrap(),
+            "header \"MatrixSDKCryptoFFIFFI.h\"\n"
+        );
+    }
 }
