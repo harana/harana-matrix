@@ -28,6 +28,7 @@ use matrix_sdk::{
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
+use matrix_sdk_base::RoomInfoNotableUpdateReasons;
 use matrix_sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use matrix_sdk_ui::{
     timeline::{RoomExt, TimelineBuilder, default_event_filter},
@@ -418,11 +419,17 @@ impl Room {
         self: Arc<Self>,
         listener: Box<dyn RoomInfoListener>,
     ) -> Arc<TaskHandle> {
-        let mut subscriber = self.inner.subscribe_info();
+        let room_id = self.inner.room_id().to_owned();
+        let mut receiver = self.inner.client().room_info_notable_update_receiver();
+
         Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
-            while subscriber.next().await.is_some() {
+            while let Ok(update) = receiver.recv().await {
+                if update.room_id != room_id {
+                    continue;
+                }
+
                 match self.room_info().await {
-                    Ok(room_info) => listener.call(room_info),
+                    Ok(room_info) => listener.call(room_info, RoomInfoUpdateReason::from_reasons(update.reasons)),
                     Err(e) => {
                         error!("Failed to compute new RoomInfo: {e}");
                     }
@@ -1514,7 +1521,76 @@ pub fn matrix_to_room_alias_permalink(
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
-    fn call(&self, room_info: RoomInfo);
+    /// A new [`RoomInfo`] is available.
+    ///
+    /// `reasons` describes what changed. It makes it possible to react
+    /// selectively, instead of comparing every field of the new `RoomInfo`
+    /// with the previous one. It is empty when the `RoomInfo` is the initial
+    /// value of the subscription, i.e. nothing changed yet, and it contains
+    /// [`RoomInfoUpdateReason::Unknown`] when the change could not be
+    /// attributed to a more precise reason.
+    fn call(&self, room_info: RoomInfo, reasons: Vec<RoomInfoUpdateReason>);
+}
+
+/// The reason why a [`RoomInfo`] update has been emitted.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Enum)]
+pub enum RoomInfoUpdateReason {
+    /// The recency stamp of the room has changed.
+    RecencyStamp,
+
+    /// The latest event of the room has changed.
+    LatestEvent,
+
+    /// A read receipt has changed.
+    ReadReceipt,
+
+    /// The user-controlled unread marker value has changed.
+    UnreadMarker,
+
+    /// A membership change happened for the current user.
+    Membership,
+
+    /// The display name has changed.
+    DisplayName,
+
+    /// The active service members have changed.
+    ActiveServiceMembers,
+
+    /// The user's `m.fully_read` marker has changed.
+    FullyRead,
+
+    /// A room hero's global profile changed (e.g. their status or call).
+    Heroes,
+
+    /// The room info changed for a reason that isn't identified yet. Consumers
+    /// must consider that any field may have changed.
+    Unknown,
+}
+
+impl RoomInfoUpdateReason {
+    /// Expand the bit flags into the list of reasons they represent.
+    pub(crate) fn from_reasons(value: RoomInfoNotableUpdateReasons) -> Vec<Self> {
+        // `RoomInfoNotableUpdateReasons::NONE` is the catch-all reason, used when the
+        // update could not be attributed to a more precise one.
+        [
+            (RoomInfoNotableUpdateReasons::RECENCY_STAMP, RoomInfoUpdateReason::RecencyStamp),
+            (RoomInfoNotableUpdateReasons::LATEST_EVENT, RoomInfoUpdateReason::LatestEvent),
+            (RoomInfoNotableUpdateReasons::READ_RECEIPT, RoomInfoUpdateReason::ReadReceipt),
+            (RoomInfoNotableUpdateReasons::UNREAD_MARKER, RoomInfoUpdateReason::UnreadMarker),
+            (RoomInfoNotableUpdateReasons::MEMBERSHIP, RoomInfoUpdateReason::Membership),
+            (RoomInfoNotableUpdateReasons::DISPLAY_NAME, RoomInfoUpdateReason::DisplayName),
+            (
+                RoomInfoNotableUpdateReasons::ACTIVE_SERVICE_MEMBERS,
+                RoomInfoUpdateReason::ActiveServiceMembers,
+            ),
+            (RoomInfoNotableUpdateReasons::FULLY_READ, RoomInfoUpdateReason::FullyRead),
+            (RoomInfoNotableUpdateReasons::HEROES, RoomInfoUpdateReason::Heroes),
+            (RoomInfoNotableUpdateReasons::NONE, RoomInfoUpdateReason::Unknown),
+        ]
+        .into_iter()
+        .filter_map(|(flag, reason)| value.contains(flag).then_some(reason))
+        .collect()
+    }
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]

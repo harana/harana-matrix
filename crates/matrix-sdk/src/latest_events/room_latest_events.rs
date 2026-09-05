@@ -12,16 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, ops::ControlFlow, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    ops::{ControlFlow, Not},
+    sync::Arc,
+};
 
 use matrix_sdk_base::RoomInfoNotableUpdateReasons;
-use ruma::{EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels};
+use ruma::{
+    EventId, OwnedEventId, OwnedUserId, UserId, events::room::power_levels::RoomPowerLevels,
+};
 use tokio::sync::{OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 use tracing::{debug, error, instrument, warn};
 
 use super::{
     LatestEvent, filter_timeline_event,
-    latest_event::{IsLatestEventValueNone, NeedMoreEvents, With},
+    latest_event::{IsLatestEventValueNone, NeedMoreEvents, With, is_sent_by_an_ignored_user},
 };
 use crate::{
     Room,
@@ -165,6 +171,10 @@ impl RoomLatestEventsWriteGuard {
         let own_user_id = room.own_user_id();
         let power_levels = room.power_levels().await.ok();
 
+        // Events sent by an ignored user are not candidates for a latest event. Get the
+        // ignore list once for all the updates of all the latest events for this room.
+        let ignored_users = room.client().base_client().ignored_users().await;
+
         let inner = &mut *self.inner;
         let for_the_room = &mut inner.for_the_room;
         let per_thread = &mut inner.per_thread;
@@ -193,17 +203,32 @@ impl RoomLatestEventsWriteGuard {
         // in the background until a suitable event surfaces.
         if matches!(
             for_the_room
-                .update_with_event_cache(room_event_cache, own_user_id, power_levels.as_ref())
+                .update_with_event_cache(
+                    room_event_cache,
+                    own_user_id,
+                    power_levels.as_ref(),
+                    &ignored_users,
+                )
                 .await,
             NeedMoreEvents::Yes
         ) && room.client().event_cache().back_pagination_queue().is_some()
         {
-            Self::back_paginate_for_candidate(&room, own_user_id, power_levels.as_ref());
+            Self::back_paginate_for_candidate(
+                &room,
+                own_user_id,
+                power_levels.as_ref(),
+                &ignored_users,
+            );
         }
 
         for latest_event in per_thread.values_mut() {
             latest_event
-                .update_with_event_cache(room_event_cache, own_user_id, power_levels.as_ref())
+                .update_with_event_cache(
+                    room_event_cache,
+                    own_user_id,
+                    power_levels.as_ref(),
+                    &ignored_users,
+                )
                 .await;
         }
     }
@@ -222,6 +247,7 @@ impl RoomLatestEventsWriteGuard {
         };
         let own_user_id = room.own_user_id();
         let power_levels = room.power_levels().await.ok();
+        let ignored_users = room.client().base_client().ignored_users().await;
 
         let inner = &mut *self.inner;
         let for_the_room = &mut inner.for_the_room;
@@ -253,6 +279,7 @@ impl RoomLatestEventsWriteGuard {
                 room_event_cache,
                 own_user_id,
                 power_levels.as_ref(),
+                &ignored_users,
             )
             .await;
 
@@ -263,6 +290,7 @@ impl RoomLatestEventsWriteGuard {
                     room_event_cache,
                     own_user_id,
                     power_levels.as_ref(),
+                    &ignored_users,
                 )
                 .await;
         }
@@ -297,6 +325,7 @@ impl RoomLatestEventsWriteGuard {
         room: &Room,
         own_user_id: &UserId,
         power_levels: Option<&RoomPowerLevels>,
+        ignored_users: &BTreeSet<OwnedUserId>,
     ) {
         let Some(queue) = room.client().event_cache().back_pagination_queue() else {
             return;
@@ -304,6 +333,7 @@ impl RoomLatestEventsWriteGuard {
 
         let own_user_id = own_user_id.to_owned();
         let power_levels = power_levels.cloned();
+        let ignored_users = ignored_users.clone();
 
         // This filters each batch to spot a candidate and `Builder::new_remote`
         // filters the same events again when it computes the value afterwards. That
@@ -311,7 +341,9 @@ impl RoomLatestEventsWriteGuard {
         // and a stop condition only ever sees the batch it just loaded.
         let stop = move |outcome: &BackPaginationOutcome| {
             let found = outcome.events.iter().any(|event| {
-                filter_timeline_event(event, None, &own_user_id, power_levels.as_ref()).is_break()
+                is_sent_by_an_ignored_user(event, &ignored_users).not()
+                    && filter_timeline_event(event, None, &own_user_id, power_levels.as_ref())
+                        .is_break()
             });
 
             if found { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }

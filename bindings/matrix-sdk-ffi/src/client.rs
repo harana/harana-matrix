@@ -144,7 +144,9 @@ use crate::{
     },
     notification_settings::NotificationSettings,
     qr_code::{GrantLoginWithQrCodeHandler, LoginWithQrCodeHandler},
-    room::{RoomHistoryVisibility, RoomInfoListener, RoomSendQueueUpdate},
+    room::{
+        RoomHistoryVisibility, RoomInfoListener, RoomInfoUpdateReason, RoomSendQueueUpdate,
+    },
     room_directory_search::RoomDirectorySearch,
     room_preview::RoomPreview,
     ruma::{
@@ -2362,11 +2364,12 @@ impl Client {
     ) -> Result<Arc<TaskHandle>, ClientError> {
         let room_id = RoomId::parse(room_id)?;
 
-        // Emit the initial event, if present
+        // Emit the initial event, if present. There is no reason to report: nothing
+        // changed yet.
         if let Some(room) = self.inner.get_room(&room_id)
             && let Ok(room_info) = RoomInfo::new(&room).await
         {
-            listener.call(room_info);
+            listener.call(room_info, Vec::new());
         }
 
         Ok(Arc::new(TaskHandle::new(get_runtime_handle().spawn({
@@ -2381,7 +2384,7 @@ impl Client {
                     if let Some(room) = client.get_room(&room_id)
                         && let Ok(room_info) = RoomInfo::new(&room).await
                     {
-                        listener.call(room_info);
+                        listener.call(room_info, RoomInfoUpdateReason::from_reasons(room_update.reasons));
                     }
                 }
             }

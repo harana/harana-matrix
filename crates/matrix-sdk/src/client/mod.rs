@@ -3695,6 +3695,7 @@ impl Client {
                     self.event_cache().clone(),
                     SendQueue::new(self.clone()),
                     self.room_info_notable_update_receiver(),
+                    self.subscribe_to_ignore_user_list_changes(),
                 )
             })
             .await

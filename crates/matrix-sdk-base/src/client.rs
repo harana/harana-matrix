@@ -1180,21 +1180,29 @@ impl BaseClient {
 
     /// Checks whether the provided `user_id` belongs to an ignored user.
     pub async fn is_user_ignored(&self, user_id: &UserId) -> bool {
+        self.ignored_users().await.contains(user_id)
+    }
+
+    /// The set of users the current user has ignored.
+    ///
+    /// It returns an empty set if the ignored user list is unknown, or cannot
+    /// be read.
+    pub async fn ignored_users(&self) -> BTreeSet<OwnedUserId> {
         match self.state_store.get_account_data_event_static::<IgnoredUserListEventContent>().await
         {
             Ok(Some(raw_ignored_user_list)) => match raw_ignored_user_list.deserialize() {
                 Ok(current_ignored_user_list) => {
-                    current_ignored_user_list.content.ignored_users.contains_key(user_id)
+                    current_ignored_user_list.content.ignored_users.into_keys().collect()
                 }
                 Err(error) => {
                     warn!(?error, "Failed to deserialize the ignored user list event");
-                    false
+                    BTreeSet::new()
                 }
             },
-            Ok(None) => false,
+            Ok(None) => BTreeSet::new(),
             Err(error) => {
                 warn!(?error, "Could not get the ignored user list from the state store");
-                false
+                BTreeSet::new()
             }
         }
     }
