@@ -53,7 +53,7 @@ use crate::{
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     encryption::{EncryptionConfig, StoreEncryption},
     error::{Error, Result},
-    fs,
+    fs, recovery,
     utils::{
         EncryptableStore, Key, SqliteAsyncConnExt, SqliteKeyValueStoreAsyncConnExt,
         SqliteKeyValueStoreConnExt, SqliteTransactionExt, host_parameters,
@@ -201,6 +201,10 @@ impl SqliteEventCacheStore {
     }
 
     /// Open the SQLite-based event cache store with the config open config.
+    ///
+    /// If the database turns out to be corrupted, it is deleted and recreated
+    /// from scratch: this store is a cache, and an unreadable database file
+    /// would otherwise leave the client permanently broken.
     #[instrument(skip(config), fields(path = ?config.path))]
     pub async fn open_with_config(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         debug!(?config);
@@ -209,6 +213,16 @@ impl SqliteEventCacheStore {
 
         fs::create_dir_all(&config.path).await.map_err(OpenStoreError::CreateDir)?;
 
+        let db_path = config.path.join(DATABASE_NAME);
+
+        recovery::open_or_recreate("event cache store", &db_path, || {
+            Self::open_with_config_inner(config)
+        })
+        .await
+    }
+
+    /// Open the store, assuming its database is readable.
+    async fn open_with_config_inner(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         let db_path = config.path.join(DATABASE_NAME);
         let pool_config = config.pool_config();
         let mut runtime_config = config.runtime_config();
@@ -2050,7 +2064,7 @@ mod tests {
     use ruma::{OwnedEventId, event_id};
     use tempfile::{TempDir, tempdir};
 
-    use super::{SqliteEventCacheStore, keys};
+    use super::{DATABASE_NAME, SqliteEventCacheStore, keys};
     use crate::{SqliteStoreConfig, utils::SqliteAsyncConnExt};
 
     static TMP_DIR: LazyLock<TempDir> = LazyLock::new(|| tempdir().unwrap());
@@ -2071,6 +2085,37 @@ mod tests {
 
     event_cache_store_integration_tests!();
     event_cache_store_integration_tests_time!();
+
+    /// A database that SQLite cannot read at all is thrown away and recreated,
+    /// rather than leaving the client permanently broken.
+    #[async_test]
+    async fn test_corrupted_database_is_recreated() {
+        let tmpdir_path = new_event_cache_store_workspace();
+        let linked_chunk_id = LinkedChunkId::Room(&DEFAULT_TEST_ROOM_ID);
+        let new_chunk = || {
+            vec![Update::NewItemsChunk { previous: None, new: ChunkIdentifier::new(0), next: None }]
+        };
+
+        // Open a store, put something in it, and close it.
+        {
+            let store =
+                SqliteEventCacheStore::open(tmpdir_path.to_str().unwrap(), None).await.unwrap();
+            store.handle_linked_chunk_updates(linked_chunk_id, new_chunk()).await.unwrap();
+            assert_eq!(store.load_all_chunks(linked_chunk_id).await.unwrap().len(), 1);
+            store.close().await.unwrap();
+        }
+
+        // Scribble over the database file, the way a half-finished write or a
+        // broken backup restore would.
+        std::fs::write(tmpdir_path.join(DATABASE_NAME), b"this is not an SQLite database").unwrap();
+
+        // Opening the store succeeds, on an empty database that works.
+        let store = SqliteEventCacheStore::open(tmpdir_path.to_str().unwrap(), None).await.unwrap();
+        assert!(store.load_all_chunks(linked_chunk_id).await.unwrap().is_empty());
+
+        store.handle_linked_chunk_updates(linked_chunk_id, new_chunk()).await.unwrap();
+        assert_eq!(store.load_all_chunks(linked_chunk_id).await.unwrap().len(), 1);
+    }
 
     #[async_test]
     async fn test_encryption_encode_decode_thread_id_roundtrip() {

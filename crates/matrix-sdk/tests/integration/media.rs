@@ -1,4 +1,6 @@
+use eyeball::SharedObservable;
 use matrix_sdk::{
+    TransmissionProgress,
     media::{MediaFormat, MediaRequestParameters, MediaThumbnailSettings},
     test_utils::mocks::MatrixMockServer,
 };
@@ -446,4 +448,88 @@ async fn test_get_media_preview_disabled_by_server() {
         .await;
 
     assert!(client.media().get_media_preview("https://matrix.org", None).await.is_err());
+}
+
+/// Downloading a media file reports its progress, so a client can show a
+/// progress indicator for an attachment.
+#[async_test]
+async fn test_get_media_content_reports_download_progress() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    // Big enough that the response arrives in more than one chunk.
+    let content = vec![b'x'; 512 * 1024];
+    server.mock_authed_media_download().ok_bytes(content.clone()).mock_once().mount().await;
+
+    let request = MediaRequestParameters {
+        source: MediaSource::Plain(owned_mxc_uri!("mxc://localhost/bigfile")),
+        format: MediaFormat::File,
+    };
+
+    let progress = SharedObservable::<TransmissionProgress>::default();
+    let mut subscriber = progress.subscribe();
+
+    let updates = tokio::spawn(async move {
+        let mut updates = Vec::new();
+
+        while let Some(update) = subscriber.next().await {
+            updates.push((update.current, update.total));
+        }
+
+        updates
+    });
+
+    let downloaded = client
+        .media()
+        .get_media_content_with_progress(&request, false, progress.clone())
+        .await
+        .unwrap();
+    assert_eq!(downloaded, content);
+
+    // Once the download is done, the observable says the whole file arrived.
+    let final_progress = progress.get();
+    assert_eq!(final_progress.current, content.len());
+    assert_eq!(final_progress.total, content.len());
+
+    // Dropping the observable ends the subscriber's stream.
+    drop(progress);
+    let updates = updates.await.unwrap();
+    assert!(!updates.is_empty(), "progress should have been reported while downloading");
+
+    // Progress only ever moves forward, and never past the total.
+    let mut previous = 0;
+    for (current, total) in updates {
+        assert!(current >= previous);
+        assert!(current <= total);
+        previous = current;
+    }
+}
+
+/// A cached media file reports no progress: there is no transfer to watch.
+#[async_test]
+async fn test_cached_media_content_reports_no_download_progress() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    server.mock_authed_media_download().ok_plain_text().mock_once().mount().await;
+
+    let request = MediaRequestParameters {
+        source: MediaSource::Plain(owned_mxc_uri!("mxc://localhost/textfile")),
+        format: MediaFormat::File,
+    };
+
+    // Fill the cache.
+    client.media().get_media_content(&request, true).await.unwrap();
+
+    let progress = SharedObservable::<TransmissionProgress>::default();
+    let mut subscriber = progress.subscribe();
+
+    let content =
+        client.media().get_media_content_with_progress(&request, true, progress).await.unwrap();
+    assert_eq!(content, b"Hello, World!");
+
+    // Nothing was downloaded, so nothing was reported.
+    let reported = subscriber.next_now();
+    assert_eq!(reported.current, 0);
+    assert_eq!(reported.total, 0);
 }

@@ -65,7 +65,9 @@ matrix-sdk = { workspace = true, features = [
     "socks",
     "uniffi",
     "federation-api",
-    "experimental-search"
+    "experimental-search",
+    # So `UploadParameters::generate_blurhash` actually does something.
+    "image-proc",
 ] }
 matrix-sdk-base.workspace = true
 matrix-sdk-common.workspace = true

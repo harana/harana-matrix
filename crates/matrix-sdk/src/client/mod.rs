@@ -99,7 +99,7 @@ use self::{
 };
 use crate::{
     Account, AuthApi, AuthSession, Error, HttpError, Media, Pusher, RefreshTokenError, Result,
-    Room, SessionTokens, TransmissionProgress,
+    Room, SessionTokens,
     authentication::{
         AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback,
         matrix::{MatrixAuth, MatrixSession},
@@ -117,7 +117,9 @@ use crate::{
         EventHandler, EventHandlerContext, EventHandlerDropGuard, EventHandlerHandle,
         EventHandlerStore, ObservableEventHandler, SyncEvent,
     },
-    http_client::{HttpClient, HttpSend, SupportedAuthScheme, SupportedPathBuilder},
+    http_client::{
+        HttpClient, HttpSend, RequestProgress, SupportedAuthScheme, SupportedPathBuilder,
+    },
     latest_events::LatestEvents,
     live_locations_observer::BeaconInfoUpdate,
     media::{MediaError, MediaFetcher},
@@ -2374,19 +2376,14 @@ impl Client {
         for<'a> <Request::PathBuilder as PathBuilder>::Input<'a>: SendOutsideWasm + SyncOutsideWasm,
         HttpError: From<FromHttpResponseError<Request::EndpointError>>,
     {
-        SendRequest {
-            client: self.clone(),
-            request,
-            config: None,
-            send_progress: Default::default(),
-        }
+        SendRequest { client: self.clone(), request, config: None, progress: Default::default() }
     }
 
     pub(crate) async fn send_inner<Request>(
         &self,
         request: Request,
         config: Option<RequestConfig>,
-        send_progress: SharedObservable<TransmissionProgress>,
+        progress: RequestProgress,
     ) -> HttpResult<Request::IncomingResponse>
     where
         Request: OutgoingRequest + Debug,
@@ -2411,7 +2408,7 @@ impl Client {
                 homeserver,
                 access_token.as_deref(),
                 path_builder_input,
-                send_progress,
+                progress,
             )
             .await;
 
@@ -4333,7 +4330,6 @@ pub(crate) mod tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
-    use eyeball::SharedObservable;
     use futures_util::{FutureExt, StreamExt, pin_mut};
     use js_int::{UInt, uint};
     use matrix_sdk_base::{
@@ -4382,7 +4378,7 @@ pub(crate) mod tests {
 
     use super::Client;
     use crate::{
-        Error, Result, TransmissionProgress,
+        Error, Result,
         client::{WeakClient, caches::CachedValue, futures::SendMediaUploadRequest},
         config::{RequestConfig, SyncSettings},
         futures::SendRequest,
@@ -5998,7 +5994,7 @@ pub(crate) mod tests {
             client: client.clone(),
             request: upload_request,
             config: None,
-            send_progress: SharedObservable::new(TransmissionProgress::default()),
+            progress: Default::default(),
         };
         let media_request = SendMediaUploadRequest::new(request);
 

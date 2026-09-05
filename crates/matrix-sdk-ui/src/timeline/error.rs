@@ -32,6 +32,10 @@ pub enum Error {
     #[error("Unsupported event")]
     UnsupportedEvent,
 
+    /// The event carries no media in the requested format.
+    #[error("Event has no media")]
+    EventHasNoMedia,
+
     /// Couldn't read the attachment data from the given URL.
     #[error("Invalid attachment data")]
     InvalidAttachmentData,

@@ -20,16 +20,22 @@ use std::{fs, iter, path::PathBuf, sync::Arc};
 
 use algorithms::rfind_event_by_item_id;
 use event_item::TimelineItemHandle;
+use eyeball::SharedObservable;
 use eyeball_im::VectorDiff;
 #[cfg(feature = "unstable-msc4274")]
 use futures::SendGallery;
 use futures_core::Stream;
+use futures_util::{
+    future::{Either, select},
+    pin_mut,
+};
 use imbl::Vector;
 use matrix_sdk::{
-    Result,
+    Result, TransmissionProgress,
     attachment::{AttachmentInfo, Thumbnail},
     deserialized_responses::TimelineEvent,
     event_cache::{EventCacheDropHandles, EventFocusThreadMode},
+    media::{MediaFormat, MediaRequestParameters},
     room::{
         Receipts, Room,
         edit::EditedContent,
@@ -229,6 +235,12 @@ pub struct AttachmentConfig {
     pub mentions: Option<Mentions>,
     pub in_reply_to: Option<OwnedEventId>,
     pub extra_content: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Whether to remove the metadata embedded in the image before uploading
+    /// it. See [`matrix_sdk::attachment::AttachmentConfig::strip_exif`].
+    pub strip_exif: bool,
+    /// Whether to compute the BlurHash of the image before uploading it. See
+    /// [`matrix_sdk::attachment::AttachmentConfig::generate_blurhash`].
+    pub generate_blurhash: bool,
 }
 
 impl Timeline {
@@ -835,6 +847,85 @@ impl Timeline {
     #[instrument(skip(self), fields(room_id = ?self.room().room_id()))]
     pub async fn fetch_details_for_event(&self, event_id: &EventId) -> Result<(), Error> {
         self.controller.fetch_in_reply_to_details(event_id).await
+    }
+
+    /// Download the media of an event in this timeline, reporting how far
+    /// along the transfer is on the timeline item itself.
+    ///
+    /// While the download runs, the item's
+    /// [`media_download_progress`][EventTimelineItem::media_download_progress]
+    /// is updated as bytes arrive and the timeline emits an update for it, so
+    /// a client can show per-message download status without wiring up a
+    /// separate channel. It is cleared once the transfer ends, successfully or
+    /// not.
+    ///
+    /// Content served from the media cache reports no progress: there is no
+    /// transfer to watch.
+    ///
+    /// # Arguments
+    ///
+    /// * `item_id` - The item whose media to download.
+    ///
+    /// * `format` - Whether to download the file itself, or a thumbnail of it.
+    ///   A thumbnail the sender uploaded is fetched as its own media; without
+    ///   one, the homeserver is asked to thumbnail the file.
+    ///
+    /// * `use_cache` - Whether to serve the content from the media cache, and
+    ///   store it there afterwards.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::EventNotInTimeline`] if the item is not in the
+    /// timeline, and [`Error::EventHasNoMedia`] if it carries no media in the
+    /// requested format.
+    #[instrument(skip(self), fields(room_id = ?self.room().room_id()))]
+    pub async fn download_media(
+        &self,
+        item_id: &TimelineEventItemId,
+        format: MediaFormat,
+        use_cache: bool,
+    ) -> Result<Vec<u8>, Error> {
+        let source = {
+            let items = self.controller.items().await;
+            let (_, item) = rfind_event_by_item_id(&items, item_id)
+                .ok_or_else(|| Error::EventNotInTimeline(item_id.clone()))?;
+
+            item.media_source(&format).ok_or(Error::EventHasNoMedia)?
+        };
+
+        let request = MediaRequestParameters { source, format };
+
+        let progress = SharedObservable::<TransmissionProgress>::default();
+        let mut subscriber = progress.subscribe();
+
+        let media = self.room().client().media();
+        let download = media.get_media_content_with_progress(&request, use_cache, progress.clone());
+        pin_mut!(download);
+
+        // Mirror the observable onto the timeline item until the download
+        // ends, so subscribers of the timeline see it advance.
+        let result = loop {
+            let next = subscriber.next();
+            pin_mut!(next);
+
+            match select(download.as_mut(), next).await {
+                Either::Left((result, _)) => break result,
+
+                Either::Right((update, _)) => {
+                    let Some(update) = update else {
+                        // The observable is gone, so there is nothing left to
+                        // mirror; just wait for the download.
+                        break download.as_mut().await;
+                    };
+
+                    self.controller.update_media_download_progress(item_id, Some(update)).await;
+                }
+            }
+        };
+
+        self.controller.update_media_download_progress(item_id, None).await;
+
+        Ok(result?)
     }
 
     /// Fetch all member events for the room this timeline is displaying.

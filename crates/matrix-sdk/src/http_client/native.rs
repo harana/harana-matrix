@@ -35,7 +35,7 @@ use tracing::{info, warn};
 
 #[cfg(feature = "reqwest-transport")]
 use super::{DEFAULT_REQUEST_TIMEOUT, response_to_http_response};
-use super::{HttpClient, HttpSend, TransmissionProgress};
+use super::{HttpClient, HttpSend, RequestProgress, TransmissionProgress};
 use crate::{
     HttpResult,
     config::RequestConfig,
@@ -47,7 +47,7 @@ impl HttpClient {
         &self,
         request: http::Request<Bytes>,
         config: RequestConfig,
-        send_progress: SharedObservable<TransmissionProgress>,
+        progress: RequestProgress,
     ) -> HttpResult<R::IncomingResponse>
     where
         R: OutgoingRequest + Debug,
@@ -82,14 +82,14 @@ impl HttpClient {
             request: &http::Request<Bytes>,
             timeout: Option<Duration>,
             retry_count: &AtomicU64,
-            send_progress: SharedObservable<TransmissionProgress>,
+            progress: RequestProgress,
         ) -> HttpResult<http::Response<Bytes>> {
             let num_attempt = retry_count.fetch_add(1, Ordering::SeqCst);
             debug!(num_attempt, "Sending request");
             let before = ruma::time::Instant::now();
 
             let response =
-                http_client.send_request(request.clone(), timeout, send_progress).await?;
+                http_client.send_request_with_progress(request.clone(), timeout, progress).await?;
 
             let request_duration = ruma::time::Instant::now().saturating_duration_since(before);
 
@@ -148,14 +148,14 @@ impl HttpClient {
         let retry_count = AtomicU64::new(1);
 
         let send_request = || {
-            let send_progress = send_progress.clone();
+            let progress = progress.clone();
             async {
                 let response = send_request_inner(
                     self.inner.as_ref(),
                     &request,
                     config.timeout,
                     &retry_count,
-                    send_progress,
+                    progress,
                 )
                 .await?;
                 let (parts, body) = response.into_parts();
@@ -249,11 +249,13 @@ pub(super) async fn execute_request(
     client: &reqwest::Client,
     request: http::Request<Bytes>,
     timeout: Option<Duration>,
-    send_progress: SharedObservable<TransmissionProgress>,
+    progress: RequestProgress,
 ) -> Result<http::Response<Bytes>, HttpError> {
     use std::convert::Infallible;
 
     use futures_util::stream;
+
+    let RequestProgress { send: send_progress, receive: receive_progress } = progress;
 
     let request = {
         let mut request = if send_progress.subscriber_count() != 0 {
@@ -290,7 +292,57 @@ pub(super) async fn execute_request(
     };
 
     let response = client.execute(request).await?;
+
+    if receive_progress.subscriber_count() != 0 {
+        return Ok(response_to_http_response_with_progress(response, receive_progress).await?);
+    }
+
     Ok(response_to_http_response(response).await?)
+}
+
+/// Read a response's body, reporting how much of it has arrived.
+///
+/// The body is read chunk by chunk rather than in one go, which is the only way
+/// to see it arrive; the chunks are then concatenated, so the caller still gets
+/// the whole body as one buffer.
+#[cfg(feature = "reqwest-transport")]
+async fn response_to_http_response_with_progress(
+    mut response: reqwest::Response,
+    progress: SharedObservable<TransmissionProgress>,
+) -> Result<http::Response<Bytes>, reqwest::Error> {
+    use bytes::BufMut as _;
+
+    let status = response.status();
+
+    let mut http_builder = http::Response::builder().status(status);
+    let headers = http_builder.headers_mut().expect("Can't get the response builder headers");
+
+    for (k, v) in response.headers_mut().drain() {
+        if let Some(key) = k {
+            headers.insert(key, v);
+        }
+    }
+
+    // A chunked or compressed response has no content length; the total then
+    // only becomes known as the body ends, and grows as it arrives.
+    let content_length = response.content_length().and_then(|l| usize::try_from(l).ok());
+    progress.update(|p| p.total += content_length.unwrap_or(0));
+
+    let mut body = bytes::BytesMut::with_capacity(content_length.unwrap_or(0));
+
+    while let Some(chunk) = response.chunk().await? {
+        body.put_slice(&chunk);
+
+        progress.update(|p| {
+            p.current += chunk.len();
+            // Without a content length, the best estimate of the total is what
+            // has arrived so far, so progress reads as "not finished yet"
+            // instead of overshooting.
+            p.total = p.total.max(p.current);
+        });
+    }
+
+    Ok(http_builder.body(body.freeze()).expect("Can't construct a response using the given body"))
 }
 
 #[cfg(feature = "reqwest-transport")]
