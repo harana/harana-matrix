@@ -378,6 +378,11 @@ pub(crate) struct ClientInner {
     /// See [`ClientBuilder::disable_well_known_lookup`].
     well_known_lookup_disabled: StdRwLock<bool>,
 
+    /// How long a cached discovery result stays usable.
+    ///
+    /// See [`ClientBuilder::discovery_cache_timeout`].
+    discovery_cache_timeout: Duration,
+
     /// An event that can be listened on to wait for a successful sync. The
     /// event will only be fired if a sync loop is running. Can be used for
     /// synchronization, e.g. if we send out a request to create a room, we can
@@ -478,6 +483,7 @@ impl ClientInner {
         well_known: CachedValue<TtlValue<Option<WellKnownResponse>>>,
         respect_login_well_known: bool,
         well_known_lookup_disabled: bool,
+        discovery_cache_timeout: Duration,
         event_cache: OnceCell<EventCache>,
         enable_automatic_back_pagination: bool,
         send_queue: Arc<SendQueueData>,
@@ -517,6 +523,7 @@ impl ClientInner {
             room_updates_sender: broadcast::Sender::new(32),
             respect_login_well_known,
             well_known_lookup_disabled: StdRwLock::new(well_known_lookup_disabled),
+            discovery_cache_timeout,
             sync_beat: event_listener::Event::new(),
             is_syncing: Arc::new(AtomicBool::new(false)),
             event_cache,
@@ -572,6 +579,11 @@ impl Debug for Client {
 }
 
 impl Client {
+    /// How long a cached discovery result stays usable by default: one day.
+    ///
+    /// See [`ClientBuilder::discovery_cache_timeout`].
+    pub const DEFAULT_DISCOVERY_CACHE_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24);
+
     /// Create a new [`Client`] that will use the given homeserver.
     ///
     /// # Arguments
@@ -2674,7 +2686,7 @@ impl Client {
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = cached_supported_versions.value()
-                    && !value.has_expired()
+                    && !value.has_expired_after(self.discovery_cache_timeout())
                 {
                     return Ok(value.into_data());
                 }
@@ -2784,7 +2796,9 @@ impl Client {
 
         // Spawn a task to refresh the cache if it has expired and we have a
         // valid access token.
-        if value.has_expired() && self.auth_ctx().has_valid_access_token() {
+        if value.has_expired_after(self.discovery_cache_timeout())
+            && self.auth_ctx().has_valid_access_token()
+        {
             debug!("spawning task to refresh supported versions cache");
 
             let client = self.clone();
@@ -2882,7 +2896,7 @@ impl Client {
         };
 
         // Spawn a task to refresh the cache if it has expired.
-        if value.has_expired() {
+        if value.has_expired_after(self.discovery_cache_timeout()) {
             debug!("spawning task to refresh well-known cache");
 
             let client = self.clone();
@@ -2910,7 +2924,7 @@ impl Client {
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = well_known_cache.value()
-                    && !value.has_expired()
+                    && !value.has_expired_after(self.discovery_cache_timeout())
                 {
                     return value.into_data();
                 }
@@ -2949,6 +2963,63 @@ impl Client {
     /// /.well-known/matrix/client file.
     pub fn disable_well_known_lookup(&self, disable: bool) {
         *self.inner.well_known_lookup_disabled.write().unwrap() = disable;
+    }
+
+    /// How long a cached discovery result stays usable before it is fetched
+    /// again.
+    ///
+    /// See [`ClientBuilder::discovery_cache_timeout`].
+    pub fn discovery_cache_timeout(&self) -> Duration {
+        self.inner.discovery_cache_timeout
+    }
+
+    /// Discard every cached discovery result and fetch it again.
+    ///
+    /// The homeserver's `/.well-known/matrix/client` file, the Matrix versions
+    /// it supports, its capabilities and its RTC transports are all cached
+    /// with the time they were fetched, and refreshed on their own once older
+    /// than [`Client::discovery_cache_timeout`]. This forces that refresh now,
+    /// for a client that has a better idea than a timer of when the server's
+    /// configuration may have changed: after a server migration, or when the
+    /// user asks for it.
+    ///
+    /// The stored copies are marked as expired first, so the fetches go out
+    /// through the normal outgoing request path, with this client's request
+    /// config, authentication and retries. Anything that cannot be fetched
+    /// keeps its previous value, so a failure here leaves the client no worse
+    /// off than before; the errors are logged rather than returned.
+    ///
+    /// Note that this does not re-run the homeserver *resolution* that
+    /// [`ClientBuilder::build`] did: a client keeps talking to the homeserver
+    /// URL it was built with, even if the well-known file now delegates
+    /// elsewhere.
+    pub async fn rediscover(&self) {
+        // Mark the stored copies as expired first, so that anything reading one
+        // while the fetches below are in flight knows it is looking at an old
+        // answer, and so that a fetch that fails leaves an expired value behind
+        // rather than a fresh-looking one.
+        self.inner.caches.expire_discovery();
+
+        // Refresh rather than read: reading only spawns a background refresh
+        // and hands back the stale value, so awaiting this would say nothing
+        // about whether the data was actually renewed.
+
+        // The well-known first, since the RTC transports fall back to it.
+        if !self.well_known_lookup_disabled() {
+            self.refresh_well_known_cache().await;
+        }
+
+        if let Err(error) = self.refresh_supported_versions_cache(false).await {
+            warn!("failed to re-fetch the supported versions: {error}");
+        }
+
+        if let Err(error) = self.homeserver_capabilities().refresh().await {
+            warn!("failed to re-fetch the homeserver capabilities: {error}");
+        }
+
+        if let Err(error) = self.refresh_rtc_transports_cache().await {
+            warn!("failed to re-fetch the RTC transports: {error}");
+        }
     }
 
     /// Get the well-known file of the homeserver by fetching it from the server
@@ -3049,7 +3120,9 @@ impl Client {
 
         // Spawn a task to refresh the cache if it has expired and we have a
         // valid access token.
-        if value.has_expired() && self.auth_ctx().has_valid_access_token() {
+        if value.has_expired_after(self.discovery_cache_timeout())
+            && self.auth_ctx().has_valid_access_token()
+        {
             debug!("spawning task to refresh RTC transports cache");
 
             let client = self.clone();
@@ -3081,7 +3154,7 @@ impl Client {
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = cache.value()
-                    && !value.has_expired()
+                    && !value.has_expired_after(self.discovery_cache_timeout())
                 {
                     return Ok(value.into_data());
                 }
@@ -3911,6 +3984,7 @@ impl Client {
                 self.inner.caches.well_known.value(),
                 self.inner.respect_login_well_known,
                 self.well_known_lookup_disabled(),
+                self.inner.discovery_cache_timeout,
                 self.inner.event_cache.clone(),
                 false,
                 self.inner.send_queue_data.clone(),
@@ -5010,6 +5084,107 @@ pub(crate) mod tests {
         // again.
         sleep(Duration::from_secs(1)).await;
         assert_matches!(client.inner.caches.supported_versions.value(), CachedValue::Cached(value) if !value.has_expired());
+    }
+
+    /// `rediscover()` forces a refresh even though the cached copies are
+    /// nowhere near the timeout.
+    #[async_test]
+    async fn test_rediscover_refetches_the_discovery_data() {
+        let server = MatrixMockServer::new().await;
+        let server_url = server.uri();
+        let domain = server_url.strip_prefix("http://").unwrap();
+        let server_name = <&ServerName>::try_from(domain).unwrap();
+
+        let well_known_mock = server
+            .mock_well_known()
+            .ok()
+            .named("well known mock")
+            .expect(1) // The builder's discovery, and nothing else.
+            .mount_as_scoped()
+            .await;
+
+        let client = Client::builder()
+            .insecure_server_name_no_tls(server_name)
+            .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+            .build()
+            .await
+            .unwrap();
+
+        // Cached by the builder's discovery, and far from the default one-day
+        // timeout, so this doesn't go to the server.
+        assert!(client.well_known().await.is_some());
+
+        drop(well_known_mock);
+
+        let _well_known_mock = server
+            .mock_well_known()
+            .ok()
+            .named("well known mock after rediscover")
+            .expect(1)
+            .mount_as_scoped()
+            .await;
+        // No count on this one: the capabilities and RTC transport fetches
+        // consult the supported versions to pick an endpoint, so it is asked
+        // for more than once.
+        let _versions_mock =
+            server.mock_versions().ok().named("versions after rediscover").mount_as_scoped().await;
+        // The capabilities and the RTC transports need an access token, which
+        // this client has not got; `rediscover` logs those failures and carries
+        // on rather than giving up on the rest.
+
+        // `rediscover` awaits the fetches rather than spawning them, so the
+        // mocks above are satisfied by the time it returns.
+        client.rediscover().await;
+    }
+
+    /// The timeout the builder was given, not the built-in one, decides when a
+    /// cached discovery result is stale.
+    #[async_test]
+    async fn test_the_configured_discovery_cache_timeout_decides_staleness() {
+        let server = MatrixMockServer::new().await;
+        let server_url = server.uri();
+        let domain = server_url.strip_prefix("http://").unwrap();
+        let server_name = <&ServerName>::try_from(domain).unwrap();
+
+        let _well_known_mock =
+            server.mock_well_known().ok().named("well known mock").mount_as_scoped().await;
+
+        let default_client = Client::builder()
+            .insecure_server_name_no_tls(server_name)
+            .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+            .build()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            default_client.discovery_cache_timeout(),
+            Client::DEFAULT_DISCOVERY_CACHE_TIMEOUT
+        );
+        assert_matches!(
+            default_client.inner.caches.well_known.value(),
+            CachedValue::Cached(value) => {
+                assert!(!value.has_expired_after(default_client.discovery_cache_timeout()));
+            }
+        );
+
+        let impatient_client = Client::builder()
+            .insecure_server_name_no_tls(server_name)
+            .discovery_cache_timeout(Duration::ZERO)
+            .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+            .build()
+            .await
+            .unwrap();
+
+        assert_eq!(impatient_client.discovery_cache_timeout(), Duration::ZERO);
+        assert_matches!(
+            impatient_client.inner.caches.well_known.value(),
+            CachedValue::Cached(value) => {
+                // Just fetched, so not stale by the default measure, but stale
+                // by the one this client was built with.
+                assert!(!value.has_expired());
+                assert!(value.has_expired_after(impatient_client.discovery_cache_timeout()));
+            }
+        );
     }
 
     #[async_test]
