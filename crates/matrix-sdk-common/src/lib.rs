@@ -26,6 +26,8 @@ use futures_core::Future;
 #[doc(no_inline)]
 pub use ruma;
 
+pub mod backoff;
+pub mod content_disposition;
 pub mod cross_process_lock;
 pub mod debug;
 pub mod deserialized_responses;
@@ -34,9 +36,11 @@ pub mod executor;
 pub mod failures_cache;
 pub mod linked_chunk;
 pub mod locks;
+pub mod mutex_map;
 pub mod ring_buffer;
 pub mod runtime;
 pub mod serde_helpers;
+pub mod single_flight;
 pub mod sleep;
 pub mod stream;
 pub mod task_monitor;

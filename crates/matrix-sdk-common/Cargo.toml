@@ -42,6 +42,7 @@ futures-core.workspace = true
 futures-util.workspace = true
 imbl.workspace = true
 ruma.workspace = true
+sanitize-filename.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
