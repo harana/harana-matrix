@@ -1021,6 +1021,11 @@ impl Room {
             .locks()
             .members_request_deduplicated_handler
             .run(self.room_id().to_owned(), async move {
+                // Taken before the request is sent, and held until its response has been
+                // handled: it makes the member events a sync writes in the meantime win
+                // over the older state this response describes.
+                let _guard = self.inner.start_members_request();
+
                 let request = get_member_events::v3::Request::new(self.inner.room_id().to_owned());
                 let response = self
                     .client

@@ -18,11 +18,16 @@ use ruma::{
     events::{
         AnyGlobalAccountDataEvent, AnySyncStateEvent, AnySyncTimelineEvent, StateEventType,
         direct::DirectUserIdentifier,
-        room::{avatar, member::MembershipState, message::RoomMessageEventContent},
+        room::{
+            avatar,
+            member::{MembershipState, RoomMemberEvent},
+            message::RoomMessageEventContent,
+        },
     },
-    mxc_uri, owned_room_alias_id, room_id, room_version_id, user_id,
+    mxc_uri, owned_room_alias_id, room_id, room_version_id, serde::Raw, user_id,
 };
 use serde_json::json;
+use tokio::{task::spawn, time::sleep};
 use wiremock::{
     Mock, ResponseTemplate,
     matchers::{body_json, header, method, path, path_regex},
@@ -108,6 +113,71 @@ async fn test_banned_member_has_no_profile() {
     // The other member is unaffected.
     let member = room.get_member_no_sync(admin).await.unwrap().expect("the member is known");
     assert_eq!(member.display_name(), Some("Admin"));
+}
+
+#[async_test]
+async fn test_get_members_does_not_overwrite_newer_sync_state() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let alice = user_id!("@alice:localhost");
+    let bob = user_id!("@bob:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(alice).member(alice).display_name("Alice"))
+                .add_state_event(f().sender(bob).member(bob).display_name("Bob")),
+        )
+        .await;
+
+    // The `/members` response describes the room as it was when the request was
+    // sent: Alice is still there. It is slow enough for a sync to land first.
+    let alice_event: Raw<RoomMemberEvent> =
+        f().sender(alice).member(alice).display_name("Alice").into();
+    let bob_event: Raw<RoomMemberEvent> = f().sender(bob).member(bob).display_name("Bob").into();
+    server
+        .mock_get_members()
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "chunk": [alice_event, bob_event] }))
+                .set_delay(Duration::from_millis(700)),
+        )
+        .mock_once()
+        .mount()
+        .await;
+
+    let members = spawn({
+        let room = room.clone();
+        async move { room.sync_members().await }
+    });
+
+    // Let the request go out before the sync lands.
+    sleep(Duration::from_millis(200)).await;
+
+    // Alice leaves; this is fresher than what the `/members` request will answer.
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f().sender(alice).member(alice).membership(MembershipState::Leave)),
+        )
+        .await;
+
+    members.await.unwrap().unwrap();
+
+    // The outdated `/members` response must not have brought Alice back.
+    let alice_member =
+        room.get_member_no_sync(alice).await.unwrap().expect("Alice is a known member");
+    assert_eq!(alice_member.membership(), &MembershipState::Leave);
+
+    // Everyone else is still updated from the response.
+    let bob_member = room.get_member_no_sync(bob).await.unwrap().expect("Bob is a known member");
+    assert_eq!(bob_member.membership(), &MembershipState::Join);
+    assert_eq!(bob_member.display_name(), Some("Bob"));
 }
 
 #[async_test]

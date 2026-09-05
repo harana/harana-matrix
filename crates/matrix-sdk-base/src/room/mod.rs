@@ -26,7 +26,10 @@ mod state;
 mod tags;
 mod tombstone;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    sync::{Arc, Mutex as StdMutex},
+};
 
 pub use call::CallIntentConsensus;
 pub use create::*;
@@ -105,6 +108,44 @@ pub struct Room {
 
     /// A sender that will notify receivers when room member updates happen.
     pub room_member_updates_sender: broadcast::Sender<RoomMembersUpdate>,
+
+    /// Bookkeeping to stop a `/members` response from overwriting member
+    /// events a sync wrote while that request was in flight.
+    ///
+    /// See [`Room::start_members_request`].
+    pub(super) sync_member_writes: Arc<StdMutex<SyncMemberWrites>>,
+}
+
+/// The `m.room.member` events a sync wrote while at least one `/members`
+/// request was in flight. See [`Room::start_members_request`].
+#[derive(Debug, Default)]
+pub(super) struct SyncMemberWrites {
+    /// How many `/members` requests are currently in flight.
+    in_flight: usize,
+
+    /// The users whose member event a sync wrote since the oldest in-flight
+    /// `/members` request was sent.
+    users: BTreeSet<OwnedUserId>,
+}
+
+/// Marks a `/members` request as in flight for a room, for as long as it is
+/// alive. See [`Room::start_members_request`].
+#[derive(Debug)]
+pub struct MembersRequestGuard {
+    writes: Arc<StdMutex<SyncMemberWrites>>,
+}
+
+impl Drop for MembersRequestGuard {
+    fn drop(&mut self) {
+        let mut writes = self.writes.lock().unwrap();
+
+        writes.in_flight = writes.in_flight.saturating_sub(1);
+
+        if writes.in_flight == 0 {
+            // Nothing is racing with a sync any more, so nothing needs to be remembered.
+            writes.users = BTreeSet::new();
+        }
+    }
 }
 
 impl Room {
@@ -134,7 +175,45 @@ impl Room {
             room_info_notable_update_sender,
             seen_knock_request_ids_map: SharedObservable::new_async(None),
             room_member_updates_sender,
+            sync_member_writes: Default::default(),
         }
+    }
+
+    /// Signal that a `/members` request for this room is about to be sent, and
+    /// keep track of the member events a sync writes until the returned guard
+    /// is dropped.
+    ///
+    /// A `/members` response describes the room at the time the request was
+    /// sent. A sync that lands while the request is in flight carries fresher
+    /// member events, so writing the response wholesale would make the member
+    /// state go backwards. The guard must therefore be taken *before* the
+    /// request is sent, and held until its response has been handled by
+    /// [`BaseClient::receive_all_members`], which skips the users a sync wrote
+    /// in the meantime.
+    ///
+    /// [`BaseClient::receive_all_members`]: crate::BaseClient::receive_all_members
+    pub fn start_members_request(&self) -> MembersRequestGuard {
+        self.sync_member_writes.lock().unwrap().in_flight += 1;
+
+        MembersRequestGuard { writes: self.sync_member_writes.clone() }
+    }
+
+    /// Record that a sync wrote the `m.room.member` event of `user_id`.
+    ///
+    /// This is a no-op when no `/members` request is in flight, which is the
+    /// common case.
+    pub(crate) fn record_sync_member_write(&self, user_id: &UserId) {
+        let mut writes = self.sync_member_writes.lock().unwrap();
+
+        if writes.in_flight > 0 {
+            writes.users.insert(user_id.to_owned());
+        }
+    }
+
+    /// Whether a sync wrote the `m.room.member` event of `user_id` since the
+    /// oldest in-flight `/members` request was sent.
+    pub(crate) fn sync_wrote_member_since_request(&self, user_id: &UserId) -> bool {
+        self.sync_member_writes.lock().unwrap().users.contains(user_id)
     }
 
     /// Get the unique room id of the room.
