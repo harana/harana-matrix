@@ -53,6 +53,22 @@ use self::{
 
 uniffi::include_scaffolding!("api");
 
+/// The seams a Rust application embedding these bindings can use to replace
+/// parts of what the bindings otherwise decide for it.
+///
+/// None of this is exported through `uniffi`: every item here carries a Rust
+/// trait object, which cannot cross the FFI boundary. Swift and Kotlin callers
+/// keep using the built-in SQLite, IndexedDB and in-memory stores, and the
+/// built-in text and Sentry log sinks.
+pub mod pluggable {
+    pub use matrix_sdk::StoreProvider;
+
+    pub use crate::{
+        client_builder::ClientBuilder,
+        platform::telemetry::{TelemetryLayer, TelemetryProvider, set_telemetry_providers},
+    };
+}
+
 #[matrix_sdk_ffi_macros::export]
 fn sdk_git_sha() -> String {
     env!("VERGEN_GIT_SHA").to_owned()

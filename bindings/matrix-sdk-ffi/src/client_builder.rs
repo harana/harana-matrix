@@ -27,7 +27,7 @@ use matrix_sdk::reqwest::Certificate;
 use matrix_sdk::search_index::SearchIndexStoreKind;
 use matrix_sdk::{
     Client as MatrixClient, ClientBuildError as MatrixClientBuildError, HttpError, IdParseError,
-    RumaApiError, ThreadingSupport,
+    RumaApiError, StoreProvider, ThreadingSupport,
     cross_process_lock::CrossProcessLockConfig as SdkCrossProcessLockConfig,
     encryption::{BackupDownloadStrategy, EncryptionSettings},
     event_cache::EventCacheError,
@@ -309,7 +309,7 @@ impl ClientBuilder {
     ///
     /// This performs a `.well-known/matrix/client` lookup, and is therefore
     /// incompatible with [`Self::disable_well_known_lookup`]: [`Self::build`]
-    /// then fails with [`ClientBuildError::WellKnownLookupDisabled`].
+    /// then fails with `ClientBuildError::WellKnownLookupDisabled`.
     pub fn server_name(self: Arc<Self>, server_name: String) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.homeserver_cfg = Some(HomeserverConfig::ServerName(server_name));
@@ -330,7 +330,7 @@ impl ClientBuilder {
     /// With [`Self::disable_well_known_lookup`], the discovery step is skipped
     /// and only the homeserver URL check is performed, so a homeserver URL
     /// still works while a delegating server name fails with
-    /// [`ClientBuildError::InvalidServerName`].
+    /// `ClientBuildError::InvalidServerName`.
     pub fn server_name_or_homeserver_url(self: Arc<Self>, server_name_or_url: String) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.homeserver_cfg = Some(HomeserverConfig::ServerNameOrUrl(server_name_or_url));
@@ -342,7 +342,7 @@ impl ClientBuilder {
     ///
     /// When building a client for restoration, prefer to use
     /// [`Self::homeserver_url`] as the restoration will pick up the user ID
-    /// from the [`Session`], and using this will result in a needless request
+    /// from the `Session`, and using this will result in a needless request
     /// to re-discover the homeserver.
     ///
     /// The following methods are mutually exclusive: [`Self::homeserver_url`],
@@ -352,7 +352,7 @@ impl ClientBuilder {
     ///
     /// This performs a `.well-known/matrix/client` lookup, and is therefore
     /// incompatible with [`Self::disable_well_known_lookup`]: [`Self::build`]
-    /// then fails with [`ClientBuildError::WellKnownLookupDisabled`].
+    /// then fails with `ClientBuildError::WellKnownLookupDisabled`.
     pub fn server_name_from_user_id(self: Arc<Self>, user_id: String) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.homeserver_cfg = Some(HomeserverConfig::ServerNameFromUserId(user_id));
@@ -514,7 +514,7 @@ impl ClientBuilder {
                 #[cfg(feature = "sqlite")]
                 StoreBuilderOutcome::Sqlite { config, cache_path, store_path: data_path } => {
                     inner_builder = inner_builder
-                        .sqlite_store_with_config_and_cache_path(config, Some(cache_path));
+                        .sqlite_store_with_config_and_cache_path(*config, Some(cache_path));
 
                     Some(data_path)
                 }
@@ -526,6 +526,12 @@ impl ClientBuilder {
                 }
 
                 StoreBuilderOutcome::InMemory => None,
+
+                StoreBuilderOutcome::Custom(provider) => {
+                    inner_builder = inner_builder.store_provider(provider);
+
+                    None
+                }
             }
         } else {
             debug!("Not using a session store");
@@ -572,8 +578,9 @@ impl ClientBuilder {
         {
             let mut certificates = Vec::new();
             for certificate in builder.additional_root_certificates {
-                // We don't really know what type of certificate we may get here, so let's try
-                // first one type, then the other.
+                // We don't really know what type of certificate we may get
+                // here, so let's try first one type, then the
+                // other.
                 match Certificate::from_der(&certificate) {
                     Ok(cert) => {
                         certificates.push(cert);
@@ -672,8 +679,8 @@ impl ClientBuilder {
 
             use matrix_sdk_base::crypto::x509::X509SignatureSigningError;
 
-            // Wrap the provided RawX509Signer impl in a shim which converts the arguments
-            // and results.
+            // Wrap the provided RawX509Signer impl in a shim which converts the
+            // arguments and results.
             #[derive(Debug)]
             struct X509SignImpl(Arc<dyn RawX509Signer>);
 
@@ -708,8 +715,8 @@ impl ClientBuilder {
         if let Some(x509_verify) = builder.raw_x509_verifier {
             use matrix_sdk_base::crypto::x509::X509SignatureVerificationError;
 
-            // Wrap the provided RawX509Verifier impl in a shim which converts the
-            // arguments.
+            // Wrap the provided RawX509Verifier impl in a shim which converts
+            // the arguments.
             #[derive(Debug)]
             struct X509VerifyImpl(Arc<dyn RawX509Verifier>);
             impl matrix_sdk_base::crypto::x509::RawX509Verifier for X509VerifyImpl {
@@ -752,6 +759,25 @@ impl ClientBuilder {
     ) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.raw_x509_verifier = Some(x509_verify);
+        Arc::new(builder)
+    }
+}
+
+impl ClientBuilder {
+    /// Use a session store of your own, instead of SQLite, IndexedDB or the
+    /// in-memory store.
+    ///
+    /// The provider is asked to open the client's state, event cache, media
+    /// and crypto stores while the client is being built, so it can be backed
+    /// by whatever the embedder wants: another database, an encrypted volume,
+    /// a remote service.
+    ///
+    /// This is not exported to Swift or Kotlin, since `uniffi` cannot carry a
+    /// Rust trait object across the FFI boundary. It exists for applications
+    /// embedding these bindings from Rust.
+    pub fn custom_store(self: Arc<Self>, provider: Arc<dyn StoreProvider>) -> Arc<Self> {
+        let mut builder = unwrap_or_clone_arc(self);
+        builder.store = Some(StoreBuilder::Custom(provider));
         Arc::new(builder)
     }
 }
