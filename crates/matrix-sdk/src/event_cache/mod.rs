@@ -640,20 +640,6 @@ impl EventCacheInner {
         Ok(())
     }
 
-    /// Clears a single room's data, while keeping its cache alive so that its
-    /// subscribers keep receiving updates.
-    ///
-    /// Unlike [`Self::forget_room`], the room's cache isn't removed from
-    /// `by_room`.
-    async fn clear_room(&self, room_id: &RoomId) -> Result<()> {
-        // The constraints are the same as for `clear_all_rooms`. See this method to
-        // understand them.
-        let caches_for_all_rooms = self.by_room.write().await;
-        self.state.clear_and_reload(&caches_for_all_rooms, Some(room_id)).await?;
-
-        Ok(())
-    }
-
     /// Clears all the rooms' data.
     async fn clear_all_rooms(&self) -> Result<()> {
         // Okay, here's where things get delicate.
@@ -938,71 +924,6 @@ mod tests {
         // Retrieving the event with id3 from the room which doesn't contain it
         // will fail…
         assert!(room_event_cache.find_event(eid3).await.unwrap().is_none());
-    }
-
-    #[async_test]
-    async fn test_clear_room_only_clears_that_room() {
-        let user = user_id!("@mnt_io:matrix.org");
-        let client = logged_in_client(None).await;
-        let room_id_0 = room_id!("!raclette:patate.ch");
-        let room_id_1 = room_id!("!fondue:patate.ch");
-
-        let event_cache = client.event_cache();
-        event_cache.subscribe().unwrap();
-
-        client.base_client().get_or_create_room(room_id_0, RoomState::Joined);
-        client.base_client().get_or_create_room(room_id_1, RoomState::Joined);
-
-        // Both rooms have one event.
-        for (room_id, event_id) in [(room_id_0, event_id!("$ev0")), (room_id_1, event_id!("$ev1"))]
-        {
-            let event_factory = EventFactory::new().room(room_id).sender(user);
-
-            client
-                .event_cache_store()
-                .lock()
-                .await
-                .expect("Could not acquire the event cache lock")
-                .as_clean()
-                .expect("Could not acquire a clean event cache lock")
-                .handle_linked_chunk_updates(
-                    LinkedChunkId::Room(room_id),
-                    vec![
-                        Update::NewItemsChunk {
-                            previous: None,
-                            new: ChunkIdentifier::new(0),
-                            next: None,
-                        },
-                        Update::PushItems {
-                            at: Position::new(ChunkIdentifier::new(0), 0),
-                            items: vec![
-                                event_factory.text_msg("hello").event_id(event_id).into_event(),
-                            ],
-                        },
-                    ],
-                )
-                .await
-                .unwrap();
-        }
-
-        let (room_event_cache_0, _drop_handles_0) = event_cache.room(room_id_0).await.unwrap();
-        let (room_event_cache_1, _drop_handles_1) = event_cache.room(room_id_1).await.unwrap();
-
-        assert_eq!(room_event_cache_0.events().await.unwrap().len(), 1);
-        assert_eq!(room_event_cache_1.events().await.unwrap().len(), 1);
-
-        // Clearing the first room…
-        event_cache.inner.clear_room(room_id_0).await.unwrap();
-
-        // … empties it…
-        assert!(room_event_cache_0.events().await.unwrap().is_empty());
-
-        // … and leaves the other room alone, in memory and in the store.
-        assert_eq!(room_event_cache_1.events().await.unwrap().len(), 1);
-
-        drop(room_event_cache_1);
-        let (room_event_cache_1, _drop_handles_1) = event_cache.room(room_id_1).await.unwrap();
-        assert_eq!(room_event_cache_1.events().await.unwrap().len(), 1);
     }
 
     #[async_test]

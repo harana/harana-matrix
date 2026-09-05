@@ -2791,13 +2791,3 @@ mod tests {
         drop(guard);
     }
 }
-
-/// Returns the raw JSON of a state event, whichever shape the store holds it
-/// in. Events of a room in invited state are stripped, and carry neither an
-/// event ID nor a timestamp.
-fn state_event_json(event: RawAnySyncOrStrippedState) -> String {
-    match event {
-        RawAnySyncOrStrippedState::Sync(event) => event.json().get().to_owned(),
-        RawAnySyncOrStrippedState::Stripped(event) => event.json().get().to_owned(),
-    }
-}

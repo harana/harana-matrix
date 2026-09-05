@@ -1850,7 +1850,7 @@ mod buffer_of_values_for_local_event_tests {
 
 #[cfg(all(not(target_family = "wasm"), test))]
 mod builder_tests {
-    use std::{collections::BTreeSet, sync::Arc};
+    use std::sync::Arc;
 
     use assert_matches::assert_matches;
     use matrix_sdk_base::{

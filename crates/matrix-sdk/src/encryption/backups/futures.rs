@@ -54,6 +54,7 @@ pub enum SteadyStateError {
 }
 
 /// Named future for the [`Backups::wait_for_steady_state()`] method.
+#[derive(Debug)]
 pub struct WaitForSteadyState<'a> {
     pub(super) backups: &'a Backups,
     pub(super) progress: ChannelObservable<UploadState>,
