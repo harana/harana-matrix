@@ -173,7 +173,6 @@ impl RoomLatestEventsWriteGuard {
 
         // Events sent by an ignored user are not candidates for a latest event. Get the
         // ignore list once for all the updates of all the latest events for this room.
-        let ignored_users = room.client().base_client().ignored_users().await;
 
         let inner = &mut *self.inner;
         let for_the_room = &mut inner.for_the_room;
@@ -207,7 +206,6 @@ impl RoomLatestEventsWriteGuard {
                     room_event_cache,
                     own_user_id,
                     power_levels.as_ref(),
-                    &ignored_users,
                 )
                 .await,
             NeedMoreEvents::Yes
@@ -222,7 +220,6 @@ impl RoomLatestEventsWriteGuard {
                     room_event_cache,
                     own_user_id,
                     power_levels.as_ref(),
-                    &ignored_users,
                 )
                 .await;
         }
@@ -242,7 +239,6 @@ impl RoomLatestEventsWriteGuard {
         };
         let own_user_id = room.own_user_id();
         let power_levels = room.power_levels().await.ok();
-        let ignored_users = room.client().base_client().ignored_users().await;
 
         let inner = &mut *self.inner;
         let for_the_room = &mut inner.for_the_room;
@@ -274,7 +270,6 @@ impl RoomLatestEventsWriteGuard {
                 room_event_cache,
                 own_user_id,
                 power_levels.as_ref(),
-                &ignored_users,
             )
             .await;
 
@@ -285,7 +280,6 @@ impl RoomLatestEventsWriteGuard {
                     room_event_cache,
                     own_user_id,
                     power_levels.as_ref(),
-                    &ignored_users,
                 )
                 .await;
         }
@@ -320,7 +314,6 @@ impl RoomLatestEventsWriteGuard {
         room: &Room,
         own_user_id: &UserId,
         power_levels: Option<&RoomPowerLevels>,
-        ignored_users: &BTreeSet<OwnedUserId>,
     ) {
         let Some(queue) = room.client().event_cache().back_pagination_queue() else {
             return;

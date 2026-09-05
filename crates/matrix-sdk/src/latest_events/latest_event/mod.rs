@@ -117,7 +117,6 @@ impl LatestEvent {
         room_event_cache: &RoomEventCache,
         own_user_id: &UserId,
         power_levels: Option<&RoomPowerLevels>,
-        ignored_users: &BTreeSet<OwnedUserId>,
     ) -> NeedMoreEvents {
         if self.buffer_of_values_for_local_events.is_empty().not() {
             // At least one `LatestEventValue` exists for local events (i.e. coming from the
@@ -158,7 +157,6 @@ impl LatestEvent {
         room_event_cache: &RoomEventCache,
         own_user_id: &UserId,
         power_levels: Option<&RoomPowerLevels>,
-        ignored_users: &BTreeSet<OwnedUserId>,
     ) {
         let current_event = self.current_value.get().await;
         let new_value = Builder::new_local(
@@ -169,7 +167,6 @@ impl LatestEvent {
             current_event,
             own_user_id,
             power_levels,
-            ignored_users,
         )
         .await;
 
@@ -690,7 +687,7 @@ mod tests_latest_event {
         // First, let's create a `LatestEventValue` from the event cache. It must work.
         {
             latest_event
-                .update_with_event_cache(&room_event_cache, user_id, None, &BTreeSet::new())
+                .update_with_event_cache(&room_event_cache, user_id, None)
                 .await;
 
             assert_matches!(latest_event.current_value.get().await, LatestEventValue::Remote(_));
@@ -709,7 +706,7 @@ mod tests_latest_event {
             });
 
             latest_event
-                .update_with_send_queue(&update, &room_event_cache, user_id, None, &BTreeSet::new())
+                .update_with_send_queue(&update, &room_event_cache, user_id, None)
                 .await;
 
             assert_matches!(
@@ -723,7 +720,7 @@ mod tests_latest_event {
         // `LatestEventValue` because the local event isn't sent yet.
         {
             latest_event
-                .update_with_event_cache(&room_event_cache, user_id, None, &BTreeSet::new())
+                .update_with_event_cache(&room_event_cache, user_id, None)
                 .await;
 
             assert_matches!(
@@ -741,7 +738,7 @@ mod tests_latest_event {
             };
 
             latest_event
-                .update_with_send_queue(&update, &room_event_cache, user_id, None, &BTreeSet::new())
+                .update_with_send_queue(&update, &room_event_cache, user_id, None)
                 .await;
 
             assert_matches!(
@@ -754,7 +751,7 @@ mod tests_latest_event {
         // possible, because there is no more local events.
         {
             latest_event
-                .update_with_event_cache(&room_event_cache, user_id, None, &BTreeSet::new())
+                .update_with_event_cache(&room_event_cache, user_id, None)
                 .await;
 
             assert_matches!(latest_event.current_value.get().await, LatestEventValue::Remote(_));
@@ -814,7 +811,7 @@ mod tests_latest_event {
         // Let's create a `LatestEventValue` from the event cache. It must work.
         {
             latest_event
-                .update_with_event_cache(&room_event_cache, user_id, None, &BTreeSet::new())
+                .update_with_event_cache(&room_event_cache, user_id, None)
                 .await;
 
             assert_matches!(
@@ -840,7 +837,7 @@ mod tests_latest_event {
             yield_now().await;
 
             latest_event
-                .update_with_event_cache(&room_event_cache, user_id, None, &BTreeSet::new())
+                .update_with_event_cache(&room_event_cache, user_id, None)
                 .await;
 
             assert_matches!(
@@ -918,7 +915,7 @@ mod tests_latest_event {
             {
                 let mut latest_event = LatestEvent::new(&weak_room, None);
                 latest_event
-                    .update_with_event_cache(&room_event_cache, user_id, None, &BTreeSet::new())
+                    .update_with_event_cache(&room_event_cache, user_id, None)
                     .await;
 
                 assert_matches!(

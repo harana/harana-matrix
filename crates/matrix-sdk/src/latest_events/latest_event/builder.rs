@@ -65,7 +65,6 @@ impl Builder {
         current_event: LatestEventValue,
         own_user_id: &UserId,
         power_levels: Option<&RoomPowerLevels>,
-        ignored_users: &BTreeSet<OwnedUserId>,
     ) -> Option<LatestEventValue> {
         // If we are computing a value from the Event Cache, it's because we have
         // received an update from the Event Cache. This update falls in two categories:
@@ -227,7 +226,6 @@ impl Builder {
         current_event: LatestEventValue,
         own_user_id: &UserId,
         power_levels: Option<&RoomPowerLevels>,
-        ignored_users: &BTreeSet<OwnedUserId>,
     ) -> Option<LatestEventValue> {
         use crate::send_queue::{LocalEcho, LocalEchoContent};
 
@@ -327,7 +325,6 @@ impl Builder {
                     current_event,
                     own_user_id,
                     power_levels,
-                    ignored_users,
                 )
                 .await
                 .or(or)
@@ -360,7 +357,6 @@ impl Builder {
                                 current_event,
                                 own_user_id,
                                 power_levels,
-                                ignored_users,
                             )
                             .await
                         {
@@ -386,7 +382,6 @@ impl Builder {
                     current_event,
                     own_user_id,
                     power_levels,
-                    ignored_users,
                 )
                 .await
             }
@@ -453,7 +448,6 @@ impl Builder {
                     current_event,
                     own_user_id,
                     power_levels,
-                    ignored_users,
                 )
                 .await
             }
@@ -481,7 +475,6 @@ impl Builder {
                     current_event,
                     own_user_id,
                     power_levels,
-                    ignored_users,
                 )
                 .await
             }
@@ -500,7 +493,6 @@ impl Builder {
                     current_event,
                     own_user_id,
                     power_levels,
-                    ignored_users,
                 )
                 .await
             }
@@ -525,7 +517,6 @@ impl Builder {
         current_event: LatestEventValue,
         own_user_id: &UserId,
         power_levels: Option<&RoomPowerLevels>,
-        ignored_users: &BTreeSet<OwnedUserId>,
     ) -> Option<LatestEventValue> {
         if let Some((_, value)) = buffer_of_values_for_local_events.last() {
             Some(value.clone())
