@@ -9,7 +9,7 @@ That means that we add features, merge PRs, fix bugs, update dependencies etc at
 We already diverge in a number of ways:
 
 * Everything is pluggable. Which means Tokio, Sqlite, Tantivy, TLS etc are all optional.
-* [harana-olm](https://github.com/harana/harana-olm) is used as it fixes a number of security issues.
+* [harana-olm](https://github.com/harana/harana-olm) is used as it fixes a number of security issues. It is vendored into [crates/harana-olm](./crates/harana-olm) rather than pulled in as a git dependency.
 
 ## Bindings
 

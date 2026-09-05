@@ -38,6 +38,13 @@ Notable data types include:
   `RoomInfo`), and allows running queries that are room-specific, notably
   sending events.
 
+## `crates/harana-olm`
+
+The Olm and Megolm implementation, vendored from
+[harana-olm](https://github.com/harana/harana-olm) and published under the
+`vodozemac` package name, so consumers keep using `vodozemac::` paths. See
+[its README](./crates/harana-olm/README.md) for provenance and re-sync notes.
+
 ## `crates/matrix-sdk-base`
 
 A _sans I/O_ crate to represent the base data types persisted in the SDK. No
