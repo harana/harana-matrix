@@ -36,7 +36,7 @@ use matrix_sdk_crypto::{
 #[cfg(doc)]
 use ruma::DeviceId;
 #[cfg(feature = "e2e-encryption")]
-use ruma::events::room::{history_visibility::HistoryVisibility, member::MembershipState};
+use ruma::events::room::history_visibility::HistoryVisibility;
 use ruma::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::{self as api, sync::sync_events::v5},
@@ -44,7 +44,7 @@ use ruma::{
         StateEvent, StateEventType,
         ignored_user_list::IgnoredUserListEventContent,
         push_rules::{PushRulesEvent, PushRulesEventContent},
-        room::member::SyncRoomMemberEvent,
+        room::member::{MembershipState, SyncRoomMemberEvent},
     },
     push::Ruleset,
     time::Instant,
@@ -926,6 +926,12 @@ impl BaseClient {
 
         let mut ambiguity_map: HashMap<DisplayName, BTreeSet<OwnedUserId>> = Default::default();
 
+        // The response is a complete member list, so it is also the authoritative
+        // source for the member counts of the room summary, which a lazy-loading
+        // server may never have sent.
+        let mut joined_member_count = 0u64;
+        let mut invited_member_count = 0u64;
+
         // Hold the state store lock for the whole of the processing below. A sync
         // holds it too, so this is what makes the check against
         // `Room::sync_wrote_member_since_request` meaningful: no sync can slip a
@@ -968,6 +974,12 @@ impl BaseClient {
             // fetched by `members`. Therefore, they need to be overwritten here, even if
             // they exist.
 
+            match member.membership() {
+                MembershipState::Join => joined_member_count += 1,
+                MembershipState::Invite => invited_member_count += 1,
+                _ => (),
+            }
+
             #[cfg(feature = "e2e-encryption")]
             match member.membership() {
                 MembershipState::Join | MembershipState::Invite => {
@@ -1006,6 +1018,12 @@ impl BaseClient {
             };
             let Ok(member) = raw_event.deserialize() else { continue };
 
+            match member.membership() {
+                MembershipState::Join => joined_member_count += 1,
+                MembershipState::Invite => invited_member_count += 1,
+                _ => (),
+            }
+
             #[cfg(feature = "e2e-encryption")]
             match member.membership() {
                 MembershipState::Join | MembershipState::Invite => {
@@ -1037,6 +1055,11 @@ impl BaseClient {
         {
             let mut room_info = room.clone_info();
             room_info.mark_members_synced();
+            // The summary of a room whose members are lazily loaded may never have been
+            // sent by the server, leaving the counts at zero while the store holds the
+            // whole member list. Now that we have that list, the counts can be exact.
+            room_info.update_joined_member_count(joined_member_count);
+            room_info.update_invited_member_count(invited_member_count);
             context.state_changes.add_room(room_info);
 
             processors::changes::save_and_apply(

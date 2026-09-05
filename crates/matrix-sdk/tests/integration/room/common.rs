@@ -116,6 +116,40 @@ async fn test_banned_member_has_no_profile() {
 }
 
 #[async_test]
+async fn test_sync_members_fills_in_the_member_counts() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let alice = user_id!("@alice:localhost");
+    let bob = user_id!("@bob:localhost");
+    let carol = user_id!("@carol:localhost");
+    let dave = user_id!("@dave:localhost");
+    let f = || EventFactory::new().room(room_id);
+
+    // A lazy-loading server may never send a room summary, leaving the counts at
+    // zero even though the member events are known.
+    let room = server.sync_room(&client, JoinedRoomBuilder::new(room_id)).await;
+    assert_eq!(room.active_members_count(), 0);
+
+    let members: Vec<Raw<RoomMemberEvent>> = vec![
+        f().sender(alice).member(alice).into(),
+        f().sender(bob).member(bob).into(),
+        f().sender(alice).member(carol).invited(carol).into(),
+        f().sender(alice).member(dave).banned(dave).into(),
+    ];
+    server.mock_get_members().ok(members).mock_once().mount().await;
+
+    room.sync_members().await.unwrap();
+
+    // The full member list is authoritative, so the counts are now exact.
+    assert_eq!(room.joined_members_count(), 2);
+    assert_eq!(room.invited_members_count(), 1);
+    assert_eq!(room.active_members_count(), 3);
+    assert_eq!(room.members(RoomMemberships::ACTIVE).await.unwrap().len(), 3);
+}
+
+#[async_test]
 async fn test_get_members_does_not_overwrite_newer_sync_state() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
