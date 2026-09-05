@@ -1041,8 +1041,18 @@ impl BaseClient {
     }
 
     /// Get a to-device request that will share a room key with users in a room.
+    ///
+    /// `strategy_override` replaces the client's configured
+    /// [`CollectStrategy`] for this sharing only. It is meant for the rare
+    /// events that must reach devices the configured strategy would refuse to
+    /// share with; the caller is responsible for making sure the resulting
+    /// session isn't reused for anything else.
     #[cfg(feature = "e2e-encryption")]
-    pub async fn share_room_key(&self, room_id: &RoomId) -> Result<Vec<Arc<ToDeviceRequest>>> {
+    pub async fn share_room_key(
+        &self,
+        room_id: &RoomId,
+        strategy_override: Option<CollectStrategy>,
+    ) -> Result<Vec<Arc<ToDeviceRequest>>> {
         match self.olm_machine().await.as_ref() {
             Some(o) => {
                 let Some(room) = self.get_room(room_id) else {
@@ -1067,7 +1077,7 @@ impl BaseClient {
                 let Some(settings) = EncryptionSettings::from_possibly_redacted(
                     room_encryption_event,
                     history_visibility,
-                    self.room_key_recipient_strategy.clone(),
+                    strategy_override.unwrap_or_else(|| self.room_key_recipient_strategy.clone()),
                 ) else {
                     return Err(Error::EncryptionNotEnabled);
                 };

@@ -36,7 +36,8 @@ pub use identity_status_changes::IdentityStatusChanges;
 use matrix_sdk_base::crypto::types::events::room::encrypted::EncryptedEvent;
 #[cfg(feature = "e2e-encryption")]
 use matrix_sdk_base::crypto::{
-    IdentityStatusChange, RoomIdentityProvider, UserIdentity, types::events::CryptoContextInfo,
+    CollectStrategy, IdentityStatusChange, RoomIdentityProvider, UserIdentity,
+    types::events::CryptoContextInfo,
 };
 pub use matrix_sdk_base::store::StoredThreadSubscription;
 use matrix_sdk_base::{
@@ -2384,7 +2385,7 @@ impl Room {
     // e.g. a user starts to type a message for a room.
     #[cfg(feature = "e2e-encryption")]
     #[instrument(skip_all, fields(room_id = ?self.room_id()))]
-    async fn preshare_room_key(&self) -> Result<()> {
+    async fn preshare_room_key(&self, strategy_override: Option<CollectStrategy>) -> Result<()> {
         self.ensure_room_joined()?;
 
         // Take and release the lock on the store, if needs be.
@@ -2403,7 +2404,7 @@ impl Room {
                     self.client.claim_one_time_keys(members.iter().map(Deref::deref)).await?;
                 };
 
-                let response = self.share_room_key().await;
+                let response = self.share_room_key(strategy_override.clone()).await;
 
                 // If one of the responses failed invalidate the group
                 // session as using it would end up in undecryptable
@@ -2428,10 +2429,11 @@ impl Room {
     /// Panics if the client isn't logged in.
     #[cfg(feature = "e2e-encryption")]
     #[instrument(skip_all)]
-    async fn share_room_key(&self) -> Result<()> {
+    async fn share_room_key(&self, strategy_override: Option<CollectStrategy>) -> Result<()> {
         self.ensure_room_joined()?;
 
-        let requests = self.client.base_client().share_room_key(self.room_id()).await?;
+        let requests =
+            self.client.base_client().share_room_key(self.room_id(), strategy_override).await?;
 
         for request in requests {
             let response = self.client.send_to_device(&request).await?;
@@ -5016,7 +5018,7 @@ mod tests {
         let room = client.get_room(&DEFAULT_TEST_ROOM_ID).expect("Room should exist");
 
         // Step 1, preshare the room keys.
-        room.preshare_room_key().await.unwrap();
+        room.preshare_room_key(None).await.unwrap();
 
         // Step 2, force lock invalidation by pretending another client obtained the
         // lock.

@@ -588,9 +588,8 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
         };
 
         if !in_place.is_empty() {
-            in_memory_duplicated_event_ids.retain(|(_event_id, position)| {
-                !in_place.contains(position)
-            });
+            in_memory_duplicated_event_ids
+                .retain(|(_event_id, position)| !in_place.contains(position));
 
             // Replace before removing anything: the positions above were computed on the
             // untouched linked chunk, and replacing an event doesn't move any other one.

@@ -38,6 +38,8 @@ use ruma::{
     api::client::state::send_state_event,
     events::{AnyStateEventContent, StateEventContent},
 };
+#[cfg(feature = "e2e-encryption")]
+use tracing::debug;
 use tracing::{Instrument, Span, info, trace};
 
 use super::Room;
@@ -47,6 +49,8 @@ use crate::{
     Result, TransmissionProgress, attachment::AttachmentConfig, config::RequestConfig,
     utils::IntoRawMessageLikeEventContent,
 };
+#[cfg(feature = "e2e-encryption")]
+use matrix_sdk_base::crypto::CollectStrategy;
 
 /// The result of the [`Room::send`] future
 #[derive(Debug)]
@@ -214,7 +218,7 @@ impl<'a> IntoFuture for SendRawMessageLikeEvent<'a> {
                         "Sending encrypted event because the room is encrypted.",
                     );
 
-                    ensure_room_encryption_ready(room).await?;
+                    ensure_room_encryption_ready_for_event(room, event_type, &content).await?;
 
                     let olm = room.client.olm_machine().await;
                     let olm = olm.as_ref().expect("Olm machine wasn't started");
@@ -520,6 +524,93 @@ impl<'a> IntoFuture for SendStateEvent<'a> {
 
 /// Ensures the room is ready for encrypted events to be sent.
 #[cfg(feature = "e2e-encryption")]
+/// Whether `event_type`/`content` is part of the in-room key verification
+/// framework.
+#[cfg(feature = "e2e-encryption")]
+fn is_verification_event(event_type: &str, content: &Raw<AnyMessageLikeEventContent>) -> bool {
+    if event_type.starts_with("m.key.verification.") {
+        return true;
+    }
+
+    // A verification is requested with a regular room message carrying the
+    // `m.key.verification.request` message type.
+    event_type == "m.room.message"
+        && content.get_field::<String>("msgtype").ok().flatten().as_deref()
+            == Some("m.key.verification.request")
+}
+
+/// Share the room key for an event that is about to be encrypted.
+///
+/// This is [`ensure_room_encryption_ready`], with one exception: verification
+/// events.
+///
+/// [`CollectStrategy::ErrorOnVerifiedUserProblem`] refuses to send anything to
+/// a room where a verified user has an unsigned device — but sending a
+/// verification event is exactly how that state gets resolved, so refusing
+/// makes it unresolvable. When that (and only that) is what stopped us, we
+/// retry the sharing with [`CollectStrategy::AllDevices`].
+///
+/// Widening who receives a room key must not widen who can read the rest of
+/// the room, so the session is discarded on both sides of the retry: before,
+/// so the permissive session is brand new and carries no earlier message;
+/// after, so the next event rotates to a session shared under the configured
+/// strategy again.
+#[cfg(feature = "e2e-encryption")]
+async fn ensure_room_encryption_ready_for_event(
+    room: &Room,
+    event_type: &str,
+    content: &Raw<AnyMessageLikeEventContent>,
+) -> Result<()> {
+    let error = match ensure_room_encryption_ready(room).await {
+        Ok(()) => return Ok(()),
+        Err(error) => error,
+    };
+
+    if !is_verification_event(event_type, content) || !is_unsigned_device_problem(&error) {
+        return Err(error);
+    }
+
+    debug!(
+        room_id = ?room.room_id(),
+        "Retrying to share the room key for a verification event, ignoring the unsigned \
+         devices that verification is meant to take care of",
+    );
+
+    discard_room_key(room).await?;
+
+    let result = room.preshare_room_key(Some(CollectStrategy::AllDevices)).await;
+
+    discard_room_key(room).await?;
+
+    result
+}
+
+#[cfg(feature = "e2e-encryption")]
+async fn discard_room_key(room: &Room) -> Result<()> {
+    let olm = room.client.olm_machine().await;
+    let olm = olm.as_ref().expect("Olm machine wasn't started");
+    olm.discard_room_key(room.room_id()).await?;
+    Ok(())
+}
+
+/// Whether sharing the room key failed only because a verified user has a
+/// device that isn't signed by their own identity.
+#[cfg(feature = "e2e-encryption")]
+fn is_unsigned_device_problem(error: &crate::Error) -> bool {
+    use matrix_sdk_base::crypto::{OlmError, SessionRecipientCollectionError};
+
+    matches!(
+        error,
+        crate::Error::OlmError(error)
+            if matches!(
+                **error,
+                OlmError::SessionRecipientCollectionError(
+                    SessionRecipientCollectionError::VerifiedUserHasUnsignedDevice(_)
+                )
+            )
+    )
+}
+
 async fn ensure_room_encryption_ready(room: &Room) -> Result<()> {
     if !room.are_members_synced() {
         room.sync_members().await?;
@@ -532,7 +623,60 @@ async fn ensure_room_encryption_ready(room: &Room) -> Result<()> {
     // could have not query their keys ever.
     room.query_keys_for_untracked_or_dirty_users().await?;
 
-    room.preshare_room_key().await?;
+    room.preshare_room_key(None).await?;
 
     Ok(())
+}
+
+#[cfg(all(test, feature = "e2e-encryption"))]
+mod tests {
+    use ruma::{
+        events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
+        serde::Raw,
+    };
+    use serde_json::json;
+
+    use super::is_verification_event;
+
+    fn raw(value: serde_json::Value) -> Raw<AnyMessageLikeEventContent> {
+        Raw::from_json_string(value.to_string()).unwrap()
+    }
+
+    #[test]
+    fn test_is_verification_event() {
+        // A verification is requested with a room message of a specific message type.
+        assert!(is_verification_event(
+            "m.room.message",
+            &raw(json!({ "msgtype": "m.key.verification.request", "body": "wants to verify" })),
+        ));
+
+        // The rest of the verification framework has its own event types.
+        for event_type in [
+            "m.key.verification.ready",
+            "m.key.verification.start",
+            "m.key.verification.accept",
+            "m.key.verification.key",
+            "m.key.verification.mac",
+            "m.key.verification.cancel",
+            "m.key.verification.done",
+        ] {
+            assert!(is_verification_event(event_type, &raw(json!({}))), "{event_type}");
+        }
+
+        // Anything else isn't.
+        assert!(!is_verification_event(
+            "m.room.message",
+            &raw(json!({ "msgtype": "m.text", "body": "hello" })),
+        ));
+        assert!(!is_verification_event("m.reaction", &raw(json!({}))));
+        assert!(!is_verification_event("m.room.message", &raw(json!({}))));
+
+        // Sanity check that a real content serializes the way we expect.
+        let content =
+            AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hello"));
+        assert!(!is_verification_event(
+            "m.room.message",
+            &Raw::from_json_string(serde_json::to_string(&content).unwrap()).unwrap(),
+        ));
+    }
 }
