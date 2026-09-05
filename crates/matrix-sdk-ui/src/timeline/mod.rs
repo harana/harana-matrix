@@ -224,6 +224,9 @@ pub struct AttachmentConfig {
     /// Whether to remove the metadata embedded in the image before uploading
     /// it. See [`matrix_sdk::attachment::AttachmentConfig::strip_exif`].
     pub strip_exif: bool,
+    /// Whether to compute the BlurHash of the image before uploading it. See
+    /// [`matrix_sdk::attachment::AttachmentConfig::generate_blurhash`].
+    pub generate_blurhash: bool,
 }
 
 impl Timeline {

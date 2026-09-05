@@ -2725,7 +2725,7 @@ impl Room {
         // Remove the image's metadata, if the caller asked for it, before it is
         // uploaded or cached.
         let (data, thumbnail) =
-            crate::attachment::preprocess(content_type, data, thumbnail, &config).await;
+            crate::attachment::preprocess(content_type, data, thumbnail, &mut config).await;
 
         // If necessary, store caching data for the thumbnail ahead of time.
         let thumbnail_cache_info = if store_in_cache {

@@ -158,6 +158,97 @@ async fn test_room_attachment_send_keeps_exif_by_default() {
     assert_eq!(uploaded.await.unwrap(), jpeg_with_exif());
 }
 
+/// With `generate_blurhash` set, the media event carries a BlurHash the
+/// receiving client can render while the image downloads.
+#[cfg(feature = "image-proc")]
+#[async_test]
+async fn test_room_attachment_send_generates_blurhash() {
+    use image::{ImageFormat, Rgba, RgbaImage};
+
+    let mock = MatrixMockServer::new().await;
+
+    mock.mock_authenticated_media_config().ok_default().mount().await;
+    mock.mock_upload()
+        .ok(mxc_uri!("mxc://example.com/AQwafuaFswefuhsfAFAgsw"))
+        .mock_once()
+        .mount()
+        .await;
+
+    let mut png = std::io::Cursor::new(Vec::new());
+    RgbaImage::from_pixel(32, 24, Rgba([255, 0, 0, 255]))
+        .write_to(&mut png, ImageFormat::Png)
+        .unwrap();
+
+    let client = mock.client_builder().build().await;
+    let user_id = client.user_id().unwrap().to_owned();
+
+    let (sent, send_mock) =
+        mock.mock_room_send().ok_with_capture(event_id!("$h29iv0s8:example.com"), user_id);
+    send_mock.mock_once().mount().await;
+
+    let room = mock.sync_joined_room(&client, &DEFAULT_TEST_ROOM_ID).await;
+    mock.mock_room_state_encryption().plain().mount().await;
+
+    room.send_attachment(
+        "image.png",
+        &mime::IMAGE_PNG,
+        png.into_inner(),
+        AttachmentConfig::new()
+            .info(AttachmentInfo::Image(BaseImageInfo {
+                height: Some(uint!(24)),
+                width: Some(uint!(32)),
+                ..Default::default()
+            }))
+            .generate_blurhash(true),
+    )
+    .await
+    .unwrap();
+
+    let sent: serde_json::Value = serde_json::to_value(sent.await.unwrap()).unwrap();
+    let info = &sent["content"]["info"];
+
+    // A 4x3 hash is a fixed length.
+    let blurhash =
+        info["xyz.amorgan.blurhash"].as_str().expect("the media event should carry a blurhash");
+    assert_eq!(blurhash.len(), 28);
+
+    // The dimensions the caller gave are untouched.
+    assert_eq!(info["w"], 32);
+    assert_eq!(info["h"], 24);
+}
+
+/// Without `generate_blurhash`, no hash is computed.
+#[async_test]
+async fn test_room_attachment_send_has_no_blurhash_by_default() {
+    let mock = MatrixMockServer::new().await;
+
+    mock.mock_authenticated_media_config().ok_default().mount().await;
+    mock.mock_upload()
+        .ok(mxc_uri!("mxc://example.com/AQwafuaFswefuhsfAFAgsw"))
+        .mock_once()
+        .mount()
+        .await;
+
+    let client = mock.client_builder().build().await;
+    let user_id = client.user_id().unwrap().to_owned();
+
+    let (sent, send_mock) =
+        mock.mock_room_send().ok_with_capture(event_id!("$h29iv0s8:example.com"), user_id);
+    send_mock.mock_once().mount().await;
+
+    let room = mock.sync_joined_room(&client, &DEFAULT_TEST_ROOM_ID).await;
+    mock.mock_room_state_encryption().plain().mount().await;
+
+    room.send_attachment("image.png", &mime::IMAGE_PNG, b"not really a png".to_vec(), {
+        AttachmentConfig::new().info(AttachmentInfo::Image(BaseImageInfo::default()))
+    })
+    .await
+    .unwrap();
+
+    let sent: serde_json::Value = serde_json::to_value(sent.await.unwrap()).unwrap();
+    assert!(sent["content"]["info"]["xyz.amorgan.blurhash"].is_null());
+}
+
 #[cfg(feature = "e2e-encryption")]
 #[async_test]
 async fn test_room_attachment_send_in_encrypted_room_has_binary_mime_type() {

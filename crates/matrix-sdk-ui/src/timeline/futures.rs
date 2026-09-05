@@ -83,6 +83,7 @@ impl<'a> IntoFuture for SendAttachment<'a> {
                 extra_content: config.extra_content,
                 reply,
                 strip_exif: config.strip_exif,
+                generate_blurhash: config.generate_blurhash,
             };
 
             if use_send_queue {

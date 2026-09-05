@@ -125,6 +125,10 @@ experimental-element-recent-emojis = ["matrix-sdk-base/experimental-element-rece
 
 experimental-x509-identity-verification = ["e2e-encryption", "matrix-sdk-base/experimental-x509-identity-verification"]
 
+# Decode images during upload preprocessing, to compute their BlurHash. This
+# pulls in an image decoder, so it is off by default.
+image-proc = ["dep:blurhash", "dep:image"]
+
 [dependencies]
 anyhow = { workspace = true, optional = true }
 anymap2 = { version = "0.13.0", default-features = false }
@@ -134,6 +138,7 @@ async-channel = "2.5.0"
 async-stream.workspace = true
 async-trait.workspace = true
 axum = { version = "0.8.9", optional = true }
+blurhash = { version = "0.2.3", default-features = false, optional = true }
 bytes = { version = "1.12.1", default-features = false, features = ["std"] }
 bytesize = { version = "2.4.2", default-features = false, features = ["std"] }
 cfg-if.workspace = true
@@ -146,6 +151,8 @@ futures-util = { workspace = true, features = ["async-await-macro"] }
 hex = "0.4.3"
 http.workspace = true
 imbl = { workspace = true, features = ["serde"] }
+# Only the codecs `image-proc` can strip metadata from, to keep the build small.
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
 indexmap.workspace = true
 itertools.workspace = true
 js_int = "0.2.2"

@@ -14,6 +14,8 @@
 
 //! Types and traits for attachments.
 
+#[cfg(feature = "image-proc")]
+mod blurhash;
 mod exif;
 
 use std::time::Duration;
@@ -212,6 +214,13 @@ pub struct AttachmentConfig {
     ///
     /// See [`AttachmentConfig::strip_exif`].
     pub strip_exif: bool,
+
+    /// Whether to compute the [BlurHash] of the image before uploading it.
+    ///
+    /// See [`AttachmentConfig::generate_blurhash`].
+    ///
+    /// [BlurHash]: https://blurha.sh/
+    pub generate_blurhash: bool,
 }
 
 impl AttachmentConfig {
@@ -310,6 +319,32 @@ impl AttachmentConfig {
         self
     }
 
+    /// Compute the [BlurHash] of the image before uploading it, and put it in
+    /// the media event's content.
+    ///
+    /// A BlurHash is a short string describing the rough colours of an image.
+    /// A receiving client can render it instantly, as a blurred placeholder,
+    /// while the media itself is still downloading. It is sent in the clear
+    /// even in an encrypted room, but at this resolution it reveals no more
+    /// than a heavily blurred thumbnail would.
+    ///
+    /// For an image attachment the hash is computed from the image; for a
+    /// video, from its thumbnail, since the SDK cannot decode video. A
+    /// BlurHash already present in [`AttachmentConfig::info`] is left alone.
+    ///
+    /// This requires the `image-proc` feature, which pulls in an image
+    /// decoder; without it, asking for a BlurHash logs a warning and does
+    /// nothing.
+    ///
+    /// Off by default, since decoding the image costs time and memory.
+    ///
+    /// [BlurHash]: https://blurha.sh/
+    #[must_use]
+    pub fn generate_blurhash(mut self, generate_blurhash: bool) -> Self {
+        self.generate_blurhash = generate_blurhash;
+        self
+    }
+
     /// Set additional top-level fields for the media event's content.
     ///
     /// # Arguments
@@ -327,33 +362,114 @@ impl AttachmentConfig {
 /// Apply the preprocessing steps [`AttachmentConfig`] asks for to an
 /// attachment and its thumbnail, before either is cached or uploaded.
 ///
+/// The attachment info is updated in place, since a computed BlurHash belongs
+/// in the media event's content.
+///
 /// This runs on a blocking thread: an attachment can be tens of megabytes, and
-/// walking it must not stall the caller's executor.
+/// neither walking it nor decoding it must stall the caller's executor.
 pub(crate) async fn preprocess(
     content_type: &mime::Mime,
     data: Vec<u8>,
     thumbnail: Option<Thumbnail>,
-    config: &AttachmentConfig,
+    config: &mut AttachmentConfig,
 ) -> (Vec<u8>, Option<Thumbnail>) {
-    if !config.strip_exif {
+    let strip_exif = config.strip_exif;
+    let generate_blurhash = config.generate_blurhash;
+
+    if !strip_exif && !generate_blurhash {
         return (data, thumbnail);
     }
 
     let content_type = content_type.clone();
+    let info = config.info.take();
 
-    matrix_sdk_common::executor::spawn_blocking(move || {
-        let data = exif::strip_metadata(&content_type, data);
+    let (data, thumbnail, info) = matrix_sdk_common::executor::spawn_blocking(move || {
+        let (data, thumbnail) = if strip_exif {
+            let data = exif::strip_metadata(&content_type, data);
 
-        let thumbnail = thumbnail.map(|mut thumbnail| {
-            thumbnail.data = exif::strip_metadata(&thumbnail.content_type, thumbnail.data);
-            thumbnail.size = UInt::new_saturating(thumbnail.data.len() as u64);
-            thumbnail
-        });
+            let thumbnail = thumbnail.map(|mut thumbnail| {
+                thumbnail.data = exif::strip_metadata(&thumbnail.content_type, thumbnail.data);
+                thumbnail.size = UInt::new_saturating(thumbnail.data.len() as u64);
+                thumbnail
+            });
 
-        (data, thumbnail)
+            (data, thumbnail)
+        } else {
+            (data, thumbnail)
+        };
+
+        let info = if generate_blurhash {
+            add_blurhash(&content_type, &data, thumbnail.as_ref(), info)
+        } else {
+            info
+        };
+
+        (data, thumbnail, info)
     })
     .await
-    .expect("Stripping the metadata of an attachment should never panic")
+    .expect("Preprocessing an attachment should never panic");
+
+    config.info = info;
+
+    (data, thumbnail)
+}
+
+/// Fill in the BlurHash of the attachment info, if it doesn't have one yet.
+///
+/// An image is hashed from its own data; a video from its thumbnail, since the
+/// SDK has no video decoder. Anything else has nowhere to put a BlurHash.
+#[cfg(feature = "image-proc")]
+fn add_blurhash(
+    content_type: &mime::Mime,
+    data: &[u8],
+    thumbnail: Option<&Thumbnail>,
+    info: Option<AttachmentInfo>,
+) -> Option<AttachmentInfo> {
+    // With no info at all, only an image gets one made for it: for any other
+    // type the SDK would be inventing metadata it knows nothing about.
+    let info = info.or_else(|| {
+        (content_type.type_() == mime::IMAGE)
+            .then(|| AttachmentInfo::Image(BaseImageInfo::default()))
+    })?;
+
+    Some(match info {
+        AttachmentInfo::Image(mut image) => {
+            if image.blurhash.is_none() {
+                image.blurhash = blurhash::compute(content_type, data);
+            }
+
+            AttachmentInfo::Image(image)
+        }
+
+        AttachmentInfo::Video(mut video) => {
+            if video.blurhash.is_none()
+                && let Some(thumbnail) = thumbnail
+            {
+                video.blurhash = blurhash::compute(&thumbnail.content_type, &thumbnail.data);
+            }
+
+            AttachmentInfo::Video(video)
+        }
+
+        info => info,
+    })
+}
+
+/// Without the `image-proc` feature there is no image decoder to compute a
+/// BlurHash with, so say so once rather than silently doing nothing.
+#[cfg(not(feature = "image-proc"))]
+fn add_blurhash(
+    _content_type: &mime::Mime,
+    _data: &[u8],
+    _thumbnail: Option<&Thumbnail>,
+    info: Option<AttachmentInfo>,
+) -> Option<AttachmentInfo> {
+    tracing::warn!(
+        "a blurhash was requested for an attachment, but the SDK was built \
+         without the `image-proc` feature"
+    );
+
+    info
 }
 
 /// Configuration for sending a gallery.

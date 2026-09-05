@@ -132,6 +132,7 @@ impl Timeline {
             in_reply_to: in_reply_to_event_id,
             extra_content,
             strip_exif: params.strip_exif,
+            generate_blurhash: params.generate_blurhash,
             ..Default::default()
         };
 
@@ -219,6 +220,13 @@ pub struct UploadParameters {
     /// unchanged. Defaults to `false`, since the sender may want to keep it.
     #[uniffi(default = false)]
     strip_exif: bool,
+    /// Whether to compute the BlurHash of the image before uploading it, so
+    /// receiving clients can show a blurred placeholder while the media
+    /// downloads.
+    ///
+    /// For a video this is computed from its thumbnail. Defaults to `false`.
+    #[uniffi(default = false)]
+    generate_blurhash: bool,
 }
 
 /// A source for uploading a file
