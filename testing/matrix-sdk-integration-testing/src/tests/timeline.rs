@@ -415,12 +415,10 @@ async fn test_enabling_backups_retries_decryption() {
         .response
         .event_id;
 
-    alice
-        .encryption()
-        .backups()
-        .wait_for_steady_state()
-        .await
-        .expect("We should be able to wait for our room keys to be uploaded");
+    let backups = alice.encryption().backups();
+    let wait_for_upload = backups.wait_for_upload();
+    backups.trigger_upload();
+    wait_for_upload.await.expect("We should be able to wait for our room keys to be uploaded");
 
     // We don't need Alice anymore.
     alice_sync.abort();

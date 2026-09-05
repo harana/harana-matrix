@@ -481,7 +481,8 @@ async fn test_steady_state_waiting() -> TestResult {
 
     let backups = client.encryption().backups();
 
-    let wait_for_steady_state = backups.wait_for_steady_state();
+    let wait_for_steady_state = backups.wait_for_upload();
+    backups.trigger_upload();
 
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
@@ -828,7 +829,7 @@ async fn test_steady_state_waiting_errors() -> TestResult {
     let (client, server) = no_retry_test_client_with_server().await;
     client.restore_session(session).await?;
 
-    let result = client.encryption().backups().wait_for_steady_state().await;
+    let result = client.encryption().backups().wait_for_upload().await;
 
     assert_matches!(
         result,
@@ -839,7 +840,9 @@ async fn test_steady_state_waiting_errors() -> TestResult {
     setup_backups(&client, &server).await;
     let backups = client.encryption().backups();
 
-    let result = backups.wait_for_steady_state().await;
+    let wait_for_upload = backups.wait_for_upload();
+    backups.trigger_upload();
+    let result = wait_for_upload.await;
 
     assert_matches!(
         result,
@@ -858,7 +861,8 @@ async fn test_steady_state_waiting_errors() -> TestResult {
     )
     .await;
 
-    let wait_for_steady_state = backups.wait_for_steady_state();
+    let wait_for_steady_state = backups.wait_for_upload();
+    backups.trigger_upload();
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
     let task = spawn(async move {

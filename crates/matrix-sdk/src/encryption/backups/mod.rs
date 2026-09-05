@@ -360,12 +360,90 @@ impl Backups {
     ///
     /// # anyhow::Ok(()) };
     /// ```
+    #[deprecated(
+        since = "0.18.0",
+        note = "this both triggers an upload and waits for it; use `Backups::trigger_upload` \
+                and `Backups::wait_for_upload` instead"
+    )]
     pub fn wait_for_steady_state(&self) -> WaitForSteadyState<'_> {
-        WaitForSteadyState {
-            backups: self,
-            progress: self.client.inner.e2ee.backup_state.upload_progress.clone(),
-            timeout: None,
-        }
+        let progress = self.client.inner.e2ee.backup_state.upload_progress.clone();
+        let progress_stream = Box::pin(progress.subscribe());
+
+        WaitForSteadyState { backups: self, progress, timeout: None, trigger_upload: true, progress_stream, old_delay: None }
+    }
+
+    /// Wake up the task which uploads room keys that have not yet been backed
+    /// up.
+    ///
+    /// This returns as soon as the task has been woken up; use
+    /// [`Backups::wait_for_upload`] to wait for the upload to finish.
+    pub fn trigger_upload(&self) {
+        self.maybe_trigger_backup();
+    }
+
+    /// Returns a future which resolves once every room key we currently have
+    /// has been uploaded to the backup.
+    ///
+    /// Unlike [`Backups::trigger_upload`], this only observes: it does not
+    /// wake the upload task up. Call [`Backups::trigger_upload`] first if you
+    /// want the upload to start now.
+    ///
+    /// The future resolves on the completion of an upload which started after
+    /// this method was called, so a backup which completed earlier cannot make
+    /// it report success for room keys which are still queued.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use matrix_sdk::{Client, encryption::backups::UploadState};
+    /// # use url::Url;
+    /// # async {
+    /// # let homeserver = Url::parse("http://example.com")?;
+    /// # let client = Client::new(homeserver).await?;
+    /// use futures_util::StreamExt;
+    ///
+    /// let backups = client.encryption().backups();
+    ///
+    /// let wait_for_upload = backups.wait_for_upload();
+    /// let mut progress_stream = wait_for_upload.subscribe_to_progress();
+    ///
+    /// tokio::spawn(async move {
+    ///     while let Some(update) = progress_stream.next().await {
+    ///         let Ok(update) = update else { break };
+    ///
+    ///         match update {
+    ///             UploadState::Uploading(counts) => {
+    ///                 println!(
+    ///                     "Uploaded {} out of {} room keys.",
+    ///                     counts.backed_up, counts.total
+    ///                 );
+    ///             }
+    ///             UploadState::Error => break,
+    ///             UploadState::Done => break,
+    ///             _ => (),
+    ///         }
+    ///     }
+    /// });
+    ///
+    /// backups.trigger_upload();
+    /// wait_for_upload.await?;
+    ///
+    /// # anyhow::Ok(()) };
+    /// ```
+    pub fn wait_for_upload(&self) -> WaitForSteadyState<'_> {
+        let progress = self.client.inner.e2ee.backup_state.upload_progress.clone();
+        let progress_stream = Box::pin(progress.subscribe());
+
+        WaitForSteadyState { backups: self, progress, timeout: None, trigger_upload: false, progress_stream, old_delay: None }
+    }
+
+    /// Are there room keys which we have not uploaded to the backup yet?
+    pub(super) async fn has_room_keys_to_upload(&self) -> Result<bool, Error> {
+        let olm_machine = self.client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
+        let counts = olm_machine.backup_machine().room_key_counts().await?;
+
+        Ok(counts.backed_up < counts.total)
     }
 
     /// Get a stream of updates to the [`BackupState`].
@@ -1597,44 +1675,22 @@ mod test {
             { client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned() };
 
         let wait_for_steady_state =
-            backups.wait_for_steady_state().with_delay(Duration::from_nanos(100));
+            backups.wait_for_upload().with_delay(Duration::from_nanos(100));
 
-        let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
+        // The delay is overridden right away, so that it also applies to an upload
+        // which is triggered before the future is awaited.
+        {
+            let current_delay =
+                client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned();
+            assert_eq!(current_delay, Duration::from_nanos(100));
+            assert_ne!(current_delay, old_duration);
+        }
 
-        let task = matrix_sdk_common::executor::spawn({
-            let client = client.to_owned();
-            async move {
-                while let Some(state) = progress_stream.next().await {
-                    let Ok(state) = state else {
-                        panic!("Error while waiting for the upload state")
-                    };
-
-                    match state {
-                        UploadState::Idle => (),
-                        UploadState::Done => {
-                            let current_delay = {
-                                client
-                                    .inner
-                                    .e2ee
-                                    .backup_state
-                                    .upload_delay
-                                    .read()
-                                    .unwrap()
-                                    .to_owned()
-                            };
-
-                            assert_ne!(current_delay, old_duration);
-                            break;
-                        }
-                        _ => panic!("We should not have entered any other state"),
-                    }
-                }
-            }
-        });
+        backups.trigger_upload();
 
         wait_for_steady_state.await.expect("We should be able to wait for the steady state");
-        task.await.unwrap();
 
+        // Once we are done waiting, the delay is back to what it was.
         let current_duration =
             { client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned() };
 

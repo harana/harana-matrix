@@ -14,7 +14,7 @@
 
 //! Named futures for the backup support.
 
-use std::{future::IntoFuture, time::Duration};
+use std::{future::IntoFuture, pin::Pin, time::Duration};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -52,12 +52,34 @@ pub enum SteadyStateError {
     Lagged,
 }
 
-/// Named future for the [`Backups::wait_for_steady_state()`] method.
-#[derive(Debug)]
+/// Named future for the [`Backups::wait_for_upload()`] method.
 pub struct WaitForSteadyState<'a> {
     pub(super) backups: &'a Backups,
     pub(super) progress: ChannelObservable<UploadState>,
     pub(super) timeout: Option<Duration>,
+    /// Should awaiting this future wake the upload task up, or only observe an
+    /// upload which somebody else started?
+    pub(super) trigger_upload: bool,
+    /// The progress subscription, taken when this future was created rather
+    /// than when it is awaited.
+    ///
+    /// This is what lets a caller trigger the upload between creating the
+    /// future and awaiting it without the completion going unnoticed.
+    pub(super) progress_stream:
+        Pin<Box<dyn Stream<Item = Result<UploadState, BroadcastStreamRecvError>> + Send>>,
+    /// The upload delay which was in place before [`Self::with_delay`]
+    /// overrode it, to be restored once we are done waiting.
+    pub(super) old_delay: Option<Duration>,
+}
+
+#[cfg(not(tarpaulin_include))]
+impl std::fmt::Debug for WaitForSteadyState<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WaitForSteadyState")
+            .field("timeout", &self.timeout)
+            .field("trigger_upload", &self.trigger_upload)
+            .finish_non_exhaustive()
+    }
 }
 
 impl WaitForSteadyState<'_> {
@@ -77,9 +99,18 @@ impl WaitForSteadyState<'_> {
     /// This method allows you to override how long the [`Client`] will wait.
     /// The default value is 100 ms.
     ///
+    /// The delay takes effect immediately, so that it also applies to an upload
+    /// triggered before this future is awaited, and is restored once the future
+    /// completes.
+    ///
     /// [`Client`]: crate::Client
     pub fn with_delay(mut self, delay: Duration) -> Self {
+        let mut lock = self.backups.client.inner.e2ee.backup_state.upload_delay.write().unwrap();
+
         self.timeout = Some(delay);
+        self.old_delay = Some(std::mem::replace(&mut *lock, delay));
+
+        drop(lock);
 
         self
     }
@@ -91,27 +122,39 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let Self { backups, timeout, progress } = self;
+            let Self {
+                backups,
+                timeout: _,
+                progress: _,
+                trigger_upload,
+                mut progress_stream,
+                old_delay,
+            } = self;
 
-            trace!("Creating a stream to wait for the steady state");
-
-            let mut progress_stream = progress.subscribe();
-
-            let old_delay = if let Some(delay) = timeout {
-                let mut lock = backups.client.inner.e2ee.backup_state.upload_delay.write().unwrap();
-                let old_delay = Some(lock.to_owned());
-
-                *lock = delay;
-
-                old_delay
-            } else {
-                None
-            };
+            // The stream replays the state as it was when this future was created, which
+            // may well be the `Done` of an upload that finished earlier and which
+            // therefore says nothing about the room keys we are waiting for. Take it out
+            // of the way so that only later states can end the wait.
+            let replayed_state = progress_stream.next().await;
 
             trace!("Waiting for the upload steady state");
 
-            let ret = if backups.are_enabled().await {
-                backups.maybe_trigger_backup();
+            let ret = if !backups.are_enabled().await {
+                Err(SteadyStateError::BackupDisabled)
+            } else if !trigger_upload
+                && matches!(replayed_state, Some(Ok(UploadState::Done | UploadState::Idle)))
+                && !backups.has_room_keys_to_upload().await.unwrap_or(true)
+            {
+                // Nothing is in flight and there is nothing left to upload, so we are in
+                // the steady state already. Without this, an observing wait would sit
+                // there waiting for an upload which nobody is going to start.
+                trace!("Every room key is backed up already");
+
+                Ok(())
+            } else {
+                if trigger_upload {
+                    backups.trigger_upload();
+                }
 
                 let mut ret = Ok(());
 
@@ -144,8 +187,6 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
                 }
 
                 ret
-            } else {
-                Err(SteadyStateError::BackupDisabled)
             };
 
             if let Some(old_delay) = old_delay {

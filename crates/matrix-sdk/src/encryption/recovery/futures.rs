@@ -111,8 +111,10 @@ impl<'a> IntoFuture for Enable<'a> {
 
             if wait_for_backups_upload {
                 let backups = recovery.client.encryption().backups();
-                let upload_future = backups.wait_for_steady_state();
+                let upload_future = backups.wait_for_upload();
                 let upload_progress = upload_future.subscribe_to_progress();
+
+                backups.trigger_upload();
 
                 #[allow(unused_variables)]
                 let progress_task = matrix_sdk_common::executor::spawn({
