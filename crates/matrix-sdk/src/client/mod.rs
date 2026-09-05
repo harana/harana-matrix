@@ -82,10 +82,10 @@ use ruma::{
         StateEventType, beacon_info::OriginalSyncBeaconInfoEvent, direct::DirectUserIdentifier,
     },
     int,
-    room::RoomType,
-    serde::Raw,
     presence::PresenceState,
     push::Ruleset,
+    room::RoomType,
+    serde::Raw,
     time::Instant,
 };
 use serde::de::DeserializeOwned;
@@ -718,7 +718,8 @@ impl Client {
     /// The URL built from the server name that was used for `.well-known`
     /// discovery, if any.
     ///
-    /// This is set when the client was built with [`ClientBuilder::server_name`],
+    /// This is set when the client was built with
+    /// [`ClientBuilder::server_name`],
     /// [`ClientBuilder::insecure_server_name_no_tls`], or
     /// [`ClientBuilder::server_name_or_homeserver_url`] and a server name (as
     /// opposed to a homeserver URL) was resolved. It is `None` when the
@@ -1574,8 +1575,7 @@ impl Client {
             }
         }
 
-        let preview =
-            RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await?;
+        let preview = RoomPreview::from_remote_room(self, room_id, room_or_alias_id, via).await?;
         preview.save_to_local_room(self).await;
 
         Ok(preview)
@@ -4223,9 +4223,9 @@ pub(crate) mod tests {
             ignored_user_list::IgnoredUserListEventContent,
             media_preview_config::{InviteAvatars, MediaPreviewConfigEventContent, MediaPreviews},
         },
-        owned_device_id, owned_room_id, owned_user_id,
+        int, owned_device_id, owned_room_id, owned_user_id,
         presence::PresenceState,
-        int, room_alias_id, room_id,
+        room_alias_id, room_id,
         serde::Raw,
         user_id,
     };
@@ -5372,11 +5372,7 @@ pub(crate) mod tests {
 
         // No room carries the marker yet: creating the room is safe.
         assert!(
-            client
-                .rooms_with_state_event(marker_type.into(), marker_key)
-                .await
-                .unwrap()
-                .is_empty()
+            client.rooms_with_state_event(marker_type.into(), marker_key).await.unwrap().is_empty()
         );
 
         let first = room_id!("!first:localhost");

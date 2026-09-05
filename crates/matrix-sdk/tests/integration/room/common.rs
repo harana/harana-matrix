@@ -15,7 +15,7 @@ use matrix_sdk_test::{
     bulk_room_members, event_factory::EventFactory, sync_state_event, test_json,
 };
 use ruma::{
-    RoomVersionId, event_id, int,
+    RoomVersionId, event_id,
     events::{
         AnyGlobalAccountDataEvent, AnySyncStateEvent, AnySyncTimelineEvent, StateEventType,
         direct::DirectUserIdentifier,
@@ -25,7 +25,9 @@ use ruma::{
             message::RoomMessageEventContent,
         },
     },
-    mxc_uri, owned_room_alias_id, room_id, room_version_id, serde::Raw, user_id,
+    int, mxc_uri, owned_room_alias_id, room_id, room_version_id,
+    serde::Raw,
+    user_id,
 };
 use serde_json::json;
 use stream_assert::assert_pending;
@@ -75,9 +77,12 @@ async fn test_banned_member_has_no_profile() {
         .sync_room(
             &client,
             JoinedRoomBuilder::new(room_id)
-                .add_state_event(f().sender(banned).member(banned).display_name("Spammer").avatar_url(
-                    mxc_uri!("mxc://localhost/spammer"),
-                ))
+                .add_state_event(
+                    f().sender(banned)
+                        .member(banned)
+                        .display_name("Spammer")
+                        .avatar_url(mxc_uri!("mxc://localhost/spammer")),
+                )
                 .add_state_event(f().sender(admin).member(admin).display_name("Admin")),
         )
         .await;
@@ -138,13 +143,14 @@ async fn test_member_list_filters_sorts_and_paginates() {
                 .add_state_event(f().sender(admin).member(admin).display_name("Zoe the admin"))
                 .add_state_event(f().sender(alice).member(alice).display_name("alice"))
                 .add_state_event(f().sender(bob).member(bob).display_name("Bob"))
-                .add_state_event(f().sender(admin).member(carol).invited(carol).display_name(
-                    "Carol",
-                ))
+                .add_state_event(
+                    f().sender(admin).member(carol).invited(carol).display_name("Carol"),
+                )
                 .add_state_event(f().sender(admin).member(dave).banned(dave))
-                .add_state_event(f().sender(admin).power_levels(
-                    &mut BTreeMap::from([(admin.to_owned(), int!(100))]),
-                )),
+                .add_state_event(
+                    f().sender(admin)
+                        .power_levels(&mut BTreeMap::from([(admin.to_owned(), int!(100))])),
+                ),
         )
         .await;
 
@@ -156,13 +162,8 @@ async fn test_member_list_filters_sorts_and_paginates() {
     );
 
     // Filtered by membership.
-    let joined = room
-        .member_list()
-        .no_sync()
-        .memberships(RoomMemberships::JOIN)
-        .all()
-        .await
-        .unwrap();
+    let joined =
+        room.member_list().no_sync().memberships(RoomMemberships::JOIN).all().await.unwrap();
     assert_eq!(
         joined.iter().map(|member| member.name()).collect::<Vec<_>>(),
         vec!["alice", "Bob", "Zoe the admin"]
@@ -185,15 +186,9 @@ async fn test_member_list_filters_sorts_and_paginates() {
 
     // Searching matches the display name or the user ID, case-insensitively.
     let searched = room.member_list().no_sync().search("BO").all().await.unwrap();
-    assert_eq!(
-        searched.iter().map(|member| member.name()).collect::<Vec<_>>(),
-        vec!["Bob"]
-    );
+    assert_eq!(searched.iter().map(|member| member.name()).collect::<Vec<_>>(), vec!["Bob"]);
     let searched = room.member_list().no_sync().search("@carol").all().await.unwrap();
-    assert_eq!(
-        searched.iter().map(|member| member.name()).collect::<Vec<_>>(),
-        vec!["Carol"]
-    );
+    assert_eq!(searched.iter().map(|member| member.name()).collect::<Vec<_>>(), vec!["Carol"]);
     // An empty search term is not a filter.
     assert_eq!(room.member_list().no_sync().search("   ").count().await.unwrap(), 5);
 
@@ -328,8 +323,9 @@ async fn test_get_members_does_not_overwrite_newer_sync_state() {
     server
         .sync_room(
             &client,
-            JoinedRoomBuilder::new(room_id)
-                .add_state_event(f().sender(alice).member(alice).membership(MembershipState::Leave)),
+            JoinedRoomBuilder::new(room_id).add_state_event(
+                f().sender(alice).member(alice).membership(MembershipState::Leave),
+            ),
         )
         .await;
 

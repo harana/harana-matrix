@@ -22,9 +22,7 @@ use matrix_sdk::{
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
     RoomMembersUpdate as SdkRoomMembersUpdate, RoomMemberships, RoomState,
     SuccessorRoom as SdkSuccessorRoom,
-    deserialized_responses::{
-        RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent,
-    },
+    deserialized_responses::{RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent},
     encryption::LocalTrust,
     room::{
         Room as SdkRoom, RoomMemberRole, RoomMemberSortOrder as SdkRoomMemberSortOrder,
@@ -1661,9 +1659,9 @@ impl From<SdkRoomMembersUpdate> for RoomMemberUpdate {
     fn from(value: SdkRoomMembersUpdate) -> Self {
         match value {
             SdkRoomMembersUpdate::FullReload => Self::FullReload,
-            SdkRoomMembersUpdate::Partial(user_ids) => Self::Partial {
-                user_ids: user_ids.into_iter().map(String::from).collect(),
-            },
+            SdkRoomMembersUpdate::Partial(user_ids) => {
+                Self::Partial { user_ids: user_ids.into_iter().map(String::from).collect() }
+            }
         }
     }
 }

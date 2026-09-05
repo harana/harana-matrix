@@ -92,12 +92,9 @@ async fn test_room_preview_local_first_answers_from_local_data() {
     let room_id = room_id!("!room:localhost");
 
     let mut sync_builder = SyncResponseBuilder::new();
-    sync_builder.add_invited_room(
-        InvitedRoomBuilder::new(room_id)
-            .add_state_event(EventFactory::new().sender(user_id!("@admin:localhost")).room_name(
-                "Local name",
-            )),
-    );
+    sync_builder.add_invited_room(InvitedRoomBuilder::new(room_id).add_state_event(
+        EventFactory::new().sender(user_id!("@admin:localhost")).room_name("Local name"),
+    ));
 
     mock_sync(&server, sync_builder.build_json_sync_response(), None).await;
     client.sync_once(SyncSettings::default()).await.unwrap();

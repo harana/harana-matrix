@@ -89,8 +89,7 @@ mod tests {
     use ruma::{
         EventEncryptionAlgorithm, MilliSecondsSinceUnixEpoch, event_id,
         events::{
-            AnyStrippedStateEvent, AnySyncStateEvent,
-            room::encryption::RoomEncryptionEventContent,
+            AnyStrippedStateEvent, AnySyncStateEvent, room::encryption::RoomEncryptionEventContent,
         },
         room_id,
         serde::Raw,

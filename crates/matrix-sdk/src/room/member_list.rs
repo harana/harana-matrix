@@ -18,7 +18,7 @@
 //!
 //! [`Room::member_list`]: crate::Room::member_list
 
-use matrix_sdk_base::{RoomMemberships, RoomMembersUpdate};
+use matrix_sdk_base::{RoomMembersUpdate, RoomMemberships};
 use ruma::events::room::power_levels::UserPowerLevel;
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 
@@ -174,9 +174,7 @@ impl RoomMemberListQuery {
             .into_iter()
             .filter(|member| {
                 self.search.as_ref().is_none_or(|term| matches_search(member, term))
-                    && self
-                        .min_power_level
-                        .is_none_or(|level| power_level_at_least(member, level))
+                    && self.min_power_level.is_none_or(|level| power_level_at_least(member, level))
             })
             .collect())
     }
@@ -263,10 +261,7 @@ fn sort_members(members: &mut [RoomMember], sort: RoomMemberSortOrder) {
 }
 
 fn compare_by_name(a: &RoomMember, b: &RoomMember) -> std::cmp::Ordering {
-    a.name()
-        .to_lowercase()
-        .cmp(&b.name().to_lowercase())
-        .then_with(|| a.user_id().cmp(b.user_id()))
+    a.name().to_lowercase().cmp(&b.name().to_lowercase()).then_with(|| a.user_id().cmp(b.user_id()))
 }
 
 fn compare_power_levels(a: UserPowerLevel, b: UserPowerLevel) -> std::cmp::Ordering {

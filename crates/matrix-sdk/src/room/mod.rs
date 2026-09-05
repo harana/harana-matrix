@@ -195,10 +195,10 @@ use crate::{
 pub mod edit;
 pub mod futures;
 pub mod identity_status_changes;
-mod member_list;
 /// Contains code related to requests to join a room.
 pub mod knock_requests;
 mod member;
+mod member_list;
 mod messages;
 pub mod power_levels;
 pub mod reply;
@@ -1068,10 +1068,7 @@ impl Room {
         };
 
         self.client
-            .join_room_by_id_or_alias(
-                (*successor_room.room_id).into(),
-                &successor_room.via,
-            )
+            .join_room_by_id_or_alias((*successor_room.room_id).into(), &successor_room.via)
             .await
             .map(Some)
     }

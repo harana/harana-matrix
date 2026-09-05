@@ -66,9 +66,11 @@ impl Room {
         // room are the ones most likely to have followed the tombstone, so their
         // servers come next.
         let via = via_servers(
-            info.base_info.tombstone_sender.as_deref().into_iter().chain(
-                info.heroes().iter().map(|hero| hero.user_id.as_ref()),
-            ),
+            info.base_info
+                .tombstone_sender
+                .as_deref()
+                .into_iter()
+                .chain(info.heroes().iter().map(|hero| hero.user_id.as_ref())),
         );
 
         Some(SuccessorRoom {

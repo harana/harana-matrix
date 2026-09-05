@@ -1132,9 +1132,8 @@ async fn test_encryption_state_of_an_invited_room_comes_from_the_stripped_state(
     let room = mock
         .sync_room(
             &client,
-            InvitedRoomBuilder::new(room_id).add_state_event(
-                EventFactory::new().sender(user).room(room_id).room_encryption(),
-            ),
+            InvitedRoomBuilder::new(room_id)
+                .add_state_event(EventFactory::new().sender(user).room(room_id).room_encryption()),
         )
         .await;
 
