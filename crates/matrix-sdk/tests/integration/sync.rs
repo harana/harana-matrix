@@ -1,4 +1,10 @@
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use assert_matches2::assert_matches;
 use futures_util::StreamExt as _;
@@ -15,7 +21,7 @@ use matrix_sdk_test::{
 use ruma::{
     EventEncryptionAlgorithm, MilliSecondsSinceUnixEpoch, RoomVersionId, event_id,
     events::{
-        AnyStrippedStateEvent, AnySyncStateEvent, SyncStateEvent,
+        AnyStrippedStateEvent, AnySyncStateEvent, AnySyncTimelineEvent, SyncStateEvent,
         room::{
             avatar::RoomAvatarEventContent,
             canonical_alias::RoomCanonicalAliasEventContent,
@@ -2720,4 +2726,61 @@ async fn test_sync_once_is_rejected_while_a_sync_loop_is_running() {
     // Once the sync loop is dropped, the sync session is free again.
     drop(sync_stream);
     client.sync_once(SyncSettings::default()).await.unwrap();
+}
+
+#[async_test]
+async fn test_state_event_handlers_are_called_once_per_event() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let room_id = room_id!("!r0:example.org");
+    let sender = user_id!("@example:localhost");
+
+    let state_calls = Arc::new(AtomicUsize::new(0));
+    let timeline_calls = Arc::new(AtomicUsize::new(0));
+
+    client.add_event_handler({
+        let state_calls = state_calls.clone();
+        move |_: SyncStateEvent<RoomNameEventContent>| {
+            let state_calls = state_calls.clone();
+            async move {
+                state_calls.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    });
+    client.add_event_handler({
+        let timeline_calls = timeline_calls.clone();
+        move |_: Raw<AnySyncTimelineEvent>| {
+            let timeline_calls = timeline_calls.clone();
+            async move {
+                timeline_calls.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    });
+
+    // A `state_after` sync carries the full list of state changes since the
+    // previous sync, so a state event that is part of the timeline shows up in both
+    // `state_after` and `timeline`.
+    let f = EventFactory::new().room(room_id).sender(sender);
+    let make_name_event = || {
+        f.room_name("Room name").event_id(event_id!("$name_event:example.org"))
+    };
+
+    server
+        .mock_sync()
+        .ok_and_run(&client, |builder| {
+            builder.add_joined_room(
+                JoinedRoomBuilder::new(room_id)
+                    .use_state_after()
+                    .add_state_event(make_name_event().into_raw_sync_state())
+                    .add_timeline_event(make_name_event().into_raw_sync()),
+            );
+        })
+        .await;
+
+    // The state event handler is called exactly once, even though the event was
+    // received in both places…
+    assert_eq!(state_calls.load(Ordering::SeqCst), 1);
+    // … and the timeline handler still sees the timeline event.
+    assert_eq!(timeline_calls.load(Ordering::SeqCst), 1);
 }

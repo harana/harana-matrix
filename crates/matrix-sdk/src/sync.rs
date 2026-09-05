@@ -218,8 +218,9 @@ impl Client {
 
             let room = Some(&room);
             self.handle_sync_events(HandlerKind::RoomAccountData, room, account_data).await?;
-            self.handle_sync_state_events(room, state).await?;
-            self.handle_sync_timeline_events(room, &timeline.events).await?;
+            let dispatched_state_events = self.handle_sync_state_events(room, state).await?;
+            self.handle_sync_timeline_events(room, &timeline.events, &dispatched_state_events)
+                .await?;
             // Handle ephemeral events after timeline, read receipts in here
             // could refer to timeline events from the same response.
             self.handle_sync_events(HandlerKind::EphemeralRoomData, room, ephemeral).await?;
@@ -240,8 +241,9 @@ impl Client {
 
             let room = Some(&room);
             self.handle_sync_events(HandlerKind::RoomAccountData, room, account_data).await?;
-            self.handle_sync_state_events(room, state).await?;
-            self.handle_sync_timeline_events(room, &timeline.events).await?;
+            let dispatched_state_events = self.handle_sync_state_events(room, state).await?;
+            self.handle_sync_timeline_events(room, &timeline.events, &dispatched_state_events)
+                .await?;
         }
 
         for (room_id, room_info) in &rooms.invited {
