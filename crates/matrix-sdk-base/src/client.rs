@@ -1449,6 +1449,152 @@ mod tests {
     #[cfg(feature = "unstable-msc4426")]
     use crate::{RoomMemberships, store::StateChanges};
 
+    #[async_test]
+    async fn test_receive_sent_state_event_makes_it_readable_right_away() {
+        // A send only returns the event ID the server assigned to the event; without
+        // this, reading the state we just wrote gives the previous value until the
+        // sync echoes it back.
+        let client = logged_in_base_client(None).await;
+        let room_id = room_id!("!r:e.uk");
+
+        let mut sync_builder = SyncResponseBuilder::new();
+        let response = sync_builder
+            .add_joined_room(matrix_sdk_test::JoinedRoomBuilder::new(room_id))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        let room = client.get_room(room_id).unwrap();
+        assert_eq!(room.topic(), None);
+
+        client
+            .receive_sent_state_event(
+                room_id,
+                Raw::from_json_string(
+                    json!({
+                        "type": "m.room.topic",
+                        "state_key": "",
+                        "content": { "topic": "the new topic" },
+                        "event_id": "$topic",
+                        "sender": "@u:e.uk",
+                        "origin_server_ts": 42,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(room.topic().as_deref(), Some("the new topic"));
+
+        let stored = client
+            .state_store()
+            .get_state_event(room_id, StateEventType::RoomTopic, "")
+            .await
+            .unwrap();
+        assert!(stored.is_some(), "the topic event we just sent is in the store");
+    }
+
+    #[async_test]
+    async fn test_receive_sent_state_event_leaves_member_events_to_the_sync() {
+        // Member events also feed the ambiguity cache and the profile store, which
+        // this shortcut doesn't maintain.
+        let client = logged_in_base_client(None).await;
+        let room_id = room_id!("!r:e.uk");
+
+        let mut sync_builder = SyncResponseBuilder::new();
+        let response = sync_builder
+            .add_joined_room(matrix_sdk_test::JoinedRoomBuilder::new(room_id))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        client
+            .receive_sent_state_event(
+                room_id,
+                Raw::from_json_string(
+                    json!({
+                        "type": "m.room.member",
+                        "state_key": "@u:e.uk",
+                        "content": { "membership": "join", "displayname": "Alice" },
+                        "event_id": "$member",
+                        "sender": "@u:e.uk",
+                        "origin_server_ts": 42,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let stored = client
+            .state_store()
+            .get_state_event(room_id, StateEventType::RoomMember, "@u:e.uk")
+            .await
+            .unwrap();
+        assert!(stored.is_none(), "member events are left to the sync");
+    }
+
+    #[async_test]
+    async fn test_receive_sent_state_event_for_an_unknown_room_is_a_no_op() {
+        let client = logged_in_base_client(None).await;
+
+        client
+            .receive_sent_state_event(
+                room_id!("!nowhere:e.uk"),
+                Raw::from_json_string(
+                    json!({
+                        "type": "m.room.topic",
+                        "state_key": "",
+                        "content": { "topic": "the new topic" },
+                        "event_id": "$topic",
+                        "sender": "@u:e.uk",
+                        "origin_server_ts": 42,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+    }
+
+    #[async_test]
+    async fn test_receive_sent_room_account_data_applies_the_unread_marker() {
+        // Marking a room as unread takes effect right away, instead of only once the
+        // server has been told and has told us back.
+        let client = logged_in_base_client(None).await;
+        let room_id = room_id!("!r:e.uk");
+
+        let mut sync_builder = SyncResponseBuilder::new();
+        let response = sync_builder
+            .add_joined_room(matrix_sdk_test::JoinedRoomBuilder::new(room_id))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        let room = client.get_room(room_id).unwrap();
+        assert!(!room.is_marked_unread());
+
+        for unread in [true, false] {
+            client
+                .receive_sent_room_account_data(
+                    room_id,
+                    Raw::from_json_string(
+                        json!({
+                            "type": "m.marked_unread",
+                            "content": { "unread": unread },
+                        })
+                        .to_string(),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(room.is_marked_unread(), unread);
+        }
+    }
+
     #[test]
     fn test_requested_required_states() {
         let room_id_0 = room_id!("!r0");

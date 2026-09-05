@@ -2090,3 +2090,100 @@ async fn fetch_replied_to_event<P: RoomDataProvider>(
 
     Ok(res)
 }
+
+#[cfg(test)]
+mod tests {
+    use assert_matches2::assert_let;
+    use ruma::{
+        TransactionId,
+        events::{
+            AnyMessageLikeEventContent, AnySyncTimelineEvent, reaction::ReactionEventContent,
+            relation::Annotation, room::message::RoomMessageEventContent,
+        },
+        owned_event_id, user_id,
+    };
+
+    use super::{TimelineSettings, local_echo_as_sync_event};
+
+    #[test]
+    fn test_local_echo_as_sync_event() {
+        // The filter takes a whole event, so a local echo's content is wrapped into
+        // the event it is going to become once sent.
+        let sender = user_id!("@alice:example.org");
+        let txn_id = TransactionId::new();
+        let content =
+            AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hello"));
+
+        let event = local_echo_as_sync_event(&content, sender, &txn_id)
+            .expect("a room message is a known event type");
+
+        assert_eq!(event.sender(), sender);
+        assert_let!(AnySyncTimelineEvent::MessageLike(event) = event);
+        assert_let!(
+            Some(AnyMessageLikeEventContent::RoomMessage(content)) = event.original_content()
+        );
+        assert_eq!(content.body(), "hello");
+    }
+
+    #[test]
+    fn test_local_echo_as_sync_event_survives_a_colon_in_the_transaction_id() {
+        // A colon would make the placeholder event ID be validated as a
+        // room-version-1 identifier, and fail.
+        let content =
+            AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hello"));
+
+        assert!(
+            local_echo_as_sync_event(
+                &content,
+                user_id!("@alice:example.org"),
+                "has:a:colon".into(),
+            )
+            .is_some()
+        );
+    }
+
+    #[test]
+    fn test_the_default_filter_classifies_local_echoes() {
+        // What the timeline actually asks: would this echo become an item of its
+        // own? A message would; a reaction is an aggregation, and is applied to the
+        // item it targets rather than added as one.
+        let settings = TimelineSettings::default();
+        let rules = ruma::room_version_rules::RoomVersionRules::V1;
+        let sender = user_id!("@alice:example.org");
+        let txn_id = TransactionId::new();
+
+        assert!(settings.allows_local_event(
+            &AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hi")),
+            sender,
+            &txn_id,
+            &rules,
+        ));
+
+        assert!(!settings.allows_local_event(
+            &AnyMessageLikeEventContent::Reaction(ReactionEventContent::new(Annotation::new(
+                owned_event_id!("$target"),
+                "👍".to_owned(),
+            ))),
+            sender,
+            &txn_id,
+            &rules,
+        ));
+    }
+
+    #[test]
+    fn test_a_custom_filter_applies_to_local_echoes() {
+        // A timeline that hides an event type must not start showing it just because
+        // the event hasn't been sent yet.
+        let settings = TimelineSettings {
+            event_filter: std::sync::Arc::new(|_, _| false),
+            ..Default::default()
+        };
+
+        assert!(!settings.allows_local_event(
+            &AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hi")),
+            user_id!("@alice:example.org"),
+            &TransactionId::new(),
+            &ruma::room_version_rules::RoomVersionRules::V1,
+        ));
+    }
+}

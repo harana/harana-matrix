@@ -747,10 +747,19 @@ impl fmt::Debug for QueuedRequest {
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
 
-    use ruma::{events::room::MediaSource, owned_mxc_uri};
+    use ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType,
+        events::{receipt::ReceiptThread, room::MediaSource},
+        owned_event_id, owned_mxc_uri,
+    };
     use serde_json::json;
 
-    use super::{DependentQueuedRequestKind, QueuedRequestKind, SentMediaInfo};
+    use super::{
+        ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
+        MilliSecondsSinceUnixEpoch, QueuedRequestKind, ReplyThreading,
+        RoomMessageEventContentWithoutRelation, SentMediaInfo, SentMediaItem, SentRequestKey,
+        SupersedesKey,
+    };
 
     #[test]
     fn test_deserialize_legacy_redact_event() {
@@ -833,6 +842,185 @@ mod tests {
 
         assert_let!(QueuedRequestKind::MediaUpload { uploaded, .. } = deserialized);
         assert_eq!(uploaded.len(), 1);
+    }
+
+    fn media_item(url: &str) -> SentMediaItem {
+        SentMediaItem {
+            file: MediaSource::Plain(<&ruma::MxcUri>::from(url).to_owned()),
+            thumbnail: None,
+        }
+    }
+
+    #[test]
+    fn test_sent_media_info_describes_the_last_upload() {
+        // The request's own media is the last entry; the ones before it were uploaded
+        // by the earlier requests of the same gallery transaction.
+        let info = SentMediaInfo::new(
+            vec![media_item("mxc://sdk.rs/first")],
+            MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/second")),
+            Some(MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/thumbnail"))),
+        );
+
+        assert_eq!(info.medias.len(), 2);
+
+        assert_let!(MediaSource::Plain(url) = &info.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/second"));
+        assert!(info.last().thumbnail.is_some());
+
+        let previous = info.clone().into_previous();
+        assert_eq!(previous.len(), 1);
+        assert_let!(MediaSource::Plain(url) = &previous[0].file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/first"));
+
+        let last = info.into_last();
+        assert_let!(MediaSource::Plain(url) = &last.file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/second"));
+    }
+
+    #[test]
+    fn test_sent_media_info_from_a_single_item() {
+        let info = SentMediaInfo::from(media_item("mxc://sdk.rs/only"));
+
+        assert_eq!(info.medias.len(), 1);
+        assert!(info.clone().into_previous().is_empty());
+        assert_let!(MediaSource::Plain(url) = &info.into_last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/only"));
+    }
+
+    #[test]
+    fn test_only_events_are_order_sensitive() {
+        // A message that couldn't be sent holds back the ones the user typed after
+        // it; what the client says about the room on the user's behalf doesn't
+        // belong to that ordering.
+        let event =
+            QueuedRequestKind::Redaction { redacts: owned_event_id!("$target"), reason: None };
+        assert!(event.is_order_sensitive());
+
+        for kind in [
+            QueuedRequestKind::ReadReceipt {
+                receipt_type: ReceiptType::Read,
+                thread: ReceiptThread::Unthreaded,
+                event_id: owned_event_id!("$read"),
+            },
+            QueuedRequestKind::ReadMarkers {
+                fully_read: Some(owned_event_id!("$read")),
+                read: None,
+                read_private: None,
+            },
+            QueuedRequestKind::UnreadMarker { unread: true },
+        ] {
+            assert!(!kind.is_order_sensitive(), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn test_superseding_receipts() {
+        let read = |thread: ReceiptThread, event_id: &str| QueuedRequestKind::ReadReceipt {
+            receipt_type: ReceiptType::Read,
+            thread,
+            event_id: ruma::EventId::parse(event_id).unwrap(),
+        };
+
+        // A newer receipt of the same type, in the same thread, makes the older one
+        // pointless, wherever each of them points.
+        assert_eq!(
+            read(ReceiptThread::Unthreaded, "$first").supersedes_key(),
+            read(ReceiptThread::Unthreaded, "$second").supersedes_key(),
+        );
+
+        // A receipt in another thread stands on its own...
+        assert_ne!(
+            read(ReceiptThread::Unthreaded, "$first").supersedes_key(),
+            read(ReceiptThread::Main, "$first").supersedes_key(),
+        );
+
+        // ...and so does one of another type.
+        assert_ne!(
+            read(ReceiptThread::Unthreaded, "$first").supersedes_key(),
+            QueuedRequestKind::ReadReceipt {
+                receipt_type: ReceiptType::ReadPrivate,
+                thread: ReceiptThread::Unthreaded,
+                event_id: owned_event_id!("$first"),
+            }
+            .supersedes_key(),
+        );
+
+        // The unread marker and the batch of read markers each have one key of their
+        // own, whatever they carry.
+        assert_eq!(
+            QueuedRequestKind::UnreadMarker { unread: true }.supersedes_key(),
+            Some(SupersedesKey::UnreadMarker)
+        );
+        assert_eq!(
+            QueuedRequestKind::UnreadMarker { unread: false }.supersedes_key(),
+            Some(SupersedesKey::UnreadMarker)
+        );
+        assert_eq!(
+            QueuedRequestKind::ReadMarkers {
+                fully_read: None,
+                read: Some(owned_event_id!("$read")),
+                read_private: None,
+            }
+            .supersedes_key(),
+            Some(SupersedesKey::ReadMarkers)
+        );
+
+        // An event never supersedes another: they all have to be sent.
+        assert_eq!(
+            QueuedRequestKind::Redaction { redacts: owned_event_id!("$target"), reason: None }
+                .supersedes_key(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_a_queued_reply_is_an_event_of_its_own() {
+        // Unlike an edit or a reaction, a reply becomes its own timeline item.
+        let reply = DependentQueuedRequest {
+            kind: DependentQueuedRequestKind::ReplyEvent {
+                content: Box::new(RoomMessageEventContentWithoutRelation::text_plain("reply")),
+                threading: ReplyThreading::MaybeThreaded,
+            },
+            parent_transaction_id: "parent".into(),
+            own_transaction_id: ChildTransactionId::new(),
+            parent_key: None,
+            created_at: MilliSecondsSinceUnixEpoch::now(),
+        };
+        assert!(reply.is_own_event());
+
+        let reaction = DependentQueuedRequest {
+            kind: DependentQueuedRequestKind::ReactEvent { key: "👍".to_owned() },
+            ..reply
+        };
+        assert!(!reaction.is_own_event());
+    }
+
+    #[test]
+    fn test_reply_threading_round_trip() {
+        for threading in [
+            ReplyThreading::Threaded { is_reply: true },
+            ReplyThreading::Threaded { is_reply: false },
+            ReplyThreading::MaybeThreaded,
+            ReplyThreading::Unthreaded,
+        ] {
+            let serialized = serde_json::to_string(&threading).unwrap();
+            let deserialized: ReplyThreading = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(format!("{threading:?}"), format!("{deserialized:?}"), "{serialized}");
+        }
+    }
+
+    #[test]
+    fn test_nothing_is_not_something_to_depend_on() {
+        // A read receipt succeeds without producing anything another request could
+        // hang off.
+        assert!(SentRequestKey::Nothing.clone().into_event_id().is_none());
+        assert!(SentRequestKey::Nothing.clone().into_media().is_none());
+
+        // It is stored as a dependent request's parent key, so it has to survive a
+        // round trip through the store.
+        let serialized = serde_json::to_string(&SentRequestKey::Nothing).unwrap();
+        let deserialized: SentRequestKey = serde_json::from_str(&serialized).unwrap();
+        assert_matches!(deserialized, SentRequestKey::Nothing);
     }
 
     #[test]

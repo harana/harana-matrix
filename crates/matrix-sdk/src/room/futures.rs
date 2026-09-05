@@ -648,10 +648,45 @@ mod tests {
     };
     use serde_json::json;
 
-    use super::is_verification_event;
+    use std::collections::BTreeMap;
+
+    use matrix_sdk_base::crypto::{OlmError, SessionRecipientCollectionError};
+    use ruma::{device_id, user_id};
+
+    use super::{is_unsigned_device_problem, is_verification_event};
 
     fn raw(value: serde_json::Value) -> Raw<AnyMessageLikeEventContent> {
         Raw::from_json_string(value.to_string()).unwrap()
+    }
+
+    #[test]
+    fn test_is_unsigned_device_problem() {
+        // The one failure that a verification event is the answer to: a verified user
+        // has a device their own identity hasn't signed.
+        let unsigned_device =
+            crate::Error::OlmError(Box::new(OlmError::SessionRecipientCollectionError(
+                SessionRecipientCollectionError::VerifiedUserHasUnsignedDevice(BTreeMap::from([(
+                    user_id!("@alice:example.org").to_owned(),
+                    vec![device_id!("UNSIGNED").to_owned()],
+                )])),
+            )));
+        assert!(is_unsigned_device_problem(&unsigned_device));
+
+        // The other collection errors are not: sending anyway wouldn't resolve them.
+        for error in [
+            SessionRecipientCollectionError::VerifiedUserChangedIdentity(vec![
+                user_id!("@alice:example.org").to_owned(),
+            ]),
+            SessionRecipientCollectionError::CrossSigningNotSetup,
+            SessionRecipientCollectionError::SendingFromUnverifiedDevice,
+        ] {
+            let error =
+                crate::Error::OlmError(Box::new(OlmError::SessionRecipientCollectionError(error)));
+            assert!(!is_unsigned_device_problem(&error), "{error:?}");
+        }
+
+        // Neither is anything that isn't about collecting recipients at all.
+        assert!(!is_unsigned_device_problem(&crate::Error::AuthenticationRequired));
     }
 
     #[test]

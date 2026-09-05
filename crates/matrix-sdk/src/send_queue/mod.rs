@@ -3837,6 +3837,56 @@ mod tests {
     use super::canonicalize_dependent_requests;
     use crate::{client::WeakClient, test_utils::logged_in_client};
 
+    #[async_test]
+    #[cfg(feature = "e2e-encryption")]
+    async fn test_which_wedged_requests_verification_can_unblock() {
+        use std::collections::BTreeMap;
+
+        use matrix_sdk_base::store::QueueWedgeError;
+        use ruma::{device_id, user_id};
+
+        let client = logged_in_client(None).await;
+        let send_queue = client.send_queue();
+
+        // A device we know nothing about can't be the one blocking a send anymore,
+        // and neither can a user with no identity to be in violation of.
+        assert!(
+            send_queue
+                .is_verification_problem_resolved(&QueueWedgeError::InsecureDevices {
+                    user_device_map: BTreeMap::from([(
+                        user_id!("@alice:example.org").to_owned(),
+                        vec![device_id!("GONE").to_owned()],
+                    )]),
+                })
+                .await
+        );
+        assert!(
+            send_queue
+                .is_verification_problem_resolved(&QueueWedgeError::IdentityViolations {
+                    users: vec![user_id!("@alice:example.org").to_owned()],
+                })
+                .await
+        );
+
+        // Our own session isn't verified here, so a send that needed it to be stays
+        // blocked.
+        assert!(
+            !send_queue
+                .is_verification_problem_resolved(&QueueWedgeError::CrossVerificationRequired)
+                .await
+        );
+
+        // The errors that verification has nothing to do with never resolve on their
+        // own, so those requests are left alone.
+        for error in [
+            QueueWedgeError::MissingMediaContent,
+            QueueWedgeError::InvalidMimeType { mime_type: "definitely/not".to_owned() },
+            QueueWedgeError::GenericApiError { msg: "nope".to_owned() },
+        ] {
+            assert!(!send_queue.is_verification_problem_resolved(&error).await, "{error:?}");
+        }
+    }
+
     #[test]
     fn test_canonicalize_dependent_events_created_at() {
         // Test to ensure the created_at field is being serialized and retrieved
@@ -4104,5 +4154,71 @@ mod tests {
         assert_eq!(res.len(), 2);
         assert_eq!(res[0].own_transaction_id, edit_id);
         assert_eq!(res[1].own_transaction_id, react_id);
+    }
+
+    #[test]
+    fn test_canonicalize_keeps_every_reply() {
+        use matrix_sdk_base::store::ReplyThreading;
+        use ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+
+        // Unlike an edit, which only the last one of matters, every reply to an event
+        // is its own message and has to be sent.
+        let txn = TransactionId::new();
+
+        let reply = |body: &str| DependentQueuedRequest {
+            own_transaction_id: ChildTransactionId::new(),
+            kind: DependentQueuedRequestKind::ReplyEvent {
+                content: Box::new(RoomMessageEventContentWithoutRelation::text_plain(body)),
+                threading: ReplyThreading::MaybeThreaded,
+            },
+            parent_transaction_id: txn.clone(),
+            parent_key: None,
+            created_at: MilliSecondsSinceUnixEpoch::now(),
+        };
+
+        let first = reply("first");
+        let second = reply("second");
+        let (first_id, second_id) =
+            (first.own_transaction_id.clone(), second.own_transaction_id.clone());
+
+        let res = canonicalize_dependent_requests(&[first, second]);
+
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0].own_transaction_id, first_id);
+        assert_eq!(res[1].own_transaction_id, second_id);
+    }
+
+    #[test]
+    fn test_canonicalize_drops_replies_to_a_redacted_event() {
+        use matrix_sdk_base::store::ReplyThreading;
+        use ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+
+        // The parent is going away, so nothing that depends on it is worth sending.
+        let txn = TransactionId::new();
+
+        let redact = DependentQueuedRequest {
+            own_transaction_id: ChildTransactionId::new(),
+            kind: DependentQueuedRequestKind::RedactEventWithReason { reason: None },
+            parent_transaction_id: txn.clone(),
+            parent_key: None,
+            created_at: MilliSecondsSinceUnixEpoch::now(),
+        };
+        let redact_id = redact.own_transaction_id.clone();
+
+        let reply = DependentQueuedRequest {
+            own_transaction_id: ChildTransactionId::new(),
+            kind: DependentQueuedRequestKind::ReplyEvent {
+                content: Box::new(RoomMessageEventContentWithoutRelation::text_plain("reply")),
+                threading: ReplyThreading::MaybeThreaded,
+            },
+            parent_transaction_id: txn,
+            parent_key: None,
+            created_at: MilliSecondsSinceUnixEpoch::now(),
+        };
+
+        let res = canonicalize_dependent_requests(&[redact, reply]);
+
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].own_transaction_id, redact_id);
     }
 }
