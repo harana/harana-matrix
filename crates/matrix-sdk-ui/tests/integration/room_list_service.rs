@@ -2477,30 +2477,9 @@ async fn test_room_subscription() -> Result<(), Error> {
                     ],
                     "timeline_limit": 20,
                 },
-                room_id_2: {
-                    "required_state": [
-                        ["m.room.name", ""],
-                        ["m.room.encryption", ""],
-                        ["m.room.member", "$LAZY"],
-                        ["m.room.member", "$ME"],
-                        ["m.room.topic", ""],
-                        ["m.room.avatar", ""],
-                        ["m.room.canonical_alias", ""],
-                        ["m.room.power_levels", ""],
-                        ["org.matrix.msc3401.call.member", "*"],
-                        ["m.room.join_rules", ""],
-                        ["m.room.tombstone", ""],
-                        ["m.room.create", ""],
-                        ["m.room.history_visibility", ""],
-                        ["io.element.functional_members", ""],
-                        ["m.space.parent", "*"],
-                        ["m.space.child", "*"],
-                        ["org.matrix.msc3672.beacon_info", "*"],
-                        ["org.matrix.msc1763.retention", ""],
-                        ["m.room.pinned_events", ""],
-                    ],
-                    "timeline_limit": 20,
-                },
+                // `room_id_2` is not repeated: the server acknowledged that
+                // subscription with the previous request, and room subscriptions are
+                // sticky.
             },
             "extensions": {
                 "account_data": { "enabled": true },
@@ -2611,32 +2590,9 @@ async fn test_remove_and_reset_room_subscriptions() -> Result<(), Error> {
                     "timeline_limit": 1,
                 },
             },
-            "room_subscriptions": {
-                room_id_1: {
-                    "required_state": [
-                        ["m.room.name", ""],
-                        ["m.room.encryption", ""],
-                        ["m.room.member", "$LAZY"],
-                        ["m.room.member", "$ME"],
-                        ["m.room.topic", ""],
-                        ["m.room.avatar", ""],
-                        ["m.room.canonical_alias", ""],
-                        ["m.room.power_levels", ""],
-                        ["org.matrix.msc3401.call.member", "*"],
-                        ["m.room.join_rules", ""],
-                        ["m.room.tombstone", ""],
-                        ["m.room.create", ""],
-                        ["m.room.history_visibility", ""],
-                        ["io.element.functional_members", ""],
-                        ["m.space.parent", "*"],
-                        ["m.space.child", "*"],
-                        ["org.matrix.msc3672.beacon_info", "*"],
-                        ["org.matrix.msc1763.retention", ""],
-                        ["m.room.pinned_events", ""],
-                    ],
-                    "timeline_limit": 20,
-                },
-            },
+            // No `room_subscriptions` at all: the server already knows about
+            // `room_id_1`, and room subscriptions are sticky, so there's nothing new
+            // to send.
             "extensions": {
                 "account_data": { "enabled": true },
                 "receipts": { "enabled": true, "rooms": [ "*" ] },

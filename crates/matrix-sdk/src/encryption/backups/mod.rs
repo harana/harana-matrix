@@ -756,6 +756,20 @@ impl Backups {
         let olm_machine = self.client.olm_machine().await;
         let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
 
+        // Don't even enter the backup path if no backup is set up for this client:
+        // otherwise every single sync would log that room keys can't be backed up
+        // because there's no backup key, which is the expected state for a client
+        // that never enabled key backups.
+        if !olm_machine.backup_machine().enabled().await {
+            trace!("Not backing up room keys, backups are not enabled");
+            // Still report the steady state, so that anybody waiting on
+            // `Backups::wait_for_steady_state()` when the backup got disabled under its
+            // feet isn't left hanging.
+            self.client.inner.e2ee.backup_state.upload_progress.set(UploadState::Done);
+
+            return Ok(());
+        }
+
         while let Some((request_id, request)) = olm_machine.backup_machine().backup().await? {
             self.send_backup_request(olm_machine, &request_id, request).await?;
         }
