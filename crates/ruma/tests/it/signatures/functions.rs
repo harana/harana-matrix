@@ -19,7 +19,7 @@ fn add_key_to_map(public_key_map: &mut PublicKeyMap, name: &str, pair: &Ed25519K
 }
 
 #[test]
-fn verify_event_check_signatures_for_authorized_user() {
+fn verify_event_signature_for_authorized_user() {
     let keypair = Ed25519KeyPair::from_der(PKCS8_ED25519_DER, "1".to_owned()).unwrap();
 
     let mut signed_event = serde_json::from_str(
