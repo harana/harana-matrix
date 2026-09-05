@@ -812,6 +812,54 @@ impl Aggregations {
     }
 }
 
+/// The ordering key of a remote edit, used to pick the most recent one out of
+/// several edits of the same event.
+///
+/// [MSC2676] orders replacements by `origin_server_ts`, breaking ties on the
+/// lexicographically largest event id. That is the primary ordering here. When
+/// the edit's JSON isn't available (a bundled edit whose raw event we didn't
+/// keep, for instance), we fall back to the position of the event carrying the
+/// edit in the timeline, which reflects the order the server gave us.
+///
+/// A key with a timestamp always sorts above a key without one, so an edit we
+/// can order per the spec wins over one we can only guess at.
+///
+/// [MSC2676]: https://github.com/matrix-org/matrix-spec-proposals/pull/2676
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct RemoteEditOrder {
+    /// The edit's `origin_server_ts` and event id, when its JSON is available.
+    timestamp_and_id: Option<(MilliSecondsSinceUnixEpoch, OwnedEventId)>,
+
+    /// The position of the event carrying the edit in the list of all remote
+    /// events, when it is loaded.
+    position: Option<usize>,
+}
+
+impl RemoteEditOrder {
+    /// Compute the ordering key of a remote edit.
+    ///
+    /// `event_id` is the identifier of the edit event itself; for a bundled
+    /// edit, `bundled_item_owner` names the event that carried it, which is the
+    /// one that has a position in the timeline.
+    fn new(
+        edit: &PendingEdit,
+        event_id: &OwnedEventId,
+        items: &ObservableItemsTransaction<'_>,
+    ) -> Self {
+        let timestamp_and_id = edit.edit_json.as_ref().and_then(|json| {
+            let deserialized = json.deserialize().ok()?;
+            Some((deserialized.origin_server_ts(), deserialized.event_id().to_owned()))
+        });
+
+        // The position of the timeline event owning the edit: either the bundled item
+        // owner if this was a bundled edit, or the edit event itself.
+        let position =
+            items.position_by_event_id(edit.bundled_item_owner.as_ref().unwrap_or(event_id));
+
+        Self { timestamp_and_id, position }
+    }
+}
+
 /// Look at all the edits of a given event, and apply the most recent one, if
 /// found.
 ///
@@ -821,60 +869,52 @@ fn resolve_edits(
     items: &ObservableItemsTransaction<'_>,
     event: &mut Cow<'_, EventTimelineItem>,
 ) -> bool {
-    // A tuple of the best edit, if we have found one and a boolean indicating if
-    // the edit is coming from a local echo. If it's from a local echo, we can't
-    // validate it as we don't have a raw JSON, but this isn't that important as
-    // we're sure we won't send ourselves invalid edits.
-    let mut best_edit: Option<(PendingEdit, bool)> = None;
-    let mut best_edit_pos = None;
+    // An edit we sent ourselves and that hasn't reached the server yet. It is more
+    // recent than anything the server told us about, since the server hasn't seen
+    // it at all. When several of them are pending at once, the last one recorded is
+    // the most recent, so keep overwriting rather than stopping at the first.
+    //
+    // Note this is about *local echoes*, identified by the transaction id they were
+    // created with, and not about who sent the event: an event that merely shares
+    // the logged-in user's id, because it was sent from another device or through
+    // an appservice impersonating them, reaches us from the server like any other
+    // and is ordered with the remote edits below.
+    let mut best_local_edit: Option<PendingEdit> = None;
+
+    // The most recent edit received from the server, and its ordering key.
+    let mut best_remote_edit: Option<(PendingEdit, RemoteEditOrder)> = None;
 
     for a in aggregations {
-        if let AggregationKind::Edit(pending_edit) = &a.kind {
-            match &a.own_id {
-                TimelineEventItemId::TransactionId(_) => {
-                    // A local echo is always the most recent edit: use this one.
-                    best_edit = Some((pending_edit.clone(), true));
-                    break;
-                }
+        let AggregationKind::Edit(pending_edit) = &a.kind else {
+            continue;
+        };
 
-                TimelineEventItemId::EventId(event_id) => {
-                    if let Some(best_edit_pos) = &mut best_edit_pos {
-                        // Find the position of the timeline owning the edit: either the bundled
-                        // item owner if this was a bundled edit, or the edit event itself.
-                        let pos = items.position_by_event_id(
-                            pending_edit.bundled_item_owner.as_ref().unwrap_or(event_id),
-                        );
+        match &a.own_id {
+            TimelineEventItemId::TransactionId(txn_id) => {
+                trace!(?txn_id, "found a local echo of an edit");
+                best_local_edit = Some(pending_edit.clone());
+            }
 
-                        if let Some(pos) = pos {
-                            // If the edit is more recent (higher index) than the previous best
-                            // edit we knew about, use this one.
-                            if pos > *best_edit_pos {
-                                best_edit = Some((pending_edit.clone(), false));
-                                *best_edit_pos = pos;
-                                trace!(?best_edit_pos, edit_id = ?a.own_id, "found better edit");
-                            }
-                        } else {
-                            trace!(edit_id = ?a.own_id, "couldn't find timeline meta for edit event");
+            TimelineEventItemId::EventId(event_id) => {
+                let order = RemoteEditOrder::new(pending_edit, event_id, items);
 
-                            // The edit event isn't in the timeline, so it might be a bundled
-                            // edit. In this case, record it as the best edit if and only if
-                            // there wasn't any other.
-                            if best_edit.is_none() {
-                                best_edit = Some((pending_edit.clone(), false));
-                                trace!(?best_edit_pos, edit_id = ?a.own_id, "found bundled edit");
-                            }
-                        }
-                    } else {
-                        // There wasn't any best edit yet, so record this one as being it, with
-                        // its position.
-                        best_edit = Some((pending_edit.clone(), false));
-                        best_edit_pos = items.position_by_event_id(event_id);
-                        trace!(?best_edit_pos, edit_id = ?a.own_id, "first best edit");
-                    }
+                let is_better = match &best_remote_edit {
+                    Some((_, best_order)) => order > *best_order,
+                    None => true,
+                };
+
+                if is_better {
+                    trace!(edit_id = ?a.own_id, ?order, "found a better edit");
+                    best_remote_edit = Some((pending_edit.clone(), order));
                 }
             }
         }
     }
+
+    let best_edit = match best_local_edit {
+        Some(edit) => Some((edit, true)),
+        None => best_remote_edit.map(|(edit, _)| (edit, false)),
+    };
 
     if let Some((edit, is_local_echo)) = best_edit {
         edit_item(event, edit, is_local_echo)

@@ -283,6 +283,73 @@ async fn test_relations_edit_overrides_pending_edit_msg() {
 }
 
 #[async_test]
+async fn test_chained_edits_resolve_to_the_most_recent_one() {
+    // Several `m.replace` edits of the same event, delivered in an order that
+    // doesn't match the order they were sent in: the timeline must still show the
+    // newest one, per MSC2676's ordering of replacements by `origin_server_ts`.
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe().await;
+
+    let f = &timeline.factory;
+
+    let original_event_id = event_id!("$original");
+    let edit1_event_id = event_id!("$edit1");
+    let edit2_event_id = event_id!("$edit2");
+
+    timeline
+        .handle_live_event(
+            f.text_msg("original").sender(*ALICE).event_id(original_event_id).server_ts(1000),
+        )
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    assert_eq!(item.as_event().unwrap().content().as_message().unwrap().body(), "original");
+
+    let date_divider = assert_next_matches!(stream, VectorDiff::PushFront { value } => value);
+    assert!(date_divider.is_date_divider());
+
+    // The *newest* edit arrives first.
+    timeline
+        .handle_live_event(
+            f.text_msg("* edit 2")
+                .sender(*ALICE)
+                .edit(original_event_id, MessageType::text_plain("edit 2").into())
+                .event_id(edit2_event_id)
+                .server_ts(3000),
+        )
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    let event = item.as_event().unwrap();
+    assert_eq!(event.content().as_message().unwrap().body(), "edit 2");
+    assert_eq!(
+        event.latest_edit_json().unwrap().deserialize().unwrap().event_id(),
+        edit2_event_id
+    );
+
+    // Then the older one. It must not win, even though it is recorded last.
+    timeline
+        .handle_live_event(
+            f.text_msg("* edit 1")
+                .sender(*ALICE)
+                .edit(original_event_id, MessageType::text_plain("edit 1").into())
+                .event_id(edit1_event_id)
+                .server_ts(2000),
+        )
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    let event = item.as_event().unwrap();
+    assert_eq!(event.content().as_message().unwrap().body(), "edit 2");
+    assert_eq!(
+        event.latest_edit_json().unwrap().deserialize().unwrap().event_id(),
+        edit2_event_id
+    );
+
+    assert_pending!(stream);
+}
+
+#[async_test]
 async fn test_relations_edit_overrides_pending_edit_poll() {
     let timeline = TestTimeline::new().await;
     let mut stream = timeline.subscribe().await;
