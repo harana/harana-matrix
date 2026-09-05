@@ -5839,6 +5839,42 @@ pub(crate) mod tests {
     }
 
     #[async_test]
+    async fn test_threading_support_reflects_the_builder_configuration() {
+        use matrix_sdk_base::ThreadingSupport;
+
+        // A client built without threading support reports it as disabled. This is
+        // the default.
+        let client = MockClientBuilder::new(None).build().await;
+        assert_matches!(client.threading_support(), ThreadingSupport::Disabled);
+
+        // A client built with threading support, without subscriptions.
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder
+                    .with_threading_support(ThreadingSupport::Enabled { with_subscriptions: false })
+            })
+            .build()
+            .await;
+        assert_matches!(
+            client.threading_support(),
+            ThreadingSupport::Enabled { with_subscriptions: false }
+        );
+
+        // And one with subscriptions too.
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder
+                    .with_threading_support(ThreadingSupport::Enabled { with_subscriptions: true })
+            })
+            .build()
+            .await;
+        assert_matches!(
+            client.threading_support(),
+            ThreadingSupport::Enabled { with_subscriptions: true }
+        );
+    }
+
+    #[async_test]
     async fn test_get_retention_configuration() {
         use wiremock::{
             Mock, ResponseTemplate,

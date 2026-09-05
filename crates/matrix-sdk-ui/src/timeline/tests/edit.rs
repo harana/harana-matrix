@@ -16,14 +16,17 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
-use matrix_sdk::deserialized_responses::{
-    AlgorithmInfo, EncryptionInfo, VerificationLevel, VerificationState,
+use matrix_sdk::{
+    deserialized_responses::{AlgorithmInfo, EncryptionInfo, VerificationLevel, VerificationState},
+    send_queue::RoomSendQueueUpdate,
 };
 use matrix_sdk_base::deserialized_responses::{DecryptedRoomEvent, TimelineEvent};
 use matrix_sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     event_id,
-    events::room::message::{MessageType, RedactedRoomMessageEventContent},
+    events::room::message::{
+        MessageType, RedactedRoomMessageEventContent, ReplacementMetadata, RoomMessageEventContent,
+    },
     room_id,
 };
 use stream_assert::{assert_next_matches, assert_pending};
@@ -461,4 +464,44 @@ async fn test_redacting_an_edit_restores_the_original_content() {
     assert_eq!(message.body(), "original");
     assert!(!message.is_edited());
     assert!(item.latest_edit_json().is_none());
+}
+
+#[async_test]
+async fn test_cancelling_the_local_echo_of_an_edit_restores_the_original_content() {
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe_events().await;
+
+    let f = &timeline.factory;
+
+    // ALICE is the timeline's own user, so this is a message we can edit.
+    timeline.handle_live_event(f.text_msg("original").sender(&ALICE)).await;
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    let original_event_id = item.event_id().unwrap().to_owned();
+    assert!(!item.content().as_message().unwrap().is_edited());
+
+    // Send a local echo of an edit of that message.
+    let edit = RoomMessageEventContent::text_plain("edited")
+        .make_replacement(ReplacementMetadata::new(original_event_id.clone(), None));
+    let txn_id = timeline.handle_local_event(edit.into()).await;
+
+    // The edit is applied in place, it doesn't get an item of its own.
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    let message = item.content().as_message().unwrap();
+    assert_eq!(message.body(), "edited");
+    assert!(message.is_edited());
+
+    // Now the edit is cancelled before it is ever sent: the message must go back
+    // to what it was, rather than being stuck showing the edited content.
+    timeline
+        .handle_room_send_queue_update(RoomSendQueueUpdate::CancelledLocalEvent {
+            transaction_id: txn_id,
+        })
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    let message = item.content().as_message().unwrap();
+    assert_eq!(message.body(), "original");
+    assert!(!message.is_edited());
+
+    assert_pending!(stream);
 }
