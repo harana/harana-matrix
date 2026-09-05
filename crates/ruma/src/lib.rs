@@ -83,6 +83,8 @@ pub mod room_version_rules;
 pub mod serde;
 #[cfg(feature = "signatures")]
 pub mod signatures;
+#[cfg(feature = "state-res")]
+pub mod state_res;
 pub mod third_party_invite;
 pub mod thirdparty;
 mod timestamp;
