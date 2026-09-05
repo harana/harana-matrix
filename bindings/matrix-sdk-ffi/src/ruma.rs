@@ -1965,3 +1965,50 @@ mod galleries {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ruma::events::room::message::MessageType;
+
+    use super::{message_event_content_from_markdown, message_event_content_from_markdown_as_emote};
+
+    #[test]
+    fn test_markdown_that_renders_no_text_stays_plain() {
+        // "5." parses as an ordered list item with no content: the HTML would carry
+        // no text at all, so a client rendering the formatted body would show a bare
+        // list marker instead of what the user typed.
+        let content = message_event_content_from_markdown("5.".to_owned());
+
+        let MessageType::Text(text) = &content.msgtype else { panic!("expected a text message") };
+        assert_eq!(text.body, "5.");
+        assert!(text.formatted.is_none(), "the message should be sent as plain text");
+
+        // Emotes go through the same check.
+        let content = message_event_content_from_markdown_as_emote("5.".to_owned());
+
+        let MessageType::Emote(emote) = &content.msgtype else { panic!("expected an emote") };
+        assert_eq!(emote.body, "5.");
+        assert!(emote.formatted.is_none());
+    }
+
+    #[test]
+    fn test_real_markdown_still_gets_a_formatted_body() {
+        let content = message_event_content_from_markdown("# Hello".to_owned());
+
+        let MessageType::Text(text) = &content.msgtype else { panic!("expected a text message") };
+        assert_eq!(text.body, "# Hello");
+        assert_eq!(
+            text.formatted.as_ref().expect("markdown should be rendered").body,
+            "<h1>Hello</h1>\n"
+        );
+
+        // A list with content keeps its formatting, and its start number.
+        let content = message_event_content_from_markdown("5. hello".to_owned());
+
+        let MessageType::Text(text) = &content.msgtype else { panic!("expected a text message") };
+        assert_eq!(
+            text.formatted.as_ref().expect("markdown should be rendered").body,
+            "<ol start=\"5\">\n<li>hello</li>\n</ol>\n"
+        );
+    }
+}

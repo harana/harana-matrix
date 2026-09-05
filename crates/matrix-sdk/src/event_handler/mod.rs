@@ -921,6 +921,90 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(not(target_family = "wasm"))]
+    #[async_test]
+    async fn test_each_received_event_is_logged() {
+        use std::sync::Mutex as StdMutex;
+
+        use tracing::{Level, Subscriber, field::Visit};
+        use tracing_subscriber::{
+            layer::{Context, SubscriberExt as _},
+            registry::LookupSpan,
+        };
+
+        /// Collects the `event_type` field of every trace event on the
+        /// `matrix_sdk::event_handler` target.
+        #[derive(Clone, Default)]
+        struct Collector(Arc<StdMutex<Vec<String>>>);
+
+        impl<S> tracing_subscriber::Layer<S> for Collector
+        where
+            S: Subscriber + for<'a> LookupSpan<'a>,
+        {
+            fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+                let metadata = event.metadata();
+
+                if *metadata.level() != Level::TRACE
+                    || metadata.target() != "matrix_sdk::event_handler"
+                {
+                    return;
+                }
+
+                struct EventTypeVisitor<'a>(&'a mut Option<String>);
+
+                impl Visit for EventTypeVisitor<'_> {
+                    fn record_debug(&mut self, _field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {}
+
+                    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                        if field.name() == "event_type" {
+                            *self.0 = Some(value.to_owned());
+                        }
+                    }
+                }
+
+                let mut event_type = None;
+                event.record(&mut EventTypeVisitor(&mut event_type));
+
+                if let Some(event_type) = event_type {
+                    self.0.lock().unwrap().push(event_type);
+                }
+            }
+        }
+
+        let collector = Collector::default();
+        let subscriber = tracing_subscriber::registry().with(collector.clone());
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let client = logged_in_client(None).await;
+
+        let f = EventFactory::new().sender(user_id!("@example:localhost"));
+        let response = SyncResponseBuilder::default()
+            .add_joined_room(
+                JoinedRoomBuilder::default()
+                    .add_timeline_event(MEMBER_EVENT.clone())
+                    .add_typing(f.typing(vec![user_id!("@alice:matrix.org")]))
+                    .add_state_event(f.default_power_levels()),
+            )
+            .build_sync_response();
+
+        client.process_sync(response).await.unwrap();
+
+        let logged = collector.0.lock().unwrap().clone();
+
+        // Every event of the sync response shows up, whichever section it came in.
+        assert!(logged.contains(&"m.room.member".to_owned()), "logged: {logged:?}");
+        assert!(logged.contains(&"m.typing".to_owned()), "logged: {logged:?}");
+        assert!(logged.contains(&"m.room.power_levels".to_owned()), "logged: {logged:?}");
+
+        // A state event that is also in the timeline is dispatched through two
+        // passes, but is only reported once by each of them.
+        assert_eq!(
+            logged.iter().filter(|event_type| *event_type == "m.typing").count(),
+            1,
+            "logged: {logged:?}"
+        );
+    }
+
     #[async_test]
     async fn test_add_to_device_event_handler() -> crate::Result<()> {
         let client = logged_in_client(None).await;

@@ -5,7 +5,11 @@ use matrix_sdk::{
     AuthApi, AuthSession, Client, SessionTokens,
     authentication::matrix::MatrixSession,
     config::RequestConfig,
-    test_utils::{logged_in_client_with_server, no_retry_test_client_with_server},
+    test_utils::{
+        logged_in_client_with_server,
+        mocks::MatrixMockServer,
+        no_retry_test_client_with_server,
+    },
 };
 use matrix_sdk_base::SessionMeta;
 use matrix_sdk_test::{async_test, test_json};
@@ -43,6 +47,22 @@ async fn test_restore_session() {
 
     assert_matches!(client.auth_api(), Some(AuthApi::Matrix(_)));
     assert_matches!(client.session(), Some(AuthSession::Matrix(_)));
+}
+
+#[async_test]
+async fn test_logout_stops_the_send_queue() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    client.send_queue().set_enabled(true).await;
+    assert!(client.send_queue().is_enabled());
+
+    server.mock_logout().ok().mock_once().mount().await;
+    client.matrix_auth().logout().await.unwrap();
+
+    // Queued requests belong to the session that queued them, so nothing more is
+    // sent under the token we just invalidated.
+    assert!(!client.send_queue().is_enabled());
 }
 
 #[async_test]

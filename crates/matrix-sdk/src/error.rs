@@ -787,3 +787,52 @@ impl WrongRoomState {
         Self { expected, got }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use assert_matches::assert_matches;
+
+    use super::Error;
+    use crate::ClientBuildError;
+
+    #[test]
+    fn test_client_build_error_propagates_with_the_question_mark_operator() {
+        // The point of the conversion: a function returning `matrix_sdk::Error` can
+        // propagate the errors of `ClientBuilder::build` and of the store crates'
+        // constructors without unwrapping them by hand.
+        fn build() -> Result<(), ClientBuildError> {
+            Err(ClientBuildError::MissingHomeserver)
+        }
+
+        fn caller() -> Result<(), Error> {
+            build()?;
+            Ok(())
+        }
+
+        let error = caller().unwrap_err();
+
+        assert_matches!(&error, Error::ClientBuild(inner) => {
+            assert_matches!(**inner, ClientBuildError::MissingHomeserver);
+        });
+
+        // The variant is transparent, so it reads as the error it wraps.
+        assert_eq!(error.to_string(), ClientBuildError::MissingHomeserver.to_string());
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test]
+    fn test_open_store_error_propagates_with_the_question_mark_operator() {
+        fn open() -> Result<(), matrix_sdk_sqlite::OpenStoreError> {
+            Err(matrix_sdk_sqlite::OpenStoreError::MissingVersion)
+        }
+
+        fn caller() -> Result<(), Error> {
+            open()?;
+            Ok(())
+        }
+
+        assert_matches!(caller().unwrap_err(), Error::ClientBuild(inner) => {
+            assert_matches!(*inner, ClientBuildError::SqliteStore(_));
+        });
+    }
+}

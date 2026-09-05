@@ -1353,7 +1353,7 @@ mod tests {
 
     use super::{BaseClient, RequestedRequiredStates};
     use crate::{
-        DmRoomDefinition, RoomDisplayName, RoomState, SessionMeta,
+        DmRoomDefinition, RoomDisplayName, RoomInfoNotableUpdateReasons, RoomState, SessionMeta,
         client::ThreadingSupport,
         store::{RoomLoadSettings, StateStoreExt, StoreConfig},
         test_utils::logged_in_base_client,
@@ -2018,6 +2018,56 @@ mod tests {
 
         assert_let!(Some(ignored) = subscriber.next().await);
         assert!(ignored.is_empty());
+    }
+
+    #[async_test]
+    async fn test_room_joined_does_not_overwrite_a_concurrent_sync() {
+        let user_id = user_id!("@alice:localhost");
+        let client = logged_in_base_client(Some(user_id)).await;
+        let room_id = room_id!("!invited:localhost");
+
+        // We start out invited to the room.
+        let response = SyncResponseBuilder::new()
+            .add_invited_room(InvitedRoomBuilder::new(room_id))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        let room = client.get_room(room_id).expect("the sync should have created the room");
+        assert_eq!(room.state(), RoomState::Invited);
+
+        // Hold the state store lock, as sync processing does while it writes.
+        let store_lock = client.state_store_lock().lock().await;
+
+        // `room_joined` can't get past the lock, so it makes no progress. Polling it
+        // once here is what makes the race deterministic: it is exactly the point at
+        // which the room's state used to be read.
+        let mut room_joined = Box::pin(client.room_joined(room_id, None));
+        assert!(
+            (&mut room_joined).now_or_never().is_none(),
+            "room_joined should not complete while the state store lock is held"
+        );
+
+        // Under the lock, the sync applies the join itself, with the full state it got
+        // from the server.
+        room.update_and_save_room_info_with_store_guard(&store_lock, |mut info| {
+            info.mark_as_joined();
+            info.mark_state_fully_synced();
+            info.mark_members_synced();
+            (info, RoomInfoNotableUpdateReasons::MEMBERSHIP)
+        })
+        .await
+        .unwrap();
+
+        drop(store_lock);
+
+        let room = room_joined.await.unwrap();
+
+        // The room is joined, and what the sync wrote is intact: `room_joined` read
+        // the state under the lock, saw the sync's result, and left it alone instead of
+        // marking the room partially synced with missing members again.
+        assert_eq!(room.state(), RoomState::Joined);
+        assert!(room.is_state_fully_synced(), "the sync's state should not have been clobbered");
+        assert!(room.are_members_synced(), "the sync's member list should not have been clobbered");
     }
 
     #[async_test]

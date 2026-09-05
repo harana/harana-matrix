@@ -460,6 +460,100 @@ async fn setup_backups(client: &Client, server: &wiremock::MockServer) {
 }
 
 #[async_test]
+async fn test_waiting_for_the_steady_state_does_not_start_an_upload() -> TestResult {
+    let session = matrix_session_example();
+    let (client, server) = no_retry_test_client_with_server().await;
+    client.restore_session(session).await?;
+
+    setup_backups(&client, &server).await;
+
+    let backups = client.encryption().backups();
+
+    {
+        // Waiting observes an upload, it doesn't ask for one, so nothing is uploaded
+        // while we only wait.
+        let _guard = Mock::given(method("PUT"))
+            .and(path("_matrix/client/unstable/room_keys/keys"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "count": 1,
+                "etag": "abcdefg",
+            })))
+            .expect(0)
+            .mount_as_scoped(&server)
+            .await;
+
+        timeout(backups.wait_for_steady_state(), Duration::from_millis(300))
+            .await
+            .expect_err("waiting alone should not complete, since no upload was asked for");
+    }
+
+    // Asking for one explicitly does upload the room keys.
+    mount_and_assert_called_once(
+        &server,
+        "PUT",
+        "_matrix/client/unstable/room_keys/keys",
+        ResponseTemplate::new(200).set_body_json(json!({
+            "count": 1,
+            "etag": "abcdefg",
+        })),
+    )
+    .await;
+
+    let wait_for_steady_state = backups.wait_for_steady_state();
+    backups.trigger_upload();
+
+    timeout(wait_for_steady_state, Duration::from_secs(10))
+        .await
+        .expect("the wait should observe the upload we asked for")
+        .expect("and it should succeed");
+
+    Ok(())
+}
+
+#[async_test]
+async fn test_waiting_for_the_steady_state_sees_an_upload_that_already_finished() -> TestResult {
+    let session = matrix_session_example();
+    let (client, server) = no_retry_test_client_with_server().await;
+    client.restore_session(session).await?;
+
+    setup_backups(&client, &server).await;
+
+    mount_and_assert_called_once(
+        &server,
+        "PUT",
+        "_matrix/client/unstable/room_keys/keys",
+        ResponseTemplate::new(200).set_body_json(json!({
+            "count": 1,
+            "etag": "abcdefg",
+        })),
+    )
+    .await;
+
+    let backups = client.encryption().backups();
+
+    let wait_for_steady_state = backups.wait_for_steady_state();
+    let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
+
+    backups.trigger_upload();
+
+    // Let the upload run to completion *before* awaiting the future. It subscribes
+    // to the upload state when it is created, so the `Done` it needs isn't lost in
+    // the window between asking for the upload and waiting for it.
+    while let Some(Ok(state)) = progress_stream.next().await {
+        if matches!(state, UploadState::Done) {
+            break;
+        }
+    }
+
+    timeout(wait_for_steady_state, Duration::from_secs(10))
+        .await
+        .expect("the wait should return even though the upload finished first")
+        .expect("and it should succeed");
+
+    Ok(())
+}
+
+#[async_test]
 async fn test_steady_state_waiting() -> TestResult {
     let session = matrix_session_example();
     let (client, server) = no_retry_test_client_with_server().await;

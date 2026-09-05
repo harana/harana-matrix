@@ -4368,6 +4368,56 @@ pub(crate) mod tests {
         client.server_versions().await.unwrap();
     }
 
+    #[cfg(feature = "e2e-encryption")]
+    #[async_test]
+    async fn test_stopping_background_tasks_clears_them() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        client.send_queue().set_enabled(true).await;
+        assert!(client.send_queue().is_enabled());
+
+        // The encryption tasks are set up when the client is logged in.
+        client.encryption().spawn_initialization_task(None).await;
+        client.encryption().wait_for_e2ee_initialization_tasks().await;
+
+        client.stop_background_tasks();
+
+        // Nothing is left to keep talking to the homeserver on the session's behalf.
+        assert!(!client.send_queue().is_enabled());
+
+        let tasks = client.inner.e2ee.tasks.lock();
+        assert!(tasks.upload_room_keys.is_none());
+        assert!(tasks.download_room_keys.is_none());
+        assert!(tasks.update_recovery_state_after_backup.is_none());
+        assert!(tasks.update_recovery_state.is_none());
+        assert!(tasks.receive_historic_room_key_bundles.is_none());
+        assert!(tasks.setup_e2ee.is_none());
+    }
+
+    #[async_test]
+    async fn test_server_name_comes_from_the_user_id_once_logged_in() {
+        let server = MatrixMockServer::new().await;
+
+        // Built from a homeserver URL, so there is no server name to report yet.
+        let client = server.client_builder().unlogged().build().await;
+        assert_eq!(client.server_name(), None);
+
+        // Logging in gives us one: the server part of our own user ID, which is a bare
+        // Matrix server name rather than the URL requests are sent to.
+        server.mock_login().ok().mock_once().mount().await;
+        client.matrix_auth().login_username("example", "hunter2").send().await.unwrap();
+
+        let server_name = client.server_name().expect("we know the server name once logged in");
+        assert_eq!(server_name, client.user_id().unwrap().server_name());
+        assert_eq!(server_name, "matrix.org");
+
+        // It comes from the user ID rather than from the host requests go to, and it
+        // is a bare server name rather than a URL.
+        assert!(client.homeserver().to_string().starts_with("http://"));
+        assert_ne!(client.homeserver().to_string(), server_name.to_string());
+    }
+
     #[async_test]
     async fn test_homeserver_swap_resets_server_field() {
         let homeserver = MatrixMockServer::new().await;

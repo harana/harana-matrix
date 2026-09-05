@@ -60,3 +60,44 @@ pub use ruma::{
     },
     serde::Raw,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ruma::{events::AnySyncTimelineEvent as RumaAnySyncTimelineEvent, user_id};
+
+    /// The re-exports are the `ruma` types themselves, not copies of them, so a
+    /// value built through `ruma` can be used wherever these name a type.
+    #[test]
+    fn test_the_types_are_rumas() {
+        fn server_name_of(user_id: &UserId) -> &ServerName {
+            user_id.server_name()
+        }
+
+        // Built by `ruma`'s macro, accepted by a function written in terms of the
+        // re-export.
+        assert_eq!(server_name_of(user_id!("@alice:example.org")), "example.org");
+
+        let parsed: OwnedUserId = UserId::parse("@alice:example.org").unwrap();
+        assert_eq!(server_name_of(&parsed), "example.org");
+
+        // Same for the event types: a `Raw` named through this module deserializes
+        // into `ruma`'s event enum.
+        let raw: Raw<AnySyncTimelineEvent> = Raw::from_json_string(
+            serde_json::json!({
+                "type": "m.room.message",
+                "event_id": "$1",
+                "sender": "@alice:example.org",
+                "origin_server_ts": 42,
+                "content": { "msgtype": "m.text", "body": "hello" },
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let event: RumaAnySyncTimelineEvent = raw.deserialize().unwrap();
+
+        assert_eq!(event.event_id(), "$1");
+        assert_eq!(event.sender(), parsed);
+    }
+}

@@ -246,10 +246,54 @@ impl MediaEventContent for LocationMessageEventContent {
 
 #[cfg(test)]
 mod tests {
-    use ruma::mxc_uri;
+    use ruma::{mxc_uri, uint};
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn test_media_format_can_key_a_map() {
+        use std::collections::{BTreeMap, HashMap};
+
+        let file = MediaFormat::File;
+        let small = MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32)));
+        let large = MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(64), uint!(64)));
+        let cropped = MediaFormat::Thumbnail(MediaThumbnailSettings::with_method(
+            Method::Crop,
+            uint!(32),
+            uint!(32),
+        ));
+
+        // Equality distinguishes every setting.
+        assert_eq!(small, MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32))));
+        assert_ne!(small, large);
+        assert_ne!(small, cropped);
+        assert_ne!(small, file);
+
+        // `Ord` makes it usable as a `BTreeMap` key...
+        let mut ordered = BTreeMap::new();
+        ordered.insert(file.clone(), "file");
+        ordered.insert(small.clone(), "small");
+        ordered.insert(large.clone(), "large");
+
+        assert_eq!(ordered.get(&small), Some(&"small"));
+        assert_eq!(ordered.len(), 3);
+
+        // ... and `Hash` as a `HashMap` one. `Method` is a string enum without a
+        // `Hash` implementation, so this is hand-written and worth checking.
+        let mut hashed = HashMap::new();
+        hashed.insert(small.clone(), "small");
+        hashed.insert(cropped.clone(), "cropped");
+
+        assert_eq!(hashed.get(&small), Some(&"small"));
+        assert_eq!(hashed.get(&cropped), Some(&"cropped"));
+        assert_eq!(hashed.get(&large), None);
+
+        // Inserting an equal value replaces rather than duplicates.
+        hashed.insert(MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32))), "again");
+        assert_eq!(hashed.len(), 2);
+        assert_eq!(hashed.get(&small), Some(&"again"));
+    }
 
     #[test]
     fn test_media_request_url() {

@@ -2243,10 +2243,92 @@ impl TryFrom<SdkRoomSendQueueUpdate> for RoomSendQueueUpdate {
 mod tests {
     use std::time::Duration;
 
-    use matrix_sdk::{ruma::room_id, test_utils::mocks::MatrixMockServer};
+    use matrix_sdk::{
+        ruma::{event_id, room_id},
+        test_utils::mocks::MatrixMockServer,
+    };
     use tempfile::tempdir;
 
     use super::*;
+
+    /// The bindings can read the state events and room account data the SDK
+    /// already holds, without going to the homeserver for them.
+    #[tokio::test]
+    async fn test_state_events_and_account_data_are_readable() {
+        use matrix_sdk::ruma::{
+            events::{RoomAccountDataEventType, StateEventType},
+            user_id,
+        };
+        use matrix_sdk_test::{JoinedRoomBuilder, event_factory::EventFactory};
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let room_id = room_id!("!test:example.com");
+        let f = EventFactory::new().room(room_id).sender(user_id!("@alice:example.com"));
+
+        let sdk_room = server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id)
+                    .add_state_event(f.room_topic("the topic"))
+                    .add_account_data(f.fully_read(event_id!("$1"))),
+            )
+            .await;
+        let room = Room::new(sdk_room, None);
+
+        // A state event we know about comes back as its JSON.
+        let topic = room
+            .get_state_event(StateEventType::RoomTopic.to_string(), String::new())
+            .await
+            .unwrap()
+            .expect("the room has a topic");
+
+        let topic: serde_json::Value = serde_json::from_str(&topic).unwrap();
+        assert_eq!(topic["content"]["topic"], "the topic");
+        assert_eq!(topic["type"], "m.room.topic");
+
+        // So do all the events of a type.
+        let topics =
+            room.get_state_events(StateEventType::RoomTopic.to_string()).await.unwrap();
+        assert_eq!(topics.len(), 1);
+
+        // One we don't have comes back as nothing, rather than as an error.
+        assert!(
+            room.get_state_event(StateEventType::RoomAvatar.to_string(), String::new())
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Room account data is readable too.
+        let fully_read = room
+            .account_data("m.fully_read".to_owned())
+            .await
+            .unwrap()
+            .expect("the room has a fully-read marker");
+
+        let fully_read: serde_json::Value = serde_json::from_str(&fully_read).unwrap();
+        assert_eq!(fully_read["content"]["event_id"], "$1");
+
+        assert!(room.account_data("m.tag".to_owned()).await.unwrap().is_none());
+
+        // And writable: the content reaches the homeserver as given.
+        server
+            .mock_set_room_account_data(RoomAccountDataEventType::FullyRead)
+            .ok()
+            .mock_once()
+            .mount()
+            .await;
+
+        room.set_account_data(
+            "m.fully_read".to_owned(),
+            serde_json::to_string(&serde_json::json!({ "event_id": "$2" })).unwrap(),
+        )
+        .await
+        .unwrap();
+
+    }
 
     /// Dropping an FFI [`Room`] on a non-tokio thread must not panic.
     ///
