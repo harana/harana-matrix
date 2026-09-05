@@ -1224,7 +1224,15 @@ impl IdentityManager {
         device: &DeviceData,
     ) -> Result<(), CryptoStoreError> {
         match SenderDataFinder::find_using_device_data(&self.store, device.clone(), session).await {
-            Ok(sender_data) => {
+            Ok(mut sender_data) => {
+                // A session we already know to be a legacy one, e.g. one restored from a
+                // key backup, stays a legacy one: if we still cannot attribute it to a
+                // sender we must not downgrade it, or its messages get hidden from the
+                // user when insecure devices are excluded.
+                if session.sender_data.legacy_session() {
+                    sender_data.set_legacy_session(true);
+                }
+
                 debug!("Updating existing InboundGroupSession with new SenderData {sender_data:?}");
                 session.sender_data = sender_data;
             }

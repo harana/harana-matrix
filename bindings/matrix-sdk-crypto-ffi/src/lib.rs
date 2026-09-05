@@ -472,6 +472,8 @@ fn collect_sessions(
             created_using_fallback_key: session_pickle.created_using_fallback_key,
             creation_time,
             last_use_time,
+            // A migrated session has no record of when it last decrypted a message.
+            last_successful_decryption_time: None,
         };
 
         let session = Session::from_pickle(device_keys.clone(), pickle)?;

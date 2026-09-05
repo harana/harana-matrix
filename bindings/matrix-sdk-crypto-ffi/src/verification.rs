@@ -576,6 +576,15 @@ impl VerificationRequest {
         self.inner.other_device_id().map(|d| d.to_string())
     }
 
+    /// The display name of the other device that is participating in this
+    /// verification, if it has one.
+    ///
+    /// Remains available once the verification is done, so that a client can
+    /// name the device it just verified.
+    pub fn other_device_display_name(&self) -> Option<String> {
+        self.inner.other_device_data().and_then(|d| d.display_name().map(ToOwned::to_owned))
+    }
+
     /// Get the unique ID of this verification request
     pub fn flow_id(&self) -> String {
         self.inner.flow_id().as_str().to_owned()
@@ -758,7 +767,7 @@ impl VerificationRequest {
                 their_methods: their_methods.iter().map(|m| m.to_string()).collect(),
                 our_methods: our_methods.iter().map(|m| m.to_string()).collect(),
             },
-            RustVerificationRequestState::Done => VerificationRequestState::Done,
+            RustVerificationRequestState::Done { .. } => VerificationRequestState::Done,
             RustVerificationRequestState::Transitioned { .. } => {
                 let their_methods = request
                     .their_supported_methods()
@@ -792,7 +801,8 @@ impl VerificationRequest {
             // task.
             let should_break = matches!(
                 state,
-                RustVerificationRequestState::Done | RustVerificationRequestState::Cancelled { .. }
+                RustVerificationRequestState::Done { .. }
+                    | RustVerificationRequestState::Cancelled { .. }
             );
 
             let state = Self::convert_verification_request(&request, state);

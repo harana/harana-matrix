@@ -417,12 +417,26 @@ impl Device {
     pub async fn set_local_trust(&self, trust_state: LocalTrust) -> StoreResult<()> {
         self.inner.set_trust_state(trust_state);
 
+        let store = &self.verification_machine.store;
+
+        // Saving a device writes the whole object, so writing the copy we are holding
+        // would revert any field which was updated elsewhere since we read it (its
+        // deleted flag, its Olm wedging index, whether a withheld code was sent). Read
+        // the device back and change only the trust state on that fresh copy.
+        let device = match store.get_device(self.user_id(), self.device_id()).await? {
+            Some(device) => {
+                device.set_trust_state(trust_state);
+                device
+            }
+            None => self.inner.clone(),
+        };
+
         let changes = Changes {
-            devices: DeviceChanges { changed: vec![self.inner.clone()], ..Default::default() },
+            devices: DeviceChanges { changed: vec![device], ..Default::default() },
             ..Default::default()
         };
 
-        self.verification_machine.store.save_changes(changes).await
+        store.save_changes(changes).await
     }
 
     /// Encrypt the given content for this `Device`.

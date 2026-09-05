@@ -108,7 +108,15 @@ pub enum VerificationRequestState {
         other_device_data: DeviceData,
     },
     /// The verification flow that was started with this request has finished.
-    Done,
+    Done {
+        /// The device data of the device that took part in the verification,
+        /// if we know it.
+        ///
+        /// This lets a client name the device that was just verified, e.g. in
+        /// a completion dialog. It is `None` if the verification was completed
+        /// by another one of our devices.
+        other_device_data: Option<DeviceData>,
+    },
     /// The verification process has been cancelled.
     Cancelled(CancelInfo),
 }
@@ -135,7 +143,9 @@ impl From<&InnerRequest> for VerificationRequestState {
             InnerRequest::Passive(_) => {
                 Self::Cancelled(Cancelled::new(true, CancelCode::Accepted).into())
             }
-            InnerRequest::Done(_) => Self::Done,
+            InnerRequest::Done(s) => {
+                Self::Done { other_device_data: s.state.other_device_data.to_owned() }
+            }
             InnerRequest::Cancelled(s) => Self::Cancelled(s.state.to_owned().into()),
         }
     }
@@ -292,10 +302,32 @@ impl VerificationRequest {
             InnerRequest::Transitioned(r) => {
                 Some(r.state.ready.other_device_data.device_id().to_owned())
             }
-            InnerRequest::Created(_)
-            | InnerRequest::Passive(_)
-            | InnerRequest::Done(_)
-            | InnerRequest::Cancelled(_) => None,
+            // A finished verification still knows which device it verified, so that a
+            // client can tell the user what was just verified.
+            InnerRequest::Done(r) => {
+                r.state.other_device_data.as_ref().map(|d| d.device_id().to_owned())
+            }
+            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
+                None
+            }
+        }
+    }
+
+    /// The device data of the other device that is, or was, participating in
+    /// this verification.
+    ///
+    /// Unlike [`VerificationRequest::other_device_id`], this also gives access
+    /// to the display name of the device, which a client needs to tell the
+    /// user which device was verified.
+    pub fn other_device_data(&self) -> Option<DeviceData> {
+        match &*self.inner.read() {
+            InnerRequest::Requested(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Ready(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Transitioned(r) => Some(r.state.ready.other_device_data.to_owned()),
+            InnerRequest::Done(r) => r.state.other_device_data.to_owned(),
+            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
+                None
+            }
         }
     }
 
@@ -933,8 +965,11 @@ impl InnerRequest {
 
     fn receive_done(&self, content: &DoneContent<'_>) -> Option<InnerRequest> {
         let state = InnerRequest::Done(match self {
-            InnerRequest::Transitioned(s) => s.clone().into_done(content),
-            InnerRequest::Passive(s) => s.clone().into_done(content),
+            InnerRequest::Transitioned(s) => {
+                let other_device_data = s.state.ready.other_device_data.clone();
+                s.clone().into_done(content, Some(other_device_data))
+            }
+            InnerRequest::Passive(s) => s.clone().into_done(content, None),
             InnerRequest::Done(_)
             | InnerRequest::Ready(_)
             | InnerRequest::Created(_)
@@ -1011,13 +1046,17 @@ struct RequestState<S: Clone> {
 }
 
 impl<S: Clone> RequestState<S> {
-    fn into_done(self, _: &DoneContent<'_>) -> RequestState<Done> {
+    fn into_done(
+        self,
+        _: &DoneContent<'_>,
+        other_device_data: Option<DeviceData>,
+    ) -> RequestState<Done> {
         RequestState::<Done> {
             verification_cache: self.verification_cache,
             store: self.store,
             flow_id: self.flow_id,
             other_user_id: self.other_user_id,
-            state: Done {},
+            state: Done { other_device_data },
         }
     }
 
@@ -1619,7 +1658,10 @@ struct Passive {
 }
 
 #[derive(Clone, Debug)]
-struct Done {}
+struct Done {
+    /// The device that took part in the verification, if we know it.
+    other_device_data: Option<DeviceData>,
+}
 
 #[cfg(test)]
 mod tests {

@@ -30,7 +30,7 @@ use ruma::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[cfg(feature = "experimental-x509-identity-verification")]
 use crate::x509::X509Verifier;
@@ -446,6 +446,25 @@ impl OtherUserIdentity {
     /// Pin the current identity (public part of the master signing key).
     pub async fn pin_current_master_key(&self) -> Result<(), CryptoStoreError> {
         info!(master_key = ?self.master_key.get_first_key(), "Pinning current identity for user '{}'", self.user_id());
+
+        // Pinning writes the whole identity back, so if the store has since received a
+        // new set of cross-signing keys for this user we would revert them, and break
+        // communication with that user until the next key query. Check that the stored
+        // identity is still the one we hold before writing it back.
+        let stored = self.verification_machine.store.get_user_identity(self.user_id()).await?;
+
+        if let Some(stored) = &stored
+            && stored.master_key() != self.master_key.as_ref()
+        {
+            warn!(
+                user_id = ?self.user_id(),
+                "Not pinning the identity: the stored identity has changed since we read it, \
+                 pinning it would revert the newer cross-signing keys"
+            );
+
+            return Ok(());
+        }
+
         self.inner.pin();
         let to_save = UserIdentityData::Other(self.inner.clone());
         let changes = Changes {

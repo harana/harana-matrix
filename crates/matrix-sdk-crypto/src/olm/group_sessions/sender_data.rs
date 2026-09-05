@@ -180,6 +180,38 @@ impl SenderData {
         )
     }
 
+    /// Was this session created before we started collecting trust information
+    /// about sessions?
+    ///
+    /// Only the two states which lack sender data can be legacy; once we know
+    /// who the sender is, the question no longer arises.
+    pub fn legacy_session(&self) -> bool {
+        match self {
+            SenderData::UnknownDevice { legacy_session, .. }
+            | SenderData::DeviceInfo { legacy_session, .. } => *legacy_session,
+            SenderData::VerificationViolation(_)
+            | SenderData::SenderUnverified(_)
+            | SenderData::SenderVerified(_) => false,
+        }
+    }
+
+    /// Mark this sender data as belonging to a legacy session, if it is in a
+    /// state which can carry that flag.
+    ///
+    /// This is used when recomputing the sender data of a session we already
+    /// know to be a legacy one, e.g. one restored from a key backup: failing to
+    /// find its sender now must not turn it into a session whose messages we
+    /// refuse to show.
+    pub fn set_legacy_session(&mut self, is_legacy: bool) {
+        match self {
+            SenderData::UnknownDevice { legacy_session, .. }
+            | SenderData::DeviceInfo { legacy_session, .. } => *legacy_session = is_legacy,
+            SenderData::VerificationViolation(_)
+            | SenderData::SenderUnverified(_)
+            | SenderData::SenderVerified(_) => {}
+        }
+    }
+
     /// Create a [`SenderData`] which contains no device info.
     pub fn unknown() -> Self {
         Self::UnknownDevice { legacy_session: false, owner_check_failed: false }

@@ -1,6 +1,8 @@
+#![recursion_limit = "256"]
+
 use std::io::Write;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use futures_util::stream::StreamExt;
 use matrix_sdk::{
@@ -11,7 +13,7 @@ use matrix_sdk::{
         VerificationRequestState, format_emojis,
     },
     ruma::{
-        UserId,
+        OwnedUserId, UserId,
         events::{
             key::verification::request::ToDeviceKeyVerificationRequestEvent,
             room::message::{MessageType, OriginalSyncRoomMessageEvent},
@@ -117,12 +119,80 @@ async fn request_verification_handler(client: Client, request: VerificationReque
                     break;
                 }
             }
-            VerificationRequestState::Done | VerificationRequestState::Cancelled(_) => break,
+            VerificationRequestState::Done { other_device_data } => {
+                if let Some(device) = other_device_data {
+                    println!(
+                        "Verification with device {} ({}) is done",
+                        device.device_id(),
+                        device.display_name().unwrap_or("-")
+                    );
+                } else {
+                    println!("The verification is done");
+                }
+
+                break;
+            }
+            VerificationRequestState::Cancelled(info) => {
+                println!("The verification request was cancelled: {}", info.reason());
+
+                break;
+            }
         }
     }
 }
 
-async fn sync(client: Client) -> matrix_sdk::Result<()> {
+/// Send a verification request to another user, or to our own other devices,
+/// and drive the resulting flow.
+///
+/// This is the other half of the flow: `request_verification_handler` handles a
+/// request somebody else sent us, this one starts it ourselves.
+async fn request_verification(client: Client, other_user_id: &UserId) -> Result<()> {
+    let identity = client
+        .encryption()
+        .get_user_identity(other_user_id)
+        .await?
+        .with_context(|| format!("{other_user_id} has not set up cross-signing"))?;
+
+    println!("Sending a verification request to {other_user_id}");
+    let request = identity.request_verification().await?;
+
+    let mut stream = request.changes();
+
+    while let Some(state) = stream.next().await {
+        match state {
+            VerificationRequestState::Created { .. }
+            | VerificationRequestState::Requested { .. } => (),
+            VerificationRequestState::Ready { their_methods, .. } => {
+                // The other side is ready; start the SAS flow if they support it.
+                if their_methods.iter().any(|method| method.as_str() == "m.sas.v1") {
+                    if let Some(sas) = request.start_sas().await? {
+                        tokio::spawn(sas_verification_handler(client.clone(), sas));
+                    }
+                } else {
+                    println!("The other side does not support emoji verification");
+                    request.cancel().await?;
+                }
+            }
+            VerificationRequestState::Transitioned { verification } => {
+                // The other side started the flow before we did.
+                if let Verification::SasV1(sas) = verification {
+                    tokio::spawn(sas_verification_handler(client.clone(), sas));
+                    break;
+                }
+            }
+            VerificationRequestState::Done { .. } => break,
+            VerificationRequestState::Cancelled(info) => {
+                println!("The verification request was cancelled: {}", info.reason());
+
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn add_verification_request_handlers(client: &Client) {
     client.add_event_handler(
         |ev: ToDeviceKeyVerificationRequestEvent, client: Client| async move {
             let request = client
@@ -146,10 +216,6 @@ async fn sync(client: Client) -> matrix_sdk::Result<()> {
             tokio::spawn(request_verification_handler(client, request));
         }
     });
-
-    client.sync(SyncSettings::new()).await?;
-
-    Ok(())
 }
 
 #[derive(Parser, Debug)]
@@ -169,6 +235,13 @@ struct Cli {
     /// Set the proxy that should be used for the connection.
     #[clap(short, long)]
     proxy: Option<Url>,
+
+    /// The user to send a verification request to.
+    ///
+    /// Use your own user ID to verify another one of your devices. If this is
+    /// left out, we only wait for somebody else to start a verification.
+    #[clap(short = 'u', long)]
+    verify_user: Option<OwnedUserId>,
 
     /// Enable verbose logging output.
     #[clap(short, long, action)]
@@ -199,9 +272,25 @@ async fn main() -> Result<()> {
         tracing_subscriber::fmt::init();
     }
 
+    let verify_user = cli.verify_user.clone();
     let client = login(cli).await?;
 
-    sync(client).await?;
+    add_verification_request_handlers(&client);
+
+    // Sync in the background: sending a verification request, and every step of
+    // the flow that follows, needs the sync loop to be running to see the other
+    // side's responses.
+    let sync_client = client.clone();
+    let sync_handle = tokio::spawn(async move { sync_client.sync(SyncSettings::new()).await });
+
+    if let Some(other_user_id) = verify_user {
+        // Wait for the first sync so that we know about the other user's devices
+        // before we send the request to them.
+        client.sync_once(SyncSettings::new()).await?;
+        request_verification(client, &other_user_id).await?;
+    }
+
+    sync_handle.await??;
 
     Ok(())
 }

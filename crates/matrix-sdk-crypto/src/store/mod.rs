@@ -380,6 +380,7 @@ fn collect_device_updates(
 ) -> DeviceUpdates {
     let mut new: BTreeMap<_, BTreeMap<_, _>> = BTreeMap::new();
     let mut changed: BTreeMap<_, BTreeMap<_, _>> = BTreeMap::new();
+    let mut deleted: BTreeMap<_, BTreeMap<_, _>> = BTreeMap::new();
 
     let (new_identities, changed_identities, unchanged_identities) = identities.into_maps();
 
@@ -417,7 +418,16 @@ fn collect_device_updates(
             .insert(device.device_id().to_owned(), device.to_owned());
     }
 
-    DeviceUpdates { new, changed }
+    for device in devices.deleted {
+        let device = map_device(device);
+
+        deleted
+            .entry(device.user_id().to_owned())
+            .or_default()
+            .insert(device.device_id().to_owned(), device);
+    }
+
+    DeviceUpdates { new, changed, deleted }
 }
 
 /// A temporary transaction (that implies a write) to the underlying store.
