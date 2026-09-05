@@ -399,6 +399,24 @@ impl BaseClient {
 
         self.state_store.load_rooms(&session_meta.user_id, room_load_settings).await?;
         self.state_store.load_sync_token().await?;
+
+        // A session we have synced before, being restored with an empty crypto store,
+        // is a configuration mistake that used to be silent: the SDK creates a fresh
+        // Olm account for a device the homeserver already has keys for, so every
+        // device key upload is rejected and retried forever, and no message can be
+        // decrypted. Say so loudly rather than leaving it to be diagnosed from the
+        // upload loop.
+        #[cfg(feature = "e2e-encryption")]
+        if self.state_store.sync_token.read().await.is_some()
+            && self.crypto_store.load_account().await.map_err(Error::CryptoStore)?.is_none()
+        {
+            tracing::error!(
+                user_id = ?session_meta.user_id,
+                device_id = ?session_meta.device_id,
+                "Restoring a session that has synced before, but the crypto store holds no                  account for it. The store is most likely not the one this session was                  created with, or it is not persistent. Encryption will not work."
+            );
+        }
+
         self.state_store.set_session_meta(session_meta);
 
         #[cfg(feature = "e2e-encryption")]

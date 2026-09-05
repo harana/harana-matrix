@@ -108,7 +108,14 @@ pub enum VerificationRequestState {
         other_device_data: DeviceData,
     },
     /// The verification flow that was started with this request has finished.
-    Done,
+    Done {
+        /// The device data of the device that took part in the verification, if
+        /// we know it.
+        ///
+        /// `None` when the request was accepted by another one of our own
+        /// devices, in which case we never spoke to a specific device.
+        other_device_data: Option<DeviceData>,
+    },
     /// The verification process has been cancelled.
     Cancelled(CancelInfo),
 }
@@ -135,7 +142,9 @@ impl From<&InnerRequest> for VerificationRequestState {
             InnerRequest::Passive(_) => {
                 Self::Cancelled(Cancelled::new(true, CancelCode::Accepted).into())
             }
-            InnerRequest::Done(_) => Self::Done,
+            InnerRequest::Done(s) => {
+                Self::Done { other_device_data: s.state.other_device_data.to_owned() }
+            }
             InnerRequest::Cancelled(s) => Self::Cancelled(s.state.to_owned().into()),
         }
     }
@@ -292,10 +301,29 @@ impl VerificationRequest {
             InnerRequest::Transitioned(r) => {
                 Some(r.state.ready.other_device_data.device_id().to_owned())
             }
-            InnerRequest::Created(_)
-            | InnerRequest::Passive(_)
-            | InnerRequest::Done(_)
-            | InnerRequest::Cancelled(_) => None,
+            InnerRequest::Done(r) => {
+                r.state.other_device_data.as_ref().map(|d| d.device_id().to_owned())
+            }
+            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
+                None
+            }
+        }
+    }
+
+    /// The data of the other device that participated in this verification, if
+    /// we know it.
+    ///
+    /// This stays available once the verification is done, so a client can name
+    /// the device it just verified.
+    pub fn other_device_data(&self) -> Option<DeviceData> {
+        match &*self.inner.read() {
+            InnerRequest::Requested(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Ready(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Transitioned(r) => Some(r.state.ready.other_device_data.to_owned()),
+            InnerRequest::Done(r) => r.state.other_device_data.to_owned(),
+            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
+                None
+            }
         }
     }
 
@@ -931,10 +959,18 @@ impl InnerRequest {
         Some((InnerRequest::Ready(state), content))
     }
 
-    fn receive_done(&self, content: &DoneContent<'_>) -> Option<InnerRequest> {
+    fn receive_done(&self, _content: &DoneContent<'_>) -> Option<InnerRequest> {
         let state = InnerRequest::Done(match self {
-            InnerRequest::Transitioned(s) => s.clone().into_done(content),
-            InnerRequest::Passive(s) => s.clone().into_done(content),
+            // Keep hold of the device we verified with: a client wants to name it in the
+            // dialog it shows once verification succeeds, and until now the information
+            // was dropped on the way into the done state.
+            InnerRequest::Transitioned(s) => {
+                let other_device_data = s.state.other_device_data.to_owned();
+                s.clone().into_done_with(Some(other_device_data))
+            }
+            // Another of our own devices accepted the request, so we never learnt which
+            // device on the other side took part.
+            InnerRequest::Passive(s) => s.clone().into_done_with(None),
             InnerRequest::Done(_)
             | InnerRequest::Ready(_)
             | InnerRequest::Created(_)
@@ -1011,13 +1047,13 @@ struct RequestState<S: Clone> {
 }
 
 impl<S: Clone> RequestState<S> {
-    fn into_done(self, _: &DoneContent<'_>) -> RequestState<Done> {
+    fn into_done_with(self, other_device_data: Option<DeviceData>) -> RequestState<Done> {
         RequestState::<Done> {
             verification_cache: self.verification_cache,
             store: self.store,
             flow_id: self.flow_id,
             other_user_id: self.other_user_id,
-            state: Done {},
+            state: Done { other_device_data },
         }
     }
 
@@ -1619,7 +1655,13 @@ struct Passive {
 }
 
 #[derive(Clone, Debug)]
-struct Done {}
+struct Done {
+    /// The device data of the device we verified with, if we ever learnt it.
+    ///
+    /// This is `None` when the request was accepted by another one of our own
+    /// devices, since then we never talked to a specific device ourselves.
+    other_device_data: Option<DeviceData>,
+}
 
 #[cfg(test)]
 mod tests {

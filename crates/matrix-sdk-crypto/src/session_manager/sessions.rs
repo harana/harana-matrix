@@ -106,31 +106,39 @@ impl SessionManager {
         sender: &UserId,
         curve_key: Curve25519PublicKey,
     ) -> OlmResult<()> {
-        if let Some(device) = self.store.get_device_from_curve_key(sender, curve_key).await?
-            && let Some(session) = device.get_most_recent_session().await?
-        {
+        let Some(device) = self.store.get_device_from_curve_key(sender, curve_key).await? else {
+            return Ok(());
+        };
+
+        // The rate limit only exists to stop us from replacing a session we have just
+        // created. If we hold no session at all for this device, there is nothing to
+        // wait for: this happens when the very first session we made for the device is
+        // the wedged one, and it used to leave us with no way to recover.
+        let should_unwedge = match device.get_most_recent_session().await? {
+            Some(session) => {
+                let creation_time = Duration::from_secs(session.creation_time.get().into());
+                let now = Duration::from_secs(SecondsSinceUnixEpoch::now().get().into());
+
+                now.checked_sub(creation_time)
+                    .map(|elapsed| elapsed > Self::UNWEDGING_INTERVAL)
+                    .unwrap_or(true)
+            }
+            None => true,
+        };
+
+        if should_unwedge {
             info!(sender_key = ?curve_key, "Marking session to be unwedged");
 
-            let creation_time = Duration::from_secs(session.creation_time.get().into());
-            let now = Duration::from_secs(SecondsSinceUnixEpoch::now().get().into());
-
-            let should_unwedge = now
-                .checked_sub(creation_time)
-                .map(|elapsed| elapsed > Self::UNWEDGING_INTERVAL)
-                .unwrap_or(true);
-
-            if should_unwedge {
-                self.users_for_key_claim
-                    .write()
-                    .entry(device.user_id().to_owned())
-                    .or_default()
-                    .insert(device.device_id().into());
-                self.wedged_devices
-                    .write()
-                    .entry(device.user_id().to_owned())
-                    .or_default()
-                    .insert(device.device_id().into());
-            }
+            self.users_for_key_claim
+                .write()
+                .entry(device.user_id().to_owned())
+                .or_default()
+                .insert(device.device_id().into());
+            self.wedged_devices
+                .write()
+                .entry(device.user_id().to_owned())
+                .or_default()
+                .insert(device.device_id().into());
         }
 
         Ok(())

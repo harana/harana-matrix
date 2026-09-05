@@ -27,7 +27,7 @@ use indexed_db_futures::{
     internals::SystemRepr,
     object_store::ObjectStore,
     prelude::*,
-    transaction::{Transaction, TransactionMode},
+    transaction::{Transaction, TransactionDurability, TransactionMode, TransactionOptions},
 };
 use js_sys::Array;
 use matrix_sdk_base::cross_process_lock::{
@@ -359,6 +359,15 @@ impl PendingIndexeddbChanges {
         }
         Ok(())
     }
+}
+
+/// Transaction options asking the browser to only report a write as committed
+/// once it has reached persistent storage.
+///
+/// This costs an fsync, so it is reserved for the writes whose loss would
+/// corrupt cryptographic state rather than merely a cache.
+fn strict_durability() -> TransactionOptions {
+    TransactionOptions::new().with_durability(TransactionDurability::Strict)
 }
 
 impl IndexeddbCryptoStore {
@@ -844,7 +853,15 @@ impl_crypto_store! {
             return Ok(());
         }
 
-        let tx = self.inner.transaction(stores).with_mode(TransactionMode::Readwrite).build()?;
+        // The account holds the one-time keys we have published but not yet had
+        // claimed. Losing a write to it after a crash leaves us handing out a key we
+        // can no longer use, so pay for the fsync here.
+        let tx = self
+            .inner
+            .transaction(stores)
+            .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
+            .build()?;
 
         let account_pickle = if let Some(account) = changes.account {
             *self.static_account.write().unwrap() = Some(account.static_data().clone());
@@ -872,6 +889,14 @@ impl_crypto_store! {
         // TODO: #2000 should make this lock go away, or change its shape.
         let _guard = self.save_changes_lock.lock().await;
 
+        // Olm sessions ratchet: once we have used one to encrypt or decrypt, the
+        // persisted state has to move with it. IndexedDB's default durability lets the
+        // browser acknowledge a write that is still only in the operating system's
+        // buffers, so a crash or a power cut can leave our stored session behind the one
+        // the other side has already seen, which wedges it and produces UTDs. Ask for
+        // strict durability whenever a session is part of the write.
+        let needs_strict_durability = !changes.sessions.is_empty();
+
         let indexeddb_changes = self.prepare_for_transaction(&changes).await?;
 
         let stores = indexeddb_changes.touched_stores();
@@ -881,7 +906,15 @@ impl_crypto_store! {
             return Ok(());
         }
 
-        let tx = self.inner.transaction(stores).with_mode(TransactionMode::Readwrite).build()?;
+        let tx = if needs_strict_durability {
+            self.inner
+                .transaction(stores)
+                .with_mode(TransactionMode::Readwrite)
+                .with_options(strict_durability())
+                .build()?
+        } else {
+            self.inner.transaction(stores).with_mode(TransactionMode::Readwrite).build()?
+        };
 
         indexeddb_changes.apply(&tx).await?;
 

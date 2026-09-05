@@ -202,6 +202,13 @@ impl IdentityManager {
         self.failures.extend(failed_servers);
         self.failures.remove(successful_servers);
 
+        // Both of these read the stored devices and identities, change them and write
+        // them back in full. `Device::set_local_trust` and `UserIdentity::pin` do the
+        // same for a single object, so they have to be serialised against this: without
+        // the lock, a pin landing here reverts the cross-signing keys this response
+        // brought in, and a trust change reverts fields this response set.
+        let identity_guard = self.store.lock_identity_update().await;
+
         let devices = self.handle_devices_from_key_query(response.device_keys.clone()).await?;
         let (identities, cross_signing_identity) = self.handle_cross_signing_keys(response).await?;
 
@@ -213,6 +220,7 @@ impl IdentityManager {
         };
 
         self.store.save_changes(changes).await?;
+        drop(identity_guard);
 
         // Update the sender data on any existing inbound group sessions based on the
         // changes in this response.
@@ -264,6 +272,44 @@ impl IdentityManager {
         }
 
         Ok((devices, identities))
+    }
+
+    /// Handle a `/keys/query` response that we didn't ask for ourselves.
+    ///
+    /// Users we are already tracking are dropped from the response before it is
+    /// processed, so that an out-of-band response can't race the device list
+    /// tracking and mark a tracked user as up to date with data we didn't
+    /// request.
+    pub async fn receive_out_of_band_keys_query_response(
+        &self,
+        response: &KeysQueryResponse,
+    ) -> OlmResult<(DeviceChanges, IdentityChanges)> {
+        let tracked_users = {
+            let cache = self.store.cache().await?;
+            self.key_query_manager.synced(&cache).await?.tracked_users()
+        };
+
+        let is_untracked = |user_id: &OwnedUserId| !tracked_users.contains(user_id);
+
+        let mut response = response.clone();
+        response.device_keys.retain(|user_id, _| is_untracked(user_id));
+        response.master_keys.retain(|user_id, _| is_untracked(user_id));
+        response.self_signing_keys.retain(|user_id, _| is_untracked(user_id));
+        response.user_signing_keys.retain(|user_id, _| is_untracked(user_id));
+
+        if response.device_keys.is_empty()
+            && response.master_keys.is_empty()
+            && response.self_signing_keys.is_empty()
+            && response.user_signing_keys.is_empty()
+        {
+            debug!("The out-of-band /keys/query response only contained tracked users, ignoring");
+
+            return Ok((Default::default(), Default::default()));
+        }
+
+        // A request ID we never handed out, so the response can't be mistaken for the
+        // answer to a request we have in flight and consume its sequence number.
+        self.receive_keys_query_response(&TransactionId::new(), &response).await
     }
 
     async fn update_or_create_device(
@@ -1225,6 +1271,15 @@ impl IdentityManager {
     ) -> Result<(), CryptoStoreError> {
         match SenderDataFinder::find_using_device_data(&self.store, device.clone(), session).await {
             Ok(sender_data) => {
+                // A session restored from a key backup or a key export is flagged as
+                // legacy so that its messages are still shown even though we can't
+                // attest to their sender. That flag lives on the sender data, and the
+                // recomputation above has no way of knowing where the session came
+                // from, so carry it over rather than silently downgrading the session
+                // and hiding its messages.
+                let sender_data =
+                    sender_data.with_legacy_session(session.sender_data.legacy_session());
+
                 debug!("Updating existing InboundGroupSession with new SenderData {sender_data:?}");
                 session.sender_data = sender_data;
             }
@@ -1965,6 +2020,30 @@ pub(crate) mod tests {
     }
 
     #[async_test]
+    async fn test_out_of_band_key_query_skips_tracked_users() {
+        let manager = manager_test_helper(user_id(), device_id()).await;
+
+        // Given a user we're not tracking, an out-of-band response is processed.
+        let (device_changes, identity_changes) =
+            manager.receive_out_of_band_keys_query_response(&own_key_query()).await.unwrap();
+
+        assert_eq!(device_changes.new.len(), 1);
+        assert_eq!(identity_changes.new.len(), 1);
+
+        // Once the user is tracked, the machine owns their device list, and an
+        // out-of-band response must not race the tracker.
+        manager.update_tracked_users([user_id()]).await.unwrap();
+
+        let (device_changes, identity_changes) =
+            manager.receive_out_of_band_keys_query_response(&own_key_query()).await.unwrap();
+
+        assert!(device_changes.new.is_empty());
+        assert!(device_changes.changed.is_empty());
+        assert!(identity_changes.new.is_empty());
+        assert!(identity_changes.changed.is_empty());
+    }
+
+    #[async_test]
     async fn test_invalid_key_response() {
         let my_user_id = user_id();
         let my_device_id = device_id();
@@ -2046,21 +2125,30 @@ pub(crate) mod tests {
         let stream = manager.store.devices_stream();
         pin_mut!(stream);
 
-        // Then, the server stops reporting them: they have been logged out.
-        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
-        let response = ruma_response_from_json(&json!({
-            "device_keys": { user_id().as_str(): {} },
+        // When a later /keys/query reports that the user has no devices left,
+        let response: KeysQueryResponse = ruma_response_from_json(&json!({
+            "device_keys": { user_id().to_string(): {} },
+            "failures": {},
         }));
-        manager.receive_keys_query_response(&request_id, &response).await.unwrap();
 
-        let update = assert_ready!(stream);
-        let deleted = update.deleted.get(user_id()).expect("the user should have deleted devices");
-        // Our own device is deliberately never reported as deleted, but the other one
-        // in the key query response is.
+        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
+        let (device_changes, _) =
+            manager.receive_keys_query_response(&request_id, &response).await.unwrap();
+
         assert!(
-            deleted.contains_key(device_id!("LVWOVGOXME")),
-            "the update should name the device that disappeared"
+            !device_changes.deleted.is_empty(),
+            "The devices that went away should be reported as deleted"
         );
+
+        // Then a consumer of the stream can tell which devices disappeared.
+        let update = assert_ready!(stream);
+        let deleted = update.deleted.get(user_id()).expect("Our user should have lost devices");
+
+        assert_eq!(deleted.len(), device_changes.deleted.len());
+
+        for device in &device_changes.deleted {
+            assert!(deleted.contains_key(device.device_id()));
+        }
     }
 
     #[async_test]

@@ -30,7 +30,7 @@ use ruma::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[cfg(feature = "experimental-x509-identity-verification")]
 use crate::x509::X509Verifier;
@@ -446,13 +446,44 @@ impl OtherUserIdentity {
     /// Pin the current identity (public part of the master signing key).
     pub async fn pin_current_master_key(&self) -> Result<(), CryptoStoreError> {
         info!(master_key = ?self.master_key.get_first_key(), "Pinning current identity for user '{}'", self.user_id());
+
+        // Keep the in-memory copy the caller holds in step with what they asked for.
         self.inner.pin();
-        let to_save = UserIdentityData::Other(self.inner.clone());
+
+        let store = self.verification_machine.store.inner();
+
+        // Pinning writes the whole identity back, but this copy was built when the
+        // caller got hold of it. If a `/keys/query` has landed since, writing our copy
+        // would revert the cross-signing keys it brought in and break communication
+        // until the next query. Take the lock, work from what the store holds now, and
+        // only pin if it is still the identity we were asked about.
+        let _guard = store.lock_identity_update().await;
+
+        let stored = store.get_user_identity(self.user_id()).await?;
+
+        let Some(UserIdentityData::Other(stored)) = stored else {
+            warn!("The identity we were asked to pin is no longer in the store, not pinning it");
+            return Ok(());
+        };
+
+        if *stored.master_key() != *self.master_key {
+            warn!(
+                "The stored identity has changed since we were asked to pin it, not pinning                  the master key we were given"
+            );
+            return Ok(());
+        }
+
+        stored.pin();
+
         let changes = Changes {
-            identities: IdentityChanges { changed: vec![to_save], ..Default::default() },
+            identities: IdentityChanges {
+                changed: vec![UserIdentityData::Other(stored)],
+                ..Default::default()
+            },
             ..Default::default()
         };
-        self.verification_machine.store.inner().save_changes(changes).await?;
+        store.save_changes(changes).await?;
+
         Ok(())
     }
 

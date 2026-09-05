@@ -415,6 +415,14 @@ impl SecretStore {
 
         info!(cross_signing_keys = ?export, "Received the cross signing keys from the server");
 
+        // Remember what the secret store actually held, so we can tell a key that was
+        // never there from one we failed to import.
+        let exported = (
+            export.master_key.is_some(),
+            export.self_signing_key.is_some(),
+            export.user_signing_key.is_some(),
+        );
+
         // We need to ensure that we have the public parts of the cross-signing keys,
         // those are represented as the `OwnUserIdentity` struct. The public
         // parts from the server are compared to the public parts re-derived from the
@@ -431,6 +439,27 @@ impl SecretStore {
             .map_err(SecretStorageError::from_secret_import_error)?;
 
         Span::current().record("cross_signing_status", debug(&status));
+
+        // Report a key that secret storage had but that we couldn't import, rather than
+        // carrying on with a partial identity. The public key on the server not
+        // matching the private key we just recovered is the usual cause, and
+        // silently continuing left the user retrying the same recovery key in a
+        // loop.
+        let missing: Vec<String> = [
+            (exported.0 && !status.has_master, "m.cross_signing.master"),
+            (exported.1 && !status.has_self_signing, "m.cross_signing.self_signing"),
+            (exported.2 && !status.has_user_signing, "m.cross_signing.user_signing"),
+        ]
+        .into_iter()
+        .filter(|(missing, _)| *missing)
+        .map(|(_, name)| name.to_owned())
+        .collect();
+
+        if !missing.is_empty() {
+            error!(?missing, "Some cross-signing keys from the secret store could not be imported");
+
+            return Err(SecretStorageError::IncompleteCrossSigningImport { missing });
+        }
 
         info!("Done importing the cross signing keys");
 

@@ -68,7 +68,7 @@ use vodozemac::{Curve25519PublicKey, megolm::SessionOrdering};
 
 use self::types::{
     Changes, CrossSigningKeyExport, DeviceChanges, DeviceUpdates, IdentityChanges, IdentityUpdates,
-    PendingChanges, RoomKeyInfo, RoomKeyWithheldInfo, RoomPendingKeyBundleDetails,
+    PendingChanges, RoomKeyInfo, RoomKeyWithheldInfo, RoomPendingKeyBundleDetails, RoomSettings,
     UserKeyQueryResult,
 };
 use crate::{
@@ -473,7 +473,18 @@ impl StoreTransaction {
 
     /// Commits all dirty fields to the store, and maintains the cache so it
     /// reflects the current state of the database.
-    pub async fn commit(self) -> Result<()> {
+    pub async fn commit(mut self) -> Result<()> {
+        // `account()` takes the account out of the cache whether or not the caller ends
+        // up modifying it, so an untouched account has to be handed back here. Skipping
+        // the write in that case matters: `process_sync_changes` runs several times per
+        // sync and re-pickling the account each time is expensive, especially on
+        // IndexedDB.
+        if self.changes.account.as_ref().is_some_and(|account| !account.dirty())
+            && let Some(account) = self.changes.account.take()
+        {
+            *self.cache.account.lock().await = Some(account);
+        }
+
         if self.changes.is_empty() {
             return Ok(());
         }
@@ -483,7 +494,9 @@ impl StoreTransaction {
 
         self.store.save_pending_changes(self.changes).await?;
 
-        // Make the cache coherent with the database.
+        // Make the cache coherent with the database. `deep_clone` goes through a
+        // pickle, so the clone starts out clean, which is what we want now that it
+        // matches the database.
         if let Some(account) = account {
             *self.cache.account.lock().await = Some(account);
         }
@@ -690,8 +703,34 @@ impl Store {
         self.inner.store.get_sessions(sender_key).await
     }
 
+    /// Get the encryption settings for a room.
+    ///
+    /// Goes through the wrapper's cache rather than straight to the backing
+    /// store: a client asks for these on the critical path of showing a room's
+    /// encryption state, and the store lookup plus deserialization behind them
+    /// is expensive enough to be noticeable.
+    pub async fn get_room_settings(&self, room_id: &RoomId) -> Result<Option<RoomSettings>> {
+        self.inner.store.get_room_settings(room_id).await
+    }
+
     pub(crate) async fn save_changes(&self, changes: Changes) -> Result<()> {
         self.inner.store.save_changes(changes).await
+    }
+
+    /// Take the lock that serialises whole-object writes of devices and user
+    /// identities.
+    ///
+    /// See [`CryptoStoreWrapper::lock_identity_update()`].
+    pub(crate) async fn lock_identity_update(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inner.store.lock_identity_update().await
+    }
+
+    /// Take the lock that serialises the check-and-store of inbound group
+    /// sessions.
+    ///
+    /// See [`CryptoStoreWrapper::lock_inbound_group_session_merge()`].
+    pub(crate) async fn lock_inbound_group_session_merge(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inner.store.lock_inbound_group_session_merge().await
     }
 
     /// Given an `InboundGroupSession` which we have just received, see if we
@@ -1579,6 +1618,11 @@ impl Store {
         from_backup_version: Option<&str>,
         progress_listener: impl Fn(usize, usize),
     ) -> Result<RoomKeyImportResult> {
+        // Hold the merge lock across the whole check-and-store, so a room key arriving
+        // over sync while we import can't slip between our "is this better than what we
+        // have?" check and the write that acts on the answer.
+        let _merge_guard = self.inner.store.lock_inbound_group_session_merge().await;
+
         let sessions: Vec<_> = sessions.collect();
         let mut imported_sessions = Vec::new();
 

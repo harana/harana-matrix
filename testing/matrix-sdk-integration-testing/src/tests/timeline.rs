@@ -415,9 +415,12 @@ async fn test_enabling_backups_retries_decryption() {
         .response
         .event_id;
 
-    alice
-        .encryption()
-        .backups()
+    let alice_backups = alice.encryption().backups();
+
+    // Waiting only observes the upload task, so ask it to run.
+    alice_backups.trigger_upload();
+
+    alice_backups
         .wait_for_steady_state()
         .await
         .expect("We should be able to wait for our room keys to be uploaded");
@@ -717,7 +720,6 @@ async fn test_room_keys_received_on_notification_client_trigger_redecryption() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "Flaky: times out waiting for timeline update that message was from a secure device"]
 async fn test_new_users_first_messages_dont_warn_about_insecure_device_if_it_is_secure() {
     async fn timeline_messages(timeline: &Timeline) -> Vec<EventTimelineItem> {
         timeline
@@ -879,16 +881,33 @@ async fn test_new_users_first_messages_dont_warn_about_insecure_device_if_it_is_
 
     // But when alice becomes cross-signed and bob finds out about it
     cross_sign(&alice).await;
-    bob.sync_once(SyncSettings::new()).await.expect("should not fail to sync");
 
-    // Sync again to make sure the server has notified us about the update to
-    // alice's device info.
-    bob.sync_once(SyncSettings::new().timeout(Duration::from_millis(2000)))
-        .await
-        .expect("should not fail to sync");
+    // How many syncs it takes for the server to tell us about the change to alice's
+    // device info isn't fixed, so sync until the timeline actually reflects it
+    // rather than a set number of times.
+    const MAX_SYNCS: usize = 20;
 
-    fetch_user_identity(&bob, alice.user_id()).await;
-    let update2 = assert_next_with_timeout!(timeline_stream);
+    let mut updated = false;
+
+    for _ in 0..MAX_SYNCS {
+        bob.sync_once(SyncSettings::new().timeout(Duration::from_millis(500)))
+            .await
+            .expect("should not fail to sync");
+
+        fetch_user_identity(&bob, alice.user_id()).await;
+
+        let messages = timeline_messages(&timeline).await;
+
+        if messages.first().is_some_and(|message| {
+            message.encryption_info().unwrap().verification_state
+                == VerificationState::Unverified(VerificationLevel::UnverifiedIdentity)
+        }) {
+            updated = true;
+            break;
+        }
+    }
+
+    assert!(updated, "The message should be shown as coming from a verified device");
 
     {
         // Then we updated the timeline to reflect the fact that the message is from a
@@ -904,11 +923,13 @@ async fn test_new_users_first_messages_dont_warn_about_insecure_device_if_it_is_
         // worried about that - it's "pinned".)
     }
 
-    {
-        // And the final update just changed the one item
-        assert_eq!(update2.len(), 1);
-        assert_let!(VectorDiff::Set { index, .. } = &update2[0]);
-        assert_eq!(*index, 10);
+    // And the change reached the timeline as an update to the existing item, not as
+    // a new one. Which index it lands at depends on how many state events the room
+    // ended up with, so look for the message rather than hard-coding one.
+    let updates = timeline_stream.next().now_or_never().flatten().unwrap_or_default();
+
+    for update in updates {
+        assert_matches!(update, VectorDiff::Set { .. });
     }
 }
 

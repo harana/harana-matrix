@@ -406,6 +406,19 @@ pub enum Error {
     #[error("backups are not enabled")]
     BackupNotEnabled,
 
+    /// A room key we downloaded from the key backup could not be read.
+    ///
+    /// The key is present in the backup, but it could not be deserialized or
+    /// decrypted with the backup decryption key we hold. This is distinct from
+    /// the key simply not being in the backup: no amount of retrying will help,
+    /// and the user needs to be told that rather than being left with a message
+    /// stuck at "waiting for this message".
+    #[error("the room key for session {session_id} in the key backup could not be read")]
+    CorruptBackupRoomKey {
+        /// The megolm session ID of the key that could not be read.
+        session_id: String,
+    },
+
     /// It's forbidden to ignore your own user.
     #[error("can't ignore the logged-in user")]
     CantIgnoreLoggedInUser,

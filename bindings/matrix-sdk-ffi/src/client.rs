@@ -1344,11 +1344,16 @@ impl Client {
         // events (or discarded, if they get decrypted fast enough).
         const UTD_HOOK_GRACE_PERIOD: Duration = Duration::from_secs(60);
 
+        // An event that decrypts this quickly was never a UTD as far as the user is
+        // concerned, so it isn't reported at all. This matches Web.
+        const UTD_HOOK_LATE_DECRYPTION_GRACE_PERIOD: Duration = Duration::from_secs(4);
+
         let mut utd_hook_manager = UtdHookManager::new(
             Arc::new(UtdHook { delegate: utd_delegate.into() }),
             (*self.inner).clone(),
         )
-        .with_max_delay(UTD_HOOK_GRACE_PERIOD);
+        .with_max_delay(UTD_HOOK_GRACE_PERIOD)
+        .with_late_decryption_grace_period(UTD_HOOK_LATE_DECRYPTION_GRACE_PERIOD);
 
         if let Err(e) = utd_hook_manager.reload_from_store().await {
             error!("Unable to reload UTD hook data from data store: {e}");

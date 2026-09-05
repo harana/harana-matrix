@@ -299,7 +299,7 @@ impl Backups {
         result
     }
 
-    /// Returns a future to wait for room keys to be uploaded.
+    /// Wake up the task that uploads room keys to the backup.
     ///
     /// Awaiting the future only observes the upload task; it does not start
     /// one. Call [`Backups::trigger_upload()`] first if you want the keys that
@@ -320,6 +320,9 @@ impl Backups {
     /// use futures_util::StreamExt;
     ///
     /// let backups = client.encryption().backups();
+    ///
+    /// backups.trigger_upload();
+    ///
     /// let wait_for_steady_state = backups.wait_for_steady_state();
     ///
     /// backups.trigger_upload();
@@ -357,7 +360,7 @@ impl Backups {
             // creating this future and awaiting it can't finish unnoticed.
             receiver: progress.subscribe_receiver(),
             progress,
-            timeout: None,
+            old_delay: None,
         }
     }
 
@@ -447,6 +450,41 @@ impl Backups {
         self.fetch_exists_on_server().await
     }
 
+    /// Bring our local view of the backup in line with the homeserver's.
+    ///
+    /// Another client can delete the backup version we know about and create a
+    /// new one; until we notice, we report backups as enabled while every
+    /// upload is going to be rejected. This asks the homeserver which version
+    /// is current and, if it isn't the one we hold the key for, disables the
+    /// local backup so the state stops lying.
+    ///
+    /// Returns the version the homeserver currently has, if any.
+    pub async fn reconcile_with_server(&self) -> Result<Option<String>, Error> {
+        let server_version = self.get_current_version().await?.map(|response| response.version);
+
+        self.client.inner.e2ee.backup_state.set_backup_exists_on_server(server_version.is_some());
+
+        let olm_machine = self.client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
+
+        let local_version = olm_machine.backup_machine().get_backup_keys().await?.backup_version;
+
+        if let Some(local_version) = local_version
+            && server_version.as_ref() != Some(&local_version)
+        {
+            warn!(
+                local_version,
+                server_version,
+                "The backup version we hold a key for is no longer the one on the server, \
+                 disabling backups locally"
+            );
+
+            self.handle_deleted_backup_version(olm_machine).await?;
+        }
+
+        Ok(server_version)
+    }
+
     /// Subscribe to a stream that notifies when a room key for the specified
     /// room is downloaded from the key backup.
     pub fn room_keys_for_room_stream(
@@ -496,8 +534,17 @@ impl Backups {
                 RoomKeyBackup::new(response.sessions),
             )]));
 
-            self.handle_downloaded_room_keys(response, decryption_key, &version, olm_machine)
+            let unreadable = self
+                .handle_downloaded_room_keys(response, decryption_key, &version, olm_machine)
                 .await?;
+
+            if !unreadable.is_empty() {
+                error!(
+                    ?unreadable,
+                    %room_id,
+                    "Some room keys in the backup for this room could not be read"
+                );
+            }
         }
 
         Ok(())
@@ -537,8 +584,16 @@ impl Backups {
                     )])),
                 )]));
 
-                self.handle_downloaded_room_keys(response, decryption_key, &version, olm_machine)
+                let unreadable = self
+                    .handle_downloaded_room_keys(response, decryption_key, &version, olm_machine)
                     .await?;
+
+                // The key we asked for is in the backup, but we can't read it. Say so
+                // rather than reporting a successful download and leaving the event stuck
+                // at "waiting for this message" forever.
+                if unreadable.iter().any(|id| id == session_id) {
+                    return Err(Error::CorruptBackupRoomKey { session_id: session_id.to_owned() });
+                }
 
                 Ok(true)
             } else {
@@ -576,24 +631,30 @@ impl Backups {
 
     /// Decrypt and forward a response containing backed up room keys to the
     /// [`OlmMachine`].
+    ///
+    /// Returns the session IDs of the keys that were in the backup but could
+    /// not be read, so a caller that asked for one particular key can tell a
+    /// corrupt key from a missing one.
     async fn handle_downloaded_room_keys(
         &self,
         backed_up_keys: get_backup_keys::v3::Response,
         backup_decryption_key: BackupDecryptionKey,
         backup_version: &str,
         olm_machine: &OlmMachine,
-    ) -> Result<(), Error> {
+    ) -> Result<Vec<String>, Error> {
         let mut decrypted_room_keys: Vec<_> = Vec::new();
+        let mut unreadable_sessions: Vec<String> = Vec::new();
 
         for (room_id, room_keys) in backed_up_keys.rooms {
             for (session_id, room_key) in room_keys.sessions {
                 let room_key = match room_key.deserialize() {
                     Ok(k) => k,
                     Err(e) => {
-                        warn!(
+                        error!(
                             "Couldn't deserialize a room key we downloaded from backups, session \
                              ID: {session_id}, error: {e:?}"
                         );
+                        unreadable_sessions.push(session_id);
                         continue;
                     }
                 };
@@ -602,10 +663,11 @@ impl Backups {
                     match backup_decryption_key.decrypt_session_data(room_key.session_data) {
                         Ok(k) => k,
                         Err(e) => {
-                            warn!(
+                            error!(
                                 "Couldn't decrypt a room key we downloaded from backups, session \
                                  ID: {session_id}, error: {e:?}"
                             );
+                            unreadable_sessions.push(session_id);
                             continue;
                         }
                     };
@@ -627,7 +689,7 @@ impl Backups {
         // we're going to send things out in our own custom broadcaster.
         let _ = self.client.inner.e2ee.backup_state.room_keys_broadcaster.send(result);
 
-        Ok(())
+        Ok(unreadable_sessions)
     }
 
     /// Download all room keys from the backup on the homeserver.
@@ -642,7 +704,13 @@ impl Backups {
         let olm_machine = self.client.olm_machine().await;
         let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
 
-        self.handle_downloaded_room_keys(response, decryption_key, &version, olm_machine).await?;
+        let unreadable = self
+            .handle_downloaded_room_keys(response, decryption_key, &version, olm_machine)
+            .await?;
+
+        if !unreadable.is_empty() {
+            error!(?unreadable, "Some room keys in the backup could not be read");
+        }
 
         Ok(())
     }
@@ -1104,8 +1172,6 @@ impl Backups {
         }
     }
 
-    /// Send a notification to the task which is responsible for uploading room
-    /// keys to the backup that it might have new room keys to back up.
     /// Whether we know about room keys that have not been uploaded yet.
     ///
     /// Returns `false` when we can't tell, i.e. when there is no olm machine or
@@ -1135,6 +1201,8 @@ impl Backups {
         self.maybe_trigger_backup();
     }
 
+    /// Send a notification to the task which is responsible for uploading room
+    /// keys to the backup that it might have new room keys to back up.
     pub(crate) fn maybe_trigger_backup(&self) {
         let tasks = self.client.inner.e2ee.tasks.lock();
 
@@ -1623,6 +1691,8 @@ mod test {
 
         let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
+        // Waiting only observes now, so the upload has to be asked for explicitly. The
+        // delay above is already in effect at this point.
         backups.trigger_upload();
 
         let task = matrix_sdk_common::executor::spawn({

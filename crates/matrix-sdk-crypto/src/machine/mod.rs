@@ -268,6 +268,16 @@ pub struct OlmMachineInner {
     identity_manager: IdentityManager,
     /// A state machine that handles creating room key backups.
     backup_machine: BackupMachine,
+    /// The `/keys/upload` request we have handed out and that hasn't been
+    /// marked as sent yet.
+    ///
+    /// A client that polls [`OlmMachine::outgoing_requests()`] again before
+    /// marking the previous upload as sent used to get a second request
+    /// carrying the same one-time keys under a new ID. Sending both makes the
+    /// homeserver reject the second one with a 400 for a key it already has,
+    /// and the collision reproduces on every retry. Handing back the same
+    /// request keeps that from happening.
+    outgoing_keys_upload_request: StdRwLock<Option<(OwnedTransactionId, UploadKeysRequest)>>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -403,6 +413,7 @@ impl OlmMachine {
             key_request_machine,
             identity_manager,
             backup_machine,
+            outgoing_keys_upload_request: Default::default(),
         });
 
         Self { inner }
@@ -652,13 +663,29 @@ impl OlmMachine {
         let mut requests = Vec::new();
 
         {
-            let store_cache = self.inner.store.cache().await?;
-            let account = store_cache.account().await?;
-            if let Some(r) = self.keys_for_upload(&account).await.map(|r| OutgoingRequest {
-                request_id: TransactionId::new(),
-                request: Arc::new(r.into()),
-            }) {
-                requests.push(r);
+            let outstanding = self.inner.outgoing_keys_upload_request.read().clone();
+
+            let upload = if let Some((request_id, request)) = outstanding {
+                // We already handed this request out and it hasn't been marked as sent.
+                // Give back the very same one rather than minting a new ID for the same
+                // keys.
+                Some(OutgoingRequest { request_id, request: Arc::new(request.into()) })
+            } else {
+                let store_cache = self.inner.store.cache().await?;
+                let account = store_cache.account().await?;
+
+                self.keys_for_upload(&account).await.map(|request| {
+                    let request_id = TransactionId::new();
+
+                    *self.inner.outgoing_keys_upload_request.write() =
+                        Some((request_id.clone(), request.clone()));
+
+                    OutgoingRequest { request_id, request: Arc::new(request.into()) }
+                })
+            };
+
+            if let Some(upload) = upload {
+                requests.push(upload);
             }
         }
 
@@ -729,6 +756,16 @@ impl OlmMachine {
     ) -> OlmResult<()> {
         match response.into() {
             AnyIncomingResponse::KeysUpload(response) => {
+                // The keys in this request are accounted for now, so the next poll may
+                // build a fresh request.
+                {
+                    let mut outstanding = self.inner.outgoing_keys_upload_request.write();
+
+                    if outstanding.as_ref().is_some_and(|(id, _)| id == request_id) {
+                        *outstanding = None;
+                    }
+                }
+
                 Box::pin(self.receive_keys_upload_response(response)).await?;
             }
             AnyIncomingResponse::KeysQuery(response) => {
@@ -804,6 +841,13 @@ impl OlmMachine {
         let (upload_signing_keys_req, upload_signatures_req) = if reset || identity.is_empty().await
         {
             info!("Creating new cross signing identity");
+
+            // A `/keys/query` landing while we do this sees a public identity it doesn't
+            // recognise and throws the private keys away, leaving an account that can log
+            // in but can't set up recovery. Take the same lock that processing a
+            // `/keys/query` response takes, so the new identity is written before any
+            // response can act on it.
+            let _identity_guard = self.store().lock_identity_update().await;
 
             let (identity, upload_signing_keys_req, upload_signatures_req) = {
                 let cache = self.inner.store.cache().await?;
@@ -949,6 +993,41 @@ impl OlmMachine {
         // request that arrived from one of them, before or in the same sync response
         // as the device list update, was put aside instead of being dropped. Now is
         // the time to handle it.
+        self.inner.verification_machine.retry_pending_requests().await?;
+
+        Ok(changes)
+    }
+
+    /// Feed a `/keys/query` response into the [`OlmMachine`] that it did not
+    /// ask for.
+    ///
+    /// Normally a `/keys/query` response reaches the [`OlmMachine`] through
+    /// [`OlmMachine::mark_request_as_sent()`], answering a request the machine
+    /// built itself. This method is for the case where a consumer has device
+    /// keys for users the machine isn't tracking — users that aren't in any
+    /// encrypted room we share — and wants the machine to know about them, for
+    /// instance to show their verification state.
+    ///
+    /// Users the machine is already tracking are ignored, so that an
+    /// out-of-band response cannot race the machine's own device list tracking
+    /// and mark a tracked user as up to date with data the machine didn't ask
+    /// for. Call
+    /// [`OlmMachine::update_tracked_users()`] instead if you want those users
+    /// tracked from now on.
+    ///
+    /// Returns the devices and identities that were newly discovered or that
+    /// changed.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - Any `/keys/query` response.
+    pub async fn receive_keys_query(
+        &self,
+        response: &KeysQueryResponse,
+    ) -> OlmResult<(DeviceChanges, IdentityChanges)> {
+        let changes =
+            self.inner.identity_manager.receive_out_of_band_keys_query_response(response).await?;
+
         self.inner.verification_machine.retry_pending_requests().await?;
 
         Ok(changes)
@@ -1929,6 +2008,12 @@ impl OlmMachine {
             )
         }
 
+        // Processing the to-device events decides, for each room key we receive,
+        // whether it is better than the one already in the store, and the answer is
+        // only acted on by the write below. Hold the merge lock across both so
+        // an import running at the same time can't make that decision stale.
+        let merge_guard = self.store().lock_inbound_group_session_merge().await;
+
         let (events, changes) = self
             .preprocess_sync_changes(&mut store_transaction, sync_changes, decryption_settings)
             .await?;
@@ -1939,6 +2024,8 @@ impl OlmMachine {
             changes.inbound_group_sessions.iter().map(RoomKeyInfo::from).collect();
 
         self.store().save_changes(changes).await?;
+        drop(merge_guard);
+
         store_transaction.commit().await?;
 
         Ok((events, room_key_updates))
@@ -2476,6 +2563,7 @@ impl OlmMachine {
     ) -> MegolmResult<DecryptedRoomEvent> {
         let _timer = timer!(tracing::Level::TRACE, "_method");
 
+        let raw_event = event;
         let event = event.deserialize()?;
 
         Span::current()
@@ -2496,6 +2584,16 @@ impl OlmMachine {
             #[cfg(feature = "experimental-algorithms")]
             RoomEventEncryptionScheme::MegolmV2AesSha2(c) => c.into(),
             RoomEventEncryptionScheme::Unknown(_) => {
+                // A redaction strips the `algorithm` field along with the rest of the
+                // content, so a redacted event is indistinguishable from one using an
+                // algorithm we don't know unless we look at `unsigned.redacted_because`.
+                // Reporting these as unsupported-algorithm failures used to inflate UTD
+                // rates with events that were never going to decrypt.
+                if is_redacted(raw_event) {
+                    debug!("Not decrypting a room event that has been redacted");
+                    return Err(MegolmError::RedactedEvent);
+                }
+
                 warn!("Received an encrypted room event with an unsupported algorithm");
                 return Err(EventError::UnsupportedAlgorithm.into());
             }
@@ -3366,6 +3464,24 @@ pub struct EncryptionSyncChanges<'a> {
     pub next_batch_token: Option<String>,
 }
 
+/// Has this event been redacted?
+///
+/// A redaction removes the `algorithm` and `ciphertext` of an
+/// `m.room.encrypted` event, leaving only `unsigned.redacted_because` to tell
+/// us that decryption was never going to be possible.
+fn is_redacted(raw_event: &Raw<EncryptedEvent>) -> bool {
+    #[derive(serde::Deserialize)]
+    struct UnsignedWithRedactedBecause {
+        redacted_because: Option<serde::de::IgnoredAny>,
+    }
+
+    raw_event
+        .get_field::<UnsignedWithRedactedBecause>("unsigned")
+        .ok()
+        .flatten()
+        .is_some_and(|unsigned| unsigned.redacted_because.is_some())
+}
+
 /// Convert a [`MegolmError`] into an [`UnableToDecryptInfo`] or a
 /// [`CryptoStoreError`].
 ///
@@ -3381,6 +3497,7 @@ fn megolm_error_to_utd_info(
     let reason = match error {
         EventError(_) => UnableToDecryptReason::MalformedEncryptedEvent,
         Decode(_) => UnableToDecryptReason::MalformedEncryptedEvent,
+        RedactedEvent => UnableToDecryptReason::Redacted,
         MissingRoomKey(maybe_withheld) => {
             UnableToDecryptReason::MissingMegolmSession { withheld_code: maybe_withheld }
         }

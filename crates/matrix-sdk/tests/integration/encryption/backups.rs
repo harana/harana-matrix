@@ -579,6 +579,7 @@ async fn test_steady_state_waiting() -> TestResult {
 
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
+    // Waiting only observes the upload task, so ask it to run.
     backups.trigger_upload();
 
     wait_for_steady_state

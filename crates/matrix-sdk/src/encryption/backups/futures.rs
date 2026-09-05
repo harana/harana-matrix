@@ -61,7 +61,9 @@ pub struct WaitForSteadyState<'a> {
     /// Buffers upload states from the moment this future was created, so that
     /// an upload finishing before the future is awaited is still observed.
     pub(super) receiver: broadcast::Receiver<UploadState>,
-    pub(super) timeout: Option<Duration>,
+    /// The upload delay that was in place before [`Self::with_delay()`]
+    /// replaced it, to be put back once we are done waiting.
+    pub(super) old_delay: Option<Duration>,
 }
 
 impl WaitForSteadyState<'_> {
@@ -81,9 +83,25 @@ impl WaitForSteadyState<'_> {
     /// This method allows you to override how long the [`Client`] will wait.
     /// The default value is 100 ms.
     ///
+    /// The delay takes effect immediately, not when the future is awaited, so
+    /// an upload started right after this call already uses it. It is put back
+    /// to its previous value once the future resolves.
+    ///
     /// [`Client`]: crate::Client
     pub fn with_delay(mut self, delay: Duration) -> Self {
-        self.timeout = Some(delay);
+        let old_delay = {
+            let mut lock =
+                self.backups.client.inner.e2ee.backup_state.upload_delay.write().unwrap();
+            let old_delay = lock.to_owned();
+
+            *lock = delay;
+
+            old_delay
+        };
+
+        // Keep the value from before the first override, so repeated calls still
+        // restore the delay the client actually started with.
+        self.old_delay.get_or_insert(old_delay);
 
         self
     }
@@ -95,7 +113,7 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let Self { backups, timeout, progress, receiver } = self;
+            let Self { backups, old_delay, progress, receiver } = self;
 
             trace!("Creating a stream to wait for the steady state");
 
@@ -104,17 +122,6 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
             // window between creating the future and awaiting it.
             let mut progress_stream =
                 tokio_stream::once(Ok(progress.get())).chain(BroadcastStream::new(receiver));
-
-            let old_delay = if let Some(delay) = timeout {
-                let mut lock = backups.client.inner.e2ee.backup_state.upload_delay.write().unwrap();
-                let old_delay = Some(lock.to_owned());
-
-                *lock = delay;
-
-                old_delay
-            } else {
-                None
-            };
 
             trace!("Waiting for the upload steady state");
 

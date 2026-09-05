@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use futures_util::stream::StreamExt;
 use matrix_sdk::{
@@ -11,7 +11,7 @@ use matrix_sdk::{
         VerificationRequestState, format_emojis,
     },
     ruma::{
-        UserId,
+        OwnedUserId, UserId,
         events::{
             key::verification::request::ToDeviceKeyVerificationRequestEvent,
             room::message::{MessageType, OriginalSyncRoomMessageEvent},
@@ -53,6 +53,7 @@ async fn print_devices(user_id: &UserId, client: &Client) {
     }
 }
 
+/// Drive a SAS verification to its end, whichever side started it.
 async fn sas_verification_handler(client: Client, sas: SasVerification) {
     println!(
         "Starting verification with {} {}",
@@ -99,17 +100,35 @@ async fn sas_verification_handler(client: Client, sas: SasVerification) {
     }
 }
 
-async fn request_verification_handler(client: Client, request: VerificationRequest) {
-    println!("Accepting verification request from {}", request.other_user_id());
-    request.accept().await.expect("Can't accept verification request");
+/// Follow a verification request until it turns into a concrete verification
+/// flow, or ends.
+///
+/// The same loop works for a request we received and for one we sent: the only
+/// difference is that an incoming request has to be accepted first, which is
+/// what `accept` selects.
+async fn verification_request_handler(client: Client, request: VerificationRequest, accept: bool) {
+    if accept {
+        println!("Accepting verification request from {}", request.other_user_id());
+        request.accept().await.expect("Can't accept verification request");
+    } else {
+        println!("Waiting for {} to accept the verification request", request.other_user_id());
+    }
 
     let mut stream = request.changes();
 
     while let Some(state) = stream.next().await {
         match state {
             VerificationRequestState::Created { .. }
-            | VerificationRequestState::Requested { .. }
-            | VerificationRequestState::Ready { .. } => (),
+            | VerificationRequestState::Requested { .. } => (),
+            VerificationRequestState::Ready { .. } => {
+                // The side that sent the request picks the method, once the other side
+                // has told us which ones it supports. Starting SAS moves the request
+                // into the `Transitioned` state, which is where the flow is picked up
+                // below, for both sides.
+                if !accept {
+                    request.start_sas().await.expect("Can't start a SAS verification");
+                }
+            }
             VerificationRequestState::Transitioned { verification } => {
                 // We only support SAS verification.
                 if let Verification::SasV1(s) = verification {
@@ -117,12 +136,29 @@ async fn request_verification_handler(client: Client, request: VerificationReque
                     break;
                 }
             }
-            VerificationRequestState::Done | VerificationRequestState::Cancelled(_) => break,
+            VerificationRequestState::Done { other_device_data } => {
+                match other_device_data {
+                    Some(device) => println!(
+                        "Verification with {} {} is done",
+                        device.user_id(),
+                        device.device_id()
+                    ),
+                    None => println!("The verification request was handled by another device"),
+                }
+
+                break;
+            }
+            VerificationRequestState::Cancelled(cancel_info) => {
+                println!("The verification was cancelled, reason: {}", cancel_info.reason());
+                break;
+            }
         }
     }
 }
 
-async fn sync(client: Client) -> matrix_sdk::Result<()> {
+/// Register the handlers for verification requests that reach us
+/// asynchronously, either as a to-device event or as a message in a room.
+fn add_verification_request_handlers(client: &Client) {
     client.add_event_handler(
         |ev: ToDeviceKeyVerificationRequestEvent, client: Client| async move {
             let request = client
@@ -131,7 +167,7 @@ async fn sync(client: Client) -> matrix_sdk::Result<()> {
                 .await
                 .expect("Request object wasn't created");
 
-            tokio::spawn(request_verification_handler(client, request));
+            tokio::spawn(verification_request_handler(client, request, true));
         },
     );
 
@@ -143,11 +179,45 @@ async fn sync(client: Client) -> matrix_sdk::Result<()> {
                 .await
                 .expect("Request object wasn't created");
 
-            tokio::spawn(request_verification_handler(client, request));
+            tokio::spawn(verification_request_handler(client, request, true));
         }
     });
+}
 
-    client.sync(SyncSettings::new()).await?;
+/// Send a verification request to another user (or to our own other devices)
+/// and drive it.
+///
+/// The identity of the user we want to verify only exists locally once we have
+/// downloaded their device keys, which is why this runs after a first sync
+/// rather than straight after login.
+async fn request_verification(client: &Client, user_id: &UserId) -> Result<()> {
+    let identity = client
+        .encryption()
+        .get_user_identity(user_id)
+        .await?
+        .context("We don't know about that user's cross-signing identity")?;
+
+    let request = identity.request_verification().await?;
+
+    println!("Sent a verification request to {user_id}");
+
+    tokio::spawn(verification_request_handler(client.clone(), request, false));
+
+    Ok(())
+}
+
+async fn sync(client: Client, verify: Option<OwnedUserId>) -> Result<()> {
+    add_verification_request_handlers(&client);
+
+    // A first sync so that we know about the other side's devices, and so that a
+    // request they sent before we started shows up.
+    let response = client.sync_once(SyncSettings::new()).await?;
+
+    if let Some(user_id) = verify {
+        request_verification(&client, &user_id).await?;
+    }
+
+    client.sync(SyncSettings::new().token(response.next_batch)).await?;
 
     Ok(())
 }
@@ -166,25 +236,37 @@ struct Cli {
     #[clap(value_parser)]
     password: String,
 
+    /// Send a verification request to this user instead of only waiting for
+    /// one.
+    ///
+    /// Pass our own user ID to verify another one of our own devices.
+    #[clap(short, long)]
+    verify: Option<OwnedUserId>,
+
     /// Set the proxy that should be used for the connection.
     #[clap(short, long)]
     proxy: Option<Url>,
 
     /// Enable verbose logging output.
-    #[clap(short, long, action)]
+    #[clap(long, action)]
     verbose: bool,
 }
 
-async fn login(cli: Cli) -> Result<Client> {
-    let builder = Client::builder().homeserver_url(cli.homeserver);
+async fn login(
+    homeserver: Url,
+    proxy: Option<Url>,
+    user_name: &str,
+    password: &str,
+) -> Result<Client> {
+    let builder = Client::builder().homeserver_url(homeserver);
 
-    let builder = if let Some(proxy) = cli.proxy { builder.proxy(proxy) } else { builder };
+    let builder = if let Some(proxy) = proxy { builder.proxy(proxy) } else { builder };
 
     let client = builder.build().await?;
 
     client
         .matrix_auth()
-        .login_username(&cli.user_name, &cli.password)
+        .login_username(user_name, password)
         .initial_device_display_name("rust-sdk")
         .await?;
 
@@ -199,9 +281,9 @@ async fn main() -> Result<()> {
         tracing_subscriber::fmt::init();
     }
 
-    let client = login(cli).await?;
+    let client = login(cli.homeserver, cli.proxy, &cli.user_name, &cli.password).await?;
 
-    sync(client).await?;
+    sync(client, cli.verify).await?;
 
     Ok(())
 }
