@@ -63,8 +63,8 @@ struct PendingRequest {
 }
 
 impl PendingRequest {
-    fn from_device(&self) -> &DeviceId {
-        self.content.from_device()
+    fn sending_device(&self) -> &DeviceId {
+        self.content.sending_device()
     }
 }
 
@@ -87,7 +87,7 @@ enum OwnedPendingContent {
 }
 
 impl OwnedPendingContent {
-    fn from_device(&self) -> &DeviceId {
+    fn sending_device(&self) -> &DeviceId {
         match self {
             Self::RequestToDevice(content) => &content.from_device,
             Self::RequestRoom(content) => &content.from_device,
@@ -456,7 +456,7 @@ impl VerificationMachine {
 
             let Some(device_data) = self
                 .store
-                .get_device(&pending_request.sender, pending_request.from_device())
+                .get_device(&pending_request.sender, pending_request.sending_device())
                 .await?
             else {
                 still_pending.push(pending_request.clone());
@@ -465,7 +465,7 @@ impl VerificationMachine {
 
             info!(
                 sender = ?pending_request.sender,
-                from_device = pending_request.from_device().as_str(),
+                from_device = pending_request.sending_device().as_str(),
                 "The device list caught up with a verification event we had put aside",
             );
 

@@ -785,6 +785,13 @@ pub struct CrossSigningStatus {
     /// Do we have the user signing key, this one is necessary to sign other
     /// users.
     pub has_user_signing: bool,
+    /// Have the public keys of this identity been published to the homeserver?
+    ///
+    /// An identity we created but never managed to publish is invisible to
+    /// everybody else, and nothing retries the upload on its own, so a client
+    /// seeing this as `false` alongside a complete set of keys should publish
+    /// them again.
+    pub is_published: bool,
 }
 
 /// A struct containing private cross signing keys that can be backed up or
@@ -910,6 +917,7 @@ impl From<matrix_sdk_crypto::CrossSigningStatus> for CrossSigningStatus {
             has_master: s.has_master,
             has_self_signing: s.has_self_signing,
             has_user_signing: s.has_user_signing,
+            is_published: s.is_published,
         }
     }
 }

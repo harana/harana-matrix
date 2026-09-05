@@ -767,10 +767,13 @@ impl Encryption {
         &self,
         auth_data: Option<AuthData>,
     ) -> Result<CrossSigningBootstrapResult, ClientError> {
-        // Bail out before touching anything if we already have a complete identity, so
-        // that a client calling this on every start can't lose the keys it has.
+        // Bail out before touching anything if we already have a complete identity that
+        // reached the homeserver, so that a client calling this on every start can't
+        // lose the keys it has. A complete identity that was never published is not
+        // enough: nothing retries that upload on its own, so fall through and publish
+        // the keys we already hold.
         if let Some(status) = self.inner.cross_signing_status().await
-            && status.is_complete()
+            && status.is_usable()
         {
             return Ok(CrossSigningBootstrapResult::AlreadyPresent);
         }
