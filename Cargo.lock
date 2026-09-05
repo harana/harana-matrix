@@ -3956,6 +3956,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "matrix-sdk-state-res"
+version = "0.18.0"
+dependencies = [
+ "matrix-sdk-test-macros",
+ "matrix-sdk-test-utils",
+ "ruma",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "matrix-sdk-store-encryption"
 version = "0.18.0"
 dependencies = [
@@ -5370,6 +5383,7 @@ dependencies = [
  "ruma-federation-api",
  "ruma-html",
  "ruma-signatures",
+ "ruma-state-res",
  "web-time",
 ]
 
@@ -5523,6 +5537,21 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ruma-state-res"
+version = "0.17.0"
+source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
+dependencies = [
+ "js_int",
+ "ruma-common",
+ "ruma-events",
+ "ruma-signatures",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tracing",
 ]
 
 [[package]]
