@@ -125,7 +125,11 @@ impl SqliteMediaStore {
 
         let db_path = config.path.join(DATABASE_NAME);
         let pool_config = config.pool_config();
-        let runtime_config = config.runtime_config();
+        let mut runtime_config = config.runtime_config();
+        // The media store only holds a cache that can be re-synchronized from the
+        // server, so `NORMAL` is a good default: it avoids `fsync`ing on every
+        // commit while still being durable across application crashes.
+        runtime_config.synchronous.get_or_insert(crate::Synchronous::Normal);
 
         let pool = config.build_pool_of_connections(DATABASE_NAME)?;
 

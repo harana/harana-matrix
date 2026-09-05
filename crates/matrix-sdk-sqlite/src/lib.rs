@@ -316,17 +316,20 @@ impl SqliteStoreConfig {
     /// disks or RAID arrays. [`Synchronous::Normal`] only syncs at
     /// checkpoints, which is a lot cheaper while still being safe against
     /// application crashes; data can only be lost after an OS crash or a
-    /// power loss, and even then, only the store cache is affected: it will
-    /// simply be resynchronized from the homeserver.
+    /// power loss.
     ///
     /// See [`PRAGMA synchronous`] to learn more.
     ///
-    /// The default value is [`Synchronous::Normal`].
+    /// When this is never called, each store picks its own default:
+    /// [`Synchronous::Normal`] for the state, event cache and media stores,
+    /// since they only hold data that can be resynchronized from the
+    /// homeserver, and [`Synchronous::Full`] for the crypto store, since
+    /// losing encryption keys is not recoverable.
     ///
     /// [wal]: https://www.sqlite.org/wal.html
     /// [`PRAGMA synchronous`]: https://www.sqlite.org/pragma.html#pragma_synchronous
     pub fn synchronous(mut self, synchronous: Synchronous) -> Self {
-        self.runtime_config.synchronous = synchronous;
+        self.runtime_config.synchronous = Some(synchronous);
         self
     }
 
@@ -392,10 +395,10 @@ struct RuntimeConfig {
     /// with this value.
     journal_size_limit: u32,
 
-    /// Regardless of the value,
-    /// [`utils::SqliteAsyncConnExt::synchronous`] will always be called with
-    /// this value.
-    synchronous: Synchronous,
+    /// If `Some`, [`utils::SqliteAsyncConnExt::synchronous`] will be called
+    /// with this value. If `None`, each store applies its own default; see
+    /// [`SqliteStoreConfig::synchronous`].
+    synchronous: Option<Synchronous>,
 }
 
 impl Default for RuntimeConfig {
@@ -407,8 +410,8 @@ impl Default for RuntimeConfig {
             cache_size: 2_000_000,
             // A limit of 10Mib.
             journal_size_limit: 10_000_000,
-            // Only sync at checkpoints; avoid an `fsync` on every commit.
-            synchronous: Synchronous::Normal,
+            // No override; each store picks its own default.
+            synchronous: None,
         }
     }
 }
@@ -449,7 +452,7 @@ pub enum Synchronous {
 
 impl Synchronous {
     /// Returns the associated `PRAGMA synchronous` value.
-    fn as_pragma_str(self) -> &'static str {
+    pub(crate) fn as_pragma_str(self) -> &'static str {
         match self {
             Self::Off => "OFF",
             Self::Normal => "NORMAL",
@@ -476,7 +479,7 @@ mod tests {
         assert!(store_config.runtime_config.optimize);
         assert_eq!(store_config.runtime_config.cache_size, 2_000_000);
         assert_eq!(store_config.runtime_config.journal_size_limit, 10_000_000);
-        assert_eq!(store_config.runtime_config.synchronous, Synchronous::Normal);
+        assert_eq!(store_config.runtime_config.synchronous, None);
     }
 
     #[test]
@@ -505,7 +508,7 @@ mod tests {
         assert!(store_config.runtime_config.optimize.not());
         assert_eq!(store_config.runtime_config.cache_size, 43);
         assert_eq!(store_config.runtime_config.journal_size_limit, 44);
-        assert_eq!(store_config.runtime_config.synchronous, Synchronous::Full);
+        assert_eq!(store_config.runtime_config.synchronous, Some(Synchronous::Full));
     }
 
     #[test]
@@ -533,7 +536,7 @@ mod tests {
         assert!(store_config.runtime_config.optimize.not());
         assert_eq!(store_config.runtime_config.cache_size, 43);
         assert_eq!(store_config.runtime_config.journal_size_limit, 44);
-        assert_eq!(store_config.runtime_config.synchronous, Synchronous::Off);
+        assert_eq!(store_config.runtime_config.synchronous, Some(Synchronous::Off));
     }
 
     #[test]
@@ -541,6 +544,13 @@ mod tests {
         let store_config = SqliteStoreConfig::new(Path::new("foo")).path(Path::new("bar"));
 
         assert_eq!(store_config.path, PathBuf::from("bar"));
+    }
+
+    #[test]
+    fn test_store_config_synchronous() {
+        let store_config = SqliteStoreConfig::new(Path::new("foo")).synchronous(Synchronous::Off);
+
+        assert_eq!(store_config.runtime_config.synchronous, Some(Synchronous::Off));
     }
 
     #[test]
