@@ -246,7 +246,8 @@ impl MediaEventContent for LocationMessageEventContent {
 
 #[cfg(test)]
 mod tests {
-    use ruma::{mxc_uri, uint};
+    use assert_matches2::assert_let;
+    use ruma::{events::room::ImageInfo, mxc_uri, owned_mxc_uri, uint};
     use serde_json::json;
 
     use super::*;
@@ -329,5 +330,193 @@ mod tests {
         };
 
         assert_eq!(file.uri(), mxc_uri);
+    }
+    /// The unique key of a media request must distinguish the file from its
+    /// thumbnails, and the thumbnails from each other.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#thumbnails>.
+    #[test]
+    fn test_media_format_unique_keys() {
+        assert_eq!(MediaFormat::File.unique_key(), "file");
+
+        let scaled = MediaThumbnailSettings::new(uint!(100), uint!(50));
+        assert_eq!(scaled.unique_key(), "scale_100x50");
+
+        let cropped = MediaThumbnailSettings::with_method(Method::Crop, uint!(100), uint!(50));
+        assert_eq!(cropped.unique_key(), "crop_100x50");
+
+        // The dimensions are part of the key…
+        let bigger = MediaThumbnailSettings::new(uint!(200), uint!(50));
+        assert_ne!(scaled.unique_key(), bigger.unique_key());
+
+        // …and so is the animated flag.
+        let mut animated = MediaThumbnailSettings::new(uint!(100), uint!(50));
+        animated.animated = true;
+        assert_eq!(animated.unique_key(), "scale_100x50_animated");
+    }
+
+    /// The unique key of a media request combines the source and the format,
+    /// so that the file and its thumbnails are cached separately.
+    #[test]
+    fn test_media_request_unique_key() {
+        let source = MediaSource::Plain(owned_mxc_uri!("mxc://homeserver/media"));
+
+        let file = MediaRequestParameters { source: source.clone(), format: MediaFormat::File };
+        assert_eq!(file.unique_key(), "mxc://homeserver/media_file");
+
+        let thumbnail = MediaRequestParameters {
+            source,
+            format: MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(100), uint!(50))),
+        };
+        assert_eq!(thumbnail.unique_key(), "mxc://homeserver/media_scale_100x50");
+
+        assert_ne!(file.unique_key(), thumbnail.unique_key());
+    }
+
+    /// The unique key of an encrypted source is its URL, so that a file keeps
+    /// the same cache key whether it is encrypted or not.
+    #[test]
+    fn test_encrypted_source_unique_key() {
+        let mxc_uri = mxc_uri!("mxc://homeserver/media");
+        let encrypted = MediaSource::Encrypted(Box::new(
+            serde_json::from_value(json!({
+                "url": mxc_uri,
+                "key": {
+                    "kty": "oct",
+                    "key_ops": ["encrypt", "decrypt"],
+                    "alg": "A256CTR",
+                    "k": "b50ACIv6LMn9AfMCFD1POJI_UAFWIclxAN1kWrEO2X8",
+                    "ext": true,
+                },
+                "iv": "AK1wyzigZtQAAAABAAAAKK",
+                "hashes": {
+                    "sha256": "/NogKqW5bz/m8xHgFiH5haFGjCNVmUIPLzfvOhHdrxY",
+                },
+                "v": "v2",
+            }))
+            .unwrap(),
+        ));
+
+        assert_eq!(encrypted.unique_key(), mxc_uri.to_string());
+        assert_eq!(MediaSource::Plain(mxc_uri.to_owned()).unique_key(), encrypted.unique_key());
+    }
+
+    /// An `m.image` message has a file, and falls back to the file itself when
+    /// it has no dedicated thumbnail.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mimage>.
+    #[test]
+    fn test_image_message_media_sources() {
+        let file = owned_mxc_uri!("mxc://homeserver/image");
+        let thumbnail = owned_mxc_uri!("mxc://homeserver/thumbnail");
+
+        let mut content = ImageMessageEventContent::plain("image.png".to_owned(), file.clone());
+
+        assert_let!(Some(MediaSource::Plain(uri)) = content.source());
+        assert_eq!(uri, file);
+
+        // No thumbnail: the file itself is used.
+        assert_let!(Some(MediaSource::Plain(uri)) = content.thumbnail_source());
+        assert_eq!(uri, file);
+
+        // With a thumbnail: the thumbnail is used.
+        let mut info = ImageInfo::new();
+        info.thumbnail_source = Some(MediaSource::Plain(thumbnail.clone()));
+        content.info = Some(Box::new(info));
+
+        assert_let!(Some(MediaSource::Plain(uri)) = content.thumbnail_source());
+        assert_eq!(uri, thumbnail);
+    }
+
+    /// An `m.video` message behaves like an `m.image` one: it falls back to
+    /// the file when it has no thumbnail.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mvideo>.
+    #[test]
+    fn test_video_message_media_sources() {
+        let file = owned_mxc_uri!("mxc://homeserver/video");
+
+        let content = VideoMessageEventContent::plain("video.mp4".to_owned(), file.clone());
+
+        assert_let!(Some(MediaSource::Plain(uri)) = content.source());
+        assert_eq!(uri, file);
+        assert_let!(Some(MediaSource::Plain(uri)) = content.thumbnail_source());
+        assert_eq!(uri, file);
+    }
+
+    /// An `m.file` message has no thumbnail unless one is explicitly given;
+    /// the file is not a valid thumbnail of itself.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mfile>.
+    #[test]
+    fn test_file_message_media_sources() {
+        let file = owned_mxc_uri!("mxc://homeserver/document");
+        let thumbnail = owned_mxc_uri!("mxc://homeserver/thumbnail");
+
+        let mut content = FileMessageEventContent::plain("document.pdf".to_owned(), file.clone());
+
+        assert_let!(Some(MediaSource::Plain(uri)) = content.source());
+        assert_eq!(uri, file);
+        assert!(content.thumbnail_source().is_none());
+
+        let mut info = ruma::events::room::message::FileInfo::new();
+        info.thumbnail_source = Some(MediaSource::Plain(thumbnail.clone()));
+        content.info = Some(Box::new(info));
+
+        assert_let!(Some(MediaSource::Plain(uri)) = content.thumbnail_source());
+        assert_eq!(uri, thumbnail);
+    }
+
+    /// An `m.audio` message has a file but never a thumbnail.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#maudio>.
+    #[test]
+    fn test_audio_message_media_sources() {
+        let file = owned_mxc_uri!("mxc://homeserver/audio");
+
+        let content = AudioMessageEventContent::plain("audio.ogg".to_owned(), file.clone());
+
+        assert_let!(Some(MediaSource::Plain(uri)) = content.source());
+        assert_eq!(uri, file);
+        assert!(content.thumbnail_source().is_none());
+    }
+
+    /// An `m.location` message has no file, but it can have a thumbnail.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mlocation>.
+    #[test]
+    fn test_location_message_media_sources() {
+        let thumbnail = owned_mxc_uri!("mxc://homeserver/thumbnail");
+
+        let mut content = LocationMessageEventContent::new(
+            "Alice was here".to_owned(),
+            "geo:51.5008,0.1247".to_owned(),
+        );
+
+        assert!(content.source().is_none());
+        assert!(content.thumbnail_source().is_none());
+
+        let mut info = ruma::events::room::message::LocationInfo::new();
+        info.thumbnail_source = Some(MediaSource::Plain(thumbnail.clone()));
+        content.info = Some(Box::new(info));
+
+        assert!(content.source().is_none());
+        assert_let!(Some(MediaSource::Plain(uri)) = content.thumbnail_source());
+        assert_eq!(uri, thumbnail);
+    }
+
+    /// An `m.sticker` event has a file but no thumbnail.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#msticker>.
+    #[test]
+    fn test_sticker_media_sources() {
+        let file = owned_mxc_uri!("mxc://homeserver/sticker");
+
+        let content =
+            StickerEventContent::new("sticker".to_owned(), ImageInfo::new(), file.clone());
+
+        assert_let!(Some(MediaSource::Plain(uri)) = content.source());
+        assert_eq!(uri, file);
+        assert!(content.thumbnail_source().is_none());
     }
 }
