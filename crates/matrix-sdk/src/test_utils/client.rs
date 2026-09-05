@@ -43,6 +43,8 @@ impl MockClientBuilder {
             .homeserver_url(homeserver)
             .request_config(RequestConfig::new().disable_retry());
 
+        let default_builder = super::ensure_transport(default_builder);
+
         Self {
             builder: default_builder,
             auth_state: AuthState::LoggedInWithMatrixAuth {
