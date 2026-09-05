@@ -43,7 +43,7 @@ use crate::{
     OpenStoreError, RuntimeConfig, Secret, SqliteStoreConfig,
     connection::{self, Connection as SqliteAsyncConn, Pool as SqlitePool, SqliteConnections},
     error::{Error, Result},
-    fs,
+    fs, recovery,
     utils::{
         EncryptableStore, SqliteAsyncConnExt, SqliteKeyValueStoreAsyncConnExt,
         SqliteKeyValueStoreConnExt, SqliteTransactionExt, time_to_timestamp,
@@ -115,6 +115,11 @@ impl SqliteMediaStore {
     }
 
     /// Open the SQLite-based media store with the config open config.
+    ///
+    /// If the database turns out to be corrupted, it is deleted and recreated
+    /// from scratch: this store is a cache, and an unreadable database file
+    /// would otherwise leave the client permanently broken. See
+    /// [`crate::recovery`].
     #[instrument(skip(config), fields(path = ?config.path))]
     pub async fn open_with_config(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         debug!(?config);
@@ -123,6 +128,16 @@ impl SqliteMediaStore {
 
         fs::create_dir_all(&config.path).await.map_err(OpenStoreError::CreateDir)?;
 
+        let db_path = config.path.join(DATABASE_NAME);
+
+        recovery::open_or_recreate("media store", &db_path, || {
+            Self::open_with_config_inner(config)
+        })
+        .await
+    }
+
+    /// Open the store, assuming its database is readable.
+    async fn open_with_config_inner(config: &SqliteStoreConfig) -> Result<Self, OpenStoreError> {
         let db_path = config.path.join(DATABASE_NAME);
         let pool_config = config.pool_config();
         let runtime_config = config.runtime_config();
@@ -721,7 +736,7 @@ mod tests {
     use ruma::{events::room::MediaSource, media::Method, mxc_uri, uint};
     use tempfile::{TempDir, tempdir};
 
-    use super::SqliteMediaStore;
+    use super::{DATABASE_NAME, SqliteMediaStore};
     use crate::{SqliteStoreConfig, utils::SqliteAsyncConnExt};
 
     static TMP_DIR: LazyLock<TempDir> = LazyLock::new(|| tempdir().unwrap());
@@ -754,6 +769,49 @@ mod tests {
             })
             .await
             .expect("querying media cache content by last access failed")
+    }
+
+    /// A database that SQLite cannot read at all is thrown away and recreated,
+    /// rather than leaving the client permanently broken.
+    #[async_test]
+    async fn test_corrupted_database_is_recreated() {
+        let tmpdir_path = new_media_store_workspace();
+
+        let request = MediaRequestParameters {
+            source: MediaSource::Plain(mxc_uri!("mxc://localhost/media").to_owned()),
+            format: MediaFormat::File,
+        };
+
+        // Open a store, put something in it, and close it.
+        {
+            let store = SqliteMediaStore::open(tmpdir_path.to_str().unwrap(), None).await.unwrap();
+            store
+                .add_media_content(&request, "hello world".into(), IgnoreMediaRetentionPolicy::No)
+                .await
+                .unwrap();
+            store.close().await.unwrap();
+        }
+
+        // Scribble over the database file, the way a half-finished write or a
+        // broken backup restore would.
+        std::fs::write(tmpdir_path.join(DATABASE_NAME), b"this is not an SQLite database").unwrap();
+        // Leave a stale sidecar behind too; it must not be carried over into
+        // the fresh database (see `recovery::delete_database`).
+        std::fs::write(tmpdir_path.join(format!("{DATABASE_NAME}-wal")), b"stale").unwrap();
+
+        // Opening the store succeeds, on an empty database.
+        let store = SqliteMediaStore::open(tmpdir_path.to_str().unwrap(), None).await.unwrap();
+        assert!(store.get_media_content(&request).await.unwrap().is_none());
+
+        // And the recreated store works.
+        store
+            .add_media_content(&request, "hello again".into(), IgnoreMediaRetentionPolicy::No)
+            .await
+            .unwrap();
+        assert_eq!(
+            store.get_media_content(&request).await.unwrap().as_deref(),
+            Some(b"hello again".as_slice())
+        );
     }
 
     #[async_test]

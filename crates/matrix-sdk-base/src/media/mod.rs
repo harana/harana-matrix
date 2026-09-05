@@ -42,7 +42,7 @@ pub trait UniqueKey {
 }
 
 /// The requested format of a media file.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum MediaFormat {
     /// The file that was uploaded.
     File,
@@ -61,7 +61,7 @@ impl UniqueKey for MediaFormat {
 }
 
 /// The desired settings of a media thumbnail.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct MediaThumbnailSettings {
     /// The desired resizing method.
     pub method: Method,
@@ -232,6 +232,8 @@ impl MediaEventContent for LocationMessageEventContent {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use assert_matches2::assert_let;
     use ruma::{events::room::ImageInfo, mxc_uri, owned_mxc_uri, uint};
     use serde_json::json;
@@ -295,6 +297,44 @@ mod tests {
         let mut animated = MediaThumbnailSettings::new(uint!(100), uint!(50));
         animated.animated = true;
         assert_eq!(animated.unique_key(), "scale_100x50_animated");
+    }
+
+    /// `MediaFormat` is ordered and comparable, so that it can be used as a
+    /// key in a sorted map.
+    #[test]
+    fn test_media_format_is_ordered() {
+        let file = MediaFormat::File;
+        let scaled = MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(100), uint!(50)));
+        let bigger = MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(200), uint!(50)));
+        let cropped = MediaFormat::Thumbnail(MediaThumbnailSettings::with_method(
+            Method::Crop,
+            uint!(100),
+            uint!(50),
+        ));
+
+        // Equality follows the variant and its settings.
+        assert_eq!(file, MediaFormat::File);
+        assert_eq!(
+            scaled,
+            MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(100), uint!(50)))
+        );
+        assert_ne!(scaled, bigger);
+        assert_ne!(scaled, cropped);
+        assert_ne!(file, scaled);
+
+        // The variant order is the declaration order: a file sorts before a
+        // thumbnail.
+        assert!(file < scaled);
+
+        // Thumbnails sort by method first, then by dimensions.
+        assert!(cropped < scaled);
+        assert!(scaled < bigger);
+
+        // Which makes `MediaFormat` usable as a map key.
+        let map = BTreeMap::from([(file.clone(), "file"), (scaled.clone(), "thumbnail")]);
+        assert_eq!(map.get(&file), Some(&"file"));
+        assert_eq!(map.get(&scaled), Some(&"thumbnail"));
+        assert_eq!(map.get(&bigger), None);
     }
 
     /// The unique key of a media request combines the source and the format,

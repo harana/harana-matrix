@@ -31,6 +31,7 @@ mod event_cache_store;
 mod fs;
 #[cfg(feature = "media-store")]
 mod media_store;
+mod recovery;
 #[cfg(feature = "state-store")]
 mod state_store;
 mod sync_wrapper;

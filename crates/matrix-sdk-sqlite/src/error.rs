@@ -71,6 +71,10 @@ pub enum OpenStoreError {
     /// Failed to save the store cipher to the DB.
     #[error("Failed to save the store cipher to the DB: {0}")]
     SaveCipher(#[source] rusqlite::Error),
+
+    /// Failed to delete a corrupted database so it could be recreated.
+    #[error("Failed to delete the corrupted database: {0}")]
+    DeleteCorrupted(#[source] io::Error),
 }
 
 #[derive(Debug, Error)]
