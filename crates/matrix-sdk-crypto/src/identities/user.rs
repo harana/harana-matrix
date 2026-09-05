@@ -1951,6 +1951,50 @@ pub(crate) mod tests {
         assert!(other_identity.inner.has_pin_violation());
     }
 
+    /// Pinning wrote the whole identity the caller was holding back to the
+    /// store, so a `/keys/query` that landed in between was silently undone
+    /// and we went back to talking to the old keys (#129).
+    #[async_test]
+    async fn test_pinning_a_stale_identity_does_not_revert_a_newer_one() {
+        use test_json::keys_query_sets::IdentityChangeDataSet as DataSet;
+
+        let my_user_id = user_id!("@me:localhost");
+        let machine = OlmMachine::new(my_user_id, device_id!("ABCDEFGH")).await;
+        machine.bootstrap_cross_signing(false).await.unwrap();
+
+        let other_user_id = DataSet::user_id();
+
+        machine
+            .mark_request_as_sent(&TransactionId::new(), &DataSet::key_query_with_identity_a())
+            .await
+            .unwrap();
+
+        // Given a handle taken while identity A was the current one,
+        let stale =
+            machine.get_identity(other_user_id, None).await.unwrap().unwrap().other().unwrap();
+
+        // ... and a `/keys/query` that has brought in identity B since,
+        machine
+            .mark_request_as_sent(&TransactionId::new(), &DataSet::key_query_with_identity_b())
+            .await
+            .unwrap();
+
+        let current =
+            machine.get_identity(other_user_id, None).await.unwrap().unwrap().other().unwrap();
+        let master_key_b = current.master_key().clone();
+        assert!(current.identity_needs_user_approval());
+
+        // When we pin through the stale handle,
+        stale.pin_current_master_key().await.unwrap();
+
+        // Then the newer identity is still the stored one, and it still needs
+        // approval: we have not quietly pinned the keys the user never saw.
+        let stored =
+            machine.get_identity(other_user_id, None).await.unwrap().unwrap().other().unwrap();
+        assert_eq!(*stored.master_key(), master_key_b);
+        assert!(stored.identity_needs_user_approval());
+    }
+
     #[async_test]
     async fn test_resolve_identity_pin_violation_with_withdraw_verification() {
         use test_json::keys_query_sets::IdentityChangeDataSet as DataSet;

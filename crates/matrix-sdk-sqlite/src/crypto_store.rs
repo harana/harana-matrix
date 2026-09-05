@@ -1936,8 +1936,9 @@ mod tests {
 
     use matrix_sdk_common::deserialized_responses::WithheldCode;
     use matrix_sdk_crypto::{
-        cryptostore_integration_tests, cryptostore_integration_tests_time, olm::SenderDataType,
-        store::CryptoStore,
+        cryptostore_integration_tests, cryptostore_integration_tests_time,
+        olm::SenderDataType,
+        store::{CryptoStore, types::Changes},
     };
     use matrix_sdk_test::async_test;
     use ruma::{device_id, room_id, user_id};
@@ -2556,6 +2557,95 @@ mod tests {
         } else {
             panic!("expected to get a secret request");
         }
+    }
+
+    /// Build an inbound group session we can save and read back.
+    fn inbound_group_session() -> matrix_sdk_crypto::olm::InboundGroupSession {
+        use matrix_sdk_crypto::{
+            olm::{Account, InboundGroupSession, SenderData},
+            types::EventEncryptionAlgorithm,
+        };
+        use vodozemac::megolm::{GroupSession, SessionConfig};
+
+        let account = Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICE"));
+        let session_key = GroupSession::new(SessionConfig::default()).session_key();
+
+        InboundGroupSession::new(
+            account.identity_keys().curve25519,
+            account.device_keys().ed25519_key().unwrap(),
+            room_id!("!test:localhost"),
+            &session_key,
+            SenderData::unknown(),
+            None,
+            EventEncryptionAlgorithm::MegolmV1AesSha2,
+            None,
+            false,
+        )
+        .unwrap()
+    }
+
+    /// The `backed_up` column is the source of truth for whether a session has
+    /// been uploaded to the backup. Writing it back from a pickle that was read
+    /// before a backup reset used to re-mark a session as backed up, so it was
+    /// never uploaded and future devices could not decrypt what it opens
+    /// (#124).
+    #[async_test]
+    async fn test_saving_a_session_does_not_clobber_the_backed_up_flag() {
+        let store = get_store("backed_up_flag", None, true).await;
+
+        let session = inbound_group_session();
+        let room_id = session.room_id().to_owned();
+        let session_id = session.session_id().to_owned();
+
+        store
+            .save_changes(Changes {
+                inbound_group_sessions: vec![session.clone()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Once it is in the backup, the column says so.
+        store
+            .mark_inbound_group_sessions_as_backed_up(
+                "1",
+                &[(room_id.as_ref(), session_id.as_str())],
+            )
+            .await
+            .unwrap();
+        assert_eq!(store.inbound_group_session_counts(Some("1")).await.unwrap().backed_up, 1);
+
+        // A backup reset clears it,
+        store.reset_backup_state().await.unwrap();
+        assert_eq!(store.inbound_group_session_counts(Some("1")).await.unwrap().backed_up, 0);
+
+        // ... and saving the session we were already holding, whose pickle still says
+        // it was backed up, must not bring the flag back.
+        store
+            .save_changes(Changes { inbound_group_sessions: vec![session], ..Default::default() })
+            .await
+            .unwrap();
+
+        assert_eq!(store.inbound_group_session_counts(Some("1")).await.unwrap().backed_up, 0);
+    }
+
+    /// Importing sessions that are already in a backup has to mark them as
+    /// backed up explicitly, now that the column is not written from the
+    /// pickle (#124).
+    #[async_test]
+    async fn test_importing_sessions_from_a_backup_marks_them_as_backed_up() {
+        let store = get_store("import_backed_up", None, true).await;
+
+        store.save_inbound_group_sessions(vec![inbound_group_session()], Some("1")).await.unwrap();
+
+        assert_eq!(store.inbound_group_session_counts(Some("1")).await.unwrap().backed_up, 1);
+
+        // A session imported without a backup version is not in any backup.
+        store.save_inbound_group_sessions(vec![inbound_group_session()], None).await.unwrap();
+
+        let counts = store.inbound_group_session_counts(Some("1")).await.unwrap();
+        assert_eq!(counts.total, 2);
+        assert_eq!(counts.backed_up, 1);
     }
 
     async fn get_store(

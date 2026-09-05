@@ -726,6 +726,139 @@ async fn test_recovery_disabling() {
     server.verify().await
 }
 
+/// Enabling backups while we are already connected to the backup on the server
+/// used to be reported as an error, which made a re-enable look like a failure
+/// (#136).
+#[async_test]
+async fn test_backups_enabling_when_we_are_already_connected() {
+    let user_id = user_id!("@example:morpheus.localhost");
+    let (client, server) = test_client(user_id).await;
+
+    enable(user_id, &client, &server, true).await;
+
+    let recovery = client.encryption().recovery();
+    assert_eq!(client.encryption().backups().state(), BackupState::Enabled);
+
+    // The server reports the very backup version we hold the key for.
+    Mock::given(method("GET"))
+        .and(path("_matrix/client/r0/room_keys/version"))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "algorithm": "m.megolm_backup.v1.curve25519-aes-sha2",
+            "auth_data": {
+                "public_key": "hdx5rSn94rBuvJI5cwnhKAVmFyZgfJjk7vwEBD6mIHc",
+                "signatures": {}
+            },
+            "count": 1,
+            "etag": "1",
+            "version": "1"
+        })))
+        .expect(1..)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("PUT"))
+        .and(path_regex(format!("_matrix/client/r0/user/{user_id}/account_data/.*")))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&server)
+        .await;
+
+    recovery
+        .enable_backup()
+        .await
+        .expect("Enabling a backup we are already connected to should succeed");
+
+    assert_eq!(client.encryption().backups().state(), BackupState::Enabled);
+
+    server.verify().await
+}
+
+/// A backup that exists only on the server used to be impossible to get rid of
+/// through recovery: `disable()` refused because backups looked disabled
+/// locally, and the version stayed on the homeserver (#126).
+#[async_test]
+async fn test_recovery_disabling_deletes_a_server_only_backup() {
+    let user_id = user_id!("@example:morpheus.localhost");
+    let (client, server) = test_client(user_id).await;
+
+    let recovery = client.encryption().recovery();
+
+    // We hold no backup key, so as far as we are concerned backups are off.
+    assert_eq!(client.encryption().backups().state(), BackupState::Unknown);
+
+    let backup_deleted = Arc::new(Mutex::new(false));
+
+    Mock::given(method("GET"))
+        .and(path("_matrix/client/r0/room_keys/version"))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with({
+            let backup_deleted = backup_deleted.clone();
+            move |_: &wiremock::Request| {
+                if *backup_deleted.lock().unwrap() {
+                    ResponseTemplate::new(404).set_body_json(json!({
+                        "errcode": "M_NOT_FOUND",
+                        "error": "No current backup version"
+                    }))
+                } else {
+                    ResponseTemplate::new(200).set_body_json(json!({
+                        "algorithm": "m.megolm_backup.v1.curve25519-aes-sha2",
+                        "auth_data": {
+                            "public_key": "hdx5rSn94rBuvJI5cwnhKAVmFyZgfJjk7vwEBD6mIHc",
+                            "signatures": {}
+                        },
+                        "count": 1,
+                        "etag": "1",
+                        "version": "1"
+                    }))
+                }
+            }
+        })
+        .mount(&server)
+        .await;
+
+    Mock::given(method("DELETE"))
+        .and(path("_matrix/client/r0/room_keys/version/1"))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with({
+            let backup_deleted = backup_deleted.clone();
+            move |_: &wiremock::Request| {
+                *backup_deleted.lock().unwrap() = true;
+                ResponseTemplate::new(200).set_body_json(json!({}))
+            }
+        })
+        .expect(1)
+        .named("the server-side backup version is deleted")
+        .mount(&server)
+        .await;
+
+    // The account data recovery writes on its way out; none of it is what this test
+    // is about.
+    Mock::given(method("PUT"))
+        .and(path_regex(format!("_matrix/client/r0/user/{user_id}/account_data/.*")))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path_regex(format!("_matrix/client/r0/user/{user_id}/account_data/.*")))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({
+            "errcode": "M_NOT_FOUND",
+            "error": "Account data not found"
+        })))
+        .mount(&server)
+        .await;
+
+    recovery.disable().await.expect("We should be able to disable recovery");
+
+    assert!(*backup_deleted.lock().unwrap(), "The backup on the server should have been deleted");
+    assert_eq!(recovery.state(), RecoveryState::Disabled);
+
+    server.verify().await
+}
+
 #[async_test]
 async fn test_reset_recovery_key() {
     let user_id = user_id!("@example:morpheus.localhost");

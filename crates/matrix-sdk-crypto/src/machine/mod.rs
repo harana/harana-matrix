@@ -2563,7 +2563,16 @@ impl OlmMachine {
     ) -> MegolmResult<DecryptedRoomEvent> {
         let _timer = timer!(tracing::Level::TRACE, "_method");
 
-        let raw_event = event;
+        // A redaction strips the whole content of an `m.room.encrypted` event, the
+        // `algorithm` field included, so the event no longer parses as an encrypted
+        // event at all. Reporting that as a malformed event, or as one using an
+        // algorithm we don't support, used to inflate UTD rates with events that no
+        // key was ever going to open.
+        if is_redacted(event) {
+            debug!("Not decrypting a room event that has been redacted");
+            return Err(MegolmError::RedactedEvent);
+        }
+
         let event = event.deserialize()?;
 
         Span::current()
@@ -2584,16 +2593,6 @@ impl OlmMachine {
             #[cfg(feature = "experimental-algorithms")]
             RoomEventEncryptionScheme::MegolmV2AesSha2(c) => c.into(),
             RoomEventEncryptionScheme::Unknown(_) => {
-                // A redaction strips the `algorithm` field along with the rest of the
-                // content, so a redacted event is indistinguishable from one using an
-                // algorithm we don't know unless we look at `unsigned.redacted_because`.
-                // Reporting these as unsupported-algorithm failures used to inflate UTD
-                // rates with events that were never going to decrypt.
-                if is_redacted(raw_event) {
-                    debug!("Not decrypting a room event that has been redacted");
-                    return Err(MegolmError::RedactedEvent);
-                }
-
                 warn!("Received an encrypted room event with an unsupported algorithm");
                 return Err(EventError::UnsupportedAlgorithm.into());
             }

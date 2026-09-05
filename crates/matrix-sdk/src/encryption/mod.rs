@@ -2347,6 +2347,133 @@ mod tests {
         test_utils::{logged_in_client, no_retry_test_client, set_client_session},
     };
 
+    /// A one-time key the homeserver already has will be rejected every time we
+    /// send it, so retrying the upload forever hammers the homeserver and
+    /// blocks every other outgoing request behind it (#191).
+    #[async_test]
+    async fn test_duplicate_one_time_key_upload_is_terminal() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let uploads = Arc::new(AtomicUsize::new(0));
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/r0/keys/upload"))
+            .respond_with({
+                let uploads = uploads.clone();
+
+                move |_: &Request| {
+                    uploads.fetch_add(1, Ordering::SeqCst);
+
+                    ResponseTemplate::new(400).set_body_json(json!({
+                        "errcode": "M_UNKNOWN",
+                        "error": "One time key signed_curve25519:AAAAAAAAAAA already exists. \
+                                  Old key: AAAAAAAAAAA; new key: BBBBBBBBBBB"
+                    }))
+                }
+            })
+            .mount(&server)
+            .await;
+
+        // The round completes rather than failing, so the requests queued behind the
+        // upload still get their turn.
+        client
+            .send_outgoing_requests()
+            .await
+            .expect("A duplicate one-time key should not fail the whole round");
+
+        assert_eq!(uploads.load(Ordering::SeqCst), 1);
+
+        // The request was marked as sent, so the keys the server rejected are not
+        // handed out again on the next round.
+        client.send_outgoing_requests().await.expect("The next round should also complete");
+
+        assert_eq!(
+            uploads.load(Ordering::SeqCst),
+            1,
+            "We should not have sent the rejected keys a second time"
+        );
+    }
+
+    /// The homeserver reports per-key failures in the body of an otherwise
+    /// successful `/keys/signatures/upload` response, and we used to ignore
+    /// them: a device finished a verification believing itself verified while
+    /// the signature saying so never landed (#241).
+    #[async_test]
+    async fn test_signature_upload_failures_are_followed_by_a_keys_query() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/r0/keys/upload"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "one_time_key_counts": {}
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/unstable/keys/device_signing/upload"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/unstable/keys/signatures/upload"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "failures": {
+                    "@example:localhost": {
+                        "DEVICEID": {
+                            "errcode": "M_INVALID_SIGNATURE",
+                            "error": "Invalid signature"
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let queries = Arc::new(AtomicUsize::new(0));
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/r0/keys/query"))
+            .respond_with({
+                let queries = queries.clone();
+
+                move |_: &Request| {
+                    queries.fetch_add(1, Ordering::SeqCst);
+
+                    ResponseTemplate::new(200).set_body_json(json!({
+                        "device_keys": {},
+                        "master_keys": {},
+                        "self_signing_keys": {},
+                        "user_signing_keys": {}
+                    }))
+                }
+            })
+            .mount(&server)
+            .await;
+
+        // Bootstrapping produces a signature upload for our own keys.
+        client.encryption().bootstrap_cross_signing(None).await.unwrap();
+
+        client
+            .send_outgoing_requests()
+            .await
+            .expect("Rejected signatures should not fail the round");
+
+        // Having uploaded signatures for ourselves, we read our own keys back rather
+        // than trusting that the upload achieved what we asked for.
+        assert!(
+            queries.load(Ordering::SeqCst) > 0,
+            "We should have queried our own keys after uploading signatures for them"
+        );
+    }
+
     #[async_test]
     async fn test_reaction_sending() {
         let server = MockServer::start().await;

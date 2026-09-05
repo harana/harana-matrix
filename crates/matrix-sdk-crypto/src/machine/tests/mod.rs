@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, iter, ops::Not, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, future::Future, iter, ops::Not, sync::Arc, time::Duration};
 
 use assert_matches2::{assert_let, assert_matches};
 use futures_util::{FutureExt, StreamExt, pin_mut};
@@ -1282,6 +1282,135 @@ async fn test_withheld_unverified() {
             withheld_code: Some(WithheldCode::Unverified)
         }
     );
+}
+
+/// Poll `future` a handful of times, yielding in between, and assert that it
+/// still hasn't finished. Everything these tests do against a
+/// [`MemoryStore`](crate::store::MemoryStore) completes without waiting for
+/// anything, so a future that is still pending after this is one that is
+/// waiting on a lock.
+async fn assert_blocked<F: Future>(future: &mut std::pin::Pin<Box<F>>) {
+    use futures_util::poll;
+
+    for _ in 0..16 {
+        assert!(poll!(&mut *future).is_pending());
+        tokio::task::yield_now().await;
+    }
+}
+
+/// Creating the cross-signing identity has to be serialised against the
+/// processing of a `/keys/query` response. A response landing in the middle
+/// sees a public identity it doesn't recognise and throws the new private keys
+/// away, leaving an account that can log in but can't set up recovery (#154).
+#[async_test]
+async fn test_bootstrapping_cross_signing_holds_the_identity_lock() {
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+
+    // Given a `/keys/query` response is being processed,
+    let guard = machine.store().lock_identity_update().await;
+
+    // When we set up the cross-signing identity at the same time,
+    let mut bootstrap = Box::pin(machine.bootstrap_cross_signing(false));
+
+    // Then it waits its turn rather than racing the response,
+    assert_blocked(&mut bootstrap).await;
+
+    drop(guard);
+
+    // ... and once it gets its turn, the identity it created is the stored one.
+    bootstrap.await.unwrap();
+
+    let status = machine.cross_signing_status().await;
+    assert!(status.is_complete());
+    assert!(machine.get_identity(user_id(), None).await.unwrap().is_some());
+}
+
+/// The other half of #154: processing a `/keys/query` response takes the same
+/// lock, so it cannot run while an identity is being written.
+#[async_test]
+async fn test_receiving_a_keys_query_response_holds_the_identity_lock() {
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+
+    let guard = machine.store().lock_identity_update().await;
+
+    let response = keys_query_response();
+    let request_id = TransactionId::new();
+    let mut receive = Box::pin(machine.receive_keys_query_response(&request_id, &response));
+
+    assert_blocked(&mut receive).await;
+
+    drop(guard);
+
+    receive.await.unwrap();
+}
+
+/// Deciding whether a received room key is better than the stored one is a
+/// read, a comparison and a write. Importing room keys has to hold the merge
+/// lock across all three, or a room key arriving over sync can slip in between
+/// and the worse key ends up stored (#138).
+#[async_test]
+async fn test_importing_room_keys_holds_the_merge_lock() {
+    use futures_util::poll;
+
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+
+    // Given the merge lock is held by something else,
+    let guard = machine.store().lock_inbound_group_session_merge().await;
+
+    // When an import starts,
+    let mut import = Box::pin(machine.store().import_room_keys(vec![], None, |_, _| {}));
+
+    // Then it doesn't get to look at the store until the lock is free.
+    assert!(poll!(&mut import).is_pending());
+
+    drop(guard);
+
+    import.await.unwrap();
+}
+
+/// A redaction strips the `algorithm` field along with the rest of the
+/// content, which used to make a redacted event look like one using an
+/// algorithm we don't support. Those were reported as decryption failures and
+/// inflated UTD rates with events no key was ever going to open (#41).
+#[async_test]
+async fn test_decrypt_redacted_event() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    // Given an `m.room.encrypted` event whose content has been redacted away,
+    let room_event = json!({
+        "event_id": "$xxxxx:example.org",
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+        "sender": alice.user_id(),
+        "type": "m.room.encrypted",
+        "content": {},
+        "unsigned": {
+            "redacted_because": {
+                "event_id": "$redaction:example.org",
+                "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+                "sender": alice.user_id(),
+                "type": "m.room.redaction",
+                "content": {},
+            },
+        },
+    });
+    let room_event = json_convert(&room_event).unwrap();
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    // When we try to decrypt it, we are told it was redacted rather than that we
+    // don't know the algorithm.
+    let decrypt_result = bob.decrypt_room_event(&room_event, room_id, &decryption_settings).await;
+    assert_matches!(decrypt_result, Err(MegolmError::RedactedEvent));
+
+    // And the UTD it turns into is one that doesn't count: no key would help.
+    let decrypt_result =
+        bob.try_decrypt_room_event(&room_event, room_id, &decryption_settings).await.unwrap();
+    assert_let!(RoomEventDecryptionResult::UnableToDecrypt(utd_info) = decrypt_result);
+    assert_eq!(utd_info.reason, UnableToDecryptReason::Redacted);
+    assert!(utd_info.reason.is_expected());
 }
 
 /// Test what happens when we feed an unencrypted event into the decryption

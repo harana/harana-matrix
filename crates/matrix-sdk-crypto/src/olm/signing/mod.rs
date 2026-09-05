@@ -761,6 +761,35 @@ mod tests {
             .unwrap();
     }
 
+    /// A cross-signing identity we created but never managed to publish is
+    /// invisible to everybody else: we believe we are cross-signed while every
+    /// other device still sees ours as unverified. The status says so, so a
+    /// consumer can publish the keys again (#40).
+    #[async_test]
+    async fn test_status_reports_whether_the_identity_was_published() {
+        let identity = PrivateCrossSigningIdentity::new(user_id().to_owned());
+
+        let status = identity.status().await;
+        assert!(status.is_complete(), "A new identity holds all three keys");
+        assert!(!status.is_published, "... but nothing has uploaded them yet");
+        assert!(!status.is_usable(), "... so it makes nobody trust this device");
+
+        identity.mark_as_shared();
+
+        let status = identity.status().await;
+        assert!(status.is_published);
+        assert!(status.is_usable());
+
+        // An empty identity is neither complete nor usable, published or not.
+        let empty = PrivateCrossSigningIdentity::empty(user_id());
+        empty.mark_as_shared();
+
+        let status = empty.status().await;
+        assert!(!status.is_complete());
+        assert!(status.is_published);
+        assert!(!status.is_usable());
+    }
+
     #[async_test]
     async fn test_identity_pickling() {
         let identity = PrivateCrossSigningIdentity::new(user_id().to_owned());

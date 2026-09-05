@@ -370,6 +370,18 @@ fn strict_durability() -> TransactionOptions {
     TransactionOptions::new().with_durability(TransactionDurability::Strict)
 }
 
+/// Does this set of changes carry state whose loss would corrupt our
+/// cryptographic state rather than merely a cache?
+///
+/// Olm sessions ratchet: once one has been used to encrypt or decrypt, the
+/// persisted state has to move with it. IndexedDB's default durability lets the
+/// browser acknowledge a write that is still only in the operating system's
+/// buffers, so a crash or a power cut can leave our stored session behind the
+/// one the other side has already seen, which wedges it and produces UTDs.
+fn needs_strict_durability(changes: &Changes) -> bool {
+    !changes.sessions.is_empty()
+}
+
 impl IndexeddbCryptoStore {
     pub(crate) async fn open_with_store_cipher(
         prefix: &str,
@@ -889,13 +901,9 @@ impl_crypto_store! {
         // TODO: #2000 should make this lock go away, or change its shape.
         let _guard = self.save_changes_lock.lock().await;
 
-        // Olm sessions ratchet: once we have used one to encrypt or decrypt, the
-        // persisted state has to move with it. IndexedDB's default durability lets the
-        // browser acknowledge a write that is still only in the operating system's
-        // buffers, so a crash or a power cut can leave our stored session behind the one
-        // the other side has already seen, which wedges it and produces UTDs. Ask for
-        // strict durability whenever a session is part of the write.
-        let needs_strict_durability = !changes.sessions.is_empty();
+        // Ask for strict durability whenever an Olm session is part of the write; see
+        // `needs_strict_durability`.
+        let needs_strict_durability = needs_strict_durability(&changes);
 
         let indexeddb_changes = self.prepare_for_transaction(&changes).await?;
 
@@ -2122,6 +2130,37 @@ impl InboundGroupSessionIndexedDbObject {
             sender_key: Some(sender_key),
             sender_data_type: Some(session.sender_data_type() as u8),
         })
+    }
+}
+
+#[cfg(test)]
+mod durability_tests {
+    use matrix_sdk_crypto::store::types::Changes;
+    use matrix_sdk_test::async_test;
+
+    use super::needs_strict_durability;
+
+    /// A write that carries an Olm session has to wait for the browser to put
+    /// it in persistent storage; anything else can take the default, cheaper
+    /// durability (#99).
+    #[async_test]
+    async fn test_only_session_writes_ask_for_strict_durability() {
+        assert!(!needs_strict_durability(&Changes::default()));
+
+        let mut alice = matrix_sdk_crypto::olm::Account::with_device_id(
+            ruma::user_id!("@alice:localhost"),
+            ruma::device_id!("ALICE"),
+        );
+        let mut bob = matrix_sdk_crypto::olm::Account::with_device_id(
+            ruma::user_id!("@bob:localhost"),
+            ruma::device_id!("BOB"),
+        );
+        let (session, _) = alice.create_session_for_test_helper(&mut bob).await;
+
+        assert!(needs_strict_durability(&Changes {
+            sessions: vec![session],
+            ..Default::default()
+        }));
     }
 }
 

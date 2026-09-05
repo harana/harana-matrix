@@ -1900,6 +1900,49 @@ mod tests {
         assert!(bob_sas.started_from_request());
     }
 
+    /// The device we verified with used to be dropped on the way into the
+    /// `Done` state, leaving a client with nothing to name in the dialog it
+    /// shows once verification succeeds (#60).
+    #[async_test]
+    async fn test_done_keeps_the_other_device_data() {
+        use ruma::events::key::verification::done::ToDeviceKeyVerificationDoneEventContent;
+
+        use crate::verification::event_enums::DoneContent;
+
+        let (alice, alice_store, bob, bob_store) = setup_stores().await;
+
+        let alice_device_data = DeviceData::from_account(&alice);
+        let bob_device_data = DeviceData::from_account(&bob);
+
+        let bob_request = build_test_request(&bob_store, alice_id(), None);
+        let alice_request = build_incoming_verification_request(&alice_store, &bob_request).await;
+        do_accept_request(&alice_request, alice_device_data.clone(), &bob_request, None);
+
+        let (_bob_sas, request) = bob_request.start_sas().await.unwrap().unwrap();
+
+        let content: OutgoingContent = request.try_into().unwrap();
+        let content = StartContent::try_from(&content).unwrap();
+        let flow_id = content.flow_id().to_owned();
+        alice_request.receive_start(bob_device_data.user_id(), &content).await.unwrap();
+
+        // While the verification is running, both sides know the other device.
+        assert_eq!(alice_request.other_device_data().as_ref(), Some(&bob_device_data));
+        assert_eq!(bob_request.other_device_data().as_ref(), Some(&alice_device_data));
+
+        // When the flow finishes,
+        let done = ToDeviceKeyVerificationDoneEventContent::new(flow_id.as_str().into());
+        alice_request.receive_done(bob_id(), &DoneContent::from(&done));
+        bob_request.receive_done(alice_id(), &DoneContent::from(&done));
+
+        // Then each side still knows which device it just verified.
+        assert_let!(VerificationRequestState::Done { other_device_data } = alice_request.state());
+        assert_eq!(other_device_data.as_ref(), Some(&bob_device_data));
+        assert_eq!(alice_request.other_device_id().as_deref(), Some(bob_device_data.device_id()));
+
+        assert_let!(VerificationRequestState::Done { other_device_data } = bob_request.state());
+        assert_eq!(other_device_data.as_ref(), Some(&alice_device_data));
+    }
+
     #[async_test]
     #[cfg(feature = "qrcode")]
     async fn test_can_scan_another_qr_after_creating_mine() {
