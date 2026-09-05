@@ -101,7 +101,8 @@ use crate::{
     Account, AuthApi, AuthSession, Error, HttpError, Media, Pusher, RefreshTokenError, Result,
     Room, SessionTokens, TransmissionProgress,
     authentication::{
-        AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback, matrix::MatrixAuth,
+        AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback,
+        matrix::{MatrixAuth, MatrixSession},
         oauth::OAuth,
     },
     client::{
@@ -300,18 +301,18 @@ pub(crate) struct ClientInner {
     /// All the data related to authentication and authorization.
     pub(crate) auth_ctx: Arc<AuthCtx>,
 
-    /// The URL of the server.
+    /// The Matrix server name this client was built from.
     ///
-    /// Not to be confused with the `Self::homeserver`. `server` is usually
-    /// the server part in a user ID, e.g. with `@mnt_io:matrix.org`, here
-    /// `matrix.org` is the server, whilst `matrix-client.matrix.org` is the
-    /// homeserver (at the time of writing — 2024-08-28).
+    /// Not to be confused with the `Self::homeserver`. The server name is the
+    /// server part in a user ID, e.g. with `@mnt_io:matrix.org`, here
+    /// `matrix.org` is the server name, whilst `matrix-client.matrix.org` is
+    /// the homeserver (at the time of writing — 2024-08-28).
     ///
     /// This value is optional depending on how the `Client` has been built.
     /// If it's been built from a homeserver URL directly, we don't know the
     /// server. However, if the `Client` has been built from a server URL or
     /// name, then the homeserver has been discovered, and we know both.
-    server: StdRwLock<Option<Url>>,
+    server: StdRwLock<Option<OwnedServerName>>,
 
     /// The URL of the homeserver to connect to.
     ///
@@ -467,7 +468,7 @@ impl ClientInner {
     #[allow(clippy::too_many_arguments)]
     async fn new(
         auth_ctx: Arc<AuthCtx>,
-        server: Option<Url>,
+        server: Option<OwnedServerName>,
         homeserver: Url,
         sliding_sync_version: SlidingSyncVersion,
         sync_presence: Arc<StdRwLock<PresenceState>>,
@@ -625,7 +626,7 @@ impl Client {
 
     /// Change the homeserver URL used by this client.
     ///
-    /// Note that this will reset [`Client::server`] to `None`.
+    /// Note that this will reset [`Client::server_name`] to `None`.
     ///
     /// # Arguments
     ///
@@ -724,32 +725,37 @@ impl Client {
         self.inner.base_client.is_active()
     }
 
-    /// The URL built from the server name that was used for `.well-known`
-    /// discovery, if any.
+    /// The Matrix server name this client talks to, e.g. `matrix.org`.
     ///
-    /// This is set when the client was built with
+    /// This is the server part of the logged-in user's ID: with
+    /// `@mnt_io:matrix.org`, it is `matrix.org`. It is *not* a URL, and it is
+    /// not the host requests are sent to: a server delegating via
+    /// `.well-known` has a different homeserver URL, which
+    /// [`Client::homeserver`] reports.
+    ///
+    /// It is derived from the session's user ID once the client is logged in.
+    /// Before that, it is the name the client was built from with
     /// [`ClientBuilder::server_name`],
-    /// [`ClientBuilder::insecure_server_name_no_tls`], or
-    /// [`ClientBuilder::server_name_or_homeserver_url`] and a server name (as
-    /// opposed to a homeserver URL) was resolved. It is `None` when the
+    /// [`ClientBuilder::insecure_server_name_no_tls`] or
+    /// [`ClientBuilder::server_name_or_homeserver_url`], and `None` when the
     /// client was built directly from a homeserver URL with
-    /// [`ClientBuilder::homeserver_url`], since there is then no separate
-    /// server name to report.
-    ///
-    /// Note that despite the name, this returns a [`Url`], not a Matrix
-    /// server name: it is the server name combined with the scheme (`http`
-    /// or `https`) that was used to reach it. A server delegating to a
-    /// different homeserver via `.well-known` means this can differ from
-    /// [`Client::homeserver`], which is the URL requests are actually sent
-    /// to.
-    pub fn server(&self) -> Option<Url> {
+    /// [`ClientBuilder::homeserver_url`], since a homeserver URL doesn't tell
+    /// us the server name.
+    pub fn server_name(&self) -> Option<OwnedServerName> {
+        // The user ID is authoritative: it's the name other servers use to reach
+        // this one, and it survives a `.well-known` delegation.
+        if let Some(session_meta) = self.session_meta() {
+            return Some(session_meta.user_id.server_name().to_owned());
+        }
+
         self.inner.server.read().unwrap().clone()
     }
 
     /// The URL of the homeserver that this client sends requests to.
     ///
-    /// This may differ from [`Client::server`] when the server delegates to
-    /// another homeserver via `.well-known` discovery.
+    /// This may differ from [`Client::server_name`] when the server delegates
+    /// to another homeserver via `.well-known` discovery. It is also a URL,
+    /// where the server name is a bare Matrix server name.
     pub fn homeserver(&self) -> Url {
         self.inner.homeserver.read().unwrap().clone()
     }
@@ -1750,6 +1756,64 @@ impl Client {
         }
     }
 
+    /// Restore a session from an access token alone, discovering the user and
+    /// device with `whoami`.
+    ///
+    /// [`Client::restore_session()`] needs the [`SessionMeta`] that was saved
+    /// alongside the token. Use this when only the token is available, for
+    /// instance when it was obtained outside this SDK.
+    ///
+    /// This costs one request, and only works for the native Matrix
+    /// authentication API: an OAuth 2.0 session cannot be restored this way.
+    ///
+    /// See [`MatrixAuth::restore_session_with_access_token()`] for the details,
+    /// including what happens when the homeserver reports no device ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a session was already restored or logged in.
+    ///
+    /// [`MatrixAuth::restore_session_with_access_token()`]:
+    ///     crate::authentication::matrix::MatrixAuth::restore_session_with_access_token
+    pub async fn restore_session_with_access_token(
+        &self,
+        tokens: SessionTokens,
+        room_load_settings: RoomLoadSettings,
+    ) -> Result<MatrixSession> {
+        Box::pin(self.matrix_auth().restore_session_with_access_token(tokens, room_load_settings))
+            .await
+    }
+
+    /// Stop the background tasks this client runs on the session's behalf.
+    ///
+    /// Called as part of logging out: without it, the send queue keeps retrying
+    /// its requests and the encryption tasks keep polling, so a client that has
+    /// logged out (and possibly logged in again elsewhere) goes on talking to
+    /// the previous account's homeserver.
+    ///
+    /// This does not stop a sync loop, which the caller owns and must stop
+    /// itself, nor the services built on top of the client (the sync service,
+    /// the room list service), which own their own tasks.
+    pub(crate) fn stop_background_tasks(&self) {
+        // Queued requests belong to the session that queued them; they must not be
+        // sent under another one.
+        self.send_queue().disable_without_respawning();
+
+        #[cfg(feature = "e2e-encryption")]
+        {
+            // Dropping the tasks aborts the ones holding an abort-on-drop handle; the
+            // plain join handles need to be told.
+            let tasks = std::mem::take(&mut *self.inner.e2ee.tasks.lock());
+
+            if let Some(handle) = &tasks.update_recovery_state_after_backup {
+                handle.abort();
+            }
+            if let Some(handle) = &tasks.setup_e2ee {
+                handle.abort();
+            }
+        }
+    }
+
     /// Refresh the access token using the authentication API used to log into
     /// this session.
     ///
@@ -2436,13 +2500,10 @@ impl Client {
 
     /// Fetches client well_known from network; no caching.
     ///
-    /// 1. If the [`Client::server`] value is available, we use it to fetch the
-    ///    well-known contents.
-    /// 2. If it's not, we try extracting the server name from the
-    ///    [`Client::user_id`] and building the server URL from it.
-    /// 3. If we couldn't get the well-known contents with either the explicit
-    ///    server name or the implicit extracted one, we try the homeserver URL
-    ///    as a last resort.
+    /// 1. If the [`Client::server_name`] value is available, we build the
+    ///    server URL from it and use that to fetch the well-known contents.
+    /// 2. If we couldn't get the well-known contents that way, we try the
+    ///    homeserver URL as a last resort.
     ///
     /// Always returns `None` if well-known lookups were disabled with
     /// [`ClientBuilder::disable_well_known_lookup`].
@@ -2454,17 +2515,14 @@ impl Client {
         let homeserver = self.homeserver();
         let scheme = homeserver.scheme();
 
-        // Use the server name, either an explicit one or an implicit one taken
-        // from the user id: sometimes we'll have only the homeserver
-        // url available and no server name, but the server name can be
-        // extracted from the current user id.
-        let server_url = self
-            .server()
-            .map(|server| server.to_string())
-            // If the server name wasn't available, extract it from the user id and build a URL:
-            // Reuse the same scheme as the homeserver url does, assuming if it's `http` there it
-            // will be the same for the public server url, lacking a better candidate.
-            .or_else(|| self.user_id().map(|id| format!("{}://{}", scheme, id.server_name())));
+        // Use the server name, either an explicit one or an implicit one taken from
+        // the user id: sometimes we'll have only the homeserver url available and no
+        // server name, but the server name can be extracted from the current user id.
+        //
+        // Reuse the same scheme as the homeserver url does, assuming if it's `http`
+        // there it will be the same for the public server url, lacking a better
+        // candidate.
+        let server_url = self.server_name().map(|name| format!("{scheme}://{name}"));
 
         // If the server name is available, first try using it
         let response = if let Some(server_url) = server_url {
@@ -3833,10 +3891,14 @@ impl Client {
         &self,
         cross_process_lock_config: CrossProcessLockConfig,
     ) -> Result<Client> {
+        // Read the server name out before building the client, so the lock guard isn't
+        // held across an `.await`.
+        let server_name = self.inner.server.read().unwrap().clone();
+
         let client = Client {
             inner: ClientInner::new(
                 self.inner.auth_ctx.clone(),
-                self.server(),
+                server_name,
                 self.homeserver(),
                 self.sliding_sync_version(),
                 self.inner.sync_presence.clone(),
@@ -4507,9 +4569,59 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        assert_eq!(client.server().unwrap(), Url::parse(&server_url).unwrap());
+        assert_eq!(client.server_name().unwrap(), alice.server_name());
         assert_eq!(client.homeserver(), Url::parse(&homeserver_url).unwrap());
         client.server_versions().await.unwrap();
+    }
+
+    #[cfg(feature = "e2e-encryption")]
+    #[async_test]
+    async fn test_stopping_background_tasks_clears_them() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        client.send_queue().set_enabled(true).await;
+        assert!(client.send_queue().is_enabled());
+
+        // The encryption tasks are set up when the client is logged in.
+        client.encryption().spawn_initialization_task(None).await;
+        client.encryption().wait_for_e2ee_initialization_tasks().await;
+
+        client.stop_background_tasks();
+
+        // Nothing is left to keep talking to the homeserver on the session's behalf.
+        assert!(!client.send_queue().is_enabled());
+
+        let tasks = client.inner.e2ee.tasks.lock();
+        assert!(tasks.upload_room_keys.is_none());
+        assert!(tasks.download_room_keys.is_none());
+        assert!(tasks.update_recovery_state_after_backup.is_none());
+        assert!(tasks.update_recovery_state.is_none());
+        assert!(tasks.receive_historic_room_key_bundles.is_none());
+        assert!(tasks.setup_e2ee.is_none());
+    }
+
+    #[async_test]
+    async fn test_server_name_comes_from_the_user_id_once_logged_in() {
+        let server = MatrixMockServer::new().await;
+
+        // Built from a homeserver URL, so there is no server name to report yet.
+        let client = server.client_builder().unlogged().build().await;
+        assert_eq!(client.server_name(), None);
+
+        // Logging in gives us one: the server part of our own user ID, which is a bare
+        // Matrix server name rather than the URL requests are sent to.
+        server.mock_login().ok().mock_once().mount().await;
+        client.matrix_auth().login_username("example", "hunter2").send().await.unwrap();
+
+        let server_name = client.server_name().expect("we know the server name once logged in");
+        assert_eq!(server_name, client.user_id().unwrap().server_name());
+        assert_eq!(server_name, "matrix.org");
+
+        // It comes from the user ID rather than from the host requests go to, and it
+        // is a bare server name rather than a URL.
+        assert!(client.homeserver().to_string().starts_with("http://"));
+        assert_ne!(client.homeserver().to_string(), server_name.to_string());
     }
 
     #[async_test]
@@ -4528,7 +4640,7 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        assert_eq!(client.server().unwrap(), Url::parse(&homeserver_url).unwrap());
+        assert_eq!(client.server_name().unwrap(), alice.server_name());
         assert_eq!(client.homeserver(), Url::parse(&homeserver_url).unwrap());
 
         let new_server = Url::parse("http://example.org").unwrap();
@@ -4538,9 +4650,9 @@ pub(crate) mod tests {
 
         // The new URL should be set in the homeserver field.
         assert_eq!(client.homeserver(), new_server);
-        // But the server field should be set to empty, since we didn't do any
-        // discovery now.
-        assert!(client.server().is_none())
+        // But the server field should be set to empty, since we didn't do any discovery
+        // now.
+        assert!(client.server_name().is_none())
     }
 
     #[async_test]

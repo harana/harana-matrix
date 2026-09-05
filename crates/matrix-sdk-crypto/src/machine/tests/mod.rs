@@ -169,6 +169,40 @@ async fn test_create_olm_machine() {
 }
 
 #[async_test]
+async fn test_keys_upload_request_is_not_reissued_under_a_new_id() {
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+
+    // Given a pending key upload,
+    let requests = machine.outgoing_requests().await.unwrap();
+    let upload = requests
+        .iter()
+        .find(|r| matches!(r.request(), AnyOutgoingRequest::KeysUpload(_)))
+        .expect("A new machine has keys to upload");
+
+    // When we ask for the outgoing requests again before marking it as sent,
+    let requests = machine.outgoing_requests().await.unwrap();
+    let second = requests
+        .iter()
+        .find(|r| matches!(r.request(), AnyOutgoingRequest::KeysUpload(_)))
+        .expect("The upload is still outstanding");
+
+    // Then we get the same request back, rather than a second one carrying the same
+    // one-time keys, which the homeserver would reject with a 400.
+    assert_eq!(upload.request_id(), second.request_id());
+
+    // Once it is marked as sent, a later poll is free to build a new one.
+    machine.mark_request_as_sent(upload.request_id(), &keys_upload_response()).await.unwrap();
+
+    let requests = machine.outgoing_requests().await.unwrap();
+
+    for request in &requests {
+        if matches!(request.request(), AnyOutgoingRequest::KeysUpload(_)) {
+            assert_ne!(request.request_id(), upload.request_id());
+        }
+    }
+}
+
+#[async_test]
 async fn test_generate_one_time_keys() {
     let machine = OlmMachine::new(user_id(), alice_device_id()).await;
 

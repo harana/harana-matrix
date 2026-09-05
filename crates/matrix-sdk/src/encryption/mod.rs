@@ -775,6 +775,13 @@ impl Client {
             AnyOutgoingRequest::KeysUpload(request) => {
                 let response = self.keys_upload(r.request_id(), request).await;
 
+                // A duplicate one-time key is a permanent failure: the server already has
+                // that key and will reject this request every time. Retrying it forever
+                // just hammers the homeserver and blocks every other outgoing request
+                // behind it, so the request is marked as sent below and the affected keys
+                // are dropped locally so fresh ones get generated.
+                let mut is_terminal = false;
+
                 if let Err(e) = &response {
                     match e.as_client_api_error() {
                         Some(e) if e.status_code == 400 => {
@@ -790,6 +797,10 @@ impl Client {
                                         .get_kv_data(StateStoreDataKey::OneTimeKeyAlreadyUploaded)
                                         .await?
                                         .is_some();
+
+                                    if message.starts_with("One time key") {
+                                        is_terminal = true;
+                                    }
 
                                     if message.starts_with("One time key") && !already_reported {
                                         let error_message =
@@ -833,7 +844,16 @@ impl Client {
                         _ => {}
                     }
 
-                    response?;
+                    if is_terminal {
+                        // Tell the `OlmMachine` the request is done with. It marks the
+                        // keys we tried to upload as published, which drops them from the
+                        // account so the next round generates keys the server hasn't seen.
+                        let response = upload_keys::v3::Response::new(Default::default());
+
+                        self.mark_request_as_sent(r.request_id(), &response).await?;
+                    } else {
+                        response?;
+                    }
                 }
             }
             AnyOutgoingRequest::ToDeviceRequest(request) => {
@@ -842,7 +862,38 @@ impl Client {
             }
             AnyOutgoingRequest::SignatureUpload(request) => {
                 let response = self.send(request.clone()).await?;
+
+                // The homeserver reports per-key failures in the body of an otherwise
+                // successful response. Ignoring them let a device finish a verification
+                // and consider itself verified while the signature that says so never
+                // made it onto the server, so everyone else still saw it as unverified.
+                if !response.failures.is_empty() {
+                    error!(
+                        failures = ?response.failures,
+                        "The homeserver rejected some of the signatures we uploaded"
+                    );
+                }
+
                 self.mark_request_as_sent(r.request_id(), &response).await?;
+
+                // Read our own keys back, so what we believe about our device's
+                // signatures is what the server will actually hand to other people,
+                // rather than what we assumed the upload achieved.
+                if let Some(own_user_id) = self.user_id()
+                    && request.signed_keys.contains_key(own_user_id)
+                {
+                    // Build the query while holding the machine, then let go of it
+                    // before sending: `keys_query` takes it again to feed the answer in.
+                    let query = {
+                        let olm = self.olm_machine().await;
+
+                        olm.as_ref().map(|olm| olm.query_keys_for_users([own_user_id]))
+                    };
+
+                    if let Some((request_id, query)) = query {
+                        self.keys_query(&request_id, query.device_keys).await?;
+                    }
+                }
             }
             AnyOutgoingRequest::RoomMessage(request) => {
                 let response = self.room_send_helper(request).await?;

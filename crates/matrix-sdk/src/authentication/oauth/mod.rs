@@ -1360,6 +1360,10 @@ impl OAuth {
     pub async fn logout(&self) -> Result<(), OAuthError> {
         let client_id = self.client_id().ok_or(OAuthError::NotAuthenticated)?.clone();
 
+        // Stop the background tasks before revoking the token: whatever they still
+        // have queued belongs to this session.
+        self.client.stop_background_tasks();
+
         let server_metadata = self.server_metadata().await?;
         let revocation_url = RevocationUrl::from_url(server_metadata.revocation_endpoint);
 

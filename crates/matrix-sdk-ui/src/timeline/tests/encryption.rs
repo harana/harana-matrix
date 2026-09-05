@@ -881,31 +881,47 @@ async fn test_retry_decryption_updates_reply() {
         .await
         .unwrap();
 
-    // The response is updated.
-    {
-        let event = assert_next_matches_with_timeout!(
+    // The event itself is decrypted, and the reply that points at it is updated to
+    // show what it is replying to. Nothing fixes the order the two updates arrive
+    // in, so take them as they come instead of assuming one comes first.
+    let mut saw_decrypted_event = false;
+    let mut saw_updated_reply = false;
+
+    while !(saw_decrypted_event && saw_updated_reply) {
+        let (index, event) = assert_next_matches_with_timeout!(
             stream,
-            VectorDiff::Set { index: 1, value } => value
+            VectorDiff::Set { index, value } => (index, value)
         );
 
-        let msglike = event.content().as_msglike().unwrap();
-        let msg = msglike.as_message().unwrap();
-        assert_eq!(msg.body(), "well said!");
+        match index {
+            0 => {
+                assert_matches!(event.encryption_info(), Some(_));
+                assert_let!(Some(message) = event.content().as_message());
+                assert_eq!(message.body(), "It's a secret to everybody");
+                assert!(!event.is_highlighted());
 
-        let reply_details = msglike.in_reply_to.clone().unwrap();
-        assert_eq!(reply_details.event_id, original_event_id);
+                saw_decrypted_event = true;
+            }
 
-        let replied_to = as_variant!(&reply_details.event, TimelineDetails::Ready).unwrap();
-        assert_eq!(replied_to.content.as_message().unwrap().body(), "It's a secret to everybody");
-    }
+            1 => {
+                let msglike = event.content().as_msglike().unwrap();
+                let msg = msglike.as_message().unwrap();
+                assert_eq!(msg.body(), "well said!");
 
-    // The event itself is decrypted.
-    {
-        let event = assert_next_matches!(stream, VectorDiff::Set { index: 0, value } => value);
-        assert_matches!(event.encryption_info(), Some(_));
-        assert_let!(Some(message) = event.content().as_message());
-        assert_eq!(message.body(), "It's a secret to everybody");
-        assert!(!event.is_highlighted());
+                let reply_details = msglike.in_reply_to.clone().unwrap();
+                assert_eq!(reply_details.event_id, original_event_id);
+
+                let replied_to = as_variant!(&reply_details.event, TimelineDetails::Ready).unwrap();
+                assert_eq!(
+                    replied_to.content.as_message().unwrap().body(),
+                    "It's a secret to everybody"
+                );
+
+                saw_updated_reply = true;
+            }
+
+            _ => panic!("Unexpected timeline update at index {index}"),
+        }
     }
 }
 

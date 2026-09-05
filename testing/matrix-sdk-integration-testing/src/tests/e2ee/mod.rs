@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
+use as_variant::as_variant;
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use assign::assign;
@@ -47,6 +48,70 @@ mod shared_history;
 #[cfg(feature = "experimental-encrypted-state-events")]
 mod state_events;
 mod x509;
+
+/// Sync both `clients` until `observe` returns a value, or give up.
+///
+/// The verification tests used to assume that each state transition became
+/// visible after exactly one `sync_once()`. That only holds when the server
+/// batches the to-device messages the way Synapse happens to, and made the
+/// tests flaky against anything else. Waiting for the state we actually care
+/// about costs nothing when it is already reached, and still fails within a
+/// bound when it never is.
+///
+/// Both sides are synced on every round, because a verification only moves
+/// forward when both of them do: a sync is what flushes one side's outgoing
+/// to-device messages and signature uploads, and what picks up the other
+/// side's.
+async fn sync_until<T>(
+    clients: [&SyncTokenAwareClient; 2],
+    what: &str,
+    observe: impl Fn() -> Option<T>,
+) -> Result<T> {
+    /// Enough rounds for the messages of a verification flow to get through,
+    /// however the server chooses to batch them.
+    const MAX_ROUNDS: usize = 10;
+
+    for _ in 0..MAX_ROUNDS {
+        if let Some(value) = observe() {
+            return Ok(value);
+        }
+
+        for client in clients {
+            client.sync_once().await?;
+        }
+    }
+
+    observe().ok_or_else(|| anyhow::anyhow!("Timed out waiting for {what}"))
+}
+
+/// Sync both clients until each of them sees the other's identity as verified.
+///
+/// The signatures that make that true are uploaded and read back over sync, so
+/// they are not there the moment the verification itself reports being done.
+async fn sync_until_mutually_verified(
+    alice: &SyncTokenAwareClient,
+    bob: &SyncTokenAwareClient,
+) -> Result<()> {
+    const MAX_ROUNDS: usize = 10;
+
+    for _ in 0..MAX_ROUNDS {
+        let alice_bob_ident = alice.encryption().get_user_identity(bob.user_id().unwrap()).await?;
+        let bob_alice_ident = bob.encryption().get_user_identity(alice.user_id().unwrap()).await?;
+
+        if let Some(alice_bob_ident) = alice_bob_ident
+            && let Some(bob_alice_ident) = bob_alice_ident
+            && alice_bob_ident.is_verified()
+            && bob_alice_ident.is_verified()
+        {
+            return Ok(());
+        }
+
+        alice.sync_once().await?;
+        bob.sync_once().await?;
+    }
+
+    Err(anyhow::anyhow!("Timed out waiting for the two users to see each other as verified"))
+}
 
 // This test reproduces a bug seen on clients that use the same `Client`
 // instance for both the usual sliding sync loop and for getting the event for a
@@ -249,12 +314,14 @@ async fn test_mutual_sas_verification() -> Result<()> {
 
     warn!("alice has started verification");
 
-    bob.sync_once().await?;
-    let bob_verification_request = bob_verification_request
-        .lock()
-        .unwrap()
-        .take()
-        .expect("bob received a verification request");
+    let bob_verification_request = {
+        let received = bob_verification_request.clone();
+
+        sync_until([&bob, &alice], "bob to receive the verification request", || {
+            received.lock().unwrap().take()
+        })
+        .await?
+    };
 
     warn!("bob has received the verification request");
 
@@ -287,8 +354,11 @@ async fn test_mutual_sas_verification() -> Result<()> {
 
     // Alice receives the accept, and moves to the ready state.
     assert_matches!(alice_verification_request.state(), VerificationRequestState::Created { .. });
-    alice.sync_once().await.unwrap();
-    assert_matches!(alice_verification_request.state(), VerificationRequestState::Ready { .. });
+    sync_until([&alice, &bob], "alice's request to become ready", || {
+        matches!(alice_verification_request.state(), VerificationRequestState::Ready { .. })
+            .then_some(())
+    })
+    .await?;
 
     let alice_sas =
         alice_verification_request.start_sas().await?.expect("must have a sas verification");
@@ -307,9 +377,14 @@ async fn test_mutual_sas_verification() -> Result<()> {
     assert!(alice_sas.emoji().is_none());
     assert!(alice_sas.decimals().is_none());
 
-    bob.sync_once().await?;
-
-    let bob_verification = assert_matches!(bob_verification_request.state(), VerificationRequestState::Transitioned { verification } => verification);
+    let bob_verification =
+        sync_until([&bob, &alice], "bob's request to transition into a SAS", || {
+            as_variant!(
+                bob_verification_request.state(),
+                VerificationRequestState::Transitioned { verification } => verification
+            )
+        })
+        .await?;
 
     assert!(!bob_verification.is_done());
     assert!(!bob_verification.is_cancelled());
@@ -327,26 +402,23 @@ async fn test_mutual_sas_verification() -> Result<()> {
 
     bob_sas.accept().await?;
     assert_matches!(bob_sas.state(), SasState::Accepted { .. });
-    alice.sync_once().await?;
-    assert_matches!(alice_sas.state(), SasState::Accepted { .. });
+
+    sync_until([&alice, &bob], "alice's SAS to be accepted", || {
+        matches!(alice_sas.state(), SasState::Accepted { .. }).then_some(())
+    })
+    .await?;
     assert!(alice_sas.supports_emoji());
 
-    assert!(!alice_sas.can_be_presented());
-    assert!(!bob_sas.can_be_presented());
-
     // Let a little crypto messages dance happen.
-    alice.sync_once().await?;
-    bob.sync_once().await?;
-    assert_matches!(alice_sas.state(), SasState::Accepted { .. });
-    assert_matches!(bob_sas.state(), SasState::KeysExchanged { .. });
+    let bob_emojis = sync_until([&bob, &alice], "bob to receive the emojis", || {
+        as_variant!(bob_sas.state(), SasState::KeysExchanged { emojis, .. } => emojis).flatten()
+    })
+    .await?;
 
-    alice.sync_once().await?;
-    let alice_emojis =
-        assert_matches!(alice_sas.state(), SasState::KeysExchanged { emojis, .. } => emojis)
-            .expect("alice received emojis");
-    let bob_emojis =
-        assert_matches!(bob_sas.state(), SasState::KeysExchanged { emojis, .. } => emojis)
-            .expect("bob received emojis");
+    let alice_emojis = sync_until([&alice, &bob], "alice to receive the emojis", || {
+        as_variant!(alice_sas.state(), SasState::KeysExchanged { emojis, .. } => emojis).flatten()
+    })
+    .await?;
 
     assert!(alice_sas.can_be_presented());
     assert!(bob_sas.can_be_presented());
@@ -359,35 +431,35 @@ async fn test_mutual_sas_verification() -> Result<()> {
     assert_matches!(bob_sas.state(), SasState::Confirmed);
 
     // Moar crypto dancing.
-    alice.sync_once().await?;
-    bob.sync_once().await?;
-    assert_matches!(alice_sas.state(), SasState::Confirmed);
-    assert_matches!(bob_sas.state(), SasState::Done { .. });
+    sync_until([&bob, &alice], "bob's SAS to be done", || {
+        matches!(bob_sas.state(), SasState::Done { .. }).then_some(())
+    })
+    .await?;
 
-    alice.sync_once().await?;
-    assert_matches!(alice_sas.state(), SasState::Done { .. });
-    assert_matches!(bob_sas.state(), SasState::Done { .. });
+    sync_until([&alice, &bob], "alice's SAS to be done", || {
+        matches!(alice_sas.state(), SasState::Done { .. }).then_some(())
+    })
+    .await?;
 
     // Wait for remote echos for verification status requests.
-    alice.sync_once().await?;
-    bob.sync_once().await?;
+    sync_until([&bob, &alice], "bob's verification request to be done", || {
+        bob_verification_request.is_done().then_some(())
+    })
+    .await?;
+
+    sync_until([&alice, &bob], "alice's verification request to be done", || {
+        alice_verification_request.is_done().then_some(())
+    })
+    .await?;
 
     assert!(!bob_verification_request.is_cancelled());
     assert!(!alice_verification_request.is_cancelled());
 
-    assert!(bob_verification_request.is_done());
-    assert!(alice_verification_request.is_done());
     assert!(bob_sas.is_done());
     assert!(alice_sas.is_done());
 
     // Both users appear as verified to each other.
-    let alice_bob_ident =
-        alice.encryption().get_user_identity(bob.user_id().unwrap()).await?.unwrap();
-    assert!(alice_bob_ident.is_verified());
-
-    let bob_alice_ident =
-        bob.encryption().get_user_identity(alice.user_id().unwrap()).await?.unwrap();
-    assert!(bob_alice_ident.is_verified());
+    sync_until_mutually_verified(&alice, &bob).await?;
 
     // Both user devices appear as verified to the other user.
     let alice_bob_device = alice_sas.other_device();
@@ -518,12 +590,14 @@ async fn test_mutual_qrcode_verification() -> Result<()> {
 
     warn!("alice has started verification");
 
-    bob.sync_once().await?;
-    let bob_verification_request = bob_verification_request
-        .lock()
-        .unwrap()
-        .take()
-        .expect("bob received a verification request");
+    let bob_verification_request = {
+        let received = bob_verification_request.clone();
+
+        sync_until([&bob, &alice], "bob to receive the verification request", || {
+            received.lock().unwrap().take()
+        })
+        .await?
+    };
 
     warn!("bob has received the verification request");
 
@@ -554,8 +628,11 @@ async fn test_mutual_qrcode_verification() -> Result<()> {
 
     // Alice receives the accept, and moves to the ready state.
     assert_matches!(alice_verification_request.state(), VerificationRequestState::Created { .. });
-    alice.sync_once().await.unwrap();
-    assert_matches!(alice_verification_request.state(), VerificationRequestState::Ready { .. });
+    sync_until([&alice, &bob], "alice's request to become ready", || {
+        matches!(alice_verification_request.state(), VerificationRequestState::Ready { .. })
+            .then_some(())
+    })
+    .await?;
 
     let bob_qr =
         bob_verification_request.generate_qr_code().await?.expect("must have a qr verification");
@@ -593,46 +670,47 @@ async fn test_mutual_qrcode_verification() -> Result<()> {
     assert!(!alice_qr.is_cancelled());
     assert!(alice_qr.cancel_info().is_none());
 
-    bob.sync_once().await?;
-
     assert_matches!(alice_qr.state(), QrVerificationState::Reciprocated);
-    assert_matches!(bob_qr.state(), QrVerificationState::Scanned);
+
+    sync_until([&bob, &alice], "bob to see the QR code as scanned", || {
+        matches!(bob_qr.state(), QrVerificationState::Scanned).then_some(())
+    })
+    .await?;
 
     bob_qr.confirm().await?;
 
     warn!("bob has confirmed the QR code scanning");
 
-    alice.sync_once().await?;
-
-    assert_matches!(bob_qr.state(), QrVerificationState::Confirmed);
-    assert_matches!(alice_qr.state(), QrVerificationState::Done { .. });
+    sync_until([&alice, &bob], "alice's QR verification to be done", || {
+        matches!(alice_qr.state(), QrVerificationState::Done { .. }).then_some(())
+    })
+    .await?;
 
     // Crypto dancing.
-    alice.sync_once().await?;
-    bob.sync_once().await?;
-    assert_matches!(bob_qr.state(), QrVerificationState::Done { .. });
-    assert_matches!(alice_qr.state(), QrVerificationState::Done { .. });
+    sync_until([&bob, &alice], "bob's QR verification to be done", || {
+        matches!(bob_qr.state(), QrVerificationState::Done { .. }).then_some(())
+    })
+    .await?;
 
     // Wait for remote echos for verification status requests.
-    alice.sync_once().await?;
-    bob.sync_once().await?;
+    sync_until([&bob, &alice], "bob's verification request to be done", || {
+        bob_verification_request.is_done().then_some(())
+    })
+    .await?;
+
+    sync_until([&alice, &bob], "alice's verification request to be done", || {
+        alice_verification_request.is_done().then_some(())
+    })
+    .await?;
 
     assert!(!bob_verification_request.is_cancelled());
     assert!(!alice_verification_request.is_cancelled());
 
-    assert!(bob_verification_request.is_done());
-    assert!(alice_verification_request.is_done());
     assert!(bob_qr.is_done());
     assert!(alice_qr.is_done());
 
     // Both users appear as verified to each other.
-    let alice_bob_ident =
-        alice.encryption().get_user_identity(bob.user_id().unwrap()).await?.unwrap();
-    assert!(alice_bob_ident.is_verified());
-
-    let bob_alice_ident =
-        bob.encryption().get_user_identity(alice.user_id().unwrap()).await?.unwrap();
-    assert!(bob_alice_ident.is_verified());
+    sync_until_mutually_verified(&alice, &bob).await?;
 
     // Both user devices appear as verified to the other user.
     let alice_bob_device = alice_qr.other_device();

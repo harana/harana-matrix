@@ -344,6 +344,70 @@ impl WaitQueue {
         write_guard.requests_ids_waiting.entry(ids_waiting_key).or_default().insert(request_id);
     }
 
+    /// Drop any queued request from this device asking for the given secret.
+    ///
+    /// A client that asks for the same secret twice while we have no Olm
+    /// session with it leaves two requests in the queue under different
+    /// request IDs. Servicing one of them and then servicing the queued ones
+    /// too would send the secret a second time, which is exactly what we don't
+    /// want to do with secrets.
+    fn remove_secret_requests(
+        &self,
+        user_id: &UserId,
+        device_id: &DeviceId,
+        secret_name: &SecretName,
+    ) {
+        let mut write_guard = self.inner.write();
+
+        let Some(request_ids) =
+            write_guard.requests_ids_waiting.get(&(user_id.to_owned(), device_id.into())).cloned()
+        else {
+            return;
+        };
+
+        let serviced: Vec<OwnedTransactionId> = request_ids
+            .iter()
+            .filter(|id| {
+                let key = RequestInfo::new(user_id.to_owned(), device_id.into(), (*id).to_owned());
+
+                write_guard
+                    .requests_waiting_for_session
+                    .get(&key)
+                    .and_then(|event| match event {
+                        RequestEvent::Secret(event) => match &event.content.action {
+                            RequestAction::Request(request) => Some(&request.name),
+                            _ => None,
+                        },
+                        #[cfg(feature = "automatic-room-key-forwarding")]
+                        RequestEvent::KeyShare(_) => None,
+                        #[cfg(not(feature = "automatic-room-key-forwarding"))]
+                        _ => None,
+                    })
+                    .is_some_and(|name| name == secret_name)
+            })
+            .cloned()
+            .collect();
+
+        for id in serviced {
+            let key = RequestInfo::new(user_id.to_owned(), device_id.into(), id.clone());
+            write_guard.requests_waiting_for_session.remove(&key);
+
+            if let Some(ids) =
+                write_guard.requests_ids_waiting.get_mut(&(user_id.to_owned(), device_id.into()))
+            {
+                ids.remove(&id);
+            }
+        }
+
+        if write_guard
+            .requests_ids_waiting
+            .get(&(user_id.to_owned(), device_id.into()))
+            .is_some_and(|ids| ids.is_empty())
+        {
+            write_guard.requests_ids_waiting.remove(&(user_id.to_owned(), device_id.into()));
+        }
+    }
+
     fn remove(&self, user_id: &UserId, device_id: &DeviceId) -> Vec<(RequestInfo, RequestEvent)> {
         let mut write_guard = self.inner.write();
 

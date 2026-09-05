@@ -1178,6 +1178,14 @@ pub enum UnableToDecryptReason {
     /// unknown megolm message type).
     MalformedEncryptedEvent,
 
+    /// The event was redacted before we got to decrypt it, so its content —
+    /// including the `algorithm` field — has been stripped by the server and
+    /// there is nothing left to decrypt.
+    ///
+    /// This is not a decryption failure: there is no key that would help, and
+    /// it should not be counted towards UTD rates.
+    Redacted,
+
     /// Decryption failed because we're missing the megolm session that was used
     /// to encrypt the event.
     MissingMegolmSession {
@@ -1218,6 +1226,12 @@ pub enum UnableToDecryptReason {
 }
 
 impl UnableToDecryptReason {
+    /// Returns true if this "UTD" is not really a decryption failure at all,
+    /// and so should be left out of UTD metrics.
+    pub fn is_expected(&self) -> bool {
+        matches!(self, Self::Redacted)
+    }
+
     /// Returns true if this UTD is due to a missing room key (and hence might
     /// resolve itself if we wait a bit.)
     pub fn is_missing_room_key(&self) -> bool {

@@ -33,6 +33,7 @@ use matrix_sdk::{
 };
 use matrix_sdk_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
+    api::client::receipt::create_receipt::v3::ReceiptType as CreateReceiptType,
     event_id,
     events::{
         Mentions,
@@ -71,6 +72,92 @@ async fn test_unread_count_new_message_no_receipt() {
     assert_let_timeout!(Ok(_) = room_cache_updates.recv());
 
     // Both messages from BOB count as unread since there is no read receipt.
+    assert_eq!(room.num_unread_messages(), 2);
+}
+
+/// Test that sending a read receipt clears the unread count right away, rather
+/// than only once the receipt comes back through sync.
+#[async_test]
+async fn test_sending_a_read_receipt_updates_the_unread_count_locally() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    client.event_cache().subscribe().unwrap();
+
+    let room_id = room_id!("!omelette:fromage.fr");
+    let f = EventFactory::new().room(room_id).sender(*BOB);
+
+    let room = server.sync_joined_room(&client, room_id).await;
+    let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+    let (_, mut room_cache_updates) = room_event_cache.subscribe().await.unwrap();
+    assert!(room_cache_updates.is_empty());
+
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("hello").event_id(event_id!("$1")))
+                .add_timeline_event(f.text_msg("world").event_id(event_id!("$2"))),
+        )
+        .await;
+
+    assert_let_timeout!(Ok(_) = room_cache_updates.recv());
+    assert_eq!(room.num_unread_messages(), 2);
+
+    server.mock_send_receipt(CreateReceiptType::Read).ok().expect(1).mount().await;
+
+    room.send_single_receipt(
+        CreateReceiptType::Read,
+        ReceiptThread::Unthreaded,
+        event_id!("$2").to_owned(),
+    )
+    .await
+    .unwrap();
+
+    // No sync in between: the receipt was applied locally.
+    assert_eq!(room.num_unread_messages(), 0);
+}
+
+/// Test that a read receipt applied locally is rolled back when the request to
+/// send it fails.
+#[async_test]
+async fn test_a_failed_read_receipt_rolls_back_the_unread_count() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    client.event_cache().subscribe().unwrap();
+
+    let room_id = room_id!("!omelette:fromage.fr");
+    let f = EventFactory::new().room(room_id).sender(*BOB);
+
+    let room = server.sync_joined_room(&client, room_id).await;
+    let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+    let (_, mut room_cache_updates) = room_event_cache.subscribe().await.unwrap();
+    assert!(room_cache_updates.is_empty());
+
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("hello").event_id(event_id!("$1")))
+                .add_timeline_event(f.text_msg("world").event_id(event_id!("$2"))),
+        )
+        .await;
+
+    assert_let_timeout!(Ok(_) = room_cache_updates.recv());
+    assert_eq!(room.num_unread_messages(), 2);
+
+    server.mock_send_receipt(CreateReceiptType::Read).error500().mount().await;
+
+    room.send_single_receipt(
+        CreateReceiptType::Read,
+        ReceiptThread::Unthreaded,
+        event_id!("$2").to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    // The server never saw the receipt, so the room is unread again.
     assert_eq!(room.num_unread_messages(), 2);
 }
 

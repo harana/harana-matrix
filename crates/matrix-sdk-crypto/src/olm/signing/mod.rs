@@ -110,12 +110,30 @@ pub struct CrossSigningStatus {
     /// Do we have the user signing key, this one is necessary to sign other
     /// users.
     pub has_user_signing: bool,
+    /// Have the public keys of this identity been published to the homeserver?
+    ///
+    /// An identity that we created but never managed to publish is invisible to
+    /// everybody else: we think we are cross-signed while every other device
+    /// still sees ours as unverified. Nothing retries the upload on its own, so
+    /// a consumer that sees this as `false` alongside a complete set of keys
+    /// should publish them again, answering the user-interactive authentication
+    /// challenge if the homeserver asks for one.
+    pub is_published: bool,
 }
 
 impl CrossSigningStatus {
     /// Do we have all the cross signing keys locally stored.
     pub fn is_complete(&self) -> bool {
         self.has_master && self.has_user_signing && self.has_self_signing
+    }
+
+    /// Do we have all the cross signing keys, and did they reach the
+    /// homeserver?
+    ///
+    /// A complete identity that was never published doesn't make anybody trust
+    /// this device.
+    pub fn is_usable(&self) -> bool {
+        self.is_complete() && self.is_published
     }
 }
 
@@ -172,6 +190,7 @@ impl PrivateCrossSigningIdentity {
             has_master: self.has_master_key().await,
             has_self_signing: self.can_sign_devices().await,
             has_user_signing: self.can_sign_users().await,
+            is_published: self.shared(),
         }
     }
 

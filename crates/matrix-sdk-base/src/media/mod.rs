@@ -16,6 +16,8 @@
 
 pub mod store;
 
+use std::hash::{Hash, Hasher};
+
 use ruma::{
     MxcUri, UInt,
     api::client::media::get_content_thumbnail::v3::Method,
@@ -42,7 +44,7 @@ pub trait UniqueKey {
 }
 
 /// The requested format of a media file.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum MediaFormat {
     /// The file that was uploaded.
     File,
@@ -61,7 +63,7 @@ impl UniqueKey for MediaFormat {
 }
 
 /// The desired settings of a media thumbnail.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct MediaThumbnailSettings {
     /// The desired resizing method.
     pub method: Method,
@@ -98,6 +100,18 @@ impl MediaThumbnailSettings {
     /// Requests scaling, and a non-animated thumbnail.
     pub fn new(width: UInt, height: UInt) -> Self {
         Self { method: Method::Scale, width, height, animated: false }
+    }
+}
+
+// `Method` is a `StringEnum` and doesn't implement `Hash`, so this can't be
+// derived; hash the string representation instead, which is what its
+// `PartialEq` compares.
+impl Hash for MediaThumbnailSettings {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.method.as_str().hash(state);
+        self.width.hash(state);
+        self.height.hash(state);
+        self.animated.hash(state);
     }
 }
 
@@ -237,6 +251,56 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn test_media_format_can_key_a_map() {
+        use std::collections::{BTreeMap, HashMap};
+
+        let file = MediaFormat::File;
+        let small = MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32)));
+        let large = MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(64), uint!(64)));
+        let cropped = MediaFormat::Thumbnail(MediaThumbnailSettings::with_method(
+            Method::Crop,
+            uint!(32),
+            uint!(32),
+        ));
+
+        // Equality distinguishes every setting.
+        assert_eq!(
+            small,
+            MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32)))
+        );
+        assert_ne!(small, large);
+        assert_ne!(small, cropped);
+        assert_ne!(small, file);
+
+        // `Ord` makes it usable as a `BTreeMap` key...
+        let mut ordered = BTreeMap::new();
+        ordered.insert(file, "file");
+        ordered.insert(small.clone(), "small");
+        ordered.insert(large.clone(), "large");
+
+        assert_eq!(ordered.get(&small), Some(&"small"));
+        assert_eq!(ordered.len(), 3);
+
+        // ... and `Hash` as a `HashMap` one. `Method` is a string enum without a
+        // `Hash` implementation, so this is hand-written and worth checking.
+        let mut hashed = HashMap::new();
+        hashed.insert(small.clone(), "small");
+        hashed.insert(cropped.clone(), "cropped");
+
+        assert_eq!(hashed.get(&small), Some(&"small"));
+        assert_eq!(hashed.get(&cropped), Some(&"cropped"));
+        assert_eq!(hashed.get(&large), None);
+
+        // Inserting an equal value replaces rather than duplicates.
+        hashed.insert(
+            MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32))),
+            "again",
+        );
+        assert_eq!(hashed.len(), 2);
+        assert_eq!(hashed.get(&small), Some(&"again"));
+    }
 
     #[test]
     fn test_media_request_url() {

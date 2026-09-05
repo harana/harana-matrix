@@ -23,10 +23,10 @@ use std::{borrow::Cow, fmt};
 use matrix_sdk_base::{SessionMeta, store::RoomLoadSettings};
 use ruma::{
     api::{
-        OutgoingRequestExt,
+        Metadata, OutgoingRequestExt,
         auth_scheme::SendAccessToken,
         client::{
-            account::register,
+            account::{register, whoami},
             session::{
                 get_login_types, login, logout, refresh_token, sso_login, sso_login_with_provider,
             },
@@ -44,6 +44,7 @@ use crate::{
     authentication::AuthData,
     client::SessionChange,
     error::{HttpError, HttpResult},
+    http_client::SupportedPathBuilder,
     utils::UrlOrQuery,
 };
 
@@ -629,6 +630,11 @@ impl MatrixAuth {
     }
     /// Log out the current user.
     pub async fn logout(&self) -> HttpResult<logout::v3::Response> {
+        // Stop the background tasks before sending the request: whatever they still
+        // have queued belongs to this session, and the access token is about to stop
+        // being valid.
+        self.client.stop_background_tasks();
+
         let request = logout::v3::Request::new();
         self.client.send(request).await
     }
@@ -734,6 +740,66 @@ impl MatrixAuth {
         .await?;
         debug!("Done restoring Matrix auth session");
         Ok(())
+    }
+
+    /// Restore a previously logged-in session from an access token alone.
+    ///
+    /// Use this when the caller holds an access token but not the
+    /// [`SessionMeta`] that [`MatrixAuth::restore_session()`] requires, for
+    /// instance when the token was obtained outside this SDK. The user ID and
+    /// device ID are discovered by calling
+    /// [`whoami`](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3accountwhoami)
+    /// with the given token, which costs one request.
+    ///
+    /// Returns the session that was restored, so the caller can persist it and
+    /// restore it directly next time.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`Error::MissingDeviceId`] if the homeserver's `whoami`
+    /// response has no device ID. The field is optional in the specification,
+    /// but the SDK needs one: it identifies the device that owns the
+    /// end-to-end encryption keys, so a session without it cannot be restored.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a session was already restored or logged in.
+    #[instrument(skip_all)]
+    pub async fn restore_session_with_access_token(
+        &self,
+        tokens: SessionTokens,
+        room_load_settings: RoomLoadSettings,
+    ) -> Result<MatrixSession> {
+        debug!("Discovering the session's user with whoami");
+
+        // The session isn't set up yet, so the token can't be taken from it: pass it
+        // explicitly.
+        let path_builder_input =
+            <<whoami::v3::Request as Metadata>::PathBuilder as SupportedPathBuilder>::
+                get_path_builder_input(&self.client, false)
+                .await?;
+
+        let response = self
+            .client
+            .inner
+            .http_client
+            .send(
+                whoami::v3::Request::new(),
+                Some(self.client.request_config()),
+                self.client.homeserver().to_string(),
+                Some(&tokens.access_token),
+                path_builder_input,
+                Default::default(),
+            )
+            .await?;
+
+        let device_id = response.device_id.ok_or(Error::MissingDeviceId)?;
+        let session =
+            MatrixSession { meta: SessionMeta { user_id: response.user_id, device_id }, tokens };
+
+        self.restore_session(session.clone(), room_load_settings).await?;
+
+        Ok(session)
     }
 
     /// Receive a login response and update the homeserver and the base client
