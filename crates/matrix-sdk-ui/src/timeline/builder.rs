@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use matrix_sdk::Room;
-use matrix_sdk_base::{SendOutsideWasm, SyncOutsideWasm};
+use matrix_sdk_base::{SendOutsideWasm, SyncOutsideWasm, ThreadingSupport};
 use ruma::{events::AnySyncTimelineEvent, room_version_rules::RoomVersionRules};
-use tracing::{Instrument, Span, info_span};
+use tracing::{Instrument, Span, info_span, warn};
 
 use super::{
     DateDividerMode, Error, Timeline, TimelineDropHandle, TimelineFocus,
@@ -165,6 +165,22 @@ impl TimelineBuilder {
 
         // Subscribe the event cache to sync responses, in case we hadn't done it yet.
         let client = room.client();
+
+        if matches!(focus, TimelineFocus::Thread { .. })
+            && matches!(client.threading_support(), ThreadingSupport::Disabled)
+        {
+            // Without threading support, in-thread events aren't routed to the thread
+            // event cache: local echoes are never replaced by their remote counterparts,
+            // and the thread summary of the root event is never updated in the main
+            // timeline. Make the misconfiguration visible instead of silently
+            // misbehaving.
+            warn!(
+                "Building a thread-focused timeline on a client built without threading \
+                 support: local echoes and thread summaries will not be updated. Use \
+                 `ClientBuilder::with_threading_support` to enable it."
+            );
+        }
+
         let event_cache = client.event_cache();
         event_cache.subscribe()?;
 

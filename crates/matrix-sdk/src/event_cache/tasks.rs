@@ -20,10 +20,12 @@ use std::{
 
 use eyeball::Subscriber;
 use matrix_sdk_base::{
-    linked_chunk::OwnedLinkedChunkId, serde_helpers::extract_thread_root_from_content,
+    event_cache::Event,
+    linked_chunk::OwnedLinkedChunkId,
+    serde_helpers::{extract_in_reply_to, extract_thread_root_from_content},
     sync::RoomUpdates,
 };
-use ruma::{OwnedEventId, OwnedTransactionId, RoomId};
+use ruma::{EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId};
 use tokio::{
     select,
     sync::{
@@ -39,6 +41,7 @@ use super::{
     RoomEventCacheLinkedChunkUpdate,
 };
 use crate::{
+    Room,
     client::WeakClient,
     send_queue::{LocalEchoContent, RoomSendQueueUpdate, SendQueueUpdate},
 };
@@ -390,9 +393,51 @@ async fn handle_thread_subscriber_send_queue_update(
     true
 }
 
+/// Return the sender of `event`, without deserializing the whole event.
+fn sender_of(event: &Event) -> Option<OwnedUserId> {
+    event.raw().get_field::<OwnedUserId>("sender").ok().flatten()
+}
+
+/// Whether `replied_to_event_id` points at an event sent by `own_user_id`.
+///
+/// The event is looked up in the event cache first. The thread root is the one
+/// event of a thread which may legitimately be missing from the caches (it
+/// lives in the room timeline, which may not have been paginated that far
+/// back), so it is fetched from the homeserver when it isn't cached; any other
+/// target is resolved locally only, to avoid a network round-trip per in-thread
+/// event.
+async fn is_reply_to_own_event(
+    room: &Room,
+    thread_root: &EventId,
+    replied_to_event_id: &EventId,
+    own_user_id: &UserId,
+) -> bool {
+    let event = if replied_to_event_id == thread_root {
+        room.load_or_fetch_event(replied_to_event_id, None)
+            .await
+            .inspect_err(|err| {
+                debug!(%err, %replied_to_event_id, "couldn't load the thread root");
+            })
+            .ok()
+    } else {
+        match room.event_cache().await {
+            Ok((event_cache, _drop_handles)) => {
+                event_cache.find_event(replied_to_event_id).await.ok().flatten()
+            }
+            Err(err) => {
+                debug!(%err, "error when getting the room event cache");
+                None
+            }
+        }
+    };
+
+    event.as_ref().and_then(sender_of).is_some_and(|sender| sender == own_user_id)
+}
+
 /// React to a given linked chunk update by subscribing the user to a
-/// thread, if needs be (when the user got mentioned in a thread reply, for
-/// a thread they were not subscribed to).
+/// thread, if needs be (when the user got mentioned in a thread reply, or when
+/// somebody answered one of the user's own messages in that thread, for a
+/// thread they were not subscribed to).
 ///
 /// Returns a boolean indicating whether the task should keep on running or
 /// not.
@@ -450,17 +495,38 @@ async fn handle_thread_subscriber_linked_chunk_update(
         return true;
     };
 
+    let Some(own_user_id) = client.user_id().map(ToOwned::to_owned) else {
+        warn!("no user id for the current client");
+        return true;
+    };
+
     let mut subscribe_up_to = None;
 
-    // Find if there's an event that would trigger a mention for the current
-    // user, iterating from the end of the new events towards the oldest, so we can
-    // find the most recent event to subscribe to.
+    // Find if there's an event that would either trigger a mention for the current
+    // user, or answer one of their own messages. We iterate from the end of the new
+    // events towards the oldest, so we can find the most recent event to subscribe
+    // to.
     for ev in new_events.rev() {
+        let Some(event_id) = ev.event_id() else {
+            // Shouldn't happen.
+            continue;
+        };
+
         if push_context.for_event(ev.raw()).await.into_iter().any(|action| action.should_notify()) {
-            let Some(event_id) = ev.event_id() else {
-                // Shouldn't happen.
-                continue;
-            };
+            subscribe_up_to = Some(event_id.to_owned());
+            break;
+        }
+
+        // Events we sent ourselves are handled by the send queue side of the thread
+        // subscriber; and answering our own message must not subscribe us on its own.
+        if sender_of(&ev).as_deref() == Some(&*own_user_id) {
+            continue;
+        }
+
+        // Somebody answered one of our own messages in this thread.
+        if let Some(replied_to_event_id) = extract_in_reply_to(ev.raw())
+            && is_reply_to_own_event(&room, &thread_root, &replied_to_event_id, &own_user_id).await
+        {
             subscribe_up_to = Some(event_id.to_owned());
             break;
         }
