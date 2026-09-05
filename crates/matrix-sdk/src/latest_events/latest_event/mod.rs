@@ -25,7 +25,7 @@ pub use matrix_sdk_base::latest_event::{
 };
 use matrix_sdk_base::{RoomInfoNotableUpdateReasons, RoomState};
 use ruma::{
-    EventId, OwnedEventId, OwnedUserId, UserId, events::room::power_levels::RoomPowerLevels,
+    EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels,
 };
 use tracing::{error, info, instrument, trace, warn};
 
@@ -351,7 +351,7 @@ pub(super) type IsLatestEventValueNone = bool;
 
 #[cfg(all(not(target_family = "wasm"), test))]
 mod tests_latest_event {
-    use std::{collections::BTreeSet, ops::Not};
+    use std::ops::Not;
 
     use assert_matches::assert_matches;
     use matrix_sdk_base::{

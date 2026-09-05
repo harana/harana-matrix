@@ -111,7 +111,7 @@ impl<'a> IntoFuture for Enable<'a> {
 
             if wait_for_backups_upload {
                 let backups = recovery.client.encryption().backups();
-                let upload_future = backups.wait_for_upload();
+                let upload_future = backups.wait_for_steady_state();
                 let upload_progress = upload_future.subscribe_to_progress();
 
                 // Waiting only observes the upload task, so ask for the upload first.

@@ -575,7 +575,7 @@ async fn test_steady_state_waiting() -> TestResult {
 
     let backups = client.encryption().backups();
 
-    let wait_for_steady_state = backups.wait_for_upload();
+    let wait_for_steady_state = backups.wait_for_steady_state();
     backups.trigger_upload();
 
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
@@ -961,7 +961,7 @@ async fn test_steady_state_waiting_errors() -> TestResult {
     )
     .await;
 
-    let wait_for_steady_state = backups.wait_for_upload();
+    let wait_for_steady_state = backups.wait_for_steady_state();
     backups.trigger_upload();
     let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 

@@ -53,7 +53,7 @@ pub enum SteadyStateError {
     Lagged,
 }
 
-/// Named future for the [`Backups::wait_for_upload()`] method.
+/// Named future for the [`Backups::wait_for_steady_state()`] method.
 pub struct WaitForSteadyState<'a> {
     pub(super) backups: &'a Backups,
     pub(super) progress: ChannelObservable<UploadState>,

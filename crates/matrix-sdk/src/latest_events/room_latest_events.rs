@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::{
-    collections::{BTreeSet, HashMap},
-    ops::{ControlFlow, Not},
+    collections::HashMap,
+    ops::ControlFlow,
     sync::Arc,
 };
 
 use matrix_sdk_base::RoomInfoNotableUpdateReasons;
 use ruma::{
-    EventId, OwnedEventId, OwnedUserId, UserId, events::room::power_levels::RoomPowerLevels,
+    EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels,
 };
 use tokio::sync::{OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 use tracing::{debug, error, instrument, warn};

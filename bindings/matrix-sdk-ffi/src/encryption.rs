@@ -722,7 +722,7 @@ impl Encryption {
         progress_listener: Option<Box<dyn BackupSteadyStateListener>>,
     ) -> Result<(), SteadyStateError> {
         let backups = self.inner.backups();
-        let wait_for_steady_state = backups.wait_for_upload();
+        let wait_for_steady_state = backups.wait_for_steady_state();
 
         backups.trigger_upload();
 

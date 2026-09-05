@@ -372,7 +372,7 @@ impl Backups {
     #[deprecated(
         since = "0.18.0",
         note = "this both triggers an upload and waits for it; use `Backups::trigger_upload` \
-                and `Backups::wait_for_upload` instead"
+                and `Backups::wait_for_steady_state` instead"
     )]
     pub fn wait_for_steady_state(&self) -> WaitForSteadyState<'_> {
         let progress = self.client.inner.e2ee.backup_state.upload_progress.clone();
@@ -701,18 +701,6 @@ impl Backups {
                     room_key,
                 ));
             }
-        }
-
-        // If every key we got back was unreadable, the caller is otherwise left
-        // believing the download worked while the messages stay undecryptable. That is
-        // different from the key not being in the backup at all, so say which it is.
-        if decrypted_room_keys.is_empty()
-            && let Some(session_id) = unreadable_sessions.first().cloned()
-        {
-            return Err(Error::UnreadableBackedUpRoomKeys {
-                count: unreadable_sessions.len(),
-                session_id,
-            });
         }
 
         let result = olm_machine
@@ -1727,12 +1715,12 @@ mod test {
         client.inner.e2ee.backup_state.upload_progress.set(UploadState::Done);
 
         let backups = client.encryption().backups();
-        let wait_for_upload = backups.wait_for_upload();
+        let wait_for_steady_state = backups.wait_for_steady_state();
 
         // When we wait for the room keys to be uploaded, without triggering an upload
         let result =
             matrix_sdk_common::timeout::timeout(
-                async { wait_for_upload.await },
+                async { wait_for_steady_state.await },
                 Duration::from_millis(300),
             )
             .await;
@@ -1804,7 +1792,8 @@ mod test {
             { client.inner.e2ee.backup_state.upload_delay.read().unwrap().to_owned() };
 
         let wait_for_steady_state =
-            backups.wait_for_upload().with_delay(Duration::from_nanos(100));
+            backups.wait_for_steady_state().with_delay(Duration::from_nanos(100));
+        let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
         // The delay is overridden right away, so that it also applies to an upload
         // which is triggered before the future is awaited.
