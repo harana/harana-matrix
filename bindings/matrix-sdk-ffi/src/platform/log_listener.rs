@@ -214,10 +214,9 @@ mod tests {
         let collected = Arc::new(Mutex::new(Vec::new()));
         set_log_event_listener(Box::new(Collector(collected.clone())));
 
-        let subscriber =
-            tracing_subscriber::registry().with(LogEventListenerLayer.with_filter(
-                tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::INFO),
-            ));
+        let subscriber = tracing_subscriber::registry().with(LogEventListenerLayer.with_filter(
+            tracing_subscriber::filter::LevelFilter::from_level(tracing::Level::INFO),
+        ));
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::info!(target: "test_target", user = "alice", "hello");

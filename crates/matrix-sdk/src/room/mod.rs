@@ -42,11 +42,11 @@ pub use matrix_sdk_base::store::StoredThreadSubscription;
 use matrix_sdk_base::{
     ComposerDraft, DmRoomDefinition, EncryptionState, RoomInfoNotableUpdateReasons,
     RoomMemberships, SendOutsideWasm, StateStoreDataKey, StateStoreDataValue,
-    read_receipts::ReadReceipts,
     deserialized_responses::{
         RawAnySyncOrStrippedState, RawSyncOrStrippedState, SyncOrStrippedState,
     },
     media::{MediaThumbnailSettings, store::IgnoreMediaRetentionPolicy},
+    read_receipts::ReadReceipts,
     serde_helpers::extract_relation,
     store::{StateStoreExt, ThreadSubscriptionStatus},
 };

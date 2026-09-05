@@ -33,8 +33,8 @@ use matrix_sdk::{
 };
 use matrix_sdk_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
-    event_id,
     api::client::receipt::create_receipt::v3::ReceiptType as CreateReceiptType,
+    event_id,
     events::{
         Mentions,
         receipt::{ReceiptThread, ReceiptType},

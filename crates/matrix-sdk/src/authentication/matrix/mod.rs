@@ -41,10 +41,10 @@ use tracing::{debug, error, info, instrument};
 
 use crate::{
     Client, Error, RefreshTokenError, Result,
-    http_client::SupportedPathBuilder,
     authentication::AuthData,
     client::SessionChange,
     error::{HttpError, HttpResult},
+    http_client::SupportedPathBuilder,
     utils::UrlOrQuery,
 };
 

@@ -37,7 +37,6 @@ use mime::Mime;
 use ruma::{
     EventId, Int, OwnedDeviceId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId, RoomAliasId,
     ServerName, UserId, assign,
-    serde::Raw,
     events::{
         AnyMessageLikeEventContent, AnySyncTimelineEvent,
         receipt::ReceiptThread as RumaReceiptThread,
@@ -48,6 +47,7 @@ use ruma::{
             join_rules::JoinRule as RumaJoinRule, message::RoomMessageEventContentWithoutRelation,
         },
     },
+    serde::Raw,
 };
 use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
@@ -555,10 +555,7 @@ impl Room {
     /// # Arguments
     ///
     /// * `event_type` - The type of the state events, e.g. `m.room.member`.
-    pub async fn get_state_events(
-        &self,
-        event_type: String,
-    ) -> Result<Vec<String>, ClientError> {
+    pub async fn get_state_events(&self, event_type: String) -> Result<Vec<String>, ClientError> {
         let events = self.inner.get_state_events(event_type.into()).await?;
         Ok(events.iter().map(state_event_json).collect())
     }
@@ -2289,8 +2286,7 @@ mod tests {
         assert_eq!(topic["type"], "m.room.topic");
 
         // So do all the events of a type.
-        let topics =
-            room.get_state_events(StateEventType::RoomTopic.to_string()).await.unwrap();
+        let topics = room.get_state_events(StateEventType::RoomTopic.to_string()).await.unwrap();
         assert_eq!(topics.len(), 1);
 
         // One we don't have comes back as nothing, rather than as an error.
@@ -2327,7 +2323,6 @@ mod tests {
         )
         .await
         .unwrap();
-
     }
 
     /// Dropping an FFI [`Room`] on a non-tokio thread must not panic.

@@ -334,6 +334,8 @@ mod tests {
 
     #[test]
     fn test_no_reason_maps_to_nothing() {
-        assert!(RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::empty()).is_empty());
+        assert!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::empty()).is_empty()
+        );
     }
 }

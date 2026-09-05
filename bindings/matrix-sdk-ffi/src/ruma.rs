@@ -280,9 +280,10 @@ pub fn message_event_content_from_markdown(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
     let formatted = markdown_formatted_body(&md);
-    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Text(
-        assign!(RumaTextMessageEventContent::plain(md), { formatted }),
-    )))
+    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Text(assign!(
+        RumaTextMessageEventContent::plain(md),
+        { formatted }
+    ))))
 }
 
 #[matrix_sdk_ffi_macros::export]
@@ -290,9 +291,10 @@ pub fn message_event_content_from_markdown_as_emote(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
     let formatted = markdown_formatted_body(&md);
-    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Emote(
-        assign!(RumaEmoteMessageEventContent::plain(md), { formatted }),
-    )))
+    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Emote(assign!(
+        RumaEmoteMessageEventContent::plain(md),
+        { formatted }
+    ))))
 }
 
 #[matrix_sdk_ffi_macros::export]
@@ -1970,7 +1972,9 @@ mod galleries {
 mod tests {
     use ruma::events::room::message::MessageType;
 
-    use super::{message_event_content_from_markdown, message_event_content_from_markdown_as_emote};
+    use super::{
+        message_event_content_from_markdown, message_event_content_from_markdown_as_emote,
+    };
 
     #[test]
     fn test_markdown_that_renders_no_text_stays_plain() {

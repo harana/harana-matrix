@@ -6,9 +6,7 @@ use matrix_sdk::{
     authentication::matrix::MatrixSession,
     config::RequestConfig,
     test_utils::{
-        logged_in_client_with_server,
-        mocks::MatrixMockServer,
-        no_retry_test_client_with_server,
+        logged_in_client_with_server, mocks::MatrixMockServer, no_retry_test_client_with_server,
     },
 };
 use matrix_sdk_base::SessionMeta;

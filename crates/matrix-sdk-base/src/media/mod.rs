@@ -104,8 +104,8 @@ impl MediaThumbnailSettings {
 }
 
 // `Method` is a `StringEnum` and doesn't implement `Hash`, so this can't be
-// derived; hash the string representation instead, which is what its `PartialEq`
-// compares.
+// derived; hash the string representation instead, which is what its
+// `PartialEq` compares.
 impl Hash for MediaThumbnailSettings {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.method.as_str().hash(state);
@@ -266,14 +266,17 @@ mod tests {
         ));
 
         // Equality distinguishes every setting.
-        assert_eq!(small, MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32))));
+        assert_eq!(
+            small,
+            MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32)))
+        );
         assert_ne!(small, large);
         assert_ne!(small, cropped);
         assert_ne!(small, file);
 
         // `Ord` makes it usable as a `BTreeMap` key...
         let mut ordered = BTreeMap::new();
-        ordered.insert(file.clone(), "file");
+        ordered.insert(file, "file");
         ordered.insert(small.clone(), "small");
         ordered.insert(large.clone(), "large");
 
@@ -291,7 +294,10 @@ mod tests {
         assert_eq!(hashed.get(&large), None);
 
         // Inserting an equal value replaces rather than duplicates.
-        hashed.insert(MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32))), "again");
+        hashed.insert(
+            MediaFormat::Thumbnail(MediaThumbnailSettings::new(uint!(32), uint!(32))),
+            "again",
+        );
         assert_eq!(hashed.len(), 2);
         assert_eq!(hashed.get(&small), Some(&"again"));
     }

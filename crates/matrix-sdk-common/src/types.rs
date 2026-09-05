@@ -50,9 +50,10 @@
 //! server sent.
 
 pub use ruma::{
-    DeviceId, EventId, MilliSecondsSinceUnixEpoch, MxcUri, OwnedDeviceId, OwnedEventId, OwnedMxcUri,
-    OwnedRoomAliasId, OwnedRoomId, OwnedServerName, OwnedTransactionId, OwnedUserId, RoomAliasId,
-    RoomId, RoomVersionId, SecondsSinceUnixEpoch, ServerName, TransactionId, UInt, UserId,
+    DeviceId, EventId, MilliSecondsSinceUnixEpoch, MxcUri, OwnedDeviceId, OwnedEventId,
+    OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedServerName, OwnedTransactionId, OwnedUserId,
+    RoomAliasId, RoomId, RoomVersionId, SecondsSinceUnixEpoch, ServerName, TransactionId, UInt,
+    UserId,
     events::{
         AnyMessageLikeEventContent, AnyStateEventContent, AnySyncMessageLikeEvent,
         AnySyncStateEvent, AnySyncTimelineEvent, AnyTimelineEvent, MessageLikeEventType,

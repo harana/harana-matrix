@@ -332,9 +332,9 @@ mod test {
     #[cfg(feature = "markdown")]
     use ruma::events::room::message::FormattedBody;
 
+    use crate::utils::is_room_alias_format_valid;
     #[cfg(feature = "markdown")]
     use crate::utils::{formatted_body_from, markdown_formatted_body};
-    use crate::utils::is_room_alias_format_valid;
 
     #[cfg(feature = "e2e-encryption")]
     #[test]

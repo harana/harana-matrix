@@ -953,7 +953,12 @@ mod tests {
                 struct EventTypeVisitor<'a>(&'a mut Option<String>);
 
                 impl Visit for EventTypeVisitor<'_> {
-                    fn record_debug(&mut self, _field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {}
+                    fn record_debug(
+                        &mut self,
+                        _field: &tracing::field::Field,
+                        _value: &dyn std::fmt::Debug,
+                    ) {
+                    }
 
                     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
                         if field.name() == "event_type" {

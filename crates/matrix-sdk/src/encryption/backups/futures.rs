@@ -18,11 +18,10 @@ use std::{future::IntoFuture, time::Duration};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
-use tokio::sync::broadcast;
-use tokio_stream::wrappers::BroadcastStream;
 use matrix_sdk_common::boxed_into_future;
 use thiserror::Error;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::trace;
 
 use super::{Backups, UploadState};
