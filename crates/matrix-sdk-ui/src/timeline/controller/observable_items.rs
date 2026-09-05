@@ -807,6 +807,7 @@ mod observable_items_tests {
             timeline_item_index: None,
             visible: false,
             can_show_read_receipts: false,
+            is_join: false,
         }
     }
 
@@ -2073,6 +2074,7 @@ mod all_remote_events_tests {
             timeline_item_index,
             visible: false,
             can_show_read_receipts: false,
+            is_join: false,
         }
     }
 

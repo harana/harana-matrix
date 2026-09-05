@@ -23,8 +23,9 @@ use matrix_sdk::deserialized_responses::{
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId, UserId,
     events::{
-        AnySyncTimelineEvent,
+        AnySyncStateEvent, AnySyncTimelineEvent, SyncStateEvent,
         receipt::{ReceiptThread, ReceiptType},
+        room::member::MembershipChange,
     },
     push::Action,
     serde::Raw,
@@ -591,6 +592,7 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
         Option<OwnedEventId>,
         bool,
         bool,
+        bool,
     )> {
         let state_key: Option<String> = raw.get_field("state_key").ok().flatten();
 
@@ -651,6 +653,7 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
                     None,
                     true,
                     true,
+                    false,
                 ))
             }
 
@@ -666,7 +669,7 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
                 // Remember the event before returning prematurely.
                 // See [`ObservableItems::all_remote_events`].
                 self.add_or_update_remote_event(
-                    EventMeta::new(event_id, sender.as_deref(), false, false, None),
+                    EventMeta::new(event_id, sender.as_deref(), false, false, None, false),
                     sender.as_deref(),
                     origin_server_ts,
                     position,
@@ -849,6 +852,7 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
             thread_root,
             should_add,
             can_show_read_receipts,
+            is_join,
         ) = match raw.deserialize() {
             // Classical path: the event is valid, can be deserialized, everything is alright.
             Ok(event) => {
@@ -869,6 +873,7 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
                 );
 
                 let can_show_read_receipts = self.can_show_read_receipts(settings, &event);
+                let is_join = is_join_event(&event);
 
                 (
                     event.event_id().to_owned(),
@@ -889,6 +894,7 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
                     thread_root,
                     should_add,
                     can_show_read_receipts,
+                    is_join,
                 )
             }
 
@@ -913,6 +919,7 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
                 should_add,
                 can_show_read_receipts,
                 thread_root,
+                is_join,
             ),
             Some(&sender),
             Some(timestamp),
@@ -1401,4 +1408,24 @@ mod tests {
             TimelineUniqueId(timeline_id),
         )
     }
+}
+
+/// Whether `event` is the `m.room.member` event with which its sender joined
+/// the room.
+///
+/// A membership event that only changes the sender's profile isn't a join:
+/// the sender was already a member before it.
+fn is_join_event(event: &AnySyncTimelineEvent) -> bool {
+    let AnySyncTimelineEvent::State(AnySyncStateEvent::RoomMember(SyncStateEvent::Original(ev))) =
+        event
+    else {
+        return false;
+    };
+
+    matches!(
+        ev.membership_change(),
+        MembershipChange::Joined
+            | MembershipChange::InvitationAccepted
+            | MembershipChange::KnockAccepted
+    )
 }
