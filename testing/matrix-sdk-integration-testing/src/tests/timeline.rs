@@ -415,9 +415,12 @@ async fn test_enabling_backups_retries_decryption() {
         .response
         .event_id;
 
-    alice
-        .encryption()
-        .backups()
+    let alice_backups = alice.encryption().backups();
+
+    // Waiting only observes the upload task, so ask it to run.
+    alice_backups.trigger_upload();
+
+    alice_backups
         .wait_for_steady_state()
         .await
         .expect("We should be able to wait for our room keys to be uploaded");

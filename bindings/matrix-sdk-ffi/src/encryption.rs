@@ -682,6 +682,10 @@ impl Encryption {
             None
         };
 
+        // Waiting only observes the upload task, so ask it to run. The listener above
+        // is already subscribed at this point, so it doesn't miss any progress.
+        backups.trigger_upload();
+
         let result = wait_for_steady_state.await;
 
         if let Some(task) = task {
