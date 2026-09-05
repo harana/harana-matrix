@@ -24,7 +24,9 @@
 //! sync, if that is not desirable, the offline support for the [`SyncService`]
 //! may be enabled using the [`SyncServiceBuilder::with_offline_mode`] setting.
 
-use std::{sync::Arc, time::Duration};
+use std::{pin::pin, sync::Arc, time::Duration};
+
+use ruma::time::Instant;
 
 use eyeball::{SharedObservable, Subscriber};
 use futures_util::{
@@ -95,6 +97,63 @@ pub enum State {
     /// Calling [`SyncService::stop()`] will abort the offline mode and the
     /// [`SyncService`] will go into the [`State::Idle`] mode.
     Offline,
+
+    /// The service is waiting before restarting the underlying syncs, after
+    /// they failed.
+    ///
+    /// This state is only ever entered when the [`SyncService`] has been built
+    /// with the [`SyncServiceBuilder::with_offline_mode`] setting, i.e. when
+    /// the service restarts the syncs by itself. The delay grows exponentially
+    /// with the number of consecutive failures, so that a server that keeps
+    /// failing isn't hammered with requests; it is reset as soon as the syncs
+    /// have run for a while without failing.
+    ///
+    /// Calling [`SyncService::start()`] while in this state will abort the
+    /// wait and attempt to sync immediately. Calling [`SyncService::stop()`]
+    /// will abort it and the [`SyncService`] will go into the [`State::Idle`]
+    /// mode.
+    Backoff,
+}
+
+/// Computes for how long the [`SyncService`] should wait before restarting the
+/// underlying syncs, after they have failed.
+#[derive(Debug)]
+struct Backoff {
+    /// The number of consecutive failures observed so far.
+    consecutive_failures: u32,
+}
+
+impl Backoff {
+    /// The delay used after the first failure.
+    const INITIAL_DELAY: Duration = Duration::from_secs(1);
+
+    /// The delay is never longer than this, however many failures pile up.
+    const MAXIMUM_DELAY: Duration = Duration::from_secs(64);
+
+    /// How long the syncs must have run before a failure is considered
+    /// unrelated to the previous ones, and the backoff is reset.
+    const MINIMUM_UPTIME_TO_RESET: Duration = Duration::from_secs(90);
+
+    fn new() -> Self {
+        Self { consecutive_failures: 0 }
+    }
+
+    /// Record a failure that happened after the syncs ran for `uptime`, and
+    /// return how long to wait before restarting them.
+    fn record_failure(&mut self, uptime: Duration) -> Duration {
+        if uptime >= Self::MINIMUM_UPTIME_TO_RESET {
+            // The syncs have been running fine for a while: this failure is not part of
+            // the previous series, start over.
+            self.consecutive_failures = 0;
+        }
+
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+
+        // 1s, 2s, 4s, 8s… capped at `MAXIMUM_DELAY`.
+        Self::INITIAL_DELAY
+            .saturating_mul(2u32.saturating_pow(self.consecutive_failures - 1))
+            .min(Self::MAXIMUM_DELAY)
+    }
 }
 
 enum MaybeAcquiredPermit {
@@ -221,6 +280,45 @@ impl SyncTaskSupervisor {
         report
     }
 
+    /// Wait for `delay` before restarting the syncs.
+    ///
+    /// Like [`Self::offline_check`], the wait can be interrupted by the user,
+    /// through [`SyncService::start()`] or [`SyncService::stop()`], both of
+    /// which send a [`TerminationReport`] with a
+    /// [`TerminationOrigin::Supervisor`] origin. In that case the report is
+    /// returned, and the caller must handle it instead of restarting.
+    async fn backoff_wait(
+        delay: Duration,
+        receiver: &mut Receiver<TerminationReport>,
+    ) -> Option<TerminationReport> {
+        info!("Waiting {delay:?} before restarting the syncs");
+
+        let wait_for_termination_report = async {
+            loop {
+                let report =
+                    receiver.recv().await.unwrap_or_else(TerminationReport::supervisor_error);
+
+                match report.origin {
+                    // The syncs aren't running anymore; ignore stale reports coming from
+                    // them, exactly like `offline_check` does.
+                    TerminationOrigin::EncryptionSync | TerminationOrigin::RoomList => {}
+                    TerminationOrigin::Supervisor => break report,
+                }
+            }
+        };
+
+        pin_mut!(wait_for_termination_report);
+
+        let report = match select(wait_for_termination_report, pin!(sleep(delay))).await {
+            Either::Left((termination_report, _)) => Some(termination_report),
+            Either::Right((_, _)) => None,
+        };
+
+        info!("Done waiting before restarting the syncs: {report:?}");
+
+        report
+    }
+
     /// The role of the supervisor task is to wait for a termination message
     /// ([`TerminationReport`]), sent either because we wanted to stop both
     /// syncs, or because one of the syncs failed (in which case we'll stop the
@@ -249,6 +347,8 @@ impl SyncTaskSupervisor {
         let offline_mode = inner.with_offline_mode;
         let parent_span = inner.parent_span.clone();
 
+        let mut backoff = Backoff::new();
+
         let future = async move {
             loop {
                 let (room_list_task, encryption_sync_task) = Self::spawn_child_tasks(
@@ -259,6 +359,8 @@ impl SyncTaskSupervisor {
                     parent_span.clone(),
                 )
                 .await;
+
+                let syncs_started_at = Instant::now();
 
                 sync_permit_guard = MaybeAcquiredPermit::Unacquired(encryption_sync_permit.clone());
 
@@ -312,11 +414,26 @@ impl SyncTaskSupervisor {
 
                 if let Some(error) = report.error {
                     if offline_mode {
+                        // Never restart a failing sync immediately: a server that keeps
+                        // failing would otherwise be hammered in a tight loop.
+                        let delay = backoff.record_failure(syncs_started_at.elapsed());
+
                         state.set(State::Offline);
 
                         let client = room_list_service.client();
 
                         if let Some(report) = Self::offline_check(client, &mut receiver).await {
+                            if let Some(error) = report.error {
+                                state.set(State::Error(Arc::new(error)));
+                            } else {
+                                state.set(State::Idle);
+                            }
+                            break;
+                        }
+
+                        state.set(State::Backoff);
+
+                        if let Some(report) = Self::backoff_wait(delay, &mut receiver).await {
                             if let Some(error) = report.error {
                                 state.set(State::Error(Arc::new(error)));
                             } else {
@@ -633,8 +750,9 @@ impl SyncService {
         match inner.state.get() {
             // If we're already running, there's nothing to do.
             State::Running => {}
-            // If we're in the offline mode, first stop the service and then start it again.
-            State::Offline => {
+            // If we're in the offline mode or waiting to retry, first stop the service and
+            // then start it again.
+            State::Offline | State::Backoff => {
                 inner
                     .restart(self.room_list_service.clone(), self.encryption_sync_permit.clone())
                     .await
@@ -662,7 +780,7 @@ impl SyncService {
                 // No need to stop if we were not running.
                 return;
             }
-            State::Running | State::Offline => {}
+            State::Running | State::Offline | State::Backoff => {}
         }
 
         inner.stop().await;
@@ -919,4 +1037,36 @@ pub enum Error {
     /// An error had occurred in the sync task supervisor, likely due to a bug.
     #[error("the supervisor channel has run into an unexpected error")]
     Supervisor,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::Backoff;
+
+    #[test]
+    fn test_backoff_grows_exponentially_and_is_capped() {
+        let mut backoff = Backoff::new();
+
+        // Consecutive failures double the delay…
+        assert_eq!(backoff.record_failure(Duration::ZERO), Duration::from_secs(1));
+        assert_eq!(backoff.record_failure(Duration::ZERO), Duration::from_secs(2));
+        assert_eq!(backoff.record_failure(Duration::ZERO), Duration::from_secs(4));
+        assert_eq!(backoff.record_failure(Duration::ZERO), Duration::from_secs(8));
+
+        // … until it reaches the maximum, where it stays.
+        for _ in 0..10 {
+            backoff.record_failure(Duration::ZERO);
+        }
+        assert_eq!(backoff.record_failure(Duration::ZERO), Backoff::MAXIMUM_DELAY);
+
+        // A failure that comes after the syncs ran for a long while isn't part of the
+        // previous series: the delay starts over.
+        assert_eq!(
+            backoff.record_failure(Backoff::MINIMUM_UPTIME_TO_RESET),
+            Duration::from_secs(1)
+        );
+        assert_eq!(backoff.record_failure(Duration::ZERO), Duration::from_secs(2));
+    }
 }

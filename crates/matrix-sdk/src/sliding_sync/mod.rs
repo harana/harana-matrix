@@ -107,7 +107,11 @@ pub(super) struct SlidingSyncInner {
 
     /// Room subscriptions, i.e. rooms that may be out-of-scope of all lists
     /// but one wants to receive updates.
-    room_subscriptions: StdRwLock<BTreeMap<OwnedRoomId, http::request::RoomSubscription>>,
+    ///
+    /// Room subscriptions are sticky server-side: once the server has
+    /// acknowledged one, it doesn't need to be repeated in the next requests.
+    /// That's what [`RoomSubscriptionState::has_been_sent`] keeps track of.
+    room_subscriptions: StdRwLock<BTreeMap<OwnedRoomId, RoomSubscriptionState>>,
 
     /// The intended state of the extensions being supplied to sliding /sync
     /// calls.
@@ -116,6 +120,23 @@ pub(super) struct SlidingSyncInner {
     /// Internal channel used to pass messages between Sliding Sync and other
     /// types.
     internal_channel: Sender<SlidingSyncInternalMessage>,
+}
+
+/// A room subscription, and whether the server already knows about it.
+#[derive(Clone, Debug)]
+struct RoomSubscriptionState {
+    /// The settings of this subscription.
+    settings: http::request::RoomSubscription,
+
+    /// Has this exact subscription been acknowledged by the server already?
+    ///
+    /// Set to `false` when the subscription is created or its settings change,
+    /// and back to `true` once a request carrying it has received a
+    /// successful response. Sending it again would be a no-op for the
+    /// server, and room subscriptions are big enough (a full
+    /// `required_state` per room) to be worth not repeating on every
+    /// long-poll.
+    has_been_sent: bool,
 }
 
 impl SlidingSync {
@@ -564,7 +585,23 @@ impl SlidingSync {
         });
 
         // Add room subscriptions.
-        request.room_subscriptions = self.inner.room_subscriptions.read().unwrap().clone();
+        //
+        // Room subscriptions are sticky: the server remembers them for the lifetime of
+        // the connection (identified by `conn_id` and `pos`). Repeating them on every
+        // request would just re-send the same `required_state` over and over, which is
+        // several kilobytes per long-poll cycle. So only send the ones the server
+        // doesn't know about yet, unless we're starting a new session (`pos` is
+        // `None`), in which case the server has forgotten everything.
+        request.room_subscriptions = {
+            let is_new_session = request.pos.is_none();
+            let room_subscriptions = self.inner.room_subscriptions.read().unwrap();
+
+            room_subscriptions
+                .iter()
+                .filter(|(_, state)| is_new_session || !state.has_been_sent)
+                .map(|(room_id, state)| (room_id.clone(), state.settings.clone()))
+                .collect()
+        };
 
         // Add extensions.
         request.extensions = self.inner.extensions.clone();
@@ -600,6 +637,13 @@ impl SlidingSync {
 
         // Prepare the request.
         let requested_required_states = RequestedRequiredStates::from(&request);
+        // Remember the subscriptions this request carries, so that they can be marked
+        // as known by the server once it has answered successfully.
+        let sent_room_subscriptions = request
+            .room_subscriptions
+            .iter()
+            .map(|(room_id, settings)| (room_id.clone(), settings.clone()))
+            .collect::<Vec<_>>();
         let request = self.inner.client.send(request).with_request_config(request_config);
 
         // Send the request and get a response with end-to-end encryption support.
@@ -691,6 +735,10 @@ impl SlidingSync {
 
             this.cache_to_storage(&position_guard).await?;
 
+            // The server has acknowledged the request: it now knows about the room
+            // subscriptions it carried, and they don't need to be repeated.
+            this.mark_room_subscriptions_as_sent(&sent_room_subscriptions);
+
             // Release the position guard lock.
             // It means that other responses can be generated and then handled later.
             drop(position_guard);
@@ -721,6 +769,30 @@ impl SlidingSync {
     #[cfg(not(feature = "e2e-encryption"))]
     fn is_e2ee_enabled(&self) -> bool {
         false
+    }
+
+    /// Mark the given room subscriptions as known by the server.
+    ///
+    /// A subscription whose settings changed while the request was in flight is
+    /// left untouched, so that the new settings are sent with the next
+    /// request.
+    fn mark_room_subscriptions_as_sent(
+        &self,
+        sent_room_subscriptions: &[(OwnedRoomId, http::request::RoomSubscription)],
+    ) {
+        if sent_room_subscriptions.is_empty() {
+            return;
+        }
+
+        let mut room_subscriptions = self.inner.room_subscriptions.write().unwrap();
+
+        for (room_id, sent_settings) in sent_room_subscriptions {
+            if let Some(state) = room_subscriptions.get_mut(room_id)
+                && !room_subscriptions_differ(&state.settings, sent_settings)
+            {
+                state.has_been_sent = true;
+            }
+        }
     }
 
     /// Should we process the room's subpart of a response?
@@ -880,7 +952,7 @@ impl SlidingSync {
 /// request: a caller can have other reasons to cancel it, e.g. having removed a
 /// subscription.
 fn upsert_room_subscriptions(
-    room_subscriptions: &mut BTreeMap<OwnedRoomId, http::request::RoomSubscription>,
+    room_subscriptions: &mut BTreeMap<OwnedRoomId, RoomSubscriptionState>,
     client: &Client,
     room_ids: &[&RoomId],
     settings: Option<http::request::RoomSubscription>,
@@ -895,7 +967,10 @@ fn upsert_room_subscriptions(
                     room.mark_members_missing();
                 }
 
-                entry.insert(settings.clone());
+                entry.insert(RoomSubscriptionState {
+                    settings: settings.clone(),
+                    has_been_sent: false,
+                });
 
                 subscriptions_have_changed = true;
             }
@@ -903,8 +978,11 @@ fn upsert_room_subscriptions(
             // The room is already subscribed but its settings might need to be
             // refreshed
             Entry::Occupied(mut entry) => {
-                if room_subscriptions_differ(entry.get(), &settings) {
-                    entry.insert(settings.clone());
+                if room_subscriptions_differ(&entry.get().settings, &settings) {
+                    entry.insert(RoomSubscriptionState {
+                        settings: settings.clone(),
+                        has_been_sent: false,
+                    });
 
                     subscriptions_have_changed = true;
                 }
@@ -1206,6 +1284,83 @@ mod tests {
     }
 
     #[async_test]
+    async fn test_room_subscriptions_are_only_sent_once() -> Result<()> {
+        let (server, sliding_sync) = new_sliding_sync(vec![]).await?;
+
+        let room_id_0 = room_id!("!r0:bar.org");
+        let room_id_1 = room_id!("!r1:bar.org");
+
+        let _mock_guard = Mock::given(SlidingSyncMatcher)
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "pos": "1",
+                "lists": {},
+                "rooms": {},
+            })))
+            .mount_as_scoped(&server)
+            .await;
+
+        sliding_sync.add_room_subscriptions(&[room_id_0], None, false);
+
+        // The first request carries the new subscription…
+        {
+            let (request, _, _position_guard) = sliding_sync.generate_sync_request().await?;
+
+            assert_eq!(request.room_subscriptions.len(), 1);
+            assert!(request.room_subscriptions.contains_key(room_id_0));
+        }
+
+        sliding_sync.sync_once().await?;
+
+        // …and once the server has acknowledged it, it isn't repeated.
+        {
+            let (request, _, _position_guard) = sliding_sync.generate_sync_request().await?;
+
+            assert!(request.room_subscriptions.is_empty());
+        }
+
+        // Only the newly added subscription is sent.
+        sliding_sync.add_room_subscriptions(&[room_id_1], None, false);
+
+        {
+            let (request, _, _position_guard) = sliding_sync.generate_sync_request().await?;
+
+            assert_eq!(request.room_subscriptions.len(), 1);
+            assert!(request.room_subscriptions.contains_key(room_id_1));
+        }
+
+        sliding_sync.sync_once().await?;
+
+        // Changing the settings of an existing subscription sends it again.
+        sliding_sync.add_room_subscriptions(
+            &[room_id_0],
+            Some(assign!(http::request::RoomSubscription::default(), {
+                timeline_limit: uint!(42),
+            })),
+            false,
+        );
+
+        {
+            let (request, _, _position_guard) = sliding_sync.generate_sync_request().await?;
+
+            assert_eq!(request.room_subscriptions.len(), 1);
+            assert_eq!(
+                request.room_subscriptions.get(room_id_0).unwrap().timeline_limit,
+                uint!(42)
+            );
+        }
+
+        sliding_sync.sync_once().await?;
+
+        {
+            let (request, _, _position_guard) = sliding_sync.generate_sync_request().await?;
+
+            assert!(request.room_subscriptions.is_empty());
+        }
+
+        Ok(())
+    }
+
+    #[async_test]
     async fn test_add_room_subscriptions() -> Result<()> {
         let (server, sliding_sync) = new_sliding_sync(vec![
             SlidingSyncList::builder("foo")
@@ -1418,7 +1573,7 @@ mod tests {
                 .read()
                 .unwrap()
                 .get(room_id_0)
-                .map(|subscription| subscription.timeline_limit)
+                .map(|subscription| subscription.settings.timeline_limit)
         };
 
         let mut internal_channel = sliding_sync.inner.internal_channel.subscribe();
