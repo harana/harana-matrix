@@ -704,14 +704,31 @@ impl Client {
         self.inner.base_client.is_active()
     }
 
-    /// The server used by the client.
+    /// The URL built from the server name that was used for `.well-known`
+    /// discovery, if any.
     ///
-    /// See `Self::server` to learn more.
+    /// This is set when the client was built with [`ClientBuilder::server_name`],
+    /// [`ClientBuilder::insecure_server_name_no_tls`], or
+    /// [`ClientBuilder::server_name_or_homeserver_url`] and a server name (as
+    /// opposed to a homeserver URL) was resolved. It is `None` when the
+    /// client was built directly from a homeserver URL with
+    /// [`ClientBuilder::homeserver_url`], since there is then no separate
+    /// server name to report.
+    ///
+    /// Note that despite the name, this returns a [`Url`], not a Matrix
+    /// server name: it is the server name combined with the scheme (`http`
+    /// or `https`) that was used to reach it. A server delegating to a
+    /// different homeserver via `.well-known` means this can differ from
+    /// [`Client::homeserver`], which is the URL requests are actually sent
+    /// to.
     pub fn server(&self) -> Option<Url> {
         self.inner.server.read().unwrap().clone()
     }
 
-    /// The homeserver of the client.
+    /// The URL of the homeserver that this client sends requests to.
+    ///
+    /// This may differ from [`Client::server`] when the server delegates to
+    /// another homeserver via `.well-known` discovery.
     pub fn homeserver(&self) -> Url {
         self.inner.homeserver.read().unwrap().clone()
     }
