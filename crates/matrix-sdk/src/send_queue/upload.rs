@@ -25,14 +25,11 @@ use matrix_sdk_base::{
     },
     store::{
         ChildTransactionId, DependentQueuedRequestKind, FinishUploadThumbnailInfo,
-        QueuedRequestKind, SentMediaInfo, SentRequestKey, SerializableEventContent,
+        QueuedRequestKind, SentMediaItem, SentRequestKey, SerializableEventContent,
     },
 };
 #[cfg(feature = "unstable-msc4274")]
-use matrix_sdk_base::{
-    media::UniqueKey,
-    store::{AccumulatedSentMediaInfo, FinishGalleryItemInfo},
-};
+use matrix_sdk_base::{media::UniqueKey, store::FinishGalleryItemInfo};
 use mime::Mime;
 #[cfg(feature = "unstable-msc4274")]
 use ruma::events::room::message::{GalleryItemType, GalleryMessageEventContent};
@@ -66,7 +63,7 @@ use crate::{
 
 /// Replace the source by the final ones in all the media types handled by
 /// [`Room::make_attachment_type()`].
-fn update_media_event_after_upload(echo: &mut RoomMessageEventContent, sent: SentMediaInfo) {
+fn update_media_event_after_upload(echo: &mut RoomMessageEventContent, sent: SentMediaItem) {
     // Some variants look really similar below, but the `event` and `info` are all
     // different types…
     match &mut echo.msgtype {
@@ -108,7 +105,7 @@ fn update_media_event_after_upload(echo: &mut RoomMessageEventContent, sent: Sen
 #[cfg(feature = "unstable-msc4274")]
 fn update_gallery_event_after_upload(
     echo: &mut RoomMessageEventContent,
-    sent: HashMap<String, AccumulatedSentMediaInfo>,
+    sent: HashMap<String, SentMediaItem>,
 ) {
     let MessageType::Gallery(gallery) = &mut echo.msgtype else {
         // All `GalleryItemType` created by `Room::make_gallery_item_type` should be
@@ -542,6 +539,8 @@ impl QueueStorage {
             .into_media()
             .ok_or(RoomSendQueueError::StorageError(RoomSendQueueStorageError::InvalidParentKey))?;
 
+        let sent_media = sent_media.into_last();
+
         update_media_cache_keys_after_upload(client, &file_upload_txn, thumbnail_info, &sent_media)
             .await?;
         update_media_event_after_upload(&mut local_echo, sent_media);
@@ -594,11 +593,7 @@ impl QueueStorage {
             .into_media()
             .ok_or(RoomSendQueueError::StorageError(RoomSendQueueStorageError::InvalidParentKey))?;
 
-        let mut sent_media_vec = sent_gallery.accumulated;
-        sent_media_vec.push(AccumulatedSentMediaInfo {
-            file: sent_gallery.file,
-            thumbnail: sent_gallery.thumbnail,
-        });
+        let sent_media_vec = sent_gallery.medias;
 
         let mut sent_infos = HashMap::new();
 
@@ -670,8 +665,8 @@ impl QueueStorage {
         // If the previous upload was a thumbnail, it shouldn't have
         // a thumbnail itself.
         if parent_is_thumbnail_upload {
-            debug_assert!(sent_media.thumbnail.is_none());
-            if sent_media.thumbnail.is_some() {
+            debug_assert!(sent_media.last().thumbnail.is_none());
+            if sent_media.last().thumbnail.is_some() {
                 warn!("unexpected thumbnail for a thumbnail!");
             }
         }
@@ -682,21 +677,17 @@ impl QueueStorage {
              or thumbnail upload request",
         );
 
-        // If the parent request was a thumbnail upload, don't add it to the list of
-        // accumulated medias yet because its dependent file upload is still
-        // pending. If the parent request was a file upload, we know that both
-        // the file and its thumbnail (if any) have finished uploading and we
-        // can add them to the accumulated sent media.
-        #[cfg(feature = "unstable-msc4274")]
-        let accumulated = if parent_is_thumbnail_upload {
-            sent_media.accumulated
+        // If the parent request was a thumbnail upload, its own entry isn't complete
+        // yet, because the dependent file upload is still pending: leave it out of the
+        // list of media uploaded so far. If the parent request was a file upload, we
+        // know that both the file and its thumbnail (if any) have finished uploading,
+        // so its entry stands.
+        let (last, uploaded) = if parent_is_thumbnail_upload {
+            let last = sent_media.last().clone();
+            (last, sent_media.into_previous())
         } else {
-            let mut accumulated = sent_media.accumulated;
-            accumulated.push(AccumulatedSentMediaInfo {
-                file: sent_media.file.clone(),
-                thumbnail: sent_media.thumbnail,
-            });
-            accumulated
+            let last = sent_media.last().clone();
+            (last, sent_media.medias)
         };
 
         let request = QueuedRequestKind::MediaUpload {
@@ -704,10 +695,9 @@ impl QueueStorage {
             cache_key,
             // If the previous upload was a thumbnail, it becomes the thumbnail source for the next
             // upload.
-            thumbnail_source: parent_is_thumbnail_upload.then_some(sent_media.file),
+            thumbnail_source: parent_is_thumbnail_upload.then_some(last.file),
             related_to: event_txn,
-            #[cfg(feature = "unstable-msc4274")]
-            accumulated,
+            uploaded,
         };
 
         client
@@ -978,7 +968,7 @@ async fn update_media_cache_keys_after_upload(
     client: &Client,
     file_upload_txn: &OwnedTransactionId,
     thumbnail_info: Option<FinishUploadThumbnailInfo>,
-    sent_media: &SentMediaInfo,
+    sent_media: &SentMediaItem,
 ) -> Result<(), RoomSendQueueError> {
     // Do it for the file itself.
     let from_req = Media::make_local_file_media_request(file_upload_txn);

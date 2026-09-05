@@ -88,13 +88,13 @@ pub use avatar_cache::AvatarCache;
 #[cfg(any(test, feature = "testing"))]
 pub use self::integration_tests::StateStoreIntegrationTests;
 #[cfg(feature = "unstable-msc4274")]
-pub use self::send_queue::{AccumulatedSentMediaInfo, FinishGalleryItemInfo};
+pub use self::send_queue::FinishGalleryItemInfo;
 pub use self::{
     memory_store::MemoryStore,
     send_queue::{
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
         FinishUploadThumbnailInfo, QueueWedgeError, QueuedRequest, QueuedRequestKind,
-        SentMediaInfo, SentRequestKey, SerializableEventContent,
+        SentMediaInfo, SentMediaItem, SentRequestKey, SerializableEventContent,
     },
     traits::{
         ComposerDraft, ComposerDraftType, DraftAttachment, DraftAttachmentContent, DraftThumbnail,

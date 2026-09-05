@@ -874,8 +874,7 @@ impl RoomSendQueue {
                 if let QueuedRequestKind::MediaUpload {
                     cache_key,
                     thumbnail_source,
-                    #[cfg(feature = "unstable-msc4274")]
-                    accumulated,
+                    uploaded,
                     related_to,
                     ..
                 } = &queued_request.kind
@@ -890,8 +889,7 @@ impl RoomSendQueue {
                                     related_to,
                                     cache_key,
                                     thumbnail_source.as_ref(),
-                                    #[cfg(feature = "unstable-msc4274")]
-                                    accumulated,
+                                    uploaded,
                                     &room,
                                     &queue,
                                 )
@@ -1031,7 +1029,7 @@ impl RoomSendQueue {
                             // notify the global listeners about an upload progress update.
                             let _ = update_sender.send(RoomSendQueueUpdate::MediaUpload {
                                 related_to: related_txn_id.as_ref().unwrap_or(&txn_id).clone(),
-                                file: Some(sent_media_info.file),
+                                file: Some(sent_media_info.into_last().file),
                                 index,
                                 progress,
                             });
@@ -1241,8 +1239,7 @@ impl RoomSendQueue {
                 cache_key,
                 thumbnail_source,
                 related_to: relates_to,
-                #[cfg(feature = "unstable-msc4274")]
-                accumulated,
+                uploaded,
             } => {
                 trace!(%relates_to, "uploading media related to event");
 
@@ -1314,12 +1311,11 @@ impl RoomSendQueue {
                     trace!(%relates_to, mxc_uri = %uri, "media successfully uploaded");
 
                     Ok((
-                        Some(SentRequestKey::Media(SentMediaInfo {
-                            file: media_source,
-                            thumbnail: thumbnail_source,
-                            #[cfg(feature = "unstable-msc4274")]
-                            accumulated,
-                        })),
+                        Some(SentRequestKey::Media(SentMediaInfo::new(
+                            uploaded,
+                            media_source,
+                            thumbnail_source,
+                        ))),
                         None,
                     ))
                 };
@@ -2041,8 +2037,7 @@ impl QueueStorage {
                         cache_key: thumbnail_media_request,
                         thumbnail_source: None, // the thumbnail has no thumbnails :)
                         related_to: send_event_txn.clone(),
-                        #[cfg(feature = "unstable-msc4274")]
-                        accumulated: vec![],
+                        uploaded: vec![],
                     },
                     Self::LOW_PRIORITY,
                 )
@@ -2077,8 +2072,7 @@ impl QueueStorage {
                         cache_key: file_media_request,
                         thumbnail_source: None,
                         related_to: send_event_txn,
-                        #[cfg(feature = "unstable-msc4274")]
-                        accumulated: vec![],
+                        uploaded: vec![],
                     },
                     Self::LOW_PRIORITY,
                 )

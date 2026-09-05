@@ -111,11 +111,12 @@ pub enum QueuedRequestKind {
         /// To which media event transaction does this upload relate?
         related_to: OwnedTransactionId,
 
-        /// Accumulated list of infos for previously uploaded files and
-        /// thumbnails if used during a gallery transaction. Otherwise empty.
-        #[cfg(feature = "unstable-msc4274")]
-        #[serde(default)]
-        accumulated: Vec<AccumulatedSentMediaInfo>,
+        /// The media already uploaded by the earlier requests of the same
+        /// gallery transaction, in upload order.
+        ///
+        /// Empty for anything but a gallery.
+        #[serde(default, alias = "accumulated")]
+        uploaded: Vec<SentMediaItem>,
     },
 
     /// A redaction of another event to send.
@@ -377,49 +378,102 @@ impl From<OwnedTransactionId> for ChildTransactionId {
     }
 }
 
-/// Information about a media (and its thumbnail) that have been sent to a
+/// A media (and its thumbnail) that has been sent to a homeserver.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SentMediaItem {
+    /// File that was uploaded.
+    ///
+    /// If the request was a thumbnail upload, this is the thumbnail's media
+    /// source.
+    pub file: MediaSource,
+
+    /// Optional thumbnail previously uploaded, when uploading a file.
+    ///
+    /// When uploading a thumbnail, this is set to `None`.
+    pub thumbnail: Option<MediaSource>,
+}
+
+/// Information about the media that a send queue request has uploaded to a
 /// homeserver.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(try_from = "SentMediaInfoDeHelper")]
 pub struct SentMediaInfo {
-    /// File that was uploaded by this request.
+    /// The media uploaded so far in this transaction, in upload order.
     ///
-    /// If the request related to a thumbnail upload, this contains the
-    /// thumbnail media source.
-    pub file: MediaSource,
-
-    /// Optional thumbnail previously uploaded, when uploading a file.
+    /// The last entry is the media the request that produced this info
+    /// uploaded; the ones before it, if any, were uploaded by the earlier
+    /// requests of the same gallery transaction.
     ///
-    /// When uploading a thumbnail, this is set to `None`.
-    pub thumbnail: Option<MediaSource>,
+    /// Never empty.
+    pub medias: Vec<SentMediaItem>,
+}
 
-    /// Accumulated list of infos for previously uploaded files and thumbnails
-    /// if used during a gallery transaction. Otherwise empty.
-    #[cfg(feature = "unstable-msc4274")]
+impl SentMediaInfo {
+    /// Build the info for a request that uploaded `file` (and `thumbnail`),
+    /// after `previous` had been uploaded in the same transaction.
+    pub fn new(
+        previous: Vec<SentMediaItem>,
+        file: MediaSource,
+        thumbnail: Option<MediaSource>,
+    ) -> Self {
+        let mut medias = previous;
+        medias.push(SentMediaItem { file, thumbnail });
+        Self { medias }
+    }
+
+    /// The media that the request which produced this info uploaded.
+    pub fn last(&self) -> &SentMediaItem {
+        self.medias.last().expect("a `SentMediaInfo` always describes at least one media")
+    }
+
+    /// Take the media that the request which produced this info uploaded,
+    /// dropping the ones uploaded before it.
+    pub fn into_last(mut self) -> SentMediaItem {
+        self.medias.pop().expect("a `SentMediaInfo` always describes at least one media")
+    }
+
+    /// Take the media uploaded *before* the one this info was produced for.
+    pub fn into_previous(mut self) -> Vec<SentMediaItem> {
+        self.medias.pop();
+        self.medias
+    }
+}
+
+impl From<SentMediaItem> for SentMediaInfo {
+    fn from(value: SentMediaItem) -> Self {
+        Self { medias: vec![value] }
+    }
+}
+
+/// Deserialization helper for [`SentMediaInfo`], reading both the current
+/// layout and the one used before the fields of a single media moved into
+/// [`SentMediaInfo::medias`].
+#[derive(Deserialize)]
+struct SentMediaInfoDeHelper {
+    /// The current layout.
+    medias: Option<Vec<SentMediaItem>>,
+
+    /// Previous layout: the media of this very request…
+    file: Option<MediaSource>,
+    /// …its thumbnail…
+    thumbnail: Option<MediaSource>,
+    /// …and the ones uploaded before it, only ever written by a build with
+    /// gallery support.
     #[serde(default)]
-    pub accumulated: Vec<AccumulatedSentMediaInfo>,
+    accumulated: Vec<SentMediaItem>,
 }
 
-/// Accumulated information about a media (and its thumbnail) that have been
-/// sent to a homeserver.
-#[cfg(feature = "unstable-msc4274")]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccumulatedSentMediaInfo {
-    /// File that was uploaded by this request.
-    ///
-    /// If the request related to a thumbnail upload, this contains the
-    /// thumbnail media source.
-    pub file: MediaSource,
+impl TryFrom<SentMediaInfoDeHelper> for SentMediaInfo {
+    type Error = &'static str;
 
-    /// Optional thumbnail previously uploaded, when uploading a file.
-    ///
-    /// When uploading a thumbnail, this is set to `None`.
-    pub thumbnail: Option<MediaSource>,
-}
+    fn try_from(value: SentMediaInfoDeHelper) -> Result<Self, Self::Error> {
+        const EMPTY: &str = "a `SentMediaInfo` must describe at least one media";
 
-#[cfg(feature = "unstable-msc4274")]
-impl From<AccumulatedSentMediaInfo> for SentMediaInfo {
-    fn from(value: AccumulatedSentMediaInfo) -> Self {
-        Self { file: value.file, thumbnail: value.thumbnail, accumulated: vec![] }
+        if let Some(medias) = value.medias {
+            return if medias.is_empty() { Err(EMPTY) } else { Ok(Self { medias }) };
+        }
+
+        Ok(Self::new(value.accumulated, value.file.ok_or(EMPTY)?, value.thumbnail))
     }
 }
 
@@ -545,7 +599,10 @@ impl fmt::Debug for QueuedRequest {
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
 
-    use super::DependentQueuedRequestKind;
+    use ruma::{events::room::MediaSource, owned_mxc_uri};
+    use serde_json::json;
+
+    use super::{DependentQueuedRequestKind, QueuedRequestKind, SentMediaInfo};
 
     #[test]
     fn test_deserialize_legacy_redact_event() {
@@ -555,6 +612,79 @@ mod tests {
         let deserialized: DependentQueuedRequestKind =
             serde_json::from_str("\"RedactEvent\"").unwrap();
         assert_matches!(deserialized, DependentQueuedRequestKind::RedactEvent);
+    }
+
+    #[test]
+    fn test_deserialize_legacy_sent_media_info() {
+        // Requests persisted before the single-media fields moved into `medias` use
+        // this layout, and must keep loading.
+        let deserialized: SentMediaInfo = serde_json::from_value(json!({
+            "file": { "url": "mxc://sdk.rs/file" },
+            "thumbnail": { "url": "mxc://sdk.rs/thumbnail" },
+        }))
+        .unwrap();
+
+        assert_eq!(deserialized.medias.len(), 1);
+        assert_let!(MediaSource::Plain(url) = &deserialized.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/file"));
+        assert_let!(Some(MediaSource::Plain(url)) = &deserialized.last().thumbnail);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/thumbnail"));
+
+        // A build with gallery support also wrote the media uploaded before it; they
+        // come first, and the request's own media stays last.
+        let deserialized: SentMediaInfo = serde_json::from_value(json!({
+            "file": { "url": "mxc://sdk.rs/second" },
+            "thumbnail": null,
+            "accumulated": [{ "file": { "url": "mxc://sdk.rs/first" }, "thumbnail": null }],
+        }))
+        .unwrap();
+
+        assert_eq!(deserialized.medias.len(), 2);
+        assert_let!(MediaSource::Plain(url) = &deserialized.medias[0].file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/first"));
+        assert_let!(MediaSource::Plain(url) = &deserialized.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/second"));
+
+        // A `SentMediaInfo` always describes at least one media.
+        assert!(serde_json::from_value::<SentMediaInfo>(json!({})).is_err());
+        assert!(serde_json::from_value::<SentMediaInfo>(json!({ "medias": [] })).is_err());
+    }
+
+    #[test]
+    fn test_sent_media_info_round_trip() {
+        let info = SentMediaInfo::new(
+            vec![],
+            MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/file")),
+            Some(MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/thumbnail"))),
+        );
+
+        let deserialized: SentMediaInfo =
+            serde_json::from_str(&serde_json::to_string(&info).unwrap()).unwrap();
+
+        assert_eq!(deserialized.medias.len(), 1);
+        assert_let!(MediaSource::Plain(url) = &deserialized.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/file"));
+    }
+
+    #[test]
+    fn test_deserialize_legacy_media_upload_accumulated() {
+        // The field was named `accumulated`, with the same shape.
+        let deserialized: QueuedRequestKind = serde_json::from_value(json!({
+            "MediaUpload": {
+                "content_type": "image/png",
+                "cache_key": {
+                    "source": { "url": "mxc://sdk.rs/cached" },
+                    "format": "File",
+                },
+                "thumbnail_source": null,
+                "related_to": "txn",
+                "accumulated": [{ "file": { "url": "mxc://sdk.rs/first" }, "thumbnail": null }],
+            }
+        }))
+        .unwrap();
+
+        assert_let!(QueuedRequestKind::MediaUpload { uploaded, .. } = deserialized);
+        assert_eq!(uploaded.len(), 1);
     }
 
     #[test]
