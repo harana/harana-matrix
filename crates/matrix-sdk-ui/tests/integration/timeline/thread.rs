@@ -64,6 +64,22 @@ async fn client_with_threading_support(server: &MatrixMockServer) -> Client {
         .await
 }
 
+/// Wait until the room's send queue has sent everything it had.
+///
+/// Read receipts go through the send queue, so they land on the server a moment
+/// after the call that asked for them returned.
+async fn wait_for_empty_send_queue(client: &matrix_sdk::Client, room_id: &ruma::RoomId) {
+    for _ in 0..300 {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        if requests.is_empty() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+
+    panic!("the send queue still has pending requests");
+}
+
 #[async_test]
 async fn test_new_empty_thread() {
     let server = MatrixMockServer::new().await;
@@ -2043,6 +2059,8 @@ async fn test_send_read_receipt_moves_real_receipt_forward() {
     let did_send =
         timeline.send_single_receipt(SendReceiptType::Read, owned_event_id!("$1")).await.unwrap();
     assert!(did_send);
+
+    wait_for_empty_send_queue(&client, room_id).await;
 }
 
 #[async_test]

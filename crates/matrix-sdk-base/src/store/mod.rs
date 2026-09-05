@@ -95,6 +95,7 @@ pub use self::{
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
         FinishUploadThumbnailInfo, QueueWedgeError, QueuedRequest, QueuedRequestKind,
         ReplyThreading, SentMediaInfo, SentMediaItem, SentRequestKey, SerializableEventContent,
+        SupersedesKey,
     },
     traits::{
         ComposerDraft, ComposerDraftType, DraftAttachment, DraftAttachmentContent, DraftThumbnail,

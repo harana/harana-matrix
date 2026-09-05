@@ -20,8 +20,10 @@ use as_variant::as_variant;
 use ruma::{
     MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedEventId, OwnedTransactionId, OwnedUserId,
     TransactionId, UInt,
+    api::client::receipt::create_receipt::v3::ReceiptType,
     events::{
         AnyMessageLikeEventContent, MessageLikeEventContent as _, RawExt as _,
+        receipt::ReceiptThread,
         room::{
             MediaSource,
             message::{RoomMessageEventContent, RoomMessageEventContentWithoutRelation},
@@ -129,6 +131,45 @@ pub enum QueuedRequestKind {
         /// The reason for the event being redacted.
         reason: Option<String>,
     },
+
+    /// A read receipt to set.
+    ///
+    /// Reading a room is something the user does by simply looking at it, so
+    /// the receipt for it must not be lost to a flaky connection: it would
+    /// leave a room the user has read looking unread once connectivity is
+    /// back.
+    ReadReceipt {
+        /// The type of receipt to set.
+        receipt_type: ReceiptType,
+
+        /// The thread this receipt applies to.
+        thread: ReceiptThread,
+
+        /// The event this receipt points at.
+        event_id: OwnedEventId,
+    },
+
+    /// Several read markers to set at once, as one request.
+    ///
+    /// This is what [`crate::store::send_queue::QueuedRequestKind::ReadReceipt`]
+    /// is to a single receipt, for the endpoint that sets the fully-read
+    /// marker and both read receipts in one go.
+    ReadMarkers {
+        /// The event the fully-read marker points at, if it is being set.
+        fully_read: Option<OwnedEventId>,
+
+        /// The event the public read receipt points at, if it is being set.
+        read: Option<OwnedEventId>,
+
+        /// The event the private read receipt points at, if it is being set.
+        read_private: Option<OwnedEventId>,
+    },
+
+    /// The room's "marked as unread" flag to set.
+    UnreadMarker {
+        /// Whether the user has explicitly marked the room as unread.
+        unread: bool,
+    },
 }
 
 impl From<SerializableEventContent> for QueuedRequestKind {
@@ -160,6 +201,64 @@ pub struct QueuedRequest {
 
     /// The time that the request was originally attempted.
     pub created_at: MilliSecondsSinceUnixEpoch,
+}
+
+impl QueuedRequestKind {
+    /// Whether failing to send this request must block the requests queued
+    /// after it.
+    ///
+    /// Ordering matters for the events of a room: a message that couldn't be
+    /// sent holds back the ones the user typed after it. It doesn't matter for
+    /// what the user's client says about the room on their behalf - a read
+    /// receipt, an unread marker - and holding the whole room's queue back for
+    /// one of those would be worse than dropping it, since the next one
+    /// supersedes it anyway.
+    pub fn is_order_sensitive(&self) -> bool {
+        match self {
+            Self::Event { .. } | Self::MediaUpload { .. } | Self::Redaction { .. } => true,
+            Self::ReadReceipt { .. } | Self::ReadMarkers { .. } | Self::UnreadMarker { .. } => {
+                false
+            }
+        }
+    }
+
+    /// The key that a request of this kind supersedes another one on, if any.
+    ///
+    /// Two queued requests with the same key say the same thing about the same
+    /// subject, so only the most recent one is worth sending: reporting that
+    /// the user has read up to an older event, or that they had marked the
+    /// room unread a moment ago, is at best pointless and at worst wrong.
+    pub fn supersedes_key(&self) -> Option<SupersedesKey> {
+        match self {
+            Self::ReadReceipt { receipt_type, thread, .. } => Some(SupersedesKey::ReadReceipt {
+                receipt_type: receipt_type.clone(),
+                thread: thread.clone(),
+            }),
+            Self::ReadMarkers { .. } => Some(SupersedesKey::ReadMarkers),
+            Self::UnreadMarker { .. } => Some(SupersedesKey::UnreadMarker),
+            Self::Event { .. } | Self::MediaUpload { .. } | Self::Redaction { .. } => None,
+        }
+    }
+}
+
+/// What a queued request supersedes an earlier one on.
+///
+/// See [`QueuedRequestKind::supersedes_key`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SupersedesKey {
+    /// A read receipt of a given type, in a given thread.
+    ReadReceipt {
+        /// The type of the receipt.
+        receipt_type: ReceiptType,
+        /// The thread the receipt applies to.
+        thread: ReceiptThread,
+    },
+
+    /// A batch of read markers.
+    ReadMarkers,
+
+    /// The room's unread marker.
+    UnreadMarker,
 }
 
 impl QueuedRequest {
@@ -538,6 +637,10 @@ pub enum SentRequestKey {
 
     /// The parent transaction returned an uploaded resource URL.
     Media(SentMediaInfo),
+
+    /// The request succeeded without producing anything that another request
+    /// could depend on, such as a read receipt or an unread marker.
+    Nothing,
 
     /// The parent transaction returned a redaction event when it succeeded.
     Redaction {

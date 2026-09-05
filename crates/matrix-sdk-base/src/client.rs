@@ -41,7 +41,7 @@ use ruma::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::{self as api, sync::sync_events::v5},
     events::{
-        AnySyncStateEvent, StateEvent, StateEventType,
+        AnyRoomAccountDataEvent, AnySyncStateEvent, StateEvent, StateEventType,
         ignored_user_list::IgnoredUserListEventContent,
         push_rules::{PushRulesEvent, PushRulesEventContent},
         room::member::SyncRoomMemberEvent,
@@ -1041,6 +1041,45 @@ impl BaseClient {
             .insert(raw_event.state_key, raw_event.raw);
 
         context.state_changes.add_room(room_info);
+
+        let state_store_guard = self.state_store_lock().lock().await;
+
+        processors::changes::save_and_apply(
+            context,
+            &self.state_store,
+            &state_store_guard,
+            &self.ignore_user_list_changes,
+            None,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    /// Store a room account data event that we have just sent successfully.
+    ///
+    /// Like [`Self::receive_sent_state_event`], this closes the gap between a
+    /// send returning and the sync echoing the change back: what the user did
+    /// - marking a room as unread, say - takes effect right away instead of
+    /// only once the server tells us about it.
+    pub async fn receive_sent_room_account_data(
+        &self,
+        room_id: &RoomId,
+        event: Raw<AnyRoomAccountDataEvent>,
+    ) -> Result<()> {
+        if self.state_store.room(room_id).is_none() {
+            // The room is unknown to us: leave early.
+            return Ok(());
+        }
+
+        let mut context = Context::default();
+
+        processors::account_data::for_room(
+            &mut context,
+            room_id,
+            std::slice::from_ref(&event),
+            &self.state_store,
+        );
 
         let state_store_guard = self.state_store_lock().lock().await;
 

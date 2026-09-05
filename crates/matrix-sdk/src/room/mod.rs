@@ -87,7 +87,6 @@ use ruma::{
                 kick_user, leave_room, unban_user,
             },
             message::send_message_event,
-            read_marker::set_read_marker,
             receipt::create_receipt,
             redact::redact_event,
             retention::get_retention_configuration,
@@ -2173,14 +2172,7 @@ impl Room {
                 // We will unset the unread flag if we send an unthreaded receipt.
                 let is_unthreaded = thread == ReceiptThread::Unthreaded;
 
-                let mut request = create_receipt::v3::Request::new(
-                    self.room_id().to_owned(),
-                    receipt_type,
-                    event_id,
-                );
-                request.thread = thread;
-
-                self.client.send(request).await?;
+                self.send_queue().send_read_receipt(receipt_type, thread, event_id).await?;
 
                 if is_unthreaded {
                     self.set_unread_flag(false).await?;
@@ -2207,13 +2199,10 @@ impl Room {
         }
 
         let Receipts { fully_read, public_read_receipt, private_read_receipt } = receipts;
-        let request = assign!(set_read_marker::v3::Request::new(self.room_id().to_owned()), {
-            fully_read,
-            read_receipt: public_read_receipt,
-            private_read_receipt,
-        });
 
-        self.client.send(request).await?;
+        self.send_queue()
+            .send_read_markers(fully_read, public_read_receipt, private_read_receipt)
+            .await?;
 
         self.set_unread_flag(false).await?;
 
@@ -3984,6 +3973,16 @@ impl Room {
             return Ok(());
         }
 
+        self.send_queue().set_unread_marker(unread).await?;
+
+        Ok(())
+    }
+
+    /// Set the room's "marked as unread" flag on the server, right now.
+    ///
+    /// This is what [`Self::set_unread_flag`] eventually results in; it is the
+    /// send queue's business to decide when that happens.
+    pub(crate) async fn set_unread_flag_now(&self, unread: bool) -> Result<()> {
         let user_id = self.client.user_id().ok_or(Error::AuthenticationRequired)?;
 
         let content = MarkedUnreadEventContent::new(unread);
@@ -3995,6 +3994,7 @@ impl Room {
         )?;
 
         self.client.send(request).await?;
+
         Ok(())
     }
 

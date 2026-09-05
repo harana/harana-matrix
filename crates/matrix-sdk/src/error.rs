@@ -390,6 +390,10 @@ pub enum Error {
     #[error(transparent)]
     SendQueueWedgeError(Box<QueueWedgeError>),
 
+    /// An item couldn't be queued in a room's send queue.
+    #[error(transparent)]
+    SendQueue(Box<crate::send_queue::RoomSendQueueError>),
+
     /// Backups are not enabled
     #[error("backups are not enabled")]
     BackupNotEnabled,
@@ -539,6 +543,12 @@ impl From<EventCacheError> for Error {
 impl From<QueueWedgeError> for Error {
     fn from(error: QueueWedgeError) -> Self {
         Error::SendQueueWedgeError(Box::new(error))
+    }
+}
+
+impl From<crate::send_queue::RoomSendQueueError> for Error {
+    fn from(error: crate::send_queue::RoomSendQueueError) -> Self {
+        Error::SendQueue(Box::new(error))
     }
 }
 

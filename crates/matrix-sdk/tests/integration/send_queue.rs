@@ -18,6 +18,7 @@ use matrix_sdk::{
     },
     test_utils::mocks::{MatrixMock, MatrixMockServer, RoomMessagesResponseTemplate},
 };
+use matrix_sdk_base::store::QueuedRequestKind;
 use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
 use matrix_sdk_test::{
     ALICE, InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, LeftRoomBuilder, async_test,
@@ -2026,6 +2027,85 @@ async fn test_reply_to_an_already_sent_event_is_refused() {
         .await
         .unwrap();
     assert!(reply.is_none());
+}
+
+#[async_test]
+async fn test_read_receipts_are_queued_and_superseded() {
+    use ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType, events::receipt::ReceiptThread,
+    };
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    let q = room.send_queue();
+
+    // Nothing goes out while the queue sleeps, which is what being offline looks
+    // like from here.
+    q.set_enabled(false);
+
+    room.send_single_receipt(
+        ReceiptType::Read,
+        ReceiptThread::Unthreaded,
+        owned_event_id!("$first:b.c"),
+    )
+    .await
+    .unwrap();
+
+    // A receipt of the same kind, further down the room: the first one has nothing
+    // left to say.
+    room.send_single_receipt(
+        ReceiptType::Read,
+        ReceiptThread::Unthreaded,
+        owned_event_id!("$second:b.c"),
+    )
+    .await
+    .unwrap();
+
+    // One of another kind: it stands on its own.
+    room.send_single_receipt(
+        ReceiptType::ReadPrivate,
+        ReceiptThread::Unthreaded,
+        owned_event_id!("$second:b.c"),
+    )
+    .await
+    .unwrap();
+
+    {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        // The two read receipts collapsed into one, plus the private one, plus the
+        // unread marker each unthreaded receipt asks for.
+        let receipts = requests
+            .iter()
+            .filter(|request| matches!(request.kind, QueuedRequestKind::ReadReceipt { .. }))
+            .count();
+        assert_eq!(receipts, 2);
+
+        let markers = requests
+            .iter()
+            .filter(|request| matches!(request.kind, QueuedRequestKind::UnreadMarker { .. }))
+            .count();
+        assert!(markers <= 1, "unread markers supersede each other too");
+    }
+
+    // Back online: only the receipts that still say something go out.
+    mock.mock_send_receipt(ReceiptType::Read).ok().mock_once().mount().await;
+    mock.mock_send_receipt(ReceiptType::ReadPrivate).ok().mock_once().mount().await;
+
+    q.set_enabled(true);
+
+    for _ in 0..200 {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        if requests.is_empty() {
+            return;
+        }
+        sleep(Duration::from_millis(10)).await;
+    }
+
+    panic!("the queued receipts were never sent");
 }
 
 #[async_test]

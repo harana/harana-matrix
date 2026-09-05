@@ -169,9 +169,17 @@ use mime::Mime;
 use ruma::{
     MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId, RoomId,
     TransactionId,
+    api::client::{
+        read_marker::set_read_marker,
+        receipt::create_receipt::{self, v3::ReceiptType},
+    },
+    assign,
     events::{
-        AnyMessageLikeEventContent, Mentions, MessageLikeEventContent as _, TimelineEventType,
+        AnyMessageLikeEventContent, AnyRoomAccountDataEventContent, Mentions,
+        MessageLikeEventContent as _, RoomAccountDataEventContent as _, TimelineEventType,
+        marked_unread::MarkedUnreadEventContent,
         reaction::ReactionEventContent,
+        receipt::ReceiptThread,
         relation::Annotation,
         room::{
             MediaSource,
@@ -727,6 +735,125 @@ impl RoomSendQueue {
         SendEvent { queue: self, content, extra_content: None }
     }
 
+    /// Queues a read receipt to be set in this room.
+    ///
+    /// Read receipts used to be sent directly, and a failure - being offline,
+    /// most of the time - simply lost them, so a room the user had read still
+    /// looked unread once connectivity was back. Queueing them means they go
+    /// out as soon as they can.
+    ///
+    /// A receipt supersedes the one of the same type, in the same thread, that
+    /// is still waiting to be sent: only the most recent one says anything
+    /// useful.
+    pub async fn send_read_receipt(
+        &self,
+        receipt_type: ReceiptType,
+        thread: ReceiptThread,
+        event_id: OwnedEventId,
+    ) -> Result<(), RoomSendQueueError> {
+        let Some(room) = self.inner.room.get() else {
+            return Err(RoomSendQueueError::RoomDisappeared);
+        };
+        if room.state() != RoomState::Joined {
+            return Err(RoomSendQueueError::RoomNotJoined);
+        }
+
+        self.inner
+            .queue
+            .push_superseding(
+                QueuedRequestKind::ReadReceipt { receipt_type, thread, event_id },
+                MilliSecondsSinceUnixEpoch::now(),
+            )
+            .await
+            .map_err(RoomSendQueueError::StorageError)?;
+
+        self.inner.notifier.notify_one();
+
+        Ok(())
+    }
+
+    /// Queues several read markers to be set at once.
+    ///
+    /// Like [`Self::send_read_receipt`], but for the endpoint that sets the
+    /// fully-read marker and both read receipts in one request. It supersedes
+    /// the batch still waiting to be sent, if there is one.
+    pub async fn send_read_markers(
+        &self,
+        fully_read: Option<OwnedEventId>,
+        read: Option<OwnedEventId>,
+        read_private: Option<OwnedEventId>,
+    ) -> Result<(), RoomSendQueueError> {
+        let Some(room) = self.inner.room.get() else {
+            return Err(RoomSendQueueError::RoomDisappeared);
+        };
+        if room.state() != RoomState::Joined {
+            return Err(RoomSendQueueError::RoomNotJoined);
+        }
+
+        self.inner
+            .queue
+            .push_superseding(
+                QueuedRequestKind::ReadMarkers { fully_read, read, read_private },
+                MilliSecondsSinceUnixEpoch::now(),
+            )
+            .await
+            .map_err(RoomSendQueueError::StorageError)?;
+
+        self.inner.notifier.notify_one();
+
+        Ok(())
+    }
+
+    /// Queues the room's "marked as unread" flag to be set.
+    ///
+    /// The flag is applied locally right away, so the room stops looking
+    /// unread (or starts to) without waiting for the round trip, and the
+    /// request supersedes any pending one of its own kind.
+    pub async fn set_unread_marker(&self, unread: bool) -> Result<(), RoomSendQueueError> {
+        let Some(room) = self.inner.room.get() else {
+            return Err(RoomSendQueueError::RoomDisappeared);
+        };
+        if room.state() != RoomState::Joined {
+            return Err(RoomSendQueueError::RoomNotJoined);
+        }
+
+        self.inner
+            .queue
+            .push_superseding(
+                QueuedRequestKind::UnreadMarker { unread },
+                MilliSecondsSinceUnixEpoch::now(),
+            )
+            .await
+            .map_err(RoomSendQueueError::StorageError)?;
+
+        // Echo the flag locally: what the user did takes effect right away, instead of
+        // only once the server has been told and has told us back.
+        let content =
+            AnyRoomAccountDataEventContent::MarkedUnread(MarkedUnreadEventContent::new(unread));
+        let json = serde_json::json!({
+            "type": content.event_type(),
+            "content": content,
+        });
+
+        match Raw::<ruma::events::AnyRoomAccountDataEvent>::from_json_string(json.to_string()) {
+            Ok(event) => {
+                if let Err(error) = room
+                    .client()
+                    .base_client()
+                    .receive_sent_room_account_data(room.room_id(), event)
+                    .await
+                {
+                    warn!("couldn't apply the unread marker locally: {error}");
+                }
+            }
+            Err(error) => warn!("couldn't build the unread marker event: {error}"),
+        }
+
+        self.inner.notifier.notify_one();
+
+        Ok(())
+    }
+
     /// Queues a redaction of another event for sending it to this room.
     ///
     /// This immediately returns, and will push the redaction to be sent into a
@@ -860,6 +987,7 @@ impl RoomSendQueue {
             };
 
             let txn_id = queued_request.transaction_id.clone();
+            let order_sensitive = queued_request.kind.is_order_sensitive();
             trace!(txn_id = %txn_id, "received a request to send!");
 
             let Some(room) = room.get() else {
@@ -1016,6 +1144,11 @@ impl RoomSendQueue {
                             }
                         }
 
+                        SentRequestKey::Nothing => {
+                            // Nothing to report: what was sent isn't an event, and nothing
+                            // else can depend on it.
+                        }
+
                         SentRequestKey::Media(sent_media_info) => {
                             // Generate some final progress information, even if incremental
                             // progress wasn't requested.
@@ -1169,7 +1302,7 @@ impl RoomSendQueue {
                         // there's a possible race where a caller might try to
                         // remove an item, while it's still marked as being
                         // sent, resulting in a cancellation failure.
-                    } else {
+                    } else if order_sensitive {
                         warn!(txn_id = %txn_id, error = ?err, "Unrecoverable error when sending request: {err}");
 
                         // Mark the request as wedged, so it's not picked at any future point;
@@ -1179,6 +1312,15 @@ impl RoomSendQueue {
                             queue.mark_as_wedged(&txn_id, QueueWedgeError::from(&err)).await
                         {
                             warn!("unable to mark request as wedged: {storage_error}");
+                        }
+                    } else {
+                        warn!(txn_id = %txn_id, error = ?err, "Unrecoverable error when sending request: {err}, dropping it");
+
+                        // This request has no place in the room's ordering - it's a read
+                        // receipt or an unread marker - so wedging it would hold the room's
+                        // events back for something the next one supersedes anyway. Drop it.
+                        if let Err(storage_error) = queue.drop_failed(&txn_id).await {
+                            warn!("unable to remove the failed request: {storage_error}");
                         }
                     }
 
@@ -1216,6 +1358,8 @@ impl RoomSendQueue {
         cancel_upload_rx: Option<oneshot::Receiver<()>>,
         progress: Option<SharedObservable<TransmissionProgress>>,
     ) -> Result<(Option<SentRequestKey>, Option<EncryptionInfo>), crate::Error> {
+        let request_txn_id = request.transaction_id.clone();
+
         match request.kind {
             QueuedRequestKind::Event { content } => {
                 let (event, event_type) = content.into_raw();
@@ -1356,6 +1500,48 @@ impl RoomSendQueue {
                     Some(SentRequestKey::Redaction { event_id: result.event_id, redacts, reason }),
                     None,
                 ))
+            }
+
+            QueuedRequestKind::ReadReceipt { receipt_type, thread, event_id } => {
+                let mut request = create_receipt::v3::Request::new(
+                    room.room_id().to_owned(),
+                    receipt_type,
+                    event_id,
+                );
+                request.thread = thread;
+
+                room.client()
+                    .send(request)
+                    .with_request_config(RequestConfig::short_retry())
+                    .await?;
+
+                trace!(txn_id = %request_txn_id, "read receipt successfully sent");
+
+                Ok((Some(SentRequestKey::Nothing), None))
+            }
+
+            QueuedRequestKind::ReadMarkers { fully_read, read, read_private } => {
+                let request = assign!(
+                    set_read_marker::v3::Request::new(room.room_id().to_owned()),
+                    { fully_read, read_receipt: read, private_read_receipt: read_private }
+                );
+
+                room.client()
+                    .send(request)
+                    .with_request_config(RequestConfig::short_retry())
+                    .await?;
+
+                trace!(txn_id = %request_txn_id, "read markers successfully sent");
+
+                Ok((Some(SentRequestKey::Nothing), None))
+            }
+
+            QueuedRequestKind::UnreadMarker { unread } => {
+                room.set_unread_flag_now(unread).await?;
+
+                trace!(txn_id = %request_txn_id, "unread marker successfully sent");
+
+                Ok((Some(SentRequestKey::Nothing), None))
             }
         }
     }
@@ -1599,6 +1785,61 @@ impl QueueStorage {
         Ok(transaction_id)
     }
 
+    /// Push a request that supersedes the ones of its kind already queued.
+    ///
+    /// Anything the client says about the room on the user's behalf - which
+    /// event they've read, whether they've marked the room unread - is only
+    /// worth sending in its latest form, so an earlier pending request of the
+    /// same kind is dropped. One that is already on the wire can't be, so it
+    /// is left alone and this one is queued after it.
+    ///
+    /// These requests are queued at a high priority: they don't belong to the
+    /// ordering of the room's events, and shouldn't wait behind a slow media
+    /// upload to tell the server the room has been read.
+    ///
+    /// Returns the transaction id chosen to identify the request.
+    async fn push_superseding(
+        &self,
+        request: QueuedRequestKind,
+        created_at: MilliSecondsSinceUnixEpoch,
+    ) -> Result<OwnedTransactionId, RoomSendQueueStorageError> {
+        let key = request.supersedes_key();
+
+        let guard = self.store.lock().await;
+        let client = guard.client()?;
+        let store = client.state_store();
+
+        if let Some(key) = key {
+            let being_sent = guard.being_sent.as_ref().map(|info| info.transaction_id.clone());
+
+            for queued in store.load_send_queue_requests(&self.room_id).await? {
+                if queued.kind.supersedes_key().as_ref() != Some(&key) {
+                    continue;
+                }
+
+                // A request that's already on the wire can't be taken back.
+                if being_sent.as_deref() == Some(&*queued.transaction_id) {
+                    continue;
+                }
+
+                store.remove_send_queue_request(&self.room_id, &queued.transaction_id).await?;
+            }
+        }
+
+        let transaction_id = TransactionId::new();
+        store
+            .save_send_queue_request(
+                &self.room_id,
+                transaction_id.clone(),
+                created_at,
+                request,
+                Self::HIGH_PRIORITY,
+            )
+            .await?;
+
+        Ok(transaction_id)
+    }
+
     /// Peeks the next request to be sent, marking it as being sent.
     ///
     /// It is required to call [`Self::mark_as_sent`] after it's been
@@ -1732,6 +1973,26 @@ impl QueueStorage {
         }
 
         self.thumbnail_file_sizes.lock().remove(transaction_id);
+
+        Ok(())
+    }
+
+    /// Drop a request that failed and isn't worth keeping around.
+    ///
+    /// Unlike [`Self::cancel_event`], this is for requests that are being sent
+    /// right now, and that have no local echo to take back.
+    async fn drop_failed(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> Result<(), RoomSendQueueStorageError> {
+        let mut guard = self.store.lock().await;
+        guard.being_sent.take();
+
+        guard
+            .client()?
+            .state_store()
+            .remove_send_queue_request(&self.room_id, transaction_id)
+            .await?;
 
         Ok(())
     }
@@ -2219,6 +2480,14 @@ impl QueueStorage {
                     QueuedRequestKind::MediaUpload { .. } => {
                         // Don't return uploaded medias as their own things; the accompanying
                         // event represented as a dependent request should be sufficient.
+                        return None;
+                    }
+
+                    QueuedRequestKind::ReadReceipt { .. }
+                    | QueuedRequestKind::ReadMarkers { .. }
+                    | QueuedRequestKind::UnreadMarker { .. } => {
+                        // These aren't events, so they have no local echo in a timeline; they
+                        // are echoed in the room's read state instead.
                         return None;
                     }
 
