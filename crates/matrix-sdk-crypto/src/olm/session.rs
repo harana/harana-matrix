@@ -406,7 +406,6 @@ mod tests {
     use serde_json::{self, Value};
     use vodozemac::olm::{OlmMessage, SessionConfig};
 
-    use super::Session;
     use crate::{
         identities::DeviceData,
         olm::Account,

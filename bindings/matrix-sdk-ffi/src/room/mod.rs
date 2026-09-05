@@ -30,6 +30,7 @@ use matrix_sdk::{
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
+use matrix_sdk_base::RoomInfoNotableUpdateReasons;
 use matrix_sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use matrix_sdk_ui::{
     timeline::{RoomExt, TimelineBuilder, default_event_filter},

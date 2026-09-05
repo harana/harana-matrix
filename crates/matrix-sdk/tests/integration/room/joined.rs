@@ -647,6 +647,55 @@ async fn test_send_single_receipt_with_unread_flag() {
 }
 
 #[async_test]
+async fn test_send_single_receipt_has_a_local_echo() {
+    let room_id = room_id!("!test:example.org");
+    let sender = user_id!("@bob:example.org");
+    let event_id = owned_event_id!("$2:example.org");
+
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    client.event_cache().subscribe().unwrap();
+
+    let f = EventFactory::new().room(room_id).sender(sender);
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("hello").event_id(event_id!("$1:example.org")))
+                .add_timeline_event(f.text_msg("world").event_id(&event_id)),
+        )
+        .await;
+
+    // Two messages from somebody else are unread.
+    assert_eq!(room.num_unread_messages(), 2);
+
+    // Sending the receipt fails: the counts must be left untouched.
+    {
+        let _guard = server.mock_send_receipt(ReceiptType::Read).error500().mount_as_scoped().await;
+
+        room.send_single_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, event_id.clone())
+            .await
+            .unwrap_err();
+    }
+
+    assert_eq!(room.num_unread_messages(), 2);
+
+    // Sending the receipt succeeds: the counts drop right away, without waiting for
+    // the receipt to come back through sync.
+    {
+        let _guard =
+            server.mock_send_receipt(ReceiptType::Read).ok().mock_once().mount_as_scoped().await;
+
+        room.send_single_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, event_id)
+            .await
+            .unwrap();
+    }
+
+    assert_eq!(room.num_unread_messages(), 0);
+}
+
+#[async_test]
 async fn test_send_multiple_receipts() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;

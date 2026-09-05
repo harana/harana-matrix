@@ -203,6 +203,7 @@ impl SenderData {
     /// known to be legacy: the recomputation has no way of telling that the
     /// session came from a backup or a key export, so the flag has to be
     /// carried over rather than reset.
+    #[must_use]
     pub fn with_legacy_session(self, legacy: bool) -> Self {
         match self {
             SenderData::UnknownDevice { owner_check_failed, .. } => {
@@ -272,40 +273,6 @@ impl SenderData {
     /// The returned struct contains no device info.
     pub fn legacy() -> Self {
         Self::UnknownDevice { legacy_session: true, owner_check_failed: false }
-    }
-
-    /// Whether this `SenderData` carries the legacy flag.
-    ///
-    /// The flag is only meaningful for the two states that can be reached
-    /// without knowing who the sender is, so it is always `false` for the
-    /// other states.
-    pub fn legacy_session(&self) -> bool {
-        match self {
-            Self::UnknownDevice { legacy_session, .. }
-            | Self::DeviceInfo { legacy_session, .. } => *legacy_session,
-            Self::VerificationViolation(_)
-            | Self::SenderUnverified(_)
-            | Self::SenderVerified(_) => false,
-        }
-    }
-
-    /// Return a copy of this `SenderData` with the legacy flag set to
-    /// `legacy_session`.
-    ///
-    /// States that do not carry the flag are returned unchanged: once we know
-    /// who the sender is, we no longer need to fall back on the legacy
-    /// behaviour.
-    #[must_use]
-    pub fn with_legacy_session(self, legacy_session: bool) -> Self {
-        match self {
-            Self::UnknownDevice { owner_check_failed, .. } => {
-                Self::UnknownDevice { legacy_session, owner_check_failed }
-            }
-            Self::DeviceInfo { device_keys, .. } => {
-                Self::DeviceInfo { device_keys, legacy_session }
-            }
-            other => other,
-        }
     }
 
     /// Create a [`SenderData`] representing the current verification state of

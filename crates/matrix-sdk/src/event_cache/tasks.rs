@@ -39,7 +39,7 @@ use super::{
     RoomEventCacheLinkedChunkUpdate,
 };
 use crate::{
-    Client,
+    Client, Room,
     client::WeakClient,
     send_queue::{LocalEchoContent, RoomSendQueueUpdate, SendQueueUpdate},
 };
@@ -120,6 +120,39 @@ pub(super) async fn ignore_user_list_update_task(
     }
     .instrument(span)
     .await;
+}
+
+/// Whether the events of `room` may contain events sent by one of the
+/// `ignored_users`, i.e. whether the room must be cleared after those users
+/// have been ignored.
+async fn is_affected_by(
+    room: &Room,
+    ignored_users: &[OwnedUserId],
+    inner: &Arc<EventCacheInner>,
+) -> bool {
+    // The cheapest signal: the user is a known member of the room.
+    for user_id in ignored_users {
+        if matches!(room.get_member_no_sync(user_id).await, Ok(Some(_))) {
+            return true;
+        }
+    }
+
+    // The member list may not have been synced (it is lazily loaded), so also look
+    // at the events the room has in memory. Rooms that aren't loaded aren't
+    // inspected: loading all of them to clear a couple would defeat the purpose.
+    let Some(room_event_cache) =
+        inner.by_room.read().await.get(room.room_id()).map(|caches| caches.room.clone())
+    else {
+        return false;
+    };
+
+    room_event_cache
+        .rfind_map_event_in_memory_by(|event| {
+            event.sender().filter(|sender| ignored_users.contains(sender)).map(|_| ())
+        })
+        .await
+        .unwrap_or_default()
+        .is_some()
 }
 
 /// Spawns the task that will listen to auto-shrink notifications.

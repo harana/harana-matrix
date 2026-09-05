@@ -2351,6 +2351,40 @@ impl Room {
         Ok(())
     }
 
+    /// Apply a read receipt of the current user locally, before the request
+    /// that sends it to the server has been answered.
+    ///
+    /// It returns the room's event cache along with the read receipts the room
+    /// had before, if they changed, so that the caller can roll the local echo
+    /// back when the request fails.
+    async fn apply_local_read_receipt(
+        &self,
+        receipt_type: &create_receipt::v3::ReceiptType,
+        thread: &ReceiptThread,
+        event_id: &EventId,
+    ) -> Option<(RoomEventCache, ReadReceipts)> {
+        let receipt_type = match receipt_type {
+            create_receipt::v3::ReceiptType::Read => ReceiptType::Read,
+            create_receipt::v3::ReceiptType::ReadPrivate => ReceiptType::ReadPrivate,
+            // `m.fully_read` is a marker: it doesn't take part in the unread counts.
+            _ => return None,
+        };
+
+        // The local echo is best-effort: it is skipped when the event cache isn't
+        // available.
+        let (room_event_cache, _drop_handles) = self.event_cache().await.ok()?;
+
+        let previous_read_receipts = room_event_cache
+            .apply_local_read_receipt(receipt_type, thread.clone(), event_id.to_owned())
+            .await
+            .inspect_err(|error| {
+                warn!(?error, "Failed to apply a read receipt locally");
+            })
+            .ok()??;
+
+        Some((room_event_cache, previous_read_receipts))
+    }
+
     /// Helper function to enable End-to-end encryption in this room.
     /// `encrypted_state_events` is not used unless the
     /// `experimental-encrypted-state-events` feature is enabled.

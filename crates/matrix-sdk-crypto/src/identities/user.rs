@@ -487,6 +487,51 @@ impl OtherUserIdentity {
         Ok(())
     }
 
+    /// Read this identity back from the store, so that a targeted change can
+    /// be applied to the current data rather than to our own, possibly stale,
+    /// copy of it.
+    ///
+    /// Returns `None` when the stored identity no longer presents the master
+    /// key our copy was built from. In that case the identity changed
+    /// underneath us: writing our copy back would revert the new cross-signing
+    /// keys, and applying the change to the new identity would record a
+    /// decision the user never made about it.
+    async fn identity_to_update(&self) -> Result<Option<OtherUserIdentityData>, CryptoStoreError> {
+        let stored = self.verification_machine.store.inner().get_user_identity(self.user_id()).await?;
+
+        match stored {
+            // Nothing stored yet, so there is nothing of ours to overwrite.
+            None => Ok(Some(self.inner.clone())),
+
+            Some(UserIdentityData::Other(stored)) if *stored.master_key() == *self.master_key => {
+                Ok(Some(stored))
+            }
+
+            Some(_) => {
+                warn!(
+                    user_id = ?self.user_id(),
+                    master_key = ?self.master_key.get_first_key(),
+                    "The stored identity changed since we read it; not writing our stale copy back",
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    async fn save_identity(&self, identity: OtherUserIdentityData) -> Result<(), CryptoStoreError> {
+        let changes = Changes {
+            identities: IdentityChanges {
+                changed: vec![UserIdentityData::Other(identity)],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        self.verification_machine.store.inner().save_changes(changes).await?;
+
+        Ok(())
+    }
+
     /// Has the identity changed in a way that requires approval from the user?
     ///
     /// A user identity needs approval if it changed after the crypto machine
