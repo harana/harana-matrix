@@ -557,3 +557,52 @@ mod test {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use matrix_sdk_test::async_test;
+    use ruma::{device_id, room_id, user_id};
+
+    use super::CryptoStoreWrapper;
+    use crate::store::{
+        CryptoStore, MemoryStore,
+        types::{Changes, RoomSettings},
+    };
+
+    /// Reading a room's encryption settings went to the store and
+    /// deserialized on every call, on the critical path of showing that
+    /// room's encryption state. They only ever change when we write them, so
+    /// they are remembered instead (#143).
+    #[async_test]
+    async fn test_room_settings_are_cached_and_updated_on_write() {
+        let user_id = user_id!("@alice:localhost");
+        let device_id = device_id!("ALICEDEVICE");
+        let room_id = room_id!("!test:localhost");
+
+        let memory_store = Arc::new(MemoryStore::new());
+        let wrapper = CryptoStoreWrapper::new(user_id, device_id, memory_store.clone());
+
+        // Nothing is stored to begin with. "No settings for this room" is the answer
+        // that gets asked for over and over, so it is remembered as well.
+        assert!(wrapper.get_room_settings(room_id).await.unwrap().is_none());
+
+        // A write that goes around the wrapper isn't picked up, which is what tells us
+        // the answer came from the cache rather than from the store.
+        let settings = RoomSettings { only_allow_trusted_devices: true, ..Default::default() };
+        let changes = || Changes {
+            room_settings: HashMap::from([(room_id.to_owned(), settings.clone())]),
+            ..Default::default()
+        };
+        CryptoStore::save_changes(&*memory_store, changes()).await.unwrap();
+
+        assert!(wrapper.get_room_settings(room_id).await.unwrap().is_none());
+
+        // A write that goes through the wrapper is: the cache is kept in step with
+        // what we write.
+        wrapper.save_changes(changes()).await.unwrap();
+
+        assert_eq!(wrapper.get_room_settings(room_id).await.unwrap().as_ref(), Some(&settings));
+    }
+}

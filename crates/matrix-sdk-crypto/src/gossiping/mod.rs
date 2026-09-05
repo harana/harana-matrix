@@ -323,7 +323,7 @@ impl WaitQueue {
         Self::default()
     }
 
-    #[cfg(all(test, feature = "automatic-room-key-forwarding"))]
+    #[cfg(test)]
     fn is_empty(&self) -> bool {
         let read_guard = self.inner.read();
         read_guard.requests_ids_waiting.is_empty()

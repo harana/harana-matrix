@@ -2114,6 +2114,80 @@ mod tests {
         assert!(!alice_machine.inner.outgoing_requests.read().is_empty());
     }
 
+    /// A device that asks for the same secret twice while we have no Olm
+    /// session with it leaves two requests behind. Servicing one of them used
+    /// to leave the other in the wait queue, so establishing a session sent the
+    /// secret a second time (#75).
+    #[async_test]
+    async fn test_a_secret_is_not_shared_twice() {
+        let alice_machine = get_machine_test_helper().await;
+
+        let mut second_account = alice_2_account();
+        let alice_device = DeviceData::from_account(&second_account);
+
+        // We only serve secrets to a device we trust, and only if we have one to
+        // serve.
+        alice_device.set_trust_state(LocalTrust::Verified);
+        alice_machine
+            .inner
+            .store
+            .save_device_data(std::slice::from_ref(&alice_device))
+            .await
+            .unwrap();
+        alice_machine.inner.store.reset_cross_signing_identity().await;
+
+        let second_device_id = second_account.device_id().to_owned();
+        let request = |request_id: &str| {
+            RumaToDeviceEvent::new(
+                alice_id().to_owned(),
+                ToDeviceSecretRequestEventContent::new(
+                    RequestAction::Request(SecretRequestAction::new(
+                        SecretName::CrossSigningMasterKey,
+                    )),
+                    second_device_id.clone(),
+                    request_id.into(),
+                ),
+            )
+        };
+
+        // Given a request for a secret that we can't answer for lack of an Olm
+        // session,
+        alice_machine.receive_incoming_secret_request(&request("first"));
+        {
+            let cache = alice_machine.inner.store.cache().await.unwrap();
+            alice_machine.collect_incoming_key_requests(&cache).await.unwrap();
+        }
+
+        assert!(!alice_machine.inner.wait_queue.is_empty());
+        assert!(alice_machine.inner.outgoing_requests.read().is_empty());
+
+        // ... and a session that turns up afterwards,
+        let alice_session = alice_machine
+            .inner
+            .store
+            .with_transaction(async |tr| {
+                let alice_account = tr.account().await?;
+                let (alice_session, _) =
+                    alice_account.create_session_for_test_helper(&mut second_account).await;
+                Ok(alice_session)
+            })
+            .await
+            .unwrap();
+        alice_machine.inner.store.save_sessions(&[alice_session]).await.unwrap();
+
+        // When the device asks a second time and we answer that one,
+        alice_machine.receive_incoming_secret_request(&request("second"));
+        {
+            let cache = alice_machine.inner.store.cache().await.unwrap();
+            alice_machine.collect_incoming_key_requests(&cache).await.unwrap();
+        }
+
+        // Then the secret goes out exactly once, and the request still sitting in the
+        // queue is dropped rather than sending it again.
+        assert_eq!(alice_machine.inner.outgoing_requests.read().len(), 1);
+        assert!(alice_machine.inner.wait_queue.is_empty());
+    }
+
     #[async_test]
     async fn test_secret_broadcasting() {
         use futures_util::{FutureExt, pin_mut};

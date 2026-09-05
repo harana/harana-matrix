@@ -202,3 +202,71 @@ pub fn set_logger(logger: Box<dyn Logger>) {
 
     let _ = tracing_subscriber::registry().with(filter).with(layer).try_init();
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+    };
+
+    use tracing::{info_span, warn};
+    use tracing_subscriber::{layer::SubscriberExt, registry};
+
+    use super::{LogLevel, Logger, LoggerLayer};
+
+    /// One log line as the [`Logger`] trait hands it over.
+    struct LoggedLine {
+        level: LogLevel,
+        target: String,
+        message: String,
+        fields: HashMap<String, String>,
+    }
+
+    #[derive(Default)]
+    struct RecordingLogger {
+        lines: Mutex<Vec<LoggedLine>>,
+    }
+
+    impl Logger for RecordingLogger {
+        fn log(
+            &self,
+            level: LogLevel,
+            target: String,
+            message: String,
+            fields: HashMap<String, String>,
+        ) {
+            self.lines.lock().unwrap().push(LoggedLine { level, target, message, fields });
+        }
+    }
+
+    /// The logger used to be handed one flattened string, so a downstream
+    /// logger could neither route by severity nor read the fields without
+    /// parsing it back apart (#49).
+    #[test]
+    fn test_the_logger_receives_the_parts_separately() {
+        let logger = Arc::new(RecordingLogger::default());
+        let subscriber = registry().with(LoggerLayer { inner: logger.clone() });
+
+        tracing::subscriber::with_default(subscriber, || {
+            let span = info_span!("decrypting", session_id = "AAA");
+            let _guard = span.enter();
+
+            warn!(event_id = "$1", "Couldn't decrypt");
+        });
+
+        let lines = logger.lines.lock().unwrap();
+        assert_eq!(lines.len(), 1);
+
+        let line = &lines[0];
+
+        assert_eq!(line.level, LogLevel::Warn);
+        assert_eq!(line.target, module_path!());
+        assert_eq!(line.message, "Couldn't decrypt");
+
+        // The fields on the event, and the ones on the spans it was emitted in,
+        // both come through as structured data rather than as part of the message.
+        assert_eq!(line.fields.get("event_id").map(String::as_str), Some("$1"));
+        assert_eq!(line.fields.get("session_id").map(String::as_str), Some("AAA"));
+    }
+}

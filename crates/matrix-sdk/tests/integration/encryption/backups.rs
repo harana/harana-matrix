@@ -1442,6 +1442,119 @@ async fn test_enable_from_secret_storage_and_download_after_utd() -> TestResult 
     Ok(())
 }
 
+/// Another client can delete the backup version we know about and create a new
+/// one. Until we notice, we report backups as enabled while every upload is
+/// going to be rejected (#136).
+#[async_test]
+async fn test_reconcile_with_server_drops_a_backup_we_no_longer_hold_the_key_for() -> TestResult {
+    let session = matrix_session_example2();
+    let (builder, server) = test_client_builder_with_server().await;
+    let client = builder.request_config(RequestConfig::new().disable_retry()).build().await?;
+
+    client.restore_session(session).await?;
+
+    let store = init_secret_store(&client, &server).await;
+
+    let server_version = Arc::new(std::sync::Mutex::new("6".to_owned()));
+
+    Mock::given(method("GET"))
+        .and(path("_matrix/client/r0/room_keys/version"))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with({
+            let server_version = server_version.clone();
+            move |_: &wiremock::Request| {
+                ResponseTemplate::new(200).set_body_json(json!({
+                    "algorithm": "m.megolm_backup.v1.curve25519-aes-sha2",
+                    "auth_data": {
+                        "public_key": "hdx5rSn94rBuvJI5cwnhKAVmFyZgfJjk7vwEBD6mIHc",
+                        "signatures": {}
+                    },
+                    "count": 1,
+                    "etag": "1",
+                    "version": *server_version.lock().unwrap(),
+                }))
+            }
+        })
+        .mount(&server)
+        .await;
+
+    // Given we are connected to the backup the server currently has,
+    store.import_secrets().await?;
+
+    let backups = client.encryption().backups();
+    assert!(backups.are_enabled().await, "We should be connected to the backup");
+
+    // Reconciling with a server that still has that version changes nothing.
+    assert_eq!(backups.reconcile_with_server().await?.as_deref(), Some("6"));
+    assert!(backups.are_enabled().await);
+
+    // When another client replaces it with a version we hold no key for,
+    *server_version.lock().unwrap() = "7".to_owned();
+
+    // Then reconciling tells us which version the server has, and stops us claiming
+    // a backup we can no longer upload to.
+    assert_eq!(backups.reconcile_with_server().await?.as_deref(), Some("7"));
+    assert!(!backups.are_enabled().await, "The stale local backup should be disabled");
+
+    Ok(())
+}
+
+/// A room key that is in the backup but that we can't read is not the same as
+/// one that isn't there. Reporting a successful download used to leave the
+/// event stuck at "waiting for this message" with nothing to explain it (#120).
+#[async_test]
+async fn test_download_of_a_corrupt_room_key_is_reported() -> TestResult {
+    let room_id = room_id!("!DovneieKSTkdHKpIXy:morpheus.localhost");
+    let session_id = "64H7XKokIx0ASkYDHZKlT5zd/Zccz/cQspPNdvnNULA";
+
+    let session = matrix_session_example2();
+    let (builder, server) = test_client_builder_with_server().await;
+    let client = builder.request_config(RequestConfig::new().disable_retry()).build().await?;
+
+    client.restore_session(session).await?;
+
+    init_client_secret_storage_and_backup(&client, &server).await;
+
+    // The backup has the key we are after, but its ciphertext is not something we
+    // can decrypt with the backup key we hold.
+    Mock::given(method("GET"))
+        .and(path(
+            "/_matrix/client/r0/room_keys/keys/!DovneieKSTkdHKpIXy:morpheus.localhost/\
+             64H7XKokIx0ASkYDHZKlT5zd%2FZccz%2FcQspPNdvnNULA",
+        ))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "first_message_index": 0,
+            "forwarded_count": 0,
+            "is_verified": true,
+            "session_data": {
+                "ciphertext": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "ephemeral": "+KmnQw7ECkCD+s2Hc0hhntT8n9zTLJvFHgX7g3XKBjs",
+                "mac": "xdzih3IkRv4"
+            }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let error = client
+        .encryption()
+        .backups()
+        .download_room_key(room_id, session_id)
+        .await
+        .expect_err("A key we cannot read should be reported, not treated as a success");
+
+    assert_matches!(
+        error,
+        matrix_sdk::Error::CorruptBackupRoomKey { session_id: reported } => {
+            assert_eq!(reported, session_id);
+        }
+    );
+
+    server.verify().await;
+    Ok(())
+}
+
 /// Even if we have a key to the session, we should still attempt a backup
 /// download if the UTD message has a lower megolm ratchet index than we have.
 #[async_test]

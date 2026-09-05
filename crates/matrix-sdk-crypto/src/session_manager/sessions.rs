@@ -891,6 +891,33 @@ mod tests {
         assert!(!manager.outgoing_to_device_requests.read().is_empty())
     }
 
+    /// A device whose very first Olm session is the wedged one has no session
+    /// to rate limit against. We used to read that as "too soon to unwedge"
+    /// and give up, leaving the device wedged for good (#103).
+    #[async_test]
+    async fn test_session_unwedging_without_an_existing_session() {
+        let (manager, _identity_manager) = session_manager_test_helper().await;
+        let bob = bob_account();
+        let bob_device = DeviceData::from_account(&bob);
+
+        manager.store.save_device_data(std::slice::from_ref(&bob_device)).await.unwrap();
+
+        let curve_key = bob_device.curve25519_key().unwrap();
+
+        // No session was ever created for this device.
+        let sessions = manager.store.get_sessions(&curve_key.to_base64()).await.unwrap();
+        match sessions {
+            None => (),
+            Some(sessions) => assert!(sessions.lock().await.is_empty()),
+        }
+        assert!(!manager.is_device_wedged(&bob_device));
+
+        manager.mark_device_as_wedged(bob_device.user_id(), curve_key).await.unwrap();
+
+        assert!(manager.is_device_wedged(&bob_device));
+        assert!(manager.users_for_key_claim.read().contains_key(bob.user_id()));
+    }
+
     #[async_test]
     async fn test_failure_handling() {
         let alice = user_id!("@alice:example.org");
