@@ -451,7 +451,8 @@ impl SecretStore {
             (exported.2 && !status.has_user_signing, "m.cross_signing.user_signing"),
         ]
         .into_iter()
-        .filter_map(|(missing, name)| missing.then(|| name.to_owned()))
+        .filter(|(missing, _)| *missing)
+        .map(|(_, name)| name.to_owned())
         .collect();
 
         if !missing.is_empty() {
