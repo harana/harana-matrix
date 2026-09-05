@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, ops::Not, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    ops::Not,
+    sync::Arc,
+};
 
 use eyeball::SharedObservable;
 use eyeball_im::VectorDiff;
@@ -315,6 +319,109 @@ impl Caches {
                 }
             },
         )
+    }
+
+    /// Route events that have just been decrypted to the [`ThreadEventCache`]
+    /// they belong to, and refresh the [`ThreadSummary`] of every affected
+    /// thread root.
+    ///
+    /// While it was a UTD, an in-thread event could not be identified as such:
+    /// its `m.relates_to` field was encrypted. It was therefore never routed to
+    /// a thread cache — that cache may not even exist — and the thread summary
+    /// of its root was never computed, so the thread was invisible in the main
+    /// timeline. This is why iterating over the thread caches that are alive
+    /// isn't enough: the threads have to be (re)discovered from the events
+    /// themselves.
+    ///
+    /// `already_updated_threads` holds the roots of the threads which had an
+    /// in-memory UTD replaced in place, and whose summary must be recomputed
+    /// too.
+    ///
+    /// [`ThreadEventCache`]: thread::ThreadEventCache
+    /// [`ThreadSummary`]: matrix_sdk_base::deserialized_responses::ThreadSummary
+    #[cfg(feature = "e2e-encryption")]
+    pub(super) async fn handle_decrypted_thread_events(
+        &self,
+        decrypted_events: &[Event],
+        already_updated_threads: BTreeSet<OwnedEventId>,
+    ) -> Result<()> {
+        use matrix_sdk_base::{
+            serde_helpers::{extract_thread_root, extract_timestamp},
+            sync::Timeline,
+        };
+        use ruma::MilliSecondsSinceUnixEpoch;
+
+        let mut events_by_thread = BTreeMap::<OwnedEventId, Vec<Event>>::new();
+
+        for event in decrypted_events {
+            if let Some(thread_root) = extract_thread_root(event.raw()) {
+                events_by_thread.entry(thread_root).or_default().push(event.clone());
+            }
+        }
+
+        let mut threads_to_refresh = already_updated_threads;
+
+        for (thread_root, events) in events_by_thread {
+            let thread = self.thread(thread_root.clone()).await?;
+
+            // Skip the events this thread already has in memory: those have been replaced
+            // in place already, and re-adding them here would move them to the end of the
+            // thread. Events that are not in memory go through the regular deduplication
+            // of the sync path below.
+            let mut new_events = Vec::with_capacity(events.len());
+
+            {
+                let state = thread.state().read().await?;
+                let linked_chunk = state.thread_linked_chunk();
+
+                for event in events {
+                    let Some(event_id) = event.event_id() else {
+                        continue;
+                    };
+
+                    let known = linked_chunk
+                        .revents()
+                        .any(|(_position, known)| known.event_id().as_deref() == Some(&*event_id));
+
+                    if known.not() {
+                        new_events.push(event);
+                    }
+                }
+            }
+
+            if new_events.is_empty().not() {
+                // The events are appended at the end of the thread, so make sure they are in
+                // chronological order: nothing guarantees the order in which the crypto layer
+                // hands the resolved UTDs back to us.
+                let now = MilliSecondsSinceUnixEpoch::now();
+                new_events.sort_by_key(|event| extract_timestamp(event.raw(), now));
+
+                thread
+                    .handle_joined_room_update(
+                        JoinedRoomUpdate {
+                            timeline: Timeline {
+                                limited: false,
+                                prev_batch: None,
+                                events: new_events,
+                            },
+                            ..Default::default()
+                        },
+                        &[],
+                    )
+                    .await?;
+            }
+
+            threads_to_refresh.insert(thread_root);
+        }
+
+        for thread_id in threads_to_refresh {
+            let thread = self.thread(thread_id.clone()).await?;
+            let new_thread_summary = thread.state().read().await?.compute_thread_summary().await?;
+
+            self.room.update_thread_summary(&thread_id, new_thread_summary).await?;
+        }
+
+        Ok(())
     }
 
     /// Update all the event caches with a [`JoinedRoomUpdate`].

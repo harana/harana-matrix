@@ -541,16 +541,17 @@ impl EventCache {
             // chunk contains which event ID, to avoid doing the linear searches
             // here.
 
-            // Replaces UTDs in each thread, and maybe update the thread summary.
-            for (thread_id, thread_cache) in try_join_all(
+            // Replace UTDs in each thread that is alive, and remember which threads have
+            // been touched, so their summary can be recomputed below.
+            let already_updated_threads: BTreeSet<_> = try_join_all(
                 all_caches.threads.read().await.iter().map(|(thread_id, thread_cache)| async {
                     Result::<_, EventCacheError>::Ok(
-                        // If at least one event has been replaced, return the `thread_id` and the
-                        // `thread_cache` to update the thread summary later.
+                        // If at least one event has been replaced, return the `thread_id` to
+                        // update the thread summary later.
                         thread_cache
                             .replace_in_memory_utds(&maybe_resolved_events)
                             .await?
-                            .then(|| (thread_id.clone(), thread_cache.clone())),
+                            .then(|| thread_id.clone()),
                     )
                 }),
             )
@@ -558,12 +559,22 @@ impl EventCache {
             .into_iter()
             // Filter out results that are `None`, i.e. a thread where no UTD has been replaced.
             .flatten()
-            {
-                let new_thread_summary =
-                    thread_cache.state().read().await?.compute_thread_summary().await?;
+            .collect();
 
-                all_caches.room.update_thread_summary(&thread_id, new_thread_summary).await?;
-            }
+            // The threads above are only the ones that were already known. An event that
+            // was a UTD when it was received couldn't be identified as an in-thread event,
+            // so its thread may be entirely unknown at this point: hand the decrypted
+            // events over, so those threads can be discovered and all the affected thread
+            // summaries refreshed.
+            let decrypted_events: Vec<_> = maybe_resolved_events
+                .iter()
+                .filter_map(MaybeResolvedEvent::as_resolved)
+                .cloned()
+                .collect();
+
+            all_caches
+                .handle_decrypted_thread_events(&decrypted_events, already_updated_threads)
+                .await?;
         }
 
         // Resolve in-memory UTDs on the pinned-events cache.
@@ -1253,7 +1264,7 @@ mod tests {
     use matrix_sdk_base::{
         cross_process_lock::CrossProcessLockGeneration,
         crypto::types::events::{ToDeviceEvent, room::encrypted::ToDeviceEncryptedEventContent},
-        deserialized_responses::{TimelineEventKind, VerificationState},
+        deserialized_responses::{TimelineEventKind, ThreadSummaryStatus, VerificationState},
         event_cache::{
             Event, Gap,
             store::{EventCacheStore, EventCacheStoreError, MemoryStore},
@@ -1276,7 +1287,7 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use serde_json::json;
+    use serde_json::{Value, json};
     use tokio::sync::oneshot::{self, Sender};
     use tracing::{Instrument, info};
 
@@ -1703,6 +1714,168 @@ mod tests {
         );
         assert_eq!(expected_room_id, room_id);
         assert!(generic_stream.is_empty());
+    }
+
+    #[async_test]
+    async fn test_redecryption_discovers_unknown_threads() {
+        // While it is a UTD, an in-thread event can't be identified as such: its
+        // `m.relates_to` field is encrypted. The thread it belongs to is therefore
+        // entirely unknown, and the thread summary of its root is never computed, so
+        // the thread is invisible in the main timeline. Decrypting the event must make
+        // the thread appear.
+
+        let room_id = room_id!("!test:localhost");
+
+        let event_factory = EventFactory::new().room(room_id);
+        let (alice, bob, matrix_mock_server, _) = set_up_clients(room_id, true, false).await;
+
+        let alice_user_id = alice.user_id().unwrap().to_owned();
+        let bob_user_id = bob.user_id().unwrap().to_owned();
+
+        let thread_root_id = event_id!("$thread_root");
+        let in_thread_reply_id = event_id!("$in_thread_reply");
+
+        // Alice sends an in-thread reply. Bob will receive it before the room key, so
+        // it lands in his event cache as a UTD.
+        let alice_room = alice.get_room(room_id).expect("Alice should have access to the room");
+
+        let (event_receiver, mock) =
+            matrix_mock_server.mock_room_send().ok_with_capture(in_thread_reply_id, &*alice_user_id);
+        let (_guard, room_key) =
+            matrix_mock_server.mock_capture_put_to_device(&*alice_user_id).await;
+
+        {
+            let _guard = mock.mock_once().mount_as_scoped().await;
+
+            matrix_mock_server
+                .mock_get_members()
+                .ok(vec![
+                    event_factory.member(&alice_user_id).into_raw(),
+                    event_factory.member(&bob_user_id).into_raw(),
+                ])
+                .mock_once()
+                .mount()
+                .await;
+
+            alice_room
+                .send_raw(
+                    "m.room.message",
+                    json!({
+                        "body": "a secret, in a thread",
+                        "msgtype": "m.text",
+                        "m.relates_to": {
+                            "rel_type": "m.thread",
+                            "event_id": thread_root_id,
+                            "is_falling_back": true,
+                            "m.in_reply_to": { "event_id": thread_root_id },
+                        },
+                    }),
+                )
+                .await
+                .expect("Alice should be able to send an in-thread message");
+        }
+
+        let encrypted_reply =
+            event_receiver.await.expect("Alice should have sent the event by now");
+        let room_key = room_key.await;
+
+        // Strip the cleartext copy of `m.relates_to` from the encrypted event: sending
+        // clients are not required to duplicate the relation outside of the ciphertext,
+        // and some don't. The thread relation is then invisible for as long as the
+        // event is a UTD, which is exactly the situation this test is about.
+        let encrypted_reply = {
+            let mut json: Value = serde_json::from_str(encrypted_reply.json().get()).unwrap();
+            json["content"]
+                .as_object_mut()
+                .expect("the content of the encrypted event must be an object")
+                .remove("m.relates_to")
+                .expect("the SDK copies the relation out of the ciphertext");
+            Raw::new(&json).unwrap().cast_unchecked()
+        };
+
+        // Let's now see what Bob's event cache does.
+        let event_cache = bob.event_cache();
+        let (room_cache, _drop_handles) = event_cache
+            .room(room_id)
+            .await
+            .expect("We should be able to get to the event cache for a specific room");
+
+        let (_, mut subscriber) = room_cache.subscribe().await.unwrap();
+
+        // Bob receives the thread root in clear, and the encrypted in-thread reply.
+        let thread_root = event_factory
+            .text_msg("what do you think?")
+            .sender(&alice_user_id)
+            .event_id(thread_root_id)
+            .into_raw_sync();
+
+        matrix_mock_server
+            .mock_sync()
+            .ok_and_run(&bob, |builder| {
+                builder.add_joined_room(
+                    JoinedRoomBuilder::new(room_id)
+                        .add_timeline_event(thread_root)
+                        .add_timeline_event(encrypted_reply),
+                );
+            })
+            .await;
+
+        assert_let_timeout!(
+            Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { .. })) =
+                subscriber.recv()
+        );
+
+        // The thread relation is not visible yet, so the thread is entirely unknown:
+        // the root has no thread summary, and the thread doesn't show in the timeline.
+        let root = room_cache
+            .find_event(thread_root_id)
+            .await
+            .unwrap()
+            .expect("the thread root must be in the event cache");
+        assert!(
+            !matches!(root.thread_summary, ThreadSummaryStatus::Some(_)),
+            "the thread must not be known yet, got {:?}",
+            root.thread_summary
+        );
+
+        // Now we send the room key to Bob.
+        matrix_mock_server
+            .mock_sync()
+            .ok_and_run(&bob, |builder| {
+                builder.add_to_device_event(
+                    room_key
+                        .deserialize_as()
+                        .expect("We should be able to deserialize the room key"),
+                );
+            })
+            .await;
+
+        // The thread is discovered when the reply is decrypted: the root gets a thread
+        // summary counting that one reply.
+        //
+        // Redecryption happens in a background task, and updates the root in a second
+        // step, so give it a few chances to land.
+        let mut thread_summary = ThreadSummaryStatus::Unknown;
+
+        for _ in 0..20 {
+            sleep(Duration::from_millis(100)).await;
+
+            thread_summary = room_cache
+                .find_event(thread_root_id)
+                .await
+                .unwrap()
+                .expect("the thread root must be in the event cache")
+                .thread_summary;
+
+            if matches!(&thread_summary, ThreadSummaryStatus::Some(summary) if summary.latest_reply.is_some())
+            {
+                break;
+            }
+        }
+
+        assert_matches!(thread_summary, ThreadSummaryStatus::Some(summary));
+        assert_eq!(summary.num_replies, 1);
+        assert_eq!(summary.latest_reply.as_deref(), Some(in_thread_reply_id));
     }
 
     #[async_test]
