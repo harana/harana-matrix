@@ -92,7 +92,8 @@ use crate::{
     Account, AuthApi, AuthSession, Error, HttpError, Media, Pusher, RefreshTokenError, Result,
     Room, SessionTokens, TransmissionProgress,
     authentication::{
-        AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback, matrix::MatrixAuth,
+        AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback,
+        matrix::{MatrixAuth, MatrixSession},
         oauth::OAuth,
     },
     client::{
@@ -1644,6 +1645,34 @@ impl Client {
                 Box::pin(self.oauth().restore_session(*session, room_load_settings)).await
             }
         }
+    }
+
+    /// Restore a session from an access token alone, discovering the user and
+    /// device with `whoami`.
+    ///
+    /// [`Client::restore_session()`] needs the [`SessionMeta`] that was saved
+    /// alongside the token. Use this when only the token is available, for
+    /// instance when it was obtained outside this SDK.
+    ///
+    /// This costs one request, and only works for the native Matrix
+    /// authentication API: an OAuth 2.0 session cannot be restored this way.
+    ///
+    /// See [`MatrixAuth::restore_session_with_access_token()`] for the details,
+    /// including what happens when the homeserver reports no device ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a session was already restored or logged in.
+    ///
+    /// [`MatrixAuth::restore_session_with_access_token()`]:
+    ///     crate::authentication::matrix::MatrixAuth::restore_session_with_access_token
+    pub async fn restore_session_with_access_token(
+        &self,
+        tokens: SessionTokens,
+        room_load_settings: RoomLoadSettings,
+    ) -> Result<MatrixSession> {
+        Box::pin(self.matrix_auth().restore_session_with_access_token(tokens, room_load_settings))
+            .await
     }
 
     /// Refresh the access token using the authentication API used to log into

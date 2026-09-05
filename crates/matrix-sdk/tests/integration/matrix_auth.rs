@@ -46,6 +46,57 @@ async fn test_restore_session() {
 }
 
 #[async_test]
+async fn test_restore_session_with_access_token() {
+    let (client, server) = no_retry_test_client_with_server().await;
+
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/r0/account/whoami"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "user_id": "@example:localhost",
+            "device_id": "MYDEVICEID",
+        })))
+        .mount(&server)
+        .await;
+
+    let session = client
+        .restore_session_with_access_token(
+            SessionTokens { access_token: "My-Token".to_owned(), refresh_token: None },
+            Default::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(session.meta.user_id, "@example:localhost");
+    assert_eq!(session.meta.device_id, "MYDEVICEID");
+    assert!(client.matrix_auth().logged_in());
+}
+
+#[async_test]
+async fn test_restore_session_with_access_token_without_a_device_id() {
+    let (client, server) = no_retry_test_client_with_server().await;
+
+    // The device ID is optional in the specification, but the SDK needs one.
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/r0/account/whoami"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "user_id": "@example:localhost",
+        })))
+        .mount(&server)
+        .await;
+
+    let error = client
+        .restore_session_with_access_token(
+            SessionTokens { access_token: "My-Token".to_owned(), refresh_token: None },
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
+
+    assert_matches!(error, matrix_sdk::Error::MissingDeviceId);
+    assert!(!client.matrix_auth().logged_in());
+}
+
+#[async_test]
 async fn test_login_honours_the_request_config() {
     // The server rate-limits every login attempt.
     async fn rate_limited_server() -> (Client, MockServer) {

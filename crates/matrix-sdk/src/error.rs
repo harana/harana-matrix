@@ -431,6 +431,14 @@ pub enum Error {
     /// [`Client`]: crate::Client
     #[error(transparent)]
     ClientBuild(Box<ClientBuildError>),
+
+    /// A session couldn't be restored from an access token because the
+    /// homeserver's `whoami` response carried no device ID.
+    ///
+    /// The field is optional in the specification, but the SDK needs one: it
+    /// identifies the device that owns the end-to-end encryption keys.
+    #[error("the homeserver's whoami response didn't include a device ID")]
+    MissingDeviceId,
 }
 
 #[rustfmt::skip] // stop rustfmt breaking the `<code>` in docs across multiple lines
