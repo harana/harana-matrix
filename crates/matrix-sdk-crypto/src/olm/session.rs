@@ -414,6 +414,16 @@ mod tests {
         },
     };
 
+    /// The [`SessionConfig`] that [`Account::create_inbound_session`] expects,
+    /// which depends on whether the experimental algorithms are enabled.
+    fn session_config() -> SessionConfig {
+        #[cfg(feature = "experimental-algorithms")]
+        return SessionConfig::version_2();
+
+        #[cfg(not(feature = "experimental-algorithms"))]
+        SessionConfig::version_1()
+    }
+
     #[async_test]
     async fn test_pickle_timestamps_in_the_future_are_clamped() {
         use ruma::{SecondsSinceUnixEpoch, UInt};
@@ -430,7 +440,7 @@ mod tests {
         let one_time_key = *bob.one_time_keys().values().next().unwrap();
         let session = alice
             .create_outbound_session_helper(
-                SessionConfig::version_1(),
+                session_config(),
                 bob.identity_keys().curve25519,
                 one_time_key,
                 false,
@@ -471,7 +481,7 @@ mod tests {
         let one_time_key = *bob.one_time_keys().values().next().unwrap();
         let mut alice_session = alice
             .create_outbound_session_helper(
-                SessionConfig::version_1(),
+                session_config(),
                 bob.identity_keys().curve25519,
                 one_time_key,
                 false,
@@ -493,7 +503,11 @@ mod tests {
         // Encrypting doesn't count as decrypting.
         assert!(alice_session.last_decryption_time.is_none());
 
+        #[cfg(feature = "experimental-algorithms")]
+        assert_let!(ToDeviceEncryptedEventContent::OlmV2Curve25519AesSha2(content) = message);
+        #[cfg(not(feature = "experimental-algorithms"))]
         assert_let!(ToDeviceEncryptedEventContent::OlmV1Curve25519AesSha2(content) = message);
+
         let OlmMessage::PreKey(prekey) = content.ciphertext else {
             panic!("Wrong Olm message type");
         };
