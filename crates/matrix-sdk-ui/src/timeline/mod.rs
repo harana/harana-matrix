@@ -93,11 +93,11 @@ pub use self::{
     event_item::{
         AnyOtherStateEventContentChange, BeaconInfo, EditRevision, EmbeddedEvent, EncryptedMessage,
         EventItemOrigin, EventSendState, EventTimelineItem, InReplyToDetails, LiveLocationState,
-        MediaUploadProgress, MemberProfileChange, MembershipChange, Message, MsgLikeContent,
-        MsgLikeKind, OtherMessageLike, OtherState, PollResult, PollState, Profile, ReactionInfo,
-        ReactionStatus, ReactionsByKeyBySender, RoomMembershipChange, RoomPinnedEventsChange,
-        Sticker, ThreadSummary, TimelineDetails, TimelineEventItemId, TimelineEventShieldState,
-        TimelineEventShieldStateCode, TimelineItemContent,
+        LocalEditState, MediaUploadProgress, MemberProfileChange, MembershipChange, Message,
+        MsgLikeContent, MsgLikeKind, OtherMessageLike, OtherState, PollResult, PollState, Profile,
+        ReactionInfo, ReactionStatus, ReactionsByKeyBySender, RoomMembershipChange,
+        RoomPinnedEventsChange, Sticker, ThreadSummary, TimelineDetails, TimelineEventItemId,
+        TimelineEventShieldState, TimelineEventShieldStateCode, TimelineItemContent,
     },
     item::{TimelineItem, TimelineItemKind, TimelineUniqueId},
     latest_event::{LatestEventValue, LatestEventValueLocalState},
@@ -522,7 +522,7 @@ impl Timeline {
         description: Option<String>,
         zoom_level: Option<ZoomLevel>,
         asset_type: Option<AssetType>,
-        in_reply_to: Option<OwnedEventId>,
+        in_reply_to: Option<TimelineEventItemId>,
     ) -> Result<SendHandle, Error> {
         let mut content = LocationMessageEventContent::new(body, geo_uri.clone());
 
@@ -538,8 +538,8 @@ impl Timeline {
         let msgtype = MessageType::Location(content);
 
         match in_reply_to {
-            Some(event_id) => {
-                self.send_reply(RoomMessageEventContentWithoutRelation::new(msgtype), event_id)
+            Some(item_id) => {
+                self.send_reply_to(RoomMessageEventContentWithoutRelation::new(msgtype), &item_id)
                     .await
             }
             None => self.send(RoomMessageEventContent::new(msgtype).into()).await,

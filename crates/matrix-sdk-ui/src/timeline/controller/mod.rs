@@ -43,7 +43,7 @@ use ruma::{
     api::client::receipt::create_receipt::v3::ReceiptType as SendReceiptType,
     events::{
         AnyMessageLikeEventContent, AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent,
-        AnySyncTimelineEvent, MessageLikeEventType,
+        AnySyncTimelineEvent, MessageLikeEventContent as _, MessageLikeEventType,
         poll::unstable_start::UnstablePollStartEventContent,
         reaction::ReactionEventContent,
         receipt::{Receipt, ReceiptThread, ReceiptType},
@@ -246,6 +246,58 @@ pub(super) struct TimelineSettings {
 
     /// Should the timeline items be grouped by day or month?
     pub(super) date_divider_mode: DateDividerMode,
+}
+
+impl TimelineSettings {
+    /// Whether a local echo carrying `content` may become a timeline item of
+    /// its own.
+    ///
+    /// Local echoes go through the same [`Self::event_filter`] as remote
+    /// events: a timeline that hides an event type must not start showing it
+    /// just because the event hasn't been sent yet.
+    ///
+    /// The filter takes a whole event, so the content is wrapped into the event
+    /// it is going to become. If that fails, the local echo is kept: dropping
+    /// an item we can't classify would be worse than showing it.
+    pub(super) fn allows_local_event(
+        &self,
+        content: &AnyMessageLikeEventContent,
+        sender: &UserId,
+        txn_id: &TransactionId,
+        rules: &RoomVersionRules,
+    ) -> bool {
+        let Some(event) = local_echo_as_sync_event(content, sender, txn_id) else {
+            return true;
+        };
+
+        (self.event_filter)(&event, rules)
+    }
+}
+
+/// Build the [`AnySyncTimelineEvent`] a local echo is going to become once it
+/// has been sent, so it can be run through the timeline's event filter.
+///
+/// The event ID is a placeholder: a local echo doesn't have one yet, and no
+/// filter condition looks at it.
+fn local_echo_as_sync_event(
+    content: &AnyMessageLikeEventContent,
+    sender: &UserId,
+    txn_id: &TransactionId,
+) -> Option<AnySyncTimelineEvent> {
+    // A transaction ID may contain a colon, which would make the event ID be
+    // validated as a room-version-1 identifier, and fail.
+    let event_id =
+        EventId::parse(format!("$local-echo-{}", txn_id.as_str().replace(':', "-"))).ok()?;
+
+    let json = serde_json::json!({
+        "type": content.event_type(),
+        "content": content,
+        "event_id": event_id,
+        "sender": sender,
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+    });
+
+    Raw::<AnySyncTimelineEvent>::from_json_string(json.to_string()).ok()?.deserialize().ok()
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -872,10 +924,24 @@ impl<P: RoomDataProvider> TimelineController<P> {
         let profile = self.room_data_provider.profile_from_user_id(&sender).await;
 
         let date_divider_mode = self.settings.date_divider_mode.clone();
+        let allowed_by_filter = self.settings.allows_local_event(
+            &content,
+            &sender,
+            &txn_id,
+            &self.room_data_provider.room_version_rules(),
+        );
 
         let mut state = self.state.write().await;
         state
-            .handle_local_event(sender, profile, date_divider_mode, txn_id, send_handle, content)
+            .handle_local_event(
+                sender,
+                profile,
+                date_divider_mode,
+                txn_id,
+                send_handle,
+                content,
+                allowed_by_filter,
+            )
             .await;
     }
 
@@ -950,6 +1016,16 @@ impl<P: RoomDataProvider> TimelineController<P> {
                 }
 
                 trace!("Sent aggregation was not found");
+            } else if txn.meta.aggregations.set_aggregation_send_state(
+                &TimelineEventItemId::TransactionId(txn_id.to_owned()),
+                send_state,
+                &mut txn.items,
+            ) {
+                // An aggregation has no item of its own: a failure to send it is reported
+                // on the item it applies to, so it doesn't go unnoticed.
+                trace!("Updated the send state of an aggregation");
+                txn.commit();
+                return;
             }
 
             warn!("Timeline item not found, can't update send state");
@@ -2013,4 +2089,101 @@ async fn fetch_replied_to_event<P: RoomDataProvider>(
     };
 
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_matches2::assert_let;
+    use ruma::{
+        TransactionId,
+        events::{
+            AnyMessageLikeEventContent, AnySyncTimelineEvent, reaction::ReactionEventContent,
+            relation::Annotation, room::message::RoomMessageEventContent,
+        },
+        owned_event_id, user_id,
+    };
+
+    use super::{TimelineSettings, local_echo_as_sync_event};
+
+    #[test]
+    fn test_local_echo_as_sync_event() {
+        // The filter takes a whole event, so a local echo's content is wrapped into
+        // the event it is going to become once sent.
+        let sender = user_id!("@alice:example.org");
+        let txn_id = TransactionId::new();
+        let content =
+            AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hello"));
+
+        let event = local_echo_as_sync_event(&content, sender, &txn_id)
+            .expect("a room message is a known event type");
+
+        assert_eq!(event.sender(), sender);
+        assert_let!(AnySyncTimelineEvent::MessageLike(event) = event);
+        assert_let!(
+            Some(AnyMessageLikeEventContent::RoomMessage(content)) = event.original_content()
+        );
+        assert_eq!(content.body(), "hello");
+    }
+
+    #[test]
+    fn test_local_echo_as_sync_event_survives_a_colon_in_the_transaction_id() {
+        // A colon would make the placeholder event ID be validated as a
+        // room-version-1 identifier, and fail.
+        let content =
+            AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hello"));
+
+        assert!(
+            local_echo_as_sync_event(
+                &content,
+                user_id!("@alice:example.org"),
+                "has:a:colon".into(),
+            )
+            .is_some()
+        );
+    }
+
+    #[test]
+    fn test_the_default_filter_classifies_local_echoes() {
+        // What the timeline actually asks: would this echo become an item of its
+        // own? A message would; a reaction is an aggregation, and is applied to the
+        // item it targets rather than added as one.
+        let settings = TimelineSettings::default();
+        let rules = ruma::room_version_rules::RoomVersionRules::V1;
+        let sender = user_id!("@alice:example.org");
+        let txn_id = TransactionId::new();
+
+        assert!(settings.allows_local_event(
+            &AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hi")),
+            sender,
+            &txn_id,
+            &rules,
+        ));
+
+        assert!(!settings.allows_local_event(
+            &AnyMessageLikeEventContent::Reaction(ReactionEventContent::new(Annotation::new(
+                owned_event_id!("$target"),
+                "👍".to_owned(),
+            ))),
+            sender,
+            &txn_id,
+            &rules,
+        ));
+    }
+
+    #[test]
+    fn test_a_custom_filter_applies_to_local_echoes() {
+        // A timeline that hides an event type must not start showing it just because
+        // the event hasn't been sent yet.
+        let settings = TimelineSettings {
+            event_filter: std::sync::Arc::new(|_, _| false),
+            ..Default::default()
+        };
+
+        assert!(!settings.allows_local_event(
+            &AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hi")),
+            user_id!("@alice:example.org"),
+            &TransactionId::new(),
+            &ruma::room_version_rules::RoomVersionRules::V1,
+        ));
+    }
 }

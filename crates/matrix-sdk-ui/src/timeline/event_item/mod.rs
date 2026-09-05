@@ -96,6 +96,26 @@ pub struct EventTimelineItem {
     ///
     /// May be false when we don't know about the room encryption status yet.
     pub(super) is_room_encrypted: bool,
+    /// An edit of this event that we made and that the server hasn't
+    /// acknowledged yet.
+    ///
+    /// See [`EventTimelineItem::local_edit`].
+    pub(super) local_edit: Option<LocalEditState>,
+}
+
+/// An edit of an event, made by us, that the server hasn't acknowledged yet.
+///
+/// The edit is applied to the item optimistically, so a failed one would
+/// otherwise look exactly like a successful one: this is what tells the two
+/// apart, and how to act on a failure.
+#[derive(Clone, Debug)]
+pub struct LocalEditState {
+    /// How the sending of the edit is going.
+    pub send_state: EventSendState,
+
+    /// A handle on the edit in the send queue, to retry it with
+    /// [`SendHandle::unwedge`] or drop it with [`SendHandle::abort`].
+    pub send_handle: Option<SendHandle>,
 }
 
 #[derive(Clone, Debug)]
@@ -114,6 +134,24 @@ pub enum TimelineEventItemId {
     TransactionId(OwnedTransactionId),
     /// The item is remote, identified by its event id.
     EventId(OwnedEventId),
+}
+
+impl From<OwnedEventId> for TimelineEventItemId {
+    fn from(value: OwnedEventId) -> Self {
+        Self::EventId(value)
+    }
+}
+
+impl From<&EventId> for TimelineEventItemId {
+    fn from(value: &EventId) -> Self {
+        Self::EventId(value.to_owned())
+    }
+}
+
+impl From<OwnedTransactionId> for TimelineEventItemId {
+    fn from(value: OwnedTransactionId) -> Self {
+        Self::TransactionId(value)
+    }
 }
 
 /// An handle that usually allows to perform an action on a timeline event.
@@ -174,7 +212,19 @@ impl EventTimelineItem {
             unredacted_item: None,
             kind,
             is_room_encrypted,
+            local_edit: None,
         }
+    }
+
+    /// The state of an edit of this event that we made and that the server
+    /// hasn't acknowledged yet, if there is one.
+    ///
+    /// An edit is applied to its target as soon as it is queued, so a failed
+    /// edit is otherwise indistinguishable from a sent one. This reports the
+    /// edit's send state instead, and hands back the handle to retry or drop
+    /// it.
+    pub fn local_edit(&self) -> Option<&LocalEditState> {
+        self.local_edit.as_ref()
     }
 
     /// Check whether this item is a local echo.
@@ -568,6 +618,8 @@ impl EventTimelineItem {
             unredacted_item,
             kind,
             is_room_encrypted: self.is_room_encrypted,
+            // A redaction wipes the edits too.
+            local_edit: None,
         }
     }
 
@@ -596,6 +648,7 @@ impl EventTimelineItem {
             unredacted_item: None,
             kind,
             is_room_encrypted: self.is_room_encrypted,
+            local_edit: self.local_edit.clone(),
         }
     }
 

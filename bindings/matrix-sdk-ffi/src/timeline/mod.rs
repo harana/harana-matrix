@@ -31,7 +31,7 @@ use matrix_sdk_common::{
 use matrix_sdk_ui::timeline::{
     self, AttachmentConfig, AttachmentSource, EventItemOrigin,
     LatestEventValue as UiLatestEventValue, LatestEventValueLocalState,
-    MediaUploadProgress as SdkMediaUploadProgress, Profile, TimelineDetails,
+    MediaUploadProgress as SdkMediaUploadProgress, Profile, TimelineDetails, TimelineEventItemId,
     TimelineEventShieldState as SdkShieldState, TimelineEventShieldStateCode,
     TimelineUniqueId as SdkTimelineUniqueId,
 };
@@ -549,13 +549,18 @@ impl Timeline {
     /// If the replied to event has a thread relation, it is forwarded on the
     /// reply so that clients that support threads can render the reply
     /// inside the thread. Returns a handle to abort the pending send.
+    ///
+    /// The replied-to event may be a local echo, in which case the reply is
+    /// queued behind it and picks up its relation once the server has given
+    /// the replied-to event an ID.
     pub async fn send_reply(
         &self,
         msg: Arc<RoomMessageEventContentWithoutRelation>,
-        event_id: String,
+        event_or_transaction_id: EventOrTransactionId,
     ) -> Result<Arc<SendHandle>, ClientError> {
-        let event_id = EventId::parse(&event_id).map_err(|_| RoomError::InvalidRepliedToEventId)?;
-        let handle = self.inner.send_reply((*msg).clone(), event_id).await?;
+        let item_id: TimelineEventItemId =
+            event_or_transaction_id.try_into().map_err(|_| RoomError::InvalidRepliedToEventId)?;
+        let handle = self.inner.send_reply_to((*msg).clone(), &item_id).await?;
         Ok(Arc::new(SendHandle::new(handle)))
     }
 
@@ -628,7 +633,11 @@ impl Timeline {
             .transpose()?;
 
         let in_reply_to = replied_to_event_id
-            .map(|id| EventId::parse(id).map_err(|_| RoomError::InvalidRepliedToEventId))
+            .map(|id| {
+                EventId::parse(id)
+                    .map(TimelineEventItemId::from)
+                    .map_err(|_| RoomError::InvalidRepliedToEventId)
+            })
             .transpose()?;
 
         self.inner

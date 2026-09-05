@@ -14,21 +14,33 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
-use matrix_sdk::deserialized_responses::{
-    AlgorithmInfo, EncryptionInfo, VerificationLevel, VerificationState,
+use matrix_sdk::{
+    deserialized_responses::{AlgorithmInfo, EncryptionInfo, VerificationLevel, VerificationState},
+    send_queue::RoomSendQueueUpdate,
 };
-use matrix_sdk_base::deserialized_responses::{DecryptedRoomEvent, TimelineEvent};
+use matrix_sdk_base::{
+    deserialized_responses::{DecryptedRoomEvent, TimelineEvent},
+    store::QueueWedgeError,
+};
 use matrix_sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     event_id,
-    events::room::message::{MessageType, RedactedRoomMessageEventContent},
+    events::{
+        AnyMessageLikeEventContent,
+        room::message::{
+            MessageType, RedactedRoomMessageEventContent, ReplacementMetadata,
+            RoomMessageEventContentWithoutRelation,
+        },
+    },
     room_id,
 };
 use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;
+use crate::timeline::EventSendState;
 
 #[async_test]
 async fn test_live_redacted() {
@@ -421,4 +433,133 @@ async fn test_updated_reply_doesnt_lose_latest_edit() {
     assert_eq!(item.content().as_message().unwrap().body(), "guten tag");
 
     assert_pending!(stream);
+}
+
+#[async_test]
+async fn test_failed_edit_is_reported_on_the_item_it_edits() {
+    // An edit has no timeline item of its own: without this, a failed edit looks
+    // exactly like a sent one, and there is no way to retry it.
+    let timeline = TestTimeline::new().await;
+
+    let f = &timeline.factory;
+    timeline.handle_live_event(f.text_msg("hello").sender(&ALICE)).await;
+
+    let event_id =
+        timeline.controller.items().await[1].as_event().unwrap().event_id().unwrap().to_owned();
+
+    // Queue an edit of it: it applies right away, and reports that it hasn't been
+    // sent yet.
+    let txn_id = timeline
+        .handle_local_event(AnyMessageLikeEventContent::RoomMessage(
+            RoomMessageEventContentWithoutRelation::text_plain("hi")
+                .make_replacement(ReplacementMetadata::new(event_id.clone(), None)),
+        ))
+        .await;
+
+    let items = timeline.controller.items().await;
+    let item = items[1].as_event().unwrap();
+    assert_let!(Some(message) = item.content().as_message());
+    assert_eq!(message.body(), "hi");
+    assert_matches!(
+        item.local_edit().map(|edit| &edit.send_state),
+        Some(EventSendState::NotSentYet { .. })
+    );
+
+    // The edit fails to be sent: the item says so.
+    timeline
+        .handle_room_send_queue_update(RoomSendQueueUpdate::SendError {
+            transaction_id: txn_id.clone(),
+            error: Arc::new(matrix_sdk::Error::SendQueueWedgeError(Box::new(
+                QueueWedgeError::GenericApiError { msg: "nope".to_owned() },
+            ))),
+            is_recoverable: false,
+        })
+        .await;
+
+    let items = timeline.controller.items().await;
+    let item = items[1].as_event().unwrap();
+    // The edit stays applied, so the user doesn't lose what they typed.
+    assert_eq!(item.content().as_message().unwrap().body(), "hi");
+    assert_matches!(
+        item.local_edit().map(|edit| &edit.send_state),
+        Some(EventSendState::SendingFailed { is_recoverable: false, .. })
+    );
+
+    // Once the edit is sent, the item stops reporting it.
+    timeline
+        .handle_room_send_queue_update(RoomSendQueueUpdate::SentEvent {
+            transaction_id: txn_id,
+            event_id: event_id!("$edit").to_owned(),
+        })
+        .await;
+
+    let items = timeline.controller.items().await;
+    let item = items[1].as_event().unwrap();
+    assert_eq!(item.content().as_message().unwrap().body(), "hi");
+    assert!(item.local_edit().is_none());
+}
+
+#[async_test]
+async fn test_edit_arriving_before_its_target_is_not_dropped() {
+    // An edit whose target we haven't seen yet is stashed, and applied when the
+    // target eventually arrives.
+    let timeline = TestTimeline::new().await;
+
+    let f = &timeline.factory;
+    let target_id = event_id!("$original");
+
+    timeline
+        .handle_live_event(
+            f.text_msg("* edited")
+                .edit(target_id, RoomMessageEventContentWithoutRelation::text_plain("edited"))
+                .sender(&ALICE)
+                .event_id(event_id!("$edit")),
+        )
+        .await;
+
+    // The edit alone produces no item of its own.
+    assert!(timeline.controller.items().await.is_empty());
+
+    timeline.handle_live_event(f.text_msg("original").sender(&ALICE).event_id(target_id)).await;
+
+    let items = timeline.controller.items().await;
+    assert_eq!(items.len(), 2);
+    assert_let!(Some(message) = items[1].as_event().unwrap().content().as_message());
+    assert_eq!(message.body(), "edited");
+    assert!(message.is_edited());
+}
+
+#[async_test]
+async fn test_a_later_copy_of_the_original_doesnt_revert_an_edit() {
+    // The same event coming down again - a duplicate from a gappy sync, a
+    // re-decryption - must not take the item back to its unedited content.
+    let timeline = TestTimeline::new().await;
+
+    let f = &timeline.factory;
+    let target_id = event_id!("$original");
+
+    timeline.handle_live_event(f.text_msg("original").sender(&ALICE).event_id(target_id)).await;
+    timeline
+        .handle_live_event(
+            f.text_msg("* edited")
+                .edit(target_id, RoomMessageEventContentWithoutRelation::text_plain("edited"))
+                .sender(&ALICE)
+                .event_id(event_id!("$edit")),
+        )
+        .await;
+
+    let items = timeline.controller.items().await;
+    assert_eq!(items[1].as_event().unwrap().content().as_message().unwrap().body(), "edited");
+
+    // Here comes the unedited original again.
+    timeline.handle_live_event(f.text_msg("original").sender(&ALICE).event_id(target_id)).await;
+
+    let items = timeline.controller.items().await;
+    let message = items
+        .iter()
+        .filter_map(|item| item.as_event())
+        .last()
+        .and_then(|event| event.content().as_message())
+        .expect("the edited message is still there");
+    assert_eq!(message.body(), "edited");
 }

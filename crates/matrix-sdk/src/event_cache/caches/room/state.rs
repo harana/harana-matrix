@@ -522,7 +522,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
 
         let DeduplicationOutcome {
             all_events: events,
-            in_memory_duplicated_event_ids,
+            mut in_memory_duplicated_event_ids,
             in_store_duplicated_event_ids,
             non_empty_all_duplicates: all_duplicates,
         } = filter_duplicate_events(
@@ -573,6 +573,34 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
             self.state.waited_for_initial_prev_token = true;
         }
 
+        // The events we already know about, that sit at the very end of the linked
+        // chunk in the same order as they arrive here, don't move: update them in
+        // place instead of removing and pushing them back. Otherwise observers see the
+        // item disappear and reappear, which makes a just-sent message visibly bounce
+        // in the timeline.
+        //
+        // Only do this when no gap is inserted: a gap has to be pushed *before* the
+        // events that follow it, and these events are already past it.
+        let in_place = if prev_batch_token.is_none() {
+            self.state.room_linked_chunk.common_tail_with(&events)
+        } else {
+            Vec::new()
+        };
+
+        if !in_place.is_empty() {
+            in_memory_duplicated_event_ids
+                .retain(|(_event_id, position)| !in_place.contains(position));
+
+            // Replace before removing anything: the positions above were computed on the
+            // untouched linked chunk, and replacing an event doesn't move any other one.
+            for (position, event) in in_place.iter().zip(events.iter()) {
+                self.state
+                    .room_linked_chunk
+                    .replace_event_at(*position, event.clone())
+                    .expect("we just read this position from the linked chunk");
+            }
+        }
+
         // Remove the old duplicated events.
         //
         // We don't have to worry the removals can change the position of the existing
@@ -581,7 +609,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
 
         self.state.room_linked_chunk.push_live_events(
             prev_batch_token.map(|prev_token| Gap { token: prev_token }),
-            &events,
+            &events[in_place.len()..],
         );
 
         // Update the store.

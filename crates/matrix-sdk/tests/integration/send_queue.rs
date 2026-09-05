@@ -19,6 +19,7 @@ use matrix_sdk::{
     },
     test_utils::mocks::{MatrixMock, MatrixMockServer, RoomMessagesResponseTemplate},
 };
+use matrix_sdk_base::store::QueuedRequestKind;
 use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
 use matrix_sdk_test::{
     ALICE, InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, LeftRoomBuilder, async_test,
@@ -1722,6 +1723,71 @@ async fn test_unwedge_unrecoverable_errors() {
 }
 
 #[async_test]
+#[cfg(feature = "e2e-encryption")]
+async fn test_retry_requests_blocked_on_verification() {
+    use matrix_sdk_base::store::QueueWedgeError;
+    use ruma::device_id;
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    client.send_queue().set_enabled(true).await;
+
+    let q = room.send_queue();
+    let mut global_watch = client.send_queue().subscribe();
+    let (local_echoes, mut watch) = q.subscribe().await.unwrap();
+
+    assert!(local_echoes.is_empty());
+
+    mock.verify_and_reset().await;
+    mock.mock_room_state_encryption().plain().mount().await;
+
+    // The first attempt fails unrecoverably, which wedges the request.
+    mock.mock_room_send().error_too_large().mock_once().mount().await;
+    // The second attempt, after unwedging, succeeds.
+    mock.mock_room_send().ok(event_id!("$42")).mock_once().mount().await;
+
+    q.send(RoomMessageEventContent::text_plain("hello").into()).await.unwrap();
+
+    let (txn, _) = assert_update!((global_watch, watch) => local echo { body = "hello" });
+    assert_update!((global_watch, watch) => error { recoverable=false, txn=txn });
+
+    room.send_queue().set_enabled(true);
+
+    // The request is wedged, but not on anything verification can fix, so it is
+    // left alone.
+    client.send_queue().retry_requests_blocked_on_verification().await;
+    sleep(Duration::from_millis(100)).await;
+    assert!(watch.is_empty());
+
+    // Pretend it had been wedged because of an insecure device instead. The
+    // device is unknown to us, so it can't be blocking the send anymore.
+    client
+        .state_store()
+        .update_send_queue_request_status(
+            room_id,
+            &txn,
+            Some(QueueWedgeError::InsecureDevices {
+                user_device_map: [(
+                    owned_user_id!("@bob:example.org"),
+                    vec![device_id!("BOBDEVICE").to_owned()],
+                )]
+                .into(),
+            }),
+        )
+        .await
+        .unwrap();
+
+    client.send_queue().retry_requests_blocked_on_verification().await;
+
+    assert_update!((global_watch, watch) => retry { txn=txn });
+    assert_update!((global_watch, watch) => sent { txn=txn, event_id=event_id!("$42") });
+}
+
+#[async_test]
 async fn test_no_network_access_error_is_recoverable() {
     // This is subtle, but for the `drop(server)` below to be effectful, it needs to
     // not be a pooled wiremock server (the default), which will keep the dropped
@@ -1857,6 +1923,118 @@ async fn test_reloading_rooms_with_unsent_events() {
 
     // The real assertion is on the expect(2) on the above Mock.
     mock.verify_and_reset().await;
+}
+
+#[async_test]
+async fn test_reply_to_an_already_sent_event_is_refused() {
+    use ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    let q = room.send_queue();
+    let mut global_watch = client.send_queue().subscribe();
+    let (_, mut watch) = q.subscribe().await.unwrap();
+
+    mock.mock_room_state_encryption().plain().mount().await;
+    mock.mock_room_send().ok(event_id!("$original")).mock_once().mount().await;
+
+    let msg_handle = q.send(RoomMessageEventContent::text_plain("original").into()).await.unwrap();
+    let (txn1, _) = assert_update!((global_watch, watch) => local echo { body = "original" });
+    assert_update!((global_watch, watch) => sent { txn = txn1, event_id = event_id!("$original") });
+
+    // There's no local echo to hang the reply off anymore; the caller is expected
+    // to reply to the remote event instead.
+    let reply = msg_handle
+        .reply(
+            RoomMessageEventContentWithoutRelation::text_plain("reply"),
+            EnforceThreadInReply::MaybeThreaded,
+        )
+        .await
+        .unwrap();
+    assert!(reply.is_none());
+}
+
+#[async_test]
+async fn test_read_receipts_are_queued_and_superseded() {
+    use ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType, events::receipt::ReceiptThread,
+    };
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    let q = room.send_queue();
+
+    // Nothing goes out while the queue sleeps, which is what being offline looks
+    // like from here.
+    q.set_enabled(false);
+
+    room.send_single_receipt(
+        ReceiptType::Read,
+        ReceiptThread::Unthreaded,
+        owned_event_id!("$first:b.c"),
+    )
+    .await
+    .unwrap();
+
+    // A receipt of the same kind, further down the room: the first one has nothing
+    // left to say.
+    room.send_single_receipt(
+        ReceiptType::Read,
+        ReceiptThread::Unthreaded,
+        owned_event_id!("$second:b.c"),
+    )
+    .await
+    .unwrap();
+
+    // One of another kind: it stands on its own.
+    room.send_single_receipt(
+        ReceiptType::ReadPrivate,
+        ReceiptThread::Unthreaded,
+        owned_event_id!("$second:b.c"),
+    )
+    .await
+    .unwrap();
+
+    {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        // The two read receipts collapsed into one, plus the private one, plus the
+        // unread marker each unthreaded receipt asks for.
+        let receipts = requests
+            .iter()
+            .filter(|request| matches!(request.kind, QueuedRequestKind::ReadReceipt { .. }))
+            .count();
+        assert_eq!(receipts, 2);
+
+        let markers = requests
+            .iter()
+            .filter(|request| matches!(request.kind, QueuedRequestKind::UnreadMarker { .. }))
+            .count();
+        assert!(markers <= 1, "unread markers supersede each other too");
+    }
+
+    // Back online: only the receipts that still say something go out.
+    mock.mock_send_receipt(ReceiptType::Read).ok().mock_once().mount().await;
+    mock.mock_send_receipt(ReceiptType::ReadPrivate).ok().mock_once().mount().await;
+
+    q.set_enabled(true);
+
+    for _ in 0..200 {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        if requests.is_empty() {
+            return;
+        }
+        sleep(Duration::from_millis(10)).await;
+    }
+
+    panic!("the queued receipts were never sent");
 }
 
 #[async_test]

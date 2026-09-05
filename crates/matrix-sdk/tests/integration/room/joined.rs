@@ -488,6 +488,21 @@ async fn test_unban_user() {
     room.unban_user(user, None).await.unwrap();
 }
 
+/// Wait until the room's send queue has sent everything it had.
+///
+/// Read receipts and unread markers go through the send queue, so they land on
+/// the server a moment after the call that asked for them returned.
+async fn wait_for_empty_send_queue(client: &matrix_sdk::Client, room_id: &ruma::RoomId) {
+    for _ in 0..200 {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        if requests.is_empty() {
+            return;
+        }
+        sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the send queue still has pending requests");
+}
+
 #[async_test]
 async fn test_mark_as_unread() {
     let server = MatrixMockServer::new().await;
@@ -498,7 +513,7 @@ async fn test_mark_as_unread() {
     let room = server.sync_joined_room(&client, room_id).await;
     assert!(!room.is_marked_unread());
 
-    // Setting the room as unread makes a request.
+    // Setting the room as unread makes a request, and takes effect right away.
     {
         let _guard = server
             .mock_set_room_account_data(RoomAccountDataEventType::MarkedUnread)
@@ -507,9 +522,24 @@ async fn test_mark_as_unread() {
             .mount_as_scoped()
             .await;
         room.set_unread_flag(true).await.unwrap();
+        assert!(room.is_marked_unread());
+        wait_for_empty_send_queue(&client, room_id).await;
     }
 
-    // Unsetting the room as unread is a no-op.
+    // Unsetting it makes a request too, since it is marked unread now.
+    {
+        let _guard = server
+            .mock_set_room_account_data(RoomAccountDataEventType::MarkedUnread)
+            .ok()
+            .expect(1)
+            .mount_as_scoped()
+            .await;
+        room.set_unread_flag(false).await.unwrap();
+        assert!(!room.is_marked_unread());
+        wait_for_empty_send_queue(&client, room_id).await;
+    }
+
+    // Unsetting it again is a no-op.
     room.set_unread_flag(false).await.unwrap();
 
     // Now we mark the room as unread.
@@ -528,6 +558,7 @@ async fn test_mark_as_unread() {
             .mount_as_scoped()
             .await;
         room.set_unread_flag(false).await.unwrap();
+        wait_for_empty_send_queue(&client, room_id).await;
     }
 
     // Setting the room as unread is a no-op.
@@ -574,6 +605,8 @@ async fn test_send_single_receipt() {
     )
     .await
     .unwrap();
+
+    wait_for_empty_send_queue(&client, room_id!("!test:example.org")).await;
 }
 
 #[async_test]
@@ -604,10 +637,13 @@ async fn test_send_single_receipt_with_unread_flag() {
         room.send_single_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, event_id.clone())
             .await
             .unwrap();
+        assert!(!room.is_marked_unread());
+        wait_for_empty_send_queue(&client, room.room_id()).await;
     }
 
     // A threaded read receipt update doesn't trigger a marked unread update.
     room.send_single_receipt(ReceiptType::Read, ReceiptThread::Main, event_id).await.unwrap();
+    wait_for_empty_send_queue(&client, room.room_id()).await;
 }
 
 #[async_test]
@@ -622,6 +658,8 @@ async fn test_send_multiple_receipts() {
 
     let receipts = Receipts::new().fully_read_marker(owned_event_id!("$xxxxxx:example.org"));
     room.send_multiple_receipts(receipts).await.unwrap();
+
+    wait_for_empty_send_queue(&client, room.room_id()).await;
 }
 
 #[async_test]
@@ -650,6 +688,9 @@ async fn test_send_multiple_receipts_with_unread_flag() {
     room.send_multiple_receipts(Receipts::new().public_read_receipt(event_id.clone()))
         .await
         .unwrap();
+    assert!(!room.is_marked_unread());
+
+    wait_for_empty_send_queue(&client, room.room_id()).await;
 }
 
 #[async_test]
@@ -702,6 +743,38 @@ async fn test_room_state_event_send() {
     let response =
         room.send_state_event_for_key(user_id!("@foo:bar.com"), member_event).await.unwrap();
     assert_eq!(event_id!("$h29iv0s8:example.com"), response.event_id);
+}
+
+#[async_test]
+async fn test_sent_state_event_is_readable_right_away() {
+    use assert_matches2::assert_let;
+    use matrix_sdk::{
+        deserialized_responses::SyncOrStrippedState,
+        ruma::events::room::topic::RoomTopicEventContent, test_utils::mocks::MatrixMockServer,
+    };
+
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    let room = server.sync_joined_room(&client, &DEFAULT_TEST_ROOM_ID).await;
+
+    assert_eq!(room.topic(), None);
+
+    server.mock_room_send_state().ok(event_id!("$topic")).mock_once().mount().await;
+
+    room.send_state_event(RoomTopicEventContent::new("the new topic".to_owned())).await.unwrap();
+
+    // No sync happened in between: the state we just wrote is readable anyway.
+    assert_eq!(room.topic().as_deref(), Some("the new topic"));
+
+    let stored = room
+        .get_state_event_static::<RoomTopicEventContent>()
+        .await
+        .unwrap()
+        .expect("the topic event we just sent is in the store")
+        .deserialize()
+        .unwrap();
+    assert_let!(SyncOrStrippedState::Sync(stored) = stored);
+    assert_eq!(stored.as_original().unwrap().content.topic, "the new topic");
 }
 
 #[async_test]

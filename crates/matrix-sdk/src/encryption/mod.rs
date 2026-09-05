@@ -2146,6 +2146,11 @@ impl Encryption {
                 self.update_verification_state().await;
             }
         }
+
+        // New signatures may have resolved what was blocking a send: a device is now
+        // signed by its owner, a user's identity is trusted again, or our own session
+        // has become verified.
+        self.client.send_queue().retry_requests_blocked_on_verification().await;
     }
 
     async fn update_verification_state(&self) {
