@@ -445,11 +445,14 @@ impl BaseClient {
     ///
     /// Update the internal and cached state accordingly. Return the final Room.
     pub async fn room_knocked(&self, room_id: &RoomId) -> Result<Room> {
+        // Take the store lock before looking at the room's state: sync processing
+        // holds the same lock while it writes, so checking the state outside of it
+        // would let a sync response land in between and be overwritten with the
+        // stale state read here.
+        let store_guard = self.state_store.lock().lock().await;
         let room = self.state_store.get_or_create_room(room_id, RoomState::Knocked);
 
         if room.state() != RoomState::Knocked {
-            let store_guard = self.state_store.lock().lock().await;
-
             // We are no longer joined to the room, so the invite acceptance details are no
             // longer relevant.
             #[cfg(feature = "e2e-encryption")]
@@ -517,13 +520,16 @@ impl BaseClient {
         room_id: &RoomId,
         inviter: Option<OwnedUserId>,
     ) -> Result<Room> {
+        // Take the store lock before looking at the room's state: sync processing
+        // holds the same lock while it writes, so checking the state outside of it
+        // would let a sync response land in between and be overwritten with the
+        // stale state read here.
+        let store_guard = self.state_store_lock().lock().await;
         let room = self.state_store.get_or_create_room(room_id, RoomState::Joined);
 
         // If the state isn't `RoomState::Joined` then this means that we knew about
         // this room before. Let's modify the existing state now.
         if room.state() != RoomState::Joined {
-            let store_guard = self.state_store_lock().lock().await;
-
             #[cfg(feature = "e2e-encryption")]
             {
                 // If our previous state was an invite and we're now in the joined state, this
@@ -566,11 +572,14 @@ impl BaseClient {
     ///
     /// Update the internal and cached state accordingly.
     pub async fn room_left(&self, room_id: &RoomId) -> Result<()> {
+        // Take the store lock before looking at the room's state: sync processing
+        // holds the same lock while it writes, so checking the state outside of it
+        // would let a sync response land in between and be overwritten with the
+        // stale state read here.
+        let store_guard = self.state_store.lock().lock().await;
         let room = self.state_store.get_or_create_room(room_id, RoomState::Left);
 
         if room.state() != RoomState::Left {
-            let store_guard = self.state_store.lock().lock().await;
-
             // We are no longer joined to the room, so the invite acceptance details are no
             // longer relevant.
             #[cfg(feature = "e2e-encryption")]
