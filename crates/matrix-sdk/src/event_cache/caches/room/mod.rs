@@ -559,15 +559,116 @@ impl RoomEventCacheInner {
 
 #[cfg(test)]
 mod tests {
-    use matrix_sdk_base::{RoomState, event_cache::Event};
+    use matrix_sdk_base::{
+        RoomState,
+        event_cache::Event,
+        linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
+    };
     use matrix_sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         RoomId, event_id,
-        events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
+        events::{
+            receipt::{ReceiptThread, ReceiptType},
+            relation::RelationType,
+            room::message::RoomMessageEventContentWithoutRelation,
+        },
         room_id, user_id,
     };
 
     use crate::test_utils::logged_in_client;
+
+    #[async_test]
+    async fn test_local_read_receipt_can_be_applied_and_restored() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let other_user_id = user_id!("@dexter:saucisse.bzh");
+        let event_id_0 = event_id!("$ev0");
+        let event_id_1 = event_id!("$ev1");
+
+        let client = logged_in_client(None).await;
+        let event_factory = EventFactory::new().room(room_id).sender(other_user_id);
+
+        // Two messages from somebody else are in the room.
+        client
+            .event_cache_store()
+            .lock()
+            .await
+            .expect("Could not acquire the event cache lock")
+            .as_clean()
+            .expect("Could not acquire a clean event cache lock")
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            event_factory.text_msg("hello").event_id(event_id_0).into_event(),
+                            event_factory.text_msg("world").event_id(event_id_1).into_event(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Compute the unread counts a first time, as a sync would do.
+        room_event_cache
+            .inner
+            .state
+            .write()
+            .await
+            .unwrap()
+            .update_read_receipts(&[])
+            .await
+            .unwrap();
+
+        assert_eq!(room.num_unread_messages(), 2);
+
+        // Applying a read receipt locally drops the unread counts right away, and
+        // returns the previous value.
+        let previous_read_receipts = room_event_cache
+            .apply_local_read_receipt(
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+                event_id_1.to_owned(),
+            )
+            .await
+            .unwrap()
+            .expect("the read receipts must have changed");
+
+        assert_eq!(previous_read_receipts.num_unread, 2);
+        assert_eq!(room.num_unread_messages(), 0);
+
+        // Applying the very same receipt again changes nothing, so there is nothing to
+        // restore.
+        assert!(
+            room_event_cache
+                .apply_local_read_receipt(
+                    ReceiptType::Read,
+                    ReceiptThread::Unthreaded,
+                    event_id_1.to_owned(),
+                )
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Restoring the previous value rolls the local echo back.
+        room_event_cache.restore_read_receipts(previous_read_receipts).await;
+
+        assert_eq!(room.num_unread_messages(), 2);
+    }
 
     #[async_test]
     async fn test_find_event_by_id_with_edit_relation() {

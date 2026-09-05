@@ -2221,6 +2221,46 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn test_room_info_update_reasons_are_expanded() {
+        // No reason at all.
+        assert!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::empty()).is_empty()
+        );
+
+        // A single reason.
+        assert_eq!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::LATEST_EVENT),
+            vec![RoomInfoUpdateReason::LatestEvent]
+        );
+
+        // The catch-all reason.
+        assert_eq!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::NONE),
+            vec![RoomInfoUpdateReason::Unknown]
+        );
+
+        // Several reasons at once.
+        assert_eq!(
+            RoomInfoUpdateReason::from_reasons(
+                RoomInfoNotableUpdateReasons::MEMBERSHIP
+                    | RoomInfoNotableUpdateReasons::READ_RECEIPT
+                    | RoomInfoNotableUpdateReasons::HEROES
+            ),
+            vec![
+                RoomInfoUpdateReason::ReadReceipt,
+                RoomInfoUpdateReason::Membership,
+                RoomInfoUpdateReason::Heroes,
+            ]
+        );
+
+        // Every reason is mapped: none of them is silently dropped.
+        assert_eq!(
+            RoomInfoUpdateReason::from_reasons(RoomInfoNotableUpdateReasons::all()).len(),
+            RoomInfoNotableUpdateReasons::all().iter().count()
+        );
+    }
+
     /// Dropping an FFI [`Room`] on a non-tokio thread must not panic.
     ///
     /// Regression test: when `Room.inner` was `SdkRoom` (not wrapped in

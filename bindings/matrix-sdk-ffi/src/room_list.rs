@@ -597,3 +597,41 @@ impl From<RumaUnreadNotificationsCount> for UnreadNotificationsCount {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use matrix_sdk::{ruma::room_id, test_utils::mocks::MatrixMockServer};
+    use matrix_sdk_ui::room_list_service::{RoomListItem, filters::BoxedFilterFn};
+
+    use super::RoomListEntriesDynamicFilterKind as Kind;
+
+    #[tokio::test]
+    async fn test_not_filter_kind_negates_the_filters_it_contains() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let room = server.sync_joined_room(&client, room_id!("!a:b.c")).await;
+        let room = RoomListItem::from(room);
+
+        // `None` matches no room, so its negation matches every room.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::None] });
+        assert!(filter(&room));
+
+        // The negation of a filter the room matches doesn't match the room.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::Joined] });
+        assert!(!filter(&room));
+
+        // Several filters are combined with `All` before being negated: this room is
+        // joined *and* non-left, so the negation doesn't match it.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::Joined, Kind::NonLeft] });
+        assert!(!filter(&room));
+
+        // … but it isn't a space, so the negation of the conjunction matches it.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::Joined, Kind::Space] });
+        assert!(filter(&room));
+
+        // `All` with no filter matches every room, so `Not` with no filter matches
+        // none.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![] });
+        assert!(!filter(&room));
+    }
+}

@@ -501,3 +501,97 @@ impl Deref for RoomListItem {
         &self.inner
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use assert_matches::assert_matches;
+    use eyeball_im::{Vector, VectorDiff};
+    use futures_util::{StreamExt as _, pin_mut, stream};
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use matrix_sdk_base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons};
+    use matrix_sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+    use ruma::{room_id, user_id};
+    use tokio::sync::broadcast;
+
+    use super::{RoomListItem, merge_stream_and_receiver};
+
+    /// A filter can decide whether a room is visible based on the state of
+    /// another room: `filters::new_filter_deduplicate_versions` hides a
+    /// tombstoned room once its successor is joined. The rooms tombstoned in
+    /// favour of an updated room must consequently be refreshed too, otherwise
+    /// their filters and sorters are never re-evaluated.
+    #[async_test]
+    async fn test_an_update_refreshes_the_rooms_tombstoned_in_its_favour() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        let old_room_id = room_id!("!old:b.c");
+        let new_room_id = room_id!("!new:b.c");
+        let unrelated_room_id = room_id!("!unrelated:b.c");
+
+        let event_factory = EventFactory::new().sender(user_id!("@mnt_io:b.c"));
+
+        server
+            .mock_sync()
+            .ok_and_run(&client, |builder| {
+                builder.add_joined_room(JoinedRoomBuilder::new(old_room_id).add_state_event(
+                    event_factory.room_tombstone("this room has been replaced", new_room_id),
+                ));
+                builder.add_joined_room(JoinedRoomBuilder::new(new_room_id));
+                builder.add_joined_room(JoinedRoomBuilder::new(unrelated_room_id));
+            })
+            .await;
+
+        let rooms = [old_room_id, new_room_id, unrelated_room_id]
+            .map(|room_id| RoomListItem::from(client.get_room(room_id).unwrap()));
+
+        // The tombstoned room knows about its successor…
+        assert_eq!(rooms[0].cached_successor_room_id.as_deref(), Some(new_room_id));
+        // … and the other rooms have no successor.
+        assert!(rooms[1].cached_successor_room_id.is_none());
+        assert!(rooms[2].cached_successor_room_id.is_none());
+
+        let (sender, receiver) = broadcast::channel(4);
+        let stream =
+            merge_stream_and_receiver(Vector::from(rooms.to_vec()), stream::pending(), receiver);
+        pin_mut!(stream);
+
+        // An update for the successor room refreshes the successor room itself, and the
+        // room that has been tombstoned in its favour.
+        sender
+            .send(RoomInfoNotableUpdate {
+                room_id: new_room_id.to_owned(),
+                reasons: RoomInfoNotableUpdateReasons::MEMBERSHIP,
+            })
+            .unwrap();
+
+        let diffs = stream.next().await.expect("a batch of diffs");
+
+        assert_eq!(diffs.len(), 2);
+        assert_matches!(&diffs[0], VectorDiff::Set { index, value } => {
+            assert_eq!(*index, 1);
+            assert_eq!(value.room_id(), new_room_id);
+        });
+        assert_matches!(&diffs[1], VectorDiff::Set { index, value } => {
+            assert_eq!(*index, 0);
+            assert_eq!(value.room_id(), old_room_id);
+        });
+
+        // An update for a room nothing is tombstoned in favour of only refreshes that
+        // room.
+        sender
+            .send(RoomInfoNotableUpdate {
+                room_id: unrelated_room_id.to_owned(),
+                reasons: RoomInfoNotableUpdateReasons::MEMBERSHIP,
+            })
+            .unwrap();
+
+        let diffs = stream.next().await.expect("a batch of diffs");
+
+        assert_eq!(diffs.len(), 1);
+        assert_matches!(&diffs[0], VectorDiff::Set { index, value } => {
+            assert_eq!(*index, 2);
+            assert_eq!(value.room_id(), unrelated_room_id);
+        });
+    }
+}
