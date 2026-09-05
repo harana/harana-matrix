@@ -2144,11 +2144,8 @@ mod tests {
 
         assert_eq!(client.sync_token().await.as_ref(), Some(&first_token));
         assert_let!(
-            Some(StateStoreDataValue::SyncToken(stored_token)) = client
-                .state_store()
-                .get_kv_data(StateStoreDataKey::SyncToken)
-                .await
-                .unwrap()
+            Some(StateStoreDataValue::SyncToken(stored_token)) =
+                client.state_store().get_kv_data(StateStoreDataKey::SyncToken).await.unwrap()
         );
         assert_eq!(stored_token, first_token);
 

@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Add `EventCacheStore::get_custom_value`, `set_custom_value` and
+  `remove_custom_value`, a key/value area for cross-process data that is not
+  tied to a room. ([#250](https://github.com/harana/harana-matrix/issues/250))
+
 ### Fixed
 
 - Drop the sync token when the ignored user list changes, so the next sync is

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Fixed
+
+- Persist the sliding sync `pos` in the event cache store rather than the
+  crypto store. A client built without encryption could not resume from its
+  previous position, because the crypto store it was kept in did not exist. A
+  `pos` written by an older version is migrated out of the crypto store the
+  first time it is read.
+  ([#250](https://github.com/harana/harana-matrix/issues/250))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 ### Added

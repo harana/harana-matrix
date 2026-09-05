@@ -60,6 +60,9 @@ struct MemoryStoreInner {
 
     /// List of all threads.
     threads: HashMap<(OwnedRoomId, OwnedEventId), ThreadInfo>,
+
+    /// Values stored under an arbitrary key.
+    custom: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl Default for MemoryStore {
@@ -69,6 +72,7 @@ impl Default for MemoryStore {
                 leases: Default::default(),
                 events: RelationalLinkedChunk::new(),
                 threads: HashMap::new(),
+                custom: HashMap::new(),
             })),
         }
     }
@@ -358,6 +362,20 @@ impl EventCacheStore for MemoryStore {
 
     async fn get_size(&self) -> Result<Option<usize>, Self::Error> {
         Ok(None)
+    }
+
+    async fn get_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self.inner.read().unwrap().custom.get(key).cloned())
+    }
+
+    async fn set_custom_value(&self, key: &[u8], value: Vec<u8>) -> Result<(), Self::Error> {
+        self.inner.write().unwrap().custom.insert(key.to_owned(), value);
+
+        Ok(())
+    }
+
+    async fn remove_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self.inner.write().unwrap().custom.remove(key))
     }
 }
 

@@ -243,6 +243,10 @@ pub trait EventCacheStoreIntegrationTests {
     /// Test multiple things related to distinguishing a thread linked chunk
     /// from a room linked chunk.
     async fn test_thread_vs_room_linked_chunk(&self);
+
+    /// Test that values stored under an arbitrary key can be read back,
+    /// replaced and removed.
+    async fn test_custom_value(&self);
 }
 
 impl EventCacheStoreIntegrationTests for DynEventCacheStore {
@@ -2369,6 +2373,28 @@ impl EventCacheStoreIntegrationTests for DynEventCacheStore {
         assert_eq!(observed_items.len(), 1);
         assert_eq!(observed_items[0].event_id(), thread1_ev.event_id());
     }
+    async fn test_custom_value(&self) {
+        // Nothing is stored under a key that was never written to.
+        assert!(self.get_custom_value(b"pos").await.unwrap().is_none());
+        assert!(self.remove_custom_value(b"pos").await.unwrap().is_none());
+
+        self.set_custom_value(b"pos", b"s1".to_vec()).await.unwrap();
+        assert_eq!(self.get_custom_value(b"pos").await.unwrap(), Some(b"s1".to_vec()));
+
+        // Keys don't collide with each other.
+        self.set_custom_value(b"other", b"value".to_vec()).await.unwrap();
+        assert_eq!(self.get_custom_value(b"pos").await.unwrap(), Some(b"s1".to_vec()));
+        assert_eq!(self.get_custom_value(b"other").await.unwrap(), Some(b"value".to_vec()));
+
+        // Writing again replaces the value.
+        self.set_custom_value(b"pos", b"s2".to_vec()).await.unwrap();
+        assert_eq!(self.get_custom_value(b"pos").await.unwrap(), Some(b"s2".to_vec()));
+
+        // Removing returns what was stored, and only removes that key.
+        assert_eq!(self.remove_custom_value(b"pos").await.unwrap(), Some(b"s2".to_vec()));
+        assert!(self.get_custom_value(b"pos").await.unwrap().is_none());
+        assert_eq!(self.get_custom_value(b"other").await.unwrap(), Some(b"value".to_vec()));
+    }
 }
 
 /// Macro building to allow your `EventCacheStore` implementation to run the
@@ -2415,6 +2441,13 @@ macro_rules! event_cache_store_integration_tests {
                 let event_cache_store =
                     get_event_cache_store().await.unwrap().into_event_cache_store();
                 event_cache_store.test_handle_updates_and_rebuild_linked_chunk().await;
+            }
+
+            #[async_test]
+            async fn test_custom_value() {
+                let event_cache_store =
+                    get_event_cache_store().await.unwrap().into_event_cache_store();
+                event_cache_store.test_custom_value().await;
             }
 
             #[async_test]
