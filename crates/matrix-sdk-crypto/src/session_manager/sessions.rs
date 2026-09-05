@@ -106,31 +106,43 @@ impl SessionManager {
         sender: &UserId,
         curve_key: Curve25519PublicKey,
     ) -> OlmResult<()> {
-        if let Some(device) = self.store.get_device_from_curve_key(sender, curve_key).await?
-            && let Some(session) = device.get_most_recent_session().await?
-        {
-            info!(sender_key = ?curve_key, "Marking session to be unwedged");
+        let Some(device) = self.store.get_device_from_curve_key(sender, curve_key).await? else {
+            return Ok(());
+        };
 
-            let creation_time = Duration::from_secs(session.creation_time.get().into());
-            let now = Duration::from_secs(SecondsSinceUnixEpoch::now().get().into());
+        // We only unwedge a device once per `UNWEDGING_INTERVAL`, using the creation
+        // time of the most recent session with it as the reference point.
+        //
+        // If there is no session in the store at all, there is nothing to rate limit
+        // against: the wedged session was the first one we created for this device and
+        // it never made it to the store. We used to bail out here, which left the
+        // device permanently wedged, so claim a fresh key instead. Once that key
+        // establishes a session, this rate limit applies again. See issue #103.
+        let should_unwedge = match device.get_most_recent_session().await? {
+            Some(session) => {
+                let creation_time = Duration::from_secs(session.creation_time.get().into());
+                let now = Duration::from_secs(SecondsSinceUnixEpoch::now().get().into());
 
-            let should_unwedge = now
-                .checked_sub(creation_time)
-                .map(|elapsed| elapsed > Self::UNWEDGING_INTERVAL)
-                .unwrap_or(true);
-
-            if should_unwedge {
-                self.users_for_key_claim
-                    .write()
-                    .entry(device.user_id().to_owned())
-                    .or_default()
-                    .insert(device.device_id().into());
-                self.wedged_devices
-                    .write()
-                    .entry(device.user_id().to_owned())
-                    .or_default()
-                    .insert(device.device_id().into());
+                now.checked_sub(creation_time)
+                    .map(|elapsed| elapsed > Self::UNWEDGING_INTERVAL)
+                    .unwrap_or(true)
             }
+            None => true,
+        };
+
+        if should_unwedge {
+            info!(sender_key = ?curve_key, "Marking device to be unwedged");
+
+            self.users_for_key_claim
+                .write()
+                .entry(device.user_id().to_owned())
+                .or_default()
+                .insert(device.device_id().into());
+            self.wedged_devices
+                .write()
+                .entry(device.user_id().to_owned())
+                .or_default()
+                .insert(device.device_id().into());
         }
 
         Ok(())
@@ -881,6 +893,28 @@ mod tests {
         assert!(!manager.is_device_wedged(&bob_device));
         assert!(manager.get_missing_sessions(iter::once(bob.user_id())).await.unwrap().is_none());
         assert!(!manager.outgoing_to_device_requests.read().is_empty())
+    }
+
+    /// Regression test for issue #103: a device whose very first Olm session
+    /// wedged before it was ever persisted used to stay wedged forever,
+    /// because there was no stored session to rate limit the unwedging
+    /// against.
+    #[async_test]
+    async fn test_session_unwedging_without_a_stored_session() {
+        let (manager, _identity_manager) = session_manager_test_helper().await;
+        let bob = bob_account();
+        let bob_device = DeviceData::from_account(&bob);
+
+        // Given we know about the device, but have no session with it...
+        manager.store.save_device_data(std::slice::from_ref(&bob_device)).await.unwrap();
+
+        // ... when a message from it turns out to be undecryptable...
+        let curve_key = bob_device.curve25519_key().unwrap();
+        manager.mark_device_as_wedged(bob_device.user_id(), curve_key).await.unwrap();
+
+        // ... then we flag it and claim a fresh one-time key for it.
+        assert!(manager.is_device_wedged(&bob_device));
+        assert!(manager.users_for_key_claim.read().contains_key(bob.user_id()));
     }
 
     #[async_test]

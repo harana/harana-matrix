@@ -520,7 +520,32 @@ impl Account {
 
     /// Generate count number of one-time keys.
     pub fn generate_one_time_keys(&mut self, count: usize) -> OneTimeKeyGenerationResult {
-        self.inner.generate_one_time_keys(count)
+        let result = self.inner.generate_one_time_keys(count);
+
+        if result.removed.is_empty() {
+            debug!(
+                requested = count,
+                created = result.created.len(),
+                stored = self.inner.stored_one_time_key_count(),
+                max_on_server = self.inner.max_number_of_one_time_keys(),
+                "Generated new one-time keys",
+            );
+        } else {
+            // We hold a hard cap on the number of one-time keys we keep the private
+            // part of; going over it silently drops the oldest ones, and any pre-key
+            // message that arrives for one of them afterwards will not decrypt.
+            warn!(
+                requested = count,
+                created = result.created.len(),
+                trimmed = result.removed.len(),
+                trimmed_keys = ?result.removed,
+                stored = self.inner.stored_one_time_key_count(),
+                max_on_server = self.inner.max_number_of_one_time_keys(),
+                "Generated new one-time keys, dropping older ones to make room",
+            );
+        }
+
+        result
     }
 
     /// Get the maximum number of one-time keys the account can hold.
@@ -569,8 +594,8 @@ impl Account {
             // so.
             if count != old_count {
                 debug!(
-                    "Updated uploaded one-time key count {} -> {count}.",
-                    self.uploaded_key_count(),
+                    max_on_server = self.max_one_time_keys(),
+                    "Updated uploaded one-time key count {old_count} -> {count}.",
                 );
             }
 
@@ -613,14 +638,7 @@ impl Account {
         let key_count = (max_keys as u64) - count;
         let key_count: usize = key_count.try_into().unwrap_or(max_keys);
 
-        let result = self.generate_one_time_keys(key_count);
-
-        debug!(
-            count = key_count,
-            discarded_keys = ?result.removed,
-            created_keys = ?result.created,
-            "Generated new one-time keys"
-        );
+        self.generate_one_time_keys(key_count);
 
         Some(key_count as u64)
     }
@@ -1124,6 +1142,17 @@ impl Account {
         let session_id = result.session.session_id();
 
         debug!(session=?result.session, "Decrypted an Olm message from a new Olm session");
+
+        // Creating an inbound session consumes the one-time key the sender claimed.
+        // Report which key went and what we have left: reports of missing one-time
+        // keys are hard to diagnose without it.
+        debug!(
+            one_time_key = ?message.one_time_key(),
+            stored_one_time_keys = self.inner.stored_one_time_key_count(),
+            uploaded_one_time_keys = self.uploaded_key_count(),
+            max_on_server = self.inner.max_number_of_one_time_keys(),
+            "Consumed a one-time key to create a new Olm session",
+        );
 
         let session = Session {
             inner: Arc::new(Mutex::new(result.session)),

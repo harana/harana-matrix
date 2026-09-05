@@ -18,7 +18,7 @@ use ruma::{SecondsSinceUnixEpoch, serde::Raw};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
-use tracing::{Span, debug};
+use tracing::{Span, debug, warn};
 use vodozemac::{
     Curve25519PublicKey,
     olm::{DecryptionError, OlmMessage, Session as InnerSession, SessionConfig, SessionPickle},
@@ -302,15 +302,51 @@ impl Session {
         let session: vodozemac::olm::Session = pickle.pickle.into();
         let session_id = session.session_id();
 
+        // The timestamps come from whatever wrote the pickle, which may be another
+        // client, an older version of this one, or an imported backup. Bring
+        // implausible values back into range before they can skew our ordering: we
+        // pick the most recent session for unwedging and for encrypting, so a session
+        // that claims to be from the future would win every comparison. See issue #87.
+        let now = SecondsSinceUnixEpoch::now();
+        let creation_time = clamp_session_timestamp(pickle.creation_time, now, "creation time");
+        let last_use_time = clamp_session_timestamp(pickle.last_use_time, now, "last use time")
+            // A session cannot have been used before it existed.
+            .max(creation_time);
+
         Ok(Session {
             inner: Arc::new(Mutex::new(session)),
             session_id: session_id.into(),
             created_using_fallback_key: pickle.created_using_fallback_key,
             sender_key: pickle.sender_key,
             our_device_keys,
-            creation_time: pickle.creation_time,
-            last_use_time: pickle.last_use_time,
+            creation_time,
+            last_use_time,
         })
+    }
+}
+
+/// Bring a timestamp read back from a pickle into a plausible range.
+///
+/// A timestamp in the future is not something we can have written: either it
+/// was recorded in the wrong unit (milliseconds where we expect seconds is the
+/// usual mistake, and lands roughly fifty thousand years out) or the pickle
+/// came from somewhere we should not trust. Either way, treat the session as
+/// if we had just seen it rather than letting it claim to be the freshest one
+/// we own.
+fn clamp_session_timestamp(
+    timestamp: SecondsSinceUnixEpoch,
+    now: SecondsSinceUnixEpoch,
+    what: &str,
+) -> SecondsSinceUnixEpoch {
+    if timestamp > now {
+        warn!(
+            ?timestamp,
+            ?now,
+            "Olm session {what} lies in the future, clamping it to the current time",
+        );
+        now
+    } else {
+        timestamp
     }
 }
 
@@ -348,6 +384,7 @@ mod tests {
     use serde_json::{self, Value};
     use vodozemac::olm::{OlmMessage, SessionConfig};
 
+    use super::Session;
     use crate::{
         identities::DeviceData,
         olm::Account,
@@ -356,6 +393,81 @@ mod tests {
             room::encrypted::ToDeviceEncryptedEventContent,
         },
     };
+
+    /// Regression test for issue #87: a pickle carrying nonsensical timestamps
+    /// (milliseconds where seconds are expected, say) used to be imported
+    /// verbatim, leaving a session that looked like the freshest one we own.
+    #[async_test]
+    async fn test_unpickling_clamps_implausible_timestamps() {
+        use ruma::{SecondsSinceUnixEpoch, UInt};
+
+        let alice =
+            Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICEDEVICE"));
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEVICE"));
+
+        bob.generate_one_time_keys(1);
+        let one_time_key = *bob.one_time_keys().values().next().unwrap();
+        let session = alice
+            .create_outbound_session_helper(
+                SessionConfig::version_1(),
+                bob.identity_keys().curve25519,
+                one_time_key,
+                false,
+                alice.device_keys(),
+            )
+            .unwrap();
+
+        let now = SecondsSinceUnixEpoch::now();
+
+        // Given a pickle whose timestamps were written in milliseconds...
+        let mut pickle = session.pickle().await;
+        let milliseconds = UInt::new(u64::from(now.get()) * 1000).unwrap();
+        pickle.creation_time = SecondsSinceUnixEpoch(milliseconds);
+        pickle.last_use_time = SecondsSinceUnixEpoch(milliseconds);
+
+        // ... when we read it back...
+        let restored = Session::from_pickle(alice.device_keys(), pickle).unwrap();
+
+        // ... then the session does not claim to come from the future.
+        assert!(restored.creation_time <= SecondsSinceUnixEpoch::now());
+        assert!(restored.last_use_time <= SecondsSinceUnixEpoch::now());
+        assert!(restored.last_use_time >= restored.creation_time);
+    }
+
+    /// A pickle with sane timestamps must come back unchanged.
+    #[async_test]
+    async fn test_unpickling_keeps_plausible_timestamps() {
+        use ruma::{SecondsSinceUnixEpoch, UInt};
+
+        let alice =
+            Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICEDEVICE"));
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEVICE"));
+
+        bob.generate_one_time_keys(1);
+        let one_time_key = *bob.one_time_keys().values().next().unwrap();
+        let session = alice
+            .create_outbound_session_helper(
+                SessionConfig::version_1(),
+                bob.identity_keys().curve25519,
+                one_time_key,
+                false,
+                alice.device_keys(),
+            )
+            .unwrap();
+
+        let an_hour_ago = SecondsSinceUnixEpoch(
+            UInt::new(u64::from(SecondsSinceUnixEpoch::now().get()) - 3600).unwrap(),
+        );
+
+        let mut pickle = session.pickle().await;
+        pickle.creation_time = an_hour_ago;
+        pickle.last_use_time = an_hour_ago;
+
+        let restored = Session::from_pickle(alice.device_keys(), pickle).unwrap();
+
+        assert_eq!(restored.creation_time, an_hour_ago);
+        assert_eq!(restored.last_use_time, an_hour_ago);
+    }
 
     #[async_test]
     async fn test_encryption_and_decryption() {
