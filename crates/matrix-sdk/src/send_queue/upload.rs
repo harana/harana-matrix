@@ -609,7 +609,7 @@ impl QueueStorage {
                 client,
                 &file_upload_txn,
                 thumbnail_info,
-                &sent_media.into(),
+                &sent_media,
             )
             .await?;
         }

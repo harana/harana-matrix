@@ -737,10 +737,10 @@ impl<'a, 'o> TimelineEventHandler<'a, 'o> {
         // An edit we're sending has no timeline item of its own, so its send state is
         // reported on the item it edits; see `EventTimelineItem::local_edit`.
         let local = as_variant!(&self.ctx.flow, Flow::Local { send_handle, .. } => {
-            LocalEditState {
+            Box::new(LocalEditState {
                 send_state: EventSendState::NotSentYet { progress: None },
                 send_handle: send_handle.clone(),
-            }
+            })
         });
 
         let aggregation = Aggregation::new(

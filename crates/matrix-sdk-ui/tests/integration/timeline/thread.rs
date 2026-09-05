@@ -30,7 +30,7 @@ use matrix_sdk_ui::timeline::{
     TimelineEventItemId, TimelineFocus, VirtualTimelineItem,
 };
 use ruma::{
-    MilliSecondsSinceUnixEpoch,
+    MilliSecondsSinceUnixEpoch, RoomId,
     api::client::receipt::create_receipt::v3::ReceiptType as SendReceiptType,
     event_id,
     events::{
@@ -68,13 +68,13 @@ async fn client_with_threading_support(server: &MatrixMockServer) -> Client {
 ///
 /// Read receipts go through the send queue, so they land on the server a moment
 /// after the call that asked for them returned.
-async fn wait_for_empty_send_queue(client: &matrix_sdk::Client, room_id: &ruma::RoomId) {
+async fn wait_for_empty_send_queue(client: &Client, room_id: &RoomId) {
     for _ in 0..300 {
         let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
         if requests.is_empty() {
             return;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
     }
 
     panic!("the send queue still has pending requests");

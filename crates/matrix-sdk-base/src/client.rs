@@ -1059,9 +1059,9 @@ impl BaseClient {
     /// Store a room account data event that we have just sent successfully.
     ///
     /// Like [`Self::receive_sent_state_event`], this closes the gap between a
-    /// send returning and the sync echoing the change back: what the user did
-    /// - marking a room as unread, say - takes effect right away instead of
-    /// only once the server tells us about it.
+    /// send returning and the sync echoing the change back: marking a room as
+    /// unread, say, takes effect right away instead of only once the server
+    /// tells us about it.
     pub async fn receive_sent_room_account_data(
         &self,
         room_id: &RoomId,

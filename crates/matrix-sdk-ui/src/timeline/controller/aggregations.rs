@@ -92,7 +92,9 @@ pub(in crate::timeline) struct PendingEdit {
 
     /// Set when this edit is one of ours that the server hasn't acknowledged
     /// yet, so a failure to send it can be surfaced on the item it edits.
-    pub local: Option<LocalEditState>,
+    ///
+    /// Boxed to keep [`AggregationKind`] small.
+    pub local: Option<Box<LocalEditState>>,
 }
 
 /// Which kind of aggregation (related event) is this?
@@ -852,11 +854,12 @@ impl Aggregations {
         match &mut pending_edit.local {
             Some(local) => local.send_state = send_state,
             None => {
-                pending_edit.local = Some(LocalEditState { send_state, send_handle: None });
+                pending_edit.local =
+                    Some(Box::new(LocalEditState { send_state, send_handle: None }));
             }
         }
 
-        let local = pending_edit.local.clone();
+        let local = pending_edit.local.as_deref().cloned();
         set_item_local_edit(items, &target, local);
 
         true
@@ -1044,7 +1047,7 @@ fn edit_item(
 
     // The applied edit is the one the item now shows, so it's the one whose send
     // state the item reports - `None` once it's been echoed back.
-    item.to_mut().local_edit = local;
+    item.to_mut().local_edit = local.map(|local| *local);
 
     true
 }
