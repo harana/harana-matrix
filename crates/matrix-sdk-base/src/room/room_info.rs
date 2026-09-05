@@ -2275,3 +2275,505 @@ mod tests {
         assert!(retention.min_lifetime().is_none());
     }
 }
+
+/// Tests for the [redaction algorithm].
+///
+/// [redaction algorithm]: https://spec.matrix.org/v1.16/client-server-api/#redactions
+#[cfg(test)]
+mod redaction_tests {
+    use ruma::{
+        events::{AnySyncTimelineEvent, room::redaction::SyncRoomRedactionEvent},
+        room_version_rules::RedactionRules,
+        serde::Raw,
+    };
+    use serde_json::{Value, json};
+
+    use super::apply_redaction;
+
+    fn redaction_event(reason: &str) -> Raw<SyncRoomRedactionEvent> {
+        Raw::new(&json!({
+            "type": "m.room.redaction",
+            "event_id": "$redaction",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 1_000_000,
+            "redacts": "$original",
+            "content": { "reason": reason },
+        }))
+        .unwrap()
+        .cast_unchecked()
+    }
+
+    fn redact(event: Value, rules: &RedactionRules) -> Option<Value> {
+        let event: Raw<AnySyncTimelineEvent> = Raw::new(&event).unwrap().cast_unchecked();
+
+        apply_redaction(&event, &redaction_event("spam"), rules)
+            .map(|raw| serde_json::to_value(raw.json()).unwrap())
+    }
+
+    /// Redacting a message strips its `content`, but keeps the keys that the
+    /// algorithm mandates, and records the redaction in
+    /// `unsigned.redacted_because`.
+    #[test]
+    fn test_message_content_is_stripped() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.message",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "origin_server_ts": 42,
+                "content": { "msgtype": "m.text", "body": "hello" },
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["type"], "m.room.message");
+        assert_eq!(redacted["event_id"], "$original");
+        assert_eq!(redacted["sender"], "@bob:localhost");
+        assert_eq!(redacted["origin_server_ts"], 42);
+        assert_eq!(redacted["content"], json!({}));
+
+        let because = &redacted["unsigned"]["redacted_because"];
+        assert_eq!(because["event_id"], "$redaction");
+        assert_eq!(because["content"]["reason"], "spam");
+    }
+
+    /// Keys that are not in the list of preserved keys are dropped, even at
+    /// the top level of the event.
+    #[test]
+    fn test_unknown_top_level_keys_are_dropped() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.message",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "origin_server_ts": 42,
+                "content": {},
+                "org.example.custom": "gone",
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert!(redacted.get("org.example.custom").is_none());
+    }
+
+    /// `m.room.member` keeps the `membership` key of its content.
+    #[test]
+    fn test_member_event_keeps_its_membership() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.member",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "state_key": "@bob:localhost",
+                "origin_server_ts": 42,
+                "content": {
+                    "membership": "join",
+                    "displayname": "Bob",
+                    "avatar_url": "mxc://localhost/avatar",
+                },
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["state_key"], "@bob:localhost");
+        assert_eq!(redacted["content"], json!({ "membership": "join" }));
+    }
+
+    /// Before room version 11, a redacted `m.room.create` keeps only its
+    /// `creator`.
+    #[test]
+    fn test_create_event_before_room_version_11() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.create",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "state_key": "",
+                "origin_server_ts": 42,
+                "content": { "creator": "@bob:localhost", "m.federate": false },
+            }),
+            &RedactionRules::V1,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["content"], json!({ "creator": "@bob:localhost" }));
+    }
+
+    /// From room version 11, a redacted `m.room.create` keeps its whole
+    /// content.
+    #[test]
+    fn test_create_event_from_room_version_11() {
+        let redacted = redact(
+            json!({
+                "type": "m.room.create",
+                "event_id": "$original",
+                "sender": "@bob:localhost",
+                "state_key": "",
+                "origin_server_ts": 42,
+                "content": { "room_version": "11", "m.federate": false },
+            }),
+            &RedactionRules::V11,
+        )
+        .unwrap();
+
+        assert_eq!(redacted["content"], json!({ "room_version": "11", "m.federate": false }));
+    }
+
+    /// Room version 11 introduced the `redacts` key of `m.room.redaction`
+    /// events as a preserved key; before that, it was dropped from the
+    /// content.
+    #[test]
+    fn test_redaction_event_redacts_key_depends_on_the_room_version() {
+        let event = json!({
+            "type": "m.room.redaction",
+            "event_id": "$original",
+            "sender": "@bob:localhost",
+            "origin_server_ts": 42,
+            "content": { "redacts": "$something", "reason": "spam" },
+        });
+
+        let redacted = redact(event.clone(), &RedactionRules::V1).unwrap();
+        assert_eq!(redacted["content"], json!({}));
+
+        let redacted = redact(event, &RedactionRules::V11).unwrap();
+        assert_eq!(redacted["content"], json!({ "redacts": "$something" }));
+    }
+
+    /// An event that isn't a JSON object cannot be redacted.
+    #[test]
+    fn test_a_non_object_event_is_not_redacted() {
+        let event: Raw<AnySyncTimelineEvent> = Raw::new(&json!("nope")).unwrap().cast_unchecked();
+
+        assert!(apply_redaction(&event, &redaction_event("spam"), &RedactionRules::V11).is_none());
+    }
+
+    /// A redaction event that isn't valid canonical JSON, e.g. because it
+    /// contains a float, cannot be applied.
+    #[test]
+    fn test_an_invalid_redaction_event_is_not_applied() {
+        let event: Raw<AnySyncTimelineEvent> = Raw::new(&json!({
+            "type": "m.room.message",
+            "event_id": "$original",
+            "sender": "@bob:localhost",
+            "origin_server_ts": 42,
+            "content": {},
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let invalid_redaction: Raw<SyncRoomRedactionEvent> = Raw::new(&json!({
+            "type": "m.room.redaction",
+            "event_id": "$redaction",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 1_000_000,
+            "redacts": "$original",
+            "content": { "score": 1.5 },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert!(apply_redaction(&event, &invalid_redaction, &RedactionRules::V11).is_none());
+    }
+}
+
+/// Tests for the handling of the [room state events] that the SDK tracks in
+/// the [`BaseRoomInfo`].
+///
+/// [room state events]: https://spec.matrix.org/v1.16/client-server-api/#room-events
+#[cfg(test)]
+mod state_event_tests {
+    use assert_matches2::assert_let;
+    use matrix_sdk_test::event_factory::EventFactory;
+    use ruma::{
+        RoomVersionId,
+        events::{
+            AnySyncStateEvent, False, StaticEventContent,
+            room::{
+                avatar::RoomAvatarEventContent,
+                canonical_alias::RoomCanonicalAliasEventContent,
+                encryption::RoomEncryptionEventContent,
+                guest_access::{GuestAccess, RoomGuestAccessEventContent},
+                history_visibility::{HistoryVisibility, RoomHistoryVisibilityEventContent},
+                join_rules::{JoinRule, RoomJoinRulesEventContent},
+                name::RoomNameEventContent,
+                topic::RoomTopicEventContent,
+            },
+        },
+        owned_mxc_uri, owned_room_alias_id, owned_user_id, room_id,
+        serde::Raw,
+        user_id,
+    };
+    use serde_json::json;
+
+    use super::{RoomInfo, RoomState};
+    use crate::RawStateEventWithKeys;
+
+    /// Builds a state event with the given content and state key, ready to be
+    /// given to [`RoomInfo::handle_state_event`].
+    fn state_event<C>(content: C, state_key: &str) -> RawStateEventWithKeys<AnySyncStateEvent>
+    where
+        C: StaticEventContent<IsPrefix = False> + serde::Serialize,
+    {
+        RawStateEventWithKeys::try_from_raw_state_event(
+            EventFactory::new()
+                .sender(user_id!("@alice:localhost"))
+                .event(content)
+                .state_key(state_key)
+                .into_raw_sync_state(),
+        )
+        .expect("the state event must be constructable")
+    }
+
+    fn raw_state_event(value: serde_json::Value) -> RawStateEventWithKeys<AnySyncStateEvent> {
+        RawStateEventWithKeys::try_from_raw_state_event(Raw::new(&value).unwrap().cast_unchecked())
+            .expect("the state event must be constructable")
+    }
+
+    fn room_info() -> RoomInfo {
+        RoomInfo::new(room_id!("!r:localhost"), RoomState::Joined)
+    }
+
+    /// An `m.room.name` event sets the name of the room, and a later one
+    /// replaces it.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomname>.
+    #[test]
+    fn test_room_name_is_handled() {
+        let mut info = room_info();
+        assert!(info.name().is_none());
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomNameEventContent::new("Room".to_owned()),
+            "",
+        )));
+        assert_eq!(info.name(), Some("Room"));
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomNameEventContent::new("Renamed".to_owned()),
+            "",
+        )));
+        assert_eq!(info.name(), Some("Renamed"));
+    }
+
+    /// An `m.room.topic` event sets the topic of the room.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomtopic>.
+    #[test]
+    fn test_room_topic_is_handled() {
+        let mut info = room_info();
+        assert!(info.topic().is_none());
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomTopicEventContent::new("The topic".to_owned()),
+            "",
+        )));
+        assert_eq!(info.topic(), Some("The topic"));
+    }
+
+    /// An `m.room.avatar` event sets the avatar of the room.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomavatar>.
+    #[test]
+    fn test_room_avatar_is_handled() {
+        let mut info = room_info();
+        assert!(info.avatar_url().is_none());
+
+        let mut content = RoomAvatarEventContent::new();
+        content.url = Some(owned_mxc_uri!("mxc://localhost/avatar"));
+
+        assert!(info.handle_state_event(&mut state_event(content, "")));
+        assert_eq!(info.avatar_url(), Some(&*owned_mxc_uri!("mxc://localhost/avatar")));
+    }
+
+    /// An `m.room.canonical_alias` event sets the main alias of the room, as
+    /// well as its alternative aliases.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomcanonical_alias>.
+    #[test]
+    fn test_canonical_alias_is_handled() {
+        let mut info = room_info();
+        assert!(info.canonical_alias().is_none());
+        assert!(info.alt_aliases().is_empty());
+
+        let mut content = RoomCanonicalAliasEventContent::new();
+        content.alias = Some(owned_room_alias_id!("#main:localhost"));
+        content.alt_aliases = vec![owned_room_alias_id!("#alt:localhost")];
+
+        assert!(info.handle_state_event(&mut state_event(content, "")));
+
+        assert_eq!(info.canonical_alias(), Some(&*owned_room_alias_id!("#main:localhost")));
+        assert_eq!(info.alt_aliases(), [owned_room_alias_id!("#alt:localhost")]);
+    }
+
+    /// The `m.room.create` event is the first event of a room and cannot be
+    /// changed, so a second one must be ignored.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomcreate>.
+    #[test]
+    fn test_create_event_cannot_be_overwritten() {
+        let mut info = room_info();
+        assert!(info.create().is_none());
+
+        let f = EventFactory::new();
+
+        let mut first = RawStateEventWithKeys::try_from_raw_state_event(
+            f.create(user_id!("@alice:localhost"), RoomVersionId::V11).into_raw_sync_state(),
+        )
+        .unwrap();
+        assert!(info.handle_state_event(&mut first));
+
+        assert_let!(Some(create) = info.create());
+        assert_eq!(create.creator, owned_user_id!("@alice:localhost"));
+        assert_eq!(create.room_version, RoomVersionId::V11);
+        assert_eq!(info.room_version(), Some(&RoomVersionId::V11));
+
+        // A second `m.room.create` event is ignored.
+        let mut second = RawStateEventWithKeys::try_from_raw_state_event(
+            f.create(user_id!("@bob:localhost"), RoomVersionId::V1).into_raw_sync_state(),
+        )
+        .unwrap();
+        assert!(!info.handle_state_event(&mut second));
+
+        assert_let!(Some(create) = info.create());
+        assert_eq!(create.creator, owned_user_id!("@alice:localhost"));
+        assert_eq!(create.room_version, RoomVersionId::V11);
+    }
+
+    /// The history visibility of a room defaults to `shared` when there is no
+    /// `m.room.history_visibility` event.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#room-history-visibility>.
+    #[test]
+    fn test_history_visibility_defaults_to_shared() {
+        let mut info = room_info();
+
+        assert!(info.history_visibility().is_none());
+        assert_eq!(info.history_visibility_or_default(), &HistoryVisibility::Shared);
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomHistoryVisibilityEventContent::new(HistoryVisibility::Invited),
+            "",
+        )));
+
+        assert_eq!(info.history_visibility(), Some(&HistoryVisibility::Invited));
+        assert_eq!(info.history_visibility_or_default(), &HistoryVisibility::Invited);
+    }
+
+    /// The guest access of a room defaults to `forbidden` when there is no
+    /// `m.room.guest_access` event.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomguest_access>.
+    #[test]
+    fn test_guest_access_defaults_to_forbidden() {
+        let mut info = room_info();
+        assert_eq!(info.guest_access(), &GuestAccess::Forbidden);
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomGuestAccessEventContent::new(GuestAccess::CanJoin),
+            "",
+        )));
+
+        assert_eq!(info.guest_access(), &GuestAccess::CanJoin);
+    }
+
+    /// The join rules of a room are tracked, but a custom join rule that the
+    /// SDK doesn't know about is skipped.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomjoin_rules>.
+    #[test]
+    fn test_join_rules_are_handled() {
+        let mut info = room_info();
+        assert!(info.join_rule().is_none());
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomJoinRulesEventContent::new(JoinRule::Public),
+            "",
+        )));
+        assert_eq!(info.join_rule(), Some(&JoinRule::Public));
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomJoinRulesEventContent::new(JoinRule::Knock),
+            "",
+        )));
+        assert_eq!(info.join_rule(), Some(&JoinRule::Knock));
+
+        // A custom join rule resets the known one, rather than being stored.
+        assert!(info.handle_state_event(&mut raw_state_event(json!({
+            "type": "m.room.join_rules",
+            "event_id": "$custom",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 42,
+            "state_key": "",
+            "content": { "join_rule": "org.example.custom" },
+        }))));
+        assert!(info.join_rule().is_none());
+    }
+
+    /// The maximum power level of the room is derived from the
+    /// `m.room.power_levels` event.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroompower_levels>.
+    #[test]
+    fn test_power_levels_update_the_maximum_power_level() {
+        let mut info = room_info();
+        // The default maximum power level is that of a room creator.
+        assert_eq!(info.base_info.max_power_level, 100);
+
+        assert!(info.handle_state_event(&mut raw_state_event(json!({
+            "type": "m.room.power_levels",
+            "event_id": "$pl",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 42,
+            "state_key": "",
+            "content": {
+                "users_default": 0,
+                "users": { "@alice:localhost": 50, "@bob:localhost": 75 },
+            },
+        }))));
+
+        assert_eq!(info.base_info.max_power_level, 75);
+    }
+
+    /// An `m.room.encryption` event without an algorithm, e.g. a redacted one,
+    /// must not mark the room as encrypted, so that an encrypted room doesn't
+    /// silently become unencrypted.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#mroomencryption>.
+    #[test]
+    fn test_encryption_event_without_an_algorithm_is_ignored() {
+        let mut info = room_info();
+
+        assert!(!info.handle_state_event(&mut raw_state_event(json!({
+            "type": "m.room.encryption",
+            "event_id": "$redacted",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 42,
+            "state_key": "",
+            "content": {},
+        }))));
+        assert!(info.base_info.encryption.is_none());
+
+        assert!(info.handle_state_event(&mut state_event(
+            RoomEncryptionEventContent::with_recommended_defaults(),
+            "",
+        )));
+        assert!(info.base_info.encryption.is_some());
+    }
+
+    /// The tracked room state events all use an empty state key; an event with
+    /// another state key must be ignored.
+    #[test]
+    fn test_a_non_empty_state_key_is_ignored() {
+        let mut info = room_info();
+
+        assert!(!info.handle_state_event(&mut state_event(
+            RoomNameEventContent::new("Room".to_owned()),
+            "not-empty",
+        )));
+
+        assert!(info.name().is_none());
+    }
+}
