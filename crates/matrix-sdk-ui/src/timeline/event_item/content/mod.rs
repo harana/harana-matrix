@@ -1000,15 +1000,19 @@ mod tests {
     use ruma::{
         assign,
         events::{
-            StateEventContentChange,
+            AnySyncStateEvent, StateEventContentChange, StateEventType,
             room::member::{
                 MembershipState, PossiblyRedactedRoomMemberEventContent, RoomMemberEventContent,
             },
         },
         room_version_rules::RedactionRules,
     };
+    use serde_json::json;
 
-    use super::{MembershipChange, RoomMembershipChange, TimelineItemContent};
+    use super::{
+        AnyOtherStateEventContentChange, MembershipChange, RoomMembershipChange,
+        TimelineItemContent,
+    };
 
     #[test]
     fn redact_membership_change() {
@@ -1030,5 +1034,148 @@ mod tests {
         assert_eq!(inner.change, Some(MembershipChange::Banned));
         assert_let!(StateEventContentChange::Redacted(inner_content_redacted) = inner.content);
         assert_eq!(inner_content_redacted.membership, MembershipState::Ban);
+    }
+    /// Every state event type that the timeline knows about must be mapped to
+    /// its own [`AnyOtherStateEventContentChange`] variant, and must keep
+    /// reporting the right event type once redacted.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#room-events>.
+    #[test]
+    fn test_every_known_state_event_type_is_mapped() {
+        // (event type, state key, content)
+        let events = [
+            (
+                "m.policy.rule.room",
+                "rule:!spam:localhost",
+                json!({
+                    "entity": "!spam:localhost",
+                    "recommendation": "m.ban",
+                    "reason": "spam",
+                }),
+            ),
+            (
+                "m.policy.rule.server",
+                "rule:spam.localhost",
+                json!({
+                    "entity": "spam.localhost",
+                    "recommendation": "m.ban",
+                    "reason": "spam",
+                }),
+            ),
+            (
+                "m.policy.rule.user",
+                "rule:@spam:localhost",
+                json!({
+                    "entity": "@spam:localhost",
+                    "recommendation": "m.ban",
+                    "reason": "spam",
+                }),
+            ),
+            ("m.room.avatar", "", json!({ "url": "mxc://localhost/avatar" })),
+            ("m.room.canonical_alias", "", json!({ "alias": "#main:localhost" })),
+            ("m.room.create", "", json!({ "room_version": "11" })),
+            ("m.room.encryption", "", json!({ "algorithm": "m.megolm.v1.aes-sha2" })),
+            ("m.room.guest_access", "", json!({ "guest_access": "can_join" })),
+            ("m.room.history_visibility", "", json!({ "history_visibility": "shared" })),
+            ("m.room.join_rules", "", json!({ "join_rule": "public" })),
+            ("m.room.name", "", json!({ "name": "The room" })),
+            ("m.room.pinned_events", "", json!({ "pinned": ["$pinned"] })),
+            ("m.room.power_levels", "", json!({ "users_default": 0 })),
+            (
+                "m.room.server_acl",
+                "",
+                json!({
+                    "allow": ["*"],
+                    "deny": ["evil.localhost"],
+                    "allow_ip_literals": false,
+                }),
+            ),
+            (
+                "m.room.third_party_invite",
+                "token",
+                json!({
+                    "display_name": "alice",
+                    "key_validity_url": "https://localhost/isvalid",
+                    "public_key": "abc123",
+                }),
+            ),
+            (
+                "m.room.tombstone",
+                "",
+                json!({
+                    "body": "This room has been replaced",
+                    "replacement_room": "!new:localhost",
+                }),
+            ),
+            ("m.room.topic", "", json!({ "topic": "The topic" })),
+            ("m.space.child", "!child:localhost", json!({ "via": ["localhost"] })),
+            ("m.space.parent", "!parent:localhost", json!({ "via": ["localhost"] })),
+        ];
+
+        for (event_type, state_key, content) in events {
+            let change = other_state_content(event_type, state_key, content);
+
+            assert_ne!(
+                change.event_type(),
+                StateEventType::from("org.example.unknown"),
+                "{event_type} must not be reported as an unknown type",
+            );
+            assert_eq!(
+                change.event_type().to_string(),
+                event_type,
+                "{event_type} must report its own event type",
+            );
+            assert!(
+                !matches!(change, AnyOtherStateEventContentChange::_Custom { .. }),
+                "{event_type} must have its own variant",
+            );
+
+            // Redacting the content must not change what the event is.
+            let redacted = change.redact(&RedactionRules::V11);
+            assert_eq!(
+                redacted.event_type().to_string(),
+                event_type,
+                "redacted {event_type} must report its own event type",
+            );
+            assert!(
+                !matches!(redacted, AnyOtherStateEventContentChange::_Custom { .. }),
+                "redacted {event_type} must keep its own variant",
+            );
+        }
+    }
+
+    /// A state event of an unknown type keeps its type, so that it can still
+    /// be displayed.
+    #[test]
+    fn test_a_custom_state_event_type_is_kept() {
+        let change = other_state_content("org.example.custom", "key", json!({ "hello": "world" }));
+
+        assert_let!(AnyOtherStateEventContentChange::_Custom { event_type } = &change);
+        assert_eq!(event_type, "org.example.custom");
+        assert_eq!(change.event_type().to_string(), "org.example.custom");
+
+        // Redacting it doesn't lose the type either.
+        let redacted = change.redact(&RedactionRules::V11);
+        assert_eq!(redacted.event_type().to_string(), "org.example.custom");
+    }
+
+    /// Builds the content change of a state event from its type, state key and
+    /// content, the way the timeline does when it receives one.
+    fn other_state_content(
+        event_type: &str,
+        state_key: &str,
+        content: serde_json::Value,
+    ) -> AnyOtherStateEventContentChange {
+        let event: AnySyncStateEvent = serde_json::from_value(json!({
+            "type": event_type,
+            "state_key": state_key,
+            "content": content,
+            "event_id": "$event",
+            "sender": "@alice:localhost",
+            "origin_server_ts": 42,
+        }))
+        .unwrap_or_else(|error| panic!("{event_type} must deserialize: {error}"));
+
+        AnyOtherStateEventContentChange::with_event_content(event.content_change())
     }
 }

@@ -86,7 +86,7 @@ use ruma::{
 #[cfg(feature = "experimental-send-custom-to-device")]
 use ruma::{events::AnyToDeviceEventContent, serde::Raw, to_device::DeviceIdOrAllDevices};
 use serde::{Deserialize, de::Error as _};
-use tasks::BundleReceiverTask;
+use tasks::{BundleReceiverTask, RecoveryStateUpdateTask};
 use tokio::sync::{Mutex, RwLockReadGuard};
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::{Instrument, Span, debug, error, instrument, warn};
@@ -259,6 +259,8 @@ impl EncryptionData {
         let join_handle = spawn(future);
 
         guard.update_recovery_state_after_backup = Some(join_handle);
+        guard.update_recovery_state =
+            Some(RecoveryStateUpdateTask::new(WeakClient::from_client(client)));
     }
 }
 

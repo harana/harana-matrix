@@ -48,3 +48,208 @@ pub(super) fn dispatch_receipt(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use matrix_sdk_test::event_factory::EventFactory;
+    use ruma::{
+        event_id,
+        events::receipt::{ReceiptThread, ReceiptType},
+        room_id,
+        serde::Raw,
+        user_id,
+    };
+    use serde_json::json;
+
+    use super::{super::Context, dispatch};
+
+    /// An `m.receipt` event is turned into receipts attached to the room.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#receipts>.
+    #[test]
+    fn test_public_read_receipt_is_dispatched() {
+        let room_id = room_id!("!r:localhost");
+        let f = EventFactory::new();
+        let event = f
+            .read_receipts()
+            .add(
+                event_id!("$1"),
+                user_id!("@alice:localhost"),
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+            )
+            .into_event()
+            .into_raw();
+
+        let mut context = Context::default();
+        dispatch(&mut context, &[event], room_id);
+
+        let receipts = context.state_changes.receipts.get(room_id).unwrap();
+        let by_type = receipts.0.get(event_id!("$1")).unwrap();
+        let receipt = by_type.get(&ReceiptType::Read).unwrap().get(user_id!("@alice:localhost"));
+
+        assert!(receipt.is_some());
+    }
+
+    /// Private read receipts (`m.read.private`) and threaded receipts are
+    /// dispatched too, and are kept apart from the public unthreaded ones.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#receipts> and
+    /// <https://spec.matrix.org/v1.16/client-server-api/#threaded-read-receipts>.
+    #[test]
+    fn test_private_and_threaded_receipts_are_dispatched() {
+        let room_id = room_id!("!r:localhost");
+        let alice = user_id!("@alice:localhost");
+        let f = EventFactory::new();
+        let event = f
+            .read_receipts()
+            .add(event_id!("$1"), alice, ReceiptType::Read, ReceiptThread::Unthreaded)
+            .add(event_id!("$2"), alice, ReceiptType::ReadPrivate, ReceiptThread::Unthreaded)
+            .add(
+                event_id!("$3"),
+                alice,
+                ReceiptType::Read,
+                ReceiptThread::Thread(event_id!("$root").to_owned()),
+            )
+            .into_event()
+            .into_raw();
+
+        let mut context = Context::default();
+        dispatch(&mut context, &[event], room_id);
+
+        let receipts = &context.state_changes.receipts.get(room_id).unwrap().0;
+
+        assert!(
+            receipts
+                .get(event_id!("$1"))
+                .unwrap()
+                .get(&ReceiptType::Read)
+                .unwrap()
+                .contains_key(alice)
+        );
+        assert!(
+            receipts
+                .get(event_id!("$2"))
+                .unwrap()
+                .get(&ReceiptType::ReadPrivate)
+                .unwrap()
+                .contains_key(alice)
+        );
+
+        let threaded = receipts
+            .get(event_id!("$3"))
+            .unwrap()
+            .get(&ReceiptType::Read)
+            .unwrap()
+            .get(alice)
+            .unwrap();
+        assert_eq!(threaded.thread, ReceiptThread::Thread(event_id!("$root").to_owned()));
+    }
+
+    /// Receipts of several users for the same event are all dispatched.
+    #[test]
+    fn test_receipts_of_several_users_are_dispatched() {
+        let room_id = room_id!("!r:localhost");
+        let f = EventFactory::new();
+        let event = f
+            .read_receipts()
+            .add(
+                event_id!("$1"),
+                user_id!("@alice:localhost"),
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+            )
+            .add(
+                event_id!("$1"),
+                user_id!("@bob:localhost"),
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+            )
+            .into_event()
+            .into_raw();
+
+        let mut context = Context::default();
+        dispatch(&mut context, &[event], room_id);
+
+        let by_type =
+            context.state_changes.receipts.get(room_id).unwrap().0.get(event_id!("$1")).unwrap();
+
+        assert_eq!(by_type.get(&ReceiptType::Read).unwrap().len(), 2);
+    }
+
+    /// The last `m.receipt` event of a batch wins, since a receipt event is
+    /// not additive at this level.
+    #[test]
+    fn test_the_last_receipt_event_wins() {
+        let room_id = room_id!("!r:localhost");
+        let f = EventFactory::new();
+        let first = f
+            .read_receipts()
+            .add(
+                event_id!("$1"),
+                user_id!("@alice:localhost"),
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+            )
+            .into_event()
+            .into_raw();
+        let second = f
+            .read_receipts()
+            .add(
+                event_id!("$2"),
+                user_id!("@alice:localhost"),
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+            )
+            .into_event()
+            .into_raw();
+
+        let mut context = Context::default();
+        dispatch(&mut context, &[first, second], room_id);
+
+        let receipts = &context.state_changes.receipts.get(room_id).unwrap().0;
+        assert!(receipts.get(event_id!("$1")).is_none());
+        assert!(receipts.get(event_id!("$2")).is_some());
+    }
+
+    /// An `m.typing` event is an ephemeral room event, but it isn't a receipt,
+    /// so it must not end up in the receipts.
+    ///
+    /// See <https://spec.matrix.org/v1.16/client-server-api/#typing-notifications>.
+    #[test]
+    fn test_typing_notification_is_not_a_receipt() {
+        let room_id = room_id!("!r:localhost");
+        let f = EventFactory::new();
+        let event = f.typing(vec![user_id!("@alice:localhost")]).into_raw();
+
+        let mut context = Context::default();
+        dispatch(&mut context, &[event], room_id);
+
+        assert!(context.state_changes.receipts.is_empty());
+    }
+
+    /// A malformed ephemeral event is skipped, and doesn't prevent the
+    /// following events from being dispatched.
+    #[test]
+    fn test_malformed_event_is_skipped() {
+        let room_id = room_id!("!r:localhost");
+        let f = EventFactory::new();
+        let malformed =
+            Raw::new(&json!({ "type": "m.receipt", "content": 42 })).unwrap().cast_unchecked();
+        let event = f
+            .read_receipts()
+            .add(
+                event_id!("$1"),
+                user_id!("@alice:localhost"),
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+            )
+            .into_event()
+            .into_raw();
+
+        let mut context = Context::default();
+        dispatch(&mut context, &[malformed, event], room_id);
+
+        assert!(context.state_changes.receipts.contains_key(room_id));
+    }
+}

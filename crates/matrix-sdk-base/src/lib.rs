@@ -43,6 +43,7 @@ pub mod store;
 pub mod sync;
 #[cfg(any(test, feature = "testing"))]
 mod test_utils;
+pub mod to_device_token;
 mod utils;
 
 pub use client::DmRoomDefinition;
@@ -59,10 +60,10 @@ pub use http;
 #[cfg(feature = "e2e-encryption")]
 pub use matrix_sdk_crypto as crypto;
 pub use room::{
-    CallIntentConsensus, EncryptionState, PredecessorRoom, Room, RoomCreateWithCreatorEventContent,
-    RoomDisplayName, RoomHero, RoomHeroWithProfile, RoomInfo, RoomInfoNotableUpdate,
-    RoomInfoNotableUpdateReasons, RoomMember, RoomMembersUpdate, RoomMemberships, RoomRecencyStamp,
-    RoomState, RoomStateFilter, SuccessorRoom, apply_redaction,
+    CallIntentConsensus, EncryptionState, MembersRequestGuard, PredecessorRoom, Room,
+    RoomCreateWithCreatorEventContent, RoomDisplayName, RoomHero, RoomHeroWithProfile, RoomInfo,
+    RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons, RoomMember, RoomMembersUpdate,
+    RoomMemberships, RoomRecencyStamp, RoomState, RoomStateFilter, SuccessorRoom, apply_redaction,
 };
 pub use store::{
     ComposerDraft, ComposerDraftType, DraftAttachment, DraftAttachmentContent, DraftThumbnail,

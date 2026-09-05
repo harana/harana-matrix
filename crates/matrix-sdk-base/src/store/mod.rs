@@ -93,8 +93,8 @@ pub use self::{
     memory_store::MemoryStore,
     send_queue::{
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
-        FinishUploadThumbnailInfo, QueueWedgeError, QueuedRequest, QueuedRequestKind,
-        ReplyThreading, SentMediaInfo, SentMediaItem, SentRequestKey, SerializableEventContent,
+        EnforceThreadInReply, FinishUploadThumbnailInfo, QueueWedgeError, QueuedRequest,
+        QueuedRequestKind, SentMediaInfo, SentMediaItem, SentRequestKey, SerializableEventContent,
         SupersedesKey,
     },
     traits::{

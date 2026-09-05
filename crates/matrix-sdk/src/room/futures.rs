@@ -21,6 +21,8 @@ use std::borrow::Borrow;
 use std::future::IntoFuture;
 
 use eyeball::SharedObservable;
+#[cfg(feature = "e2e-encryption")]
+use matrix_sdk_base::crypto::CollectStrategy;
 use matrix_sdk_base::deserialized_responses::EncryptionInfo;
 use matrix_sdk_common::boxed_into_future;
 use mime::Mime;
@@ -49,8 +51,6 @@ use crate::{
     Result, TransmissionProgress, attachment::AttachmentConfig, config::RequestConfig,
     utils::IntoRawMessageLikeEventContent,
 };
-#[cfg(feature = "e2e-encryption")]
-use matrix_sdk_base::crypto::CollectStrategy;
 
 /// The result of the [`Room::send`] future
 #[derive(Debug)]
@@ -642,16 +642,16 @@ async fn ensure_room_encryption_ready(room: &Room) -> Result<()> {
 
 #[cfg(all(test, feature = "e2e-encryption"))]
 mod tests {
-    use ruma::{
-        events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
-        serde::Raw,
-    };
-    use serde_json::json;
-
     use std::collections::BTreeMap;
 
     use matrix_sdk_base::crypto::{OlmError, SessionRecipientCollectionError};
-    use ruma::{device_id, user_id};
+    use ruma::{
+        device_id,
+        events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
+        serde::Raw,
+        user_id,
+    };
+    use serde_json::json;
 
     use super::{is_unsigned_device_problem, is_verification_event};
 

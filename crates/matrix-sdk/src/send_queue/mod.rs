@@ -146,9 +146,11 @@ use std::{
     time::Duration,
 };
 
+use as_variant::as_variant;
 use eyeball::SharedObservable;
 #[cfg(feature = "e2e-encryption")]
 use matrix_sdk_base::crypto::{OlmError, SessionRecipientCollectionError};
+pub use matrix_sdk_base::store::EnforceThreadInReply;
 #[cfg(feature = "unstable-msc4274")]
 use matrix_sdk_base::store::FinishGalleryItemInfo;
 use matrix_sdk_base::{
@@ -160,15 +162,15 @@ use matrix_sdk_base::{
     store::{
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind, DynStateStore,
         FinishUploadThumbnailInfo, QueueWedgeError, QueuedRequest, QueuedRequestKind,
-        ReplyThreading, SentMediaInfo, SentRequestKey, SerializableEventContent,
+        SentMediaInfo, SentRequestKey, SerializableEventContent,
     },
     task_monitor::BackgroundTaskHandle,
 };
 use matrix_sdk_common::{boxed_into_future, locks::Mutex as SyncMutex};
 use mime::Mime;
 use ruma::{
-    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId, RoomId,
-    TransactionId,
+    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId, RoomId,
+    TransactionId, UserId,
     api::client::{
         read_marker::set_read_marker,
         receipt::create_receipt::{self, v3::ReceiptType},
@@ -180,13 +182,12 @@ use ruma::{
         marked_unread::MarkedUnreadEventContent,
         reaction::ReactionEventContent,
         receipt::ReceiptThread,
-        relation::Annotation,
+        relation::{Annotation, Thread},
         room::{
             MediaSource,
-            encrypted::Relation as EncryptedRelation,
             message::{
-                AddMentions, FormattedBody, ForwardThread, ReplyMetadata, ReplyWithinThread,
-                RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
+                AddMentions, FormattedBody, ForwardThread, Relation, ReplyMetadata,
+                ReplyWithinThread, RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
             },
         },
     },
@@ -1145,7 +1146,8 @@ impl RoomSendQueue {
                         }
 
                         SentRequestKey::Nothing => {
-                            // Nothing to report: what was sent isn't an event, and nothing
+                            // Nothing to report: what was sent isn't an event,
+                            // and nothing
                             // else can depend on it.
                         }
 
@@ -2347,6 +2349,76 @@ impl QueueStorage {
         }
     }
 
+    /// Replies to the given local echo of an event.
+    ///
+    /// Returns the transaction id the reply will be sent with, or `None` if the
+    /// replied-to event isn't a local echo of this room (any more).
+    #[instrument(skip(self, content))]
+    async fn reply(
+        &self,
+        transaction_id: &TransactionId,
+        content: SerializableEventContent,
+        enforce_thread: EnforceThreadInReply,
+        created_at: MilliSecondsSinceUnixEpoch,
+    ) -> Result<Option<ChildTransactionId>, RoomSendQueueStorageError> {
+        let guard = self.store.lock().await;
+        let client = guard.client()?;
+        let store = client.state_store();
+
+        let requests = store.load_send_queue_requests(&self.room_id).await?;
+
+        // Find the local echo being replied to, and take its thread relation while we
+        // still can: once it has been sent, there is no guarantee the event is
+        // reachable by event id (it may not have made it to any cache yet).
+        let replied_to_thread =
+            match requests.iter().find(|item| item.transaction_id == transaction_id).and_then(
+                |item| as_variant!(&item.kind, QueuedRequestKind::Event { content } => content),
+            ) {
+                Some(content) => thread_relation_of(content),
+
+                None => {
+                    // We didn't find it as a queued request; try to find it as a dependent
+                    // queued request.
+                    let dependent_requests =
+                        store.load_dependent_queued_requests(&self.room_id).await?;
+
+                    let Some(dependent) = dependent_requests.into_iter().find(|item| {
+                        item.is_own_event() && *item.own_transaction_id == *transaction_id
+                    }) else {
+                        // We didn't find it as either a request or a dependent request, abort.
+                        return Ok(None);
+                    };
+
+                    // A reply to a reply that is itself waiting on a local echo: the thread of
+                    // the inner one is the thread of the whole chain.
+                    as_variant!(
+                        dependent.kind,
+                        DependentQueuedRequestKind::ReplyEvent { replied_to_thread, .. } =>
+                            replied_to_thread
+                    )
+                    .flatten()
+                }
+            };
+
+        // Record the dependent request.
+        let reply_txn_id = ChildTransactionId::new();
+        store
+            .save_dependent_queued_request(
+                &self.room_id,
+                transaction_id,
+                reply_txn_id.clone(),
+                created_at,
+                DependentQueuedRequestKind::ReplyEvent {
+                    content,
+                    replied_to_thread,
+                    enforce_thread,
+                },
+            )
+            .await?;
+
+        Ok(Some(reply_txn_id))
+    }
+
     /// Reacts to the given local echo of an event.
     #[instrument(skip(self))]
     async fn react(
@@ -2389,52 +2461,6 @@ impl QueueStorage {
             .await?;
 
         Ok(Some(reaction_txn_id))
-    }
-
-    /// Queue a reply to a request that hasn't been sent yet, as a dependent
-    /// request of it.
-    ///
-    /// Returns the transaction id of the reply, or `None` if the replied-to
-    /// request isn't in the queue anymore.
-    async fn reply(
-        &self,
-        transaction_id: &TransactionId,
-        content: RoomMessageEventContentWithoutRelation,
-        threading: ReplyThreading,
-        created_at: MilliSecondsSinceUnixEpoch,
-    ) -> Result<Option<ChildTransactionId>, RoomSendQueueStorageError> {
-        let guard = self.store.lock().await;
-        let client = guard.client()?;
-        let store = client.state_store();
-
-        let requests = store.load_send_queue_requests(&self.room_id).await?;
-
-        // If the replied-to event has already been sent, there's nothing to depend on.
-        if !requests.iter().any(|item| item.transaction_id == transaction_id) {
-            // It may still be a dependent request that hasn't graduated yet, like a
-            // media event whose upload is in flight.
-            let dependent_requests = store.load_dependent_queued_requests(&self.room_id).await?;
-            if !dependent_requests
-                .into_iter()
-                .filter_map(|item| item.is_own_event().then_some(item.own_transaction_id))
-                .any(|child_txn| *child_txn == *transaction_id)
-            {
-                return Ok(None);
-            }
-        }
-
-        let reply_txn_id = ChildTransactionId::new();
-        store
-            .save_dependent_queued_request(
-                &self.room_id,
-                transaction_id,
-                reply_txn_id.clone(),
-                created_at,
-                DependentQueuedRequestKind::ReplyEvent { content: Box::new(content), threading },
-            )
-            .await?;
-
-        Ok(Some(reply_txn_id))
     }
 
     /// Returns a list of the local echoes, that is, all the requests that we're
@@ -2530,16 +2556,15 @@ impl QueueStorage {
                 }),
 
                 DependentQueuedRequestKind::ReplyEvent { content, .. } => {
-                    // The reply doesn't carry its relation yet - the event it replies to
-                    // hasn't been given an ID - but it's an event of its own, so it shows
-                    // up as a local echo like any other.
+                    // Materialize as an event local echo, so the reply shows up in the
+                    // timeline right away, even while the event it replies to is itself
+                    // still being sent. The relation to the replied-to event is added when
+                    // this request graduates into a queued request, which keeps this very
+                    // transaction id.
                     Some(LocalEcho {
                         transaction_id: dep.own_transaction_id.clone().into(),
                         content: LocalEchoContent::Event {
-                            serialized_event: SerializableEventContent::new(
-                                &RoomMessageEventContent::from(*content).into(),
-                            )
-                            .ok()?,
+                            serialized_event: content,
                             send_handle: SendHandle {
                                 room: room.clone(),
                                 transaction_id: dep.own_transaction_id.into(),
@@ -2837,62 +2862,50 @@ impl QueueStorage {
                 }
             }
 
-            DependentQueuedRequestKind::ReplyEvent { content, threading } => {
+            DependentQueuedRequestKind::ReplyEvent {
+                content,
+                replied_to_thread,
+                enforce_thread,
+            } => {
                 let Some(parent_key) = parent_key else {
-                    // The replied-to event hasn't been sent yet, we should retry later.
+                    // Not applied yet, we should retry later => false.
                     return Ok(false);
                 };
 
-                let SentRequestKey::Event { event_id, event, event_type } = parent_key else {
+                let Some(parent_event_id) = parent_key.into_event_id() else {
                     return Err(RoomSendQueueError::StorageError(
                         RoomSendQueueStorageError::InvalidParentKey,
                     ));
                 };
 
-                // A local echo is always one of our own events, and the spec says not to
-                // mention oneself, so a reply to one never adds mentions.
-                let own_user_id =
-                    client.user_id().ok_or(RoomSendQueueError::RoomDisappeared)?.to_owned();
-
-                // Forward the replied-to event's thread relation, if it has one.
-                let thread = SerializableEventContent::from_raw(event, event_type)
-                    .deserialize()
-                    .ok()
-                    .and_then(|content| content.relation())
-                    .and_then(|relation| {
-                        as_variant::as_variant!(relation, EncryptedRelation::Thread)
-                    });
-
-                let metadata = ReplyMetadata::new(&event_id, &own_user_id, thread.as_ref());
-                let content = *content;
-
-                let reply = match threading {
-                    ReplyThreading::Threaded { is_reply } => content.make_for_thread(
-                        metadata,
-                        if is_reply { ReplyWithinThread::Yes } else { ReplyWithinThread::No },
-                        AddMentions::No,
-                    ),
-                    ReplyThreading::MaybeThreaded => {
-                        content.make_reply_to(metadata, ForwardThread::Yes, AddMentions::No)
-                    }
-                    ReplyThreading::Unthreaded => {
-                        content.make_reply_to(metadata, ForwardThread::No, AddMentions::No)
-                    }
+                let Ok(AnyMessageLikeEventContent::RoomMessage(reply_content)) =
+                    content.deserialize()
+                else {
+                    warn!("a queued reply must hold a room message; dropping it");
+                    return Ok(true);
                 };
 
-                let reply = AnyMessageLikeEventContent::from(reply);
-                let serializable = SerializableEventContent::from_raw(
-                    Raw::new(&reply).map_err(RoomSendQueueStorageError::JsonSerialization)?,
-                    reply.event_type().to_string(),
+                let reply_content = make_reply_to_local_echo(
+                    reply_content.into(),
+                    &parent_event_id,
+                    client.user_id().ok_or(RoomSendQueueError::RoomDisappeared)?,
+                    replied_to_thread.as_ref(),
+                    enforce_thread,
                 );
 
+                let reply_content = AnyMessageLikeEventContent::RoomMessage(reply_content);
+                let serializable = SerializableEventContent::new(&reply_content)
+                    .map_err(RoomSendQueueStorageError::JsonSerialization)?;
+
+                // Keep the dependent request's transaction id: it is the one the local echo
+                // was published with.
                 store
                     .save_send_queue_request(
                         &self.room_id,
                         dependent_request.own_transaction_id.into(),
                         dependent_request.created_at,
                         serializable.into(),
-                        Self::HIGH_PRIORITY,
+                        Self::LOW_PRIORITY,
                     )
                     .await
                     .map_err(RoomSendQueueStorageError::StateStoreError)?;
@@ -3553,36 +3566,39 @@ impl SendHandle {
 
     /// Send a reply to the event as soon as it's sent.
     ///
-    /// A reply carries the event ID of the event it replies to, which this
-    /// event doesn't have yet: the reply is queued behind it, and its relation
-    /// filled in once the server has given the replied-to event an ID. This is
-    /// what makes it possible to reply to a message that is still on its way,
-    /// or that hasn't left the device at all because it's offline.
+    /// This makes it possible to reply to a message of ours that hasn't been
+    /// sent yet, for instance while offline, and to open a thread on it.
     ///
-    /// Returns `Ok(None)` if the reply couldn't be queued because the event is
-    /// already a remote one; use [`Room::make_reply_event`] and the send queue
-    /// directly in that case.
+    /// The relation to the replied-to event is built once that event has been
+    /// sent and its event ID is known; until then, the reply shows up as a
+    /// local echo of its own, with the transaction ID this returns.
     ///
-    /// [`Room::make_reply_event`]: crate::Room::make_reply_event
+    /// If returning `Ok(None)`, this means the reply couldn't be queued because
+    /// the event is already a remote one; use [`crate::Room::make_reply_event`]
+    /// and send the result through the send queue instead.
     #[instrument(skip(self, content), fields(room_id = %self.room.inner.room.room_id(), txn_id = %self.transaction_id))]
     pub async fn reply(
         &self,
         content: RoomMessageEventContentWithoutRelation,
-        threading: ReplyThreading,
+        enforce_thread: EnforceThreadInReply,
     ) -> Result<Option<SendHandle>, RoomSendQueueStorageError> {
         trace!("received an intent to reply");
 
+        // The relation is added when the replied-to event has been sent; what is stored
+        // and echoed until then is the reply's own content.
+        let content =
+            SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(content.into()))
+                .map_err(RoomSendQueueStorageError::JsonSerialization)?;
+
         let created_at = MilliSecondsSinceUnixEpoch::now();
-        let echo_content = content.clone();
 
         let Some(reply_txn_id) = self
             .room
             .inner
             .queue
-            .reply(&self.transaction_id, content, threading, created_at)
+            .reply(&self.transaction_id, content.clone(), enforce_thread, created_at)
             .await?
         else {
-            debug!("local echo doesn't exist anymore, can't reply");
             return Ok(None);
         };
 
@@ -3593,20 +3609,17 @@ impl SendHandle {
 
         let send_handle = SendHandle {
             room: self.room.clone(),
-            transaction_id: reply_txn_id.clone().into(),
+            // Note: we do want the `txn_id` the reply will be sent with, not the one of
+            // the event being replied to.
+            transaction_id: reply_txn_id.into(),
             media_handles: vec![],
             created_at,
         };
 
-        // The reply has no relation yet - it can't, the event it replies to has no ID
-        // - but it is an event of its own, so it shows up as a local echo.
         self.room.send_update(RoomSendQueueUpdate::NewLocalEvent(LocalEcho {
-            transaction_id: reply_txn_id.into(),
+            transaction_id: send_handle.transaction_id.clone(),
             content: LocalEchoContent::Event {
-                serialized_event: SerializableEventContent::new(
-                    &RoomMessageEventContent::from(echo_content).into(),
-                )
-                .map_err(RoomSendQueueStorageError::JsonSerialization)?,
+                serialized_event: content,
                 send_handle: send_handle.clone(),
                 send_error: None,
             },
@@ -3818,6 +3831,51 @@ fn canonicalize_dependent_requests(
     by_txn.into_values().flat_map(|entries| entries.into_iter().cloned()).collect()
 }
 
+/// The `m.thread` relation of a serialized event content, if any.
+fn thread_relation_of(content: &SerializableEventContent) -> Option<Thread> {
+    let Ok(AnyMessageLikeEventContent::RoomMessage(content)) = content.deserialize() else {
+        return None;
+    };
+
+    as_variant!(content.relates_to, Some(Relation::Thread(thread)) => thread)
+}
+
+/// Build the content of a reply to an event whose ID has just become known,
+/// without looking that event up.
+///
+/// This is [`Room::make_reply_event`] for a reply that was queued against a
+/// local echo: by the time the reply is sent, the replied-to event has an event
+/// ID but is not necessarily in any cache yet, so the two things
+/// [`Room::make_reply_event`] would read from it are supplied instead. Its
+/// sender is the current user, since only our own local echoes can be replied
+/// to this way, so the reply never mentions them: the specification says a user
+/// must not mention themselves, as outgoing messages cannot self-notify.
+///
+/// [`Room::make_reply_event`]: crate::Room::make_reply_event
+fn make_reply_to_local_echo(
+    content: RoomMessageEventContentWithoutRelation,
+    replied_to_event_id: &EventId,
+    own_user_id: &UserId,
+    replied_to_thread: Option<&Thread>,
+    enforce_thread: EnforceThreadInReply,
+) -> RoomMessageEventContent {
+    let metadata = ReplyMetadata::new(replied_to_event_id, own_user_id, replied_to_thread);
+
+    match enforce_thread {
+        EnforceThreadInReply::Threaded { is_reply } => content.make_for_thread(
+            metadata,
+            if is_reply { ReplyWithinThread::Yes } else { ReplyWithinThread::No },
+            AddMentions::No,
+        ),
+        EnforceThreadInReply::MaybeThreaded => {
+            content.make_reply_to(metadata, ForwardThread::Yes, AddMentions::No)
+        }
+        EnforceThreadInReply::Unthreaded => {
+            content.make_reply_to(metadata, ForwardThread::No, AddMentions::No)
+        }
+    }
+}
+
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use std::{sync::Arc, time::Duration};
@@ -3829,12 +3887,19 @@ mod tests {
     };
     use matrix_sdk_test::{JoinedRoomBuilder, SyncResponseBuilder, async_test};
     use ruma::{
-        MilliSecondsSinceUnixEpoch, TransactionId,
-        events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
-        room_id,
+        EventId, MilliSecondsSinceUnixEpoch, TransactionId, event_id,
+        events::{
+            AnyMessageLikeEventContent,
+            relation::{Reply, Thread},
+            room::message::{Relation, RoomMessageEventContent},
+        },
+        owned_event_id, room_id, user_id,
     };
 
-    use super::canonicalize_dependent_requests;
+    use super::{
+        EnforceThreadInReply, canonicalize_dependent_requests, make_reply_to_local_echo,
+        thread_relation_of,
+    };
     use crate::{client::WeakClient, test_utils::logged_in_client};
 
     #[async_test]
@@ -3885,6 +3950,134 @@ mod tests {
         ] {
             assert!(!send_queue.is_verification_problem_resolved(&error).await, "{error:?}");
         }
+    }
+
+    /// The `m.relates_to` of a reply built by [`make_reply_to_local_echo`],
+    /// serialized, so the fields the specification names can be asserted on
+    /// directly.
+    fn reply_relation(
+        replied_to_thread: Option<Thread>,
+        enforce_thread: EnforceThreadInReply,
+    ) -> serde_json::Value {
+        let content = make_reply_to_local_echo(
+            RoomMessageEventContent::text_plain("the reply").into(),
+            event_id!("$replied_to"),
+            user_id!("@me:example.org"),
+            replied_to_thread.as_ref(),
+            enforce_thread,
+        );
+
+        serde_json::to_value(&content).unwrap()["m.relates_to"].clone()
+    }
+
+    fn thread_rooted_at(root: &EventId) -> Thread {
+        Thread::plain(root.to_owned(), root.to_owned())
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_starts_a_thread() {
+        // The replied-to event isn't in a thread, and a thread is enforced: the
+        // reply opens one rooted at the event it replies to.
+        let relation = reply_relation(None, EnforceThreadInReply::Threaded { is_reply: true });
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$replied_to");
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+        // A genuine reply within the thread, not the unthreaded-clients fallback.
+        assert!(relation["is_falling_back"].is_null());
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_joins_an_existing_thread() {
+        // The replied-to event is already in a thread: the reply joins *that*
+        // thread rather than opening a new one on the replied-to event.
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::Threaded { is_reply: true },
+        );
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$thread_root");
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+        assert!(relation["is_falling_back"].is_null());
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_not_a_reply_within_the_thread() {
+        // A plain message in the thread: its `m.in_reply_to` is only the fallback
+        // for thread-unaware clients, and says so.
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::Threaded { is_reply: false },
+        );
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$thread_root");
+        assert_eq!(relation["is_falling_back"], true);
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_forwards_the_thread() {
+        // `MaybeThreaded` forwards the replied-to event's thread when it has one…
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::MaybeThreaded,
+        );
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$thread_root");
+
+        // …and produces a plain reply when it doesn't.
+        let relation = reply_relation(None, EnforceThreadInReply::MaybeThreaded);
+
+        assert!(relation["rel_type"].is_null());
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_unthreaded() {
+        // `Unthreaded` drops the replied-to event's thread instead of forwarding
+        // it: the reply lands in the main timeline.
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::Unthreaded,
+        );
+
+        assert!(relation["rel_type"].is_null());
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+    }
+
+    #[test]
+    fn test_thread_relation_of() {
+        // The thread of a local echo is read back from its serialized content, so
+        // a reply queued against it can join the same thread.
+        let mut in_thread = RoomMessageEventContent::text_plain("in a thread");
+        in_thread.relates_to = Some(Relation::Thread(thread_rooted_at(event_id!("$thread_root"))));
+
+        let content =
+            SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(in_thread))
+                .unwrap();
+        assert_eq!(
+            thread_relation_of(&content).map(|thread| thread.event_id),
+            Some(owned_event_id!("$thread_root"))
+        );
+
+        // An event outside of any thread has none…
+        let content = SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(
+            RoomMessageEventContent::text_plain("in the room"),
+        ))
+        .unwrap();
+        assert_eq!(thread_relation_of(&content).map(|thread| thread.event_id), None);
+
+        // …and neither does a plain reply, which is a relation of another kind.
+        let mut plain_reply = RoomMessageEventContent::text_plain("a reply");
+        plain_reply.relates_to =
+            Some(Relation::Reply(Reply::with_event_id(owned_event_id!("$target"))));
+
+        let content =
+            SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(plain_reply))
+                .unwrap();
+        assert_eq!(thread_relation_of(&content).map(|thread| thread.event_id), None);
     }
 
     #[test]
@@ -4158,9 +4351,6 @@ mod tests {
 
     #[test]
     fn test_canonicalize_keeps_every_reply() {
-        use matrix_sdk_base::store::ReplyThreading;
-        use ruma::events::room::message::RoomMessageEventContentWithoutRelation;
-
         // Unlike an edit, which only the last one of matters, every reply to an event
         // is its own message and has to be sent.
         let txn = TransactionId::new();
@@ -4168,8 +4358,12 @@ mod tests {
         let reply = |body: &str| DependentQueuedRequest {
             own_transaction_id: ChildTransactionId::new(),
             kind: DependentQueuedRequestKind::ReplyEvent {
-                content: Box::new(RoomMessageEventContentWithoutRelation::text_plain(body)),
-                threading: ReplyThreading::MaybeThreaded,
+                content: SerializableEventContent::new(
+                    &RoomMessageEventContent::text_plain(body).into(),
+                )
+                .unwrap(),
+                replied_to_thread: None,
+                enforce_thread: EnforceThreadInReply::MaybeThreaded,
             },
             parent_transaction_id: txn.clone(),
             parent_key: None,
@@ -4190,9 +4384,6 @@ mod tests {
 
     #[test]
     fn test_canonicalize_drops_replies_to_a_redacted_event() {
-        use matrix_sdk_base::store::ReplyThreading;
-        use ruma::events::room::message::RoomMessageEventContentWithoutRelation;
-
         // The parent is going away, so nothing that depends on it is worth sending.
         let txn = TransactionId::new();
 
@@ -4208,8 +4399,12 @@ mod tests {
         let reply = DependentQueuedRequest {
             own_transaction_id: ChildTransactionId::new(),
             kind: DependentQueuedRequestKind::ReplyEvent {
-                content: Box::new(RoomMessageEventContentWithoutRelation::text_plain("reply")),
-                threading: ReplyThreading::MaybeThreaded,
+                content: SerializableEventContent::new(
+                    &RoomMessageEventContent::text_plain("reply").into(),
+                )
+                .unwrap(),
+                replied_to_thread: None,
+                enforce_thread: EnforceThreadInReply::MaybeThreaded,
             },
             parent_transaction_id: txn,
             parent_key: None,

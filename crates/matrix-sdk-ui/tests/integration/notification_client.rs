@@ -455,7 +455,7 @@ async fn test_notification_client_sliding_sync() {
                     "required_state": [
                         ["m.room.encryption", ""],
                         ["m.room.member", "$LAZY"],
-                        ["m.room.member", "$ME"],
+                        ["m.room.member", "@example:localhost"],
                         ["m.room.canonical_alias", ""],
                         ["m.room.name", ""],
                         ["m.room.avatar", ""],
@@ -476,7 +476,7 @@ async fn test_notification_client_sliding_sync() {
                     "required_state": [
                         ["m.room.encryption", ""],
                         ["m.room.member", "$LAZY"],
-                        ["m.room.member", "$ME"],
+                        ["m.room.member", "@example:localhost"],
                         ["m.room.canonical_alias", ""],
                         ["m.room.name", ""],
                         ["m.room.avatar", ""],
@@ -949,7 +949,7 @@ async fn test_notification_client_mixed() {
                     "required_state": [
                         ["m.room.encryption", ""],
                         ["m.room.member", "$LAZY"],
-                        ["m.room.member", "$ME"],
+                        ["m.room.member", "@example:localhost"],
                         ["m.room.canonical_alias", ""],
                         ["m.room.name", ""],
                         ["m.room.power_levels", ""],
@@ -966,7 +966,7 @@ async fn test_notification_client_mixed() {
                     "required_state": [
                         ["m.room.encryption", ""],
                         ["m.room.member", "$LAZY"],
-                        ["m.room.member", "$ME"],
+                        ["m.room.member", "@example:localhost"],
                         ["m.room.canonical_alias", ""],
                         ["m.room.name", ""],
                         ["m.room.power_levels", ""],

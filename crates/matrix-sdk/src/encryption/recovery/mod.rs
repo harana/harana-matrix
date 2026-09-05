@@ -701,20 +701,33 @@ impl Recovery {
         Ok(())
     }
 
-    async fn update_recovery_state_no_fail(&self) {
+    pub(crate) async fn update_recovery_state_no_fail(&self) {
         if let Err(e) = self.update_recovery_state().await {
             error!("Couldn't update the recovery state: {e:?}");
         }
     }
 
+    /// Ask the background task to recompute the [`RecoveryState`].
+    ///
+    /// Recomputing it runs `/account_data` requests, so it must not be done
+    /// inline in an event handler: those run on the sync task, and a slow
+    /// server response would hold up sync progress.
+    pub(crate) fn trigger_state_update(&self) {
+        let tasks = self.client.inner.e2ee.tasks.lock();
+
+        if let Some(task) = tasks.update_recovery_state.as_ref() {
+            task.trigger_update();
+        }
+    }
+
     #[instrument]
     async fn secret_send_event_handler(_: ToDeviceSecretSendEvent, client: Client) {
-        client.encryption().recovery().update_recovery_state_no_fail().await;
+        client.encryption().recovery().trigger_state_update();
     }
 
     #[instrument]
     async fn default_key_event_handler(_: SecretStorageDefaultKeyEvent, client: Client) {
-        client.encryption().recovery().update_recovery_state_no_fail().await;
+        client.encryption().recovery().trigger_state_update();
     }
 
     /// Listen for changes in the [`BackupState`] and, if necessary, update the
@@ -737,17 +750,13 @@ impl Recovery {
                             // intermediate states that tell us that
                             // we're creating a backup are not interesting.
                             if matches!(update, BackupState::Unknown | BackupState::Enabled) {
-                                client
-                                    .encryption()
-                                    .recovery()
-                                    .update_recovery_state_no_fail()
-                                    .await;
+                                client.encryption().recovery().trigger_state_update();
                             }
                         }
                         Err(_) => {
                             // We missed some updates, let's update our state in case something
                             // changed.
-                            client.encryption().recovery().update_recovery_state_no_fail().await;
+                            client.encryption().recovery().trigger_state_update();
                         }
                     }
                 } else {

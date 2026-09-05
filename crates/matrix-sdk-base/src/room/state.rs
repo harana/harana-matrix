@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::ready;
+
 use bitflags::bitflags;
+use futures_util::{Stream, StreamExt as _, stream};
 use ruma::events::room::member::MembershipState;
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +25,58 @@ impl Room {
     /// Get the state of the room.
     pub fn state(&self) -> RoomState {
         self.info.read().room_state
+    }
+
+    /// Subscribe to the state of the room, i.e. to the membership of the
+    /// current user in this room.
+    ///
+    /// The returned stream yields the current [`RoomState`] first, then a new
+    /// value on every transition: being invited, knocking, joining, leaving,
+    /// being kicked — which shows up as [`RoomState::Left`], same as leaving on
+    /// one's own — or being banned. A state that doesn't change is not yielded
+    /// again.
+    ///
+    /// This is the reliable way to learn that the current user is no longer in
+    /// a room: it is driven by the state store, so it doesn't depend on the
+    /// membership event making it into a timeline the client happens to be
+    /// watching.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use futures_util::StreamExt as _;
+    /// # use matrix_sdk_base::{Room, RoomState};
+    /// # async fn example(room: Room) {
+    /// let mut states = Box::pin(room.subscribe_to_state());
+    ///
+    /// while let Some(state) = states.next().await {
+    ///     match state {
+    ///         RoomState::Joined => println!("we're in"),
+    ///         RoomState::Left => println!("we left, or were kicked"),
+    ///         RoomState::Banned => println!("we were banned"),
+    ///         _ => {}
+    ///     }
+    /// }
+    /// # }
+    /// ```
+    pub fn subscribe_to_state(&self) -> impl Stream<Item = RoomState> + use<> {
+        // Subscribe before reading the current value, so that a transition
+        // happening in between is not missed. It may be yielded twice, which the
+        // deduplication below takes care of.
+        let updates = self.subscribe_info().map(|info| info.room_state);
+        let current = self.info.read().room_state;
+
+        stream::once(ready(current))
+            .chain(updates)
+            .scan(None, |previous: &mut Option<RoomState>, state| {
+                let changed = *previous != Some(state);
+                *previous = Some(state);
+
+                // Note: `scan` ends the stream on `None`, so the deduplication has to
+                // happen in the `filter_map` below, not here.
+                ready(Some(changed.then_some(state)))
+            })
+            .filter_map(ready)
     }
 }
 
@@ -118,11 +173,50 @@ impl RoomStateFilter {
 
 #[cfg(test)]
 mod tests {
+    use assert_matches::assert_matches;
+    use futures_util::{FutureExt as _, StreamExt as _};
     use matrix_sdk_test::async_test;
     use ruma::owned_room_id;
 
     use super::{RoomState, RoomStateFilter};
     use crate::test_utils::logged_in_base_client;
+
+    #[async_test]
+    async fn test_subscribe_to_state() {
+        let client = logged_in_base_client(None).await;
+
+        let room_id = owned_room_id!("!room:example.org");
+        let room = client.get_or_create_room(&room_id, RoomState::Invited);
+
+        let mut states = Box::pin(room.subscribe_to_state());
+
+        // The current state is yielded right away.
+        assert_matches!(states.next().now_or_never(), Some(Some(RoomState::Invited)));
+        assert!(states.next().now_or_never().is_none());
+
+        // Every transition is yielded…
+        room.update_room_info(|mut info| {
+            info.room_state = RoomState::Joined;
+            (info, Default::default())
+        })
+        .await;
+
+        assert_matches!(states.next().now_or_never(), Some(Some(RoomState::Joined)));
+
+        // … but an update that doesn't change the state isn't.
+        room.update_room_info(|info| (info, Default::default())).await;
+
+        assert!(states.next().now_or_never().is_none());
+
+        // Being kicked or leaving both show up as `Left`, being banned as `Banned`.
+        room.update_room_info(|mut info| {
+            info.room_state = RoomState::Banned;
+            (info, Default::default())
+        })
+        .await;
+
+        assert_matches!(states.next().now_or_never(), Some(Some(RoomState::Banned)));
+    }
 
     #[async_test]
     async fn test_room_state_filters() {

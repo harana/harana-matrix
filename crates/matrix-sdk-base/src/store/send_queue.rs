@@ -24,10 +24,8 @@ use ruma::{
     events::{
         AnyMessageLikeEventContent, MessageLikeEventContent as _, RawExt as _,
         receipt::ReceiptThread,
-        room::{
-            MediaSource,
-            message::{RoomMessageEventContent, RoomMessageEventContentWithoutRelation},
-        },
+        relation::Thread,
+        room::{MediaSource, message::RoomMessageEventContent},
     },
     serde::Raw,
 };
@@ -151,9 +149,10 @@ pub enum QueuedRequestKind {
 
     /// Several read markers to set at once, as one request.
     ///
-    /// This is what [`crate::store::send_queue::QueuedRequestKind::ReadReceipt`]
-    /// is to a single receipt, for the endpoint that sets the fully-read
-    /// marker and both read receipts in one go.
+    /// This is what
+    /// [`crate::store::send_queue::QueuedRequestKind::ReadReceipt`] is to a
+    /// single receipt, for the endpoint that sets the fully-read marker and
+    /// both read receipts in one go.
     ReadMarkers {
         /// The event the fully-read marker points at, if it is being set.
         fully_read: Option<OwnedEventId>,
@@ -351,19 +350,23 @@ pub enum DependentQueuedRequestKind {
         key: String,
     },
 
-    /// A reply to the event this request depends on should be sent.
-    ///
-    /// A reply carries the event ID of what it replies to, and a local echo
-    /// doesn't have one: the relation is filled in once the replied-to event
-    /// has been sent and the server has given it an ID.
+    /// The event should be replied to.
     ReplyEvent {
-        /// The content of the reply, without its relation.
-        ///
-        /// `Box`ed so that it doesn't grow the whole enum.
-        content: Box<RoomMessageEventContentWithoutRelation>,
+        /// The content of the reply, without any relation to the replied-to
+        /// event: that relation can only be built once the replied-to event
+        /// has an event ID.
+        content: SerializableEventContent,
 
-        /// How the reply should relate to a thread.
-        threading: ReplyThreading,
+        /// The `m.thread` relation of the event being replied to, if any.
+        ///
+        /// It is captured when the reply is queued: the replied-to event is a
+        /// local echo, so there is no way to look it up by event ID by the
+        /// time the reply is finally sent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        replied_to_thread: Option<Thread>,
+
+        /// Whether an `m.thread` relation must be enforced on the reply.
+        enforce_thread: EnforceThreadInReply,
     },
 
     /// Upload a file or thumbnail depending on another file or thumbnail
@@ -418,26 +421,26 @@ pub enum DependentQueuedRequestKind {
     },
 }
 
-/// How a queued reply should relate to a thread.
+/// Whether an `m.thread` relation must be enforced on a queued reply.
 ///
-/// This is the serializable counterpart of
-/// `matrix_sdk::room::reply::EnforceThread`, which can't be stored as is.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum ReplyThreading {
-    /// A thread relation is enforced: if the replied-to event isn't in a
-    /// thread, the reply starts one.
+/// This is the storable counterpart of
+/// `matrix_sdk::room::reply::EnforceThread`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnforceThreadInReply {
+    /// A thread relation is enforced. If the replied-to event isn't in a
+    /// thread itself, a new thread rooted at it is started.
     Threaded {
-        /// Whether the reply is also a rich reply to its target, within that
-        /// thread.
+        /// Whether the reply is an explicit reply within the thread, rather
+        /// than a plain message in it with a fallback for unthreaded clients.
         is_reply: bool,
     },
 
-    /// A thread relation isn't enforced; the replied-to event's own thread
-    /// relation, if it has one, is forwarded.
+    /// A thread relation is not enforced. If the replied-to event is in a
+    /// thread, that relation is forwarded.
     MaybeThreaded,
 
-    /// A thread relation isn't enforced, and the replied-to event's thread
-    /// relation is *not* forwarded.
+    /// A thread relation is not enforced. If the replied-to event is in a
+    /// thread, that relation is *not* forwarded.
     Unthreaded,
 }
 
@@ -715,12 +718,12 @@ impl DependentQueuedRequest {
                 // a new MXC ID).
                 false
             }
-            DependentQueuedRequestKind::FinishUpload { .. } => {
-                // This one graduates into a new media event.
-                true
-            }
             DependentQueuedRequestKind::ReplyEvent { .. } => {
                 // This one graduates into a new message event.
+                true
+            }
+            DependentQueuedRequestKind::FinishUpload { .. } => {
+                // This one graduates into a new media event.
                 true
             }
             #[cfg(feature = "unstable-msc4274")]
@@ -746,7 +749,6 @@ impl fmt::Debug for QueuedRequest {
 #[cfg(test)]
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
-
     use ruma::{
         api::client::receipt::create_receipt::v3::ReceiptType,
         events::{receipt::ReceiptThread, room::MediaSource},
@@ -756,9 +758,9 @@ mod tests {
 
     use super::{
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
-        MilliSecondsSinceUnixEpoch, QueuedRequestKind, ReplyThreading,
-        RoomMessageEventContentWithoutRelation, SentMediaInfo, SentMediaItem, SentRequestKey,
-        SupersedesKey,
+        EnforceThreadInReply, MilliSecondsSinceUnixEpoch, QueuedRequestKind,
+        RoomMessageEventContent, SentMediaInfo, SentMediaItem, SentRequestKey,
+        SerializableEventContent, SupersedesKey,
     };
 
     #[test]
@@ -978,8 +980,12 @@ mod tests {
         // Unlike an edit or a reaction, a reply becomes its own timeline item.
         let reply = DependentQueuedRequest {
             kind: DependentQueuedRequestKind::ReplyEvent {
-                content: Box::new(RoomMessageEventContentWithoutRelation::text_plain("reply")),
-                threading: ReplyThreading::MaybeThreaded,
+                content: SerializableEventContent::new(
+                    &RoomMessageEventContent::text_plain("reply").into(),
+                )
+                .unwrap(),
+                replied_to_thread: None,
+                enforce_thread: EnforceThreadInReply::MaybeThreaded,
             },
             parent_transaction_id: "parent".into(),
             own_transaction_id: ChildTransactionId::new(),
@@ -996,16 +1002,16 @@ mod tests {
     }
 
     #[test]
-    fn test_reply_threading_round_trip() {
-        for threading in [
-            ReplyThreading::Threaded { is_reply: true },
-            ReplyThreading::Threaded { is_reply: false },
-            ReplyThreading::MaybeThreaded,
-            ReplyThreading::Unthreaded,
+    fn test_enforce_thread_in_reply_round_trip() {
+        for enforce_thread in [
+            EnforceThreadInReply::Threaded { is_reply: true },
+            EnforceThreadInReply::Threaded { is_reply: false },
+            EnforceThreadInReply::MaybeThreaded,
+            EnforceThreadInReply::Unthreaded,
         ] {
-            let serialized = serde_json::to_string(&threading).unwrap();
-            let deserialized: ReplyThreading = serde_json::from_str(&serialized).unwrap();
-            assert_eq!(format!("{threading:?}"), format!("{deserialized:?}"), "{serialized}");
+            let serialized = serde_json::to_string(&enforce_thread).unwrap();
+            let deserialized: EnforceThreadInReply = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(enforce_thread, deserialized, "{serialized}");
         }
     }
 

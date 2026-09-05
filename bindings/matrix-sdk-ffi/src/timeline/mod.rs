@@ -560,7 +560,7 @@ impl Timeline {
     ) -> Result<Arc<SendHandle>, ClientError> {
         let item_id: TimelineEventItemId =
             event_or_transaction_id.try_into().map_err(|_| RoomError::InvalidRepliedToEventId)?;
-        let handle = self.inner.send_reply((*msg).clone(), item_id).await?;
+        let handle = self.inner.send_reply_to((*msg).clone(), &item_id).await?;
         Ok(Arc::new(SendHandle::new(handle)))
     }
 

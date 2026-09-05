@@ -158,6 +158,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use self::futures::{SendAttachment, SendMessageLikeEvent, SendRawMessageLikeEvent};
 pub use self::{
     member::{RoomMember, RoomMemberRole},
+    member_list::{RoomMemberListPage, RoomMemberListQuery, RoomMemberSortOrder},
     messages::{
         EventWithContextResponse, IncludeRelations, ListThreadsOptions, Messages, MessagesOptions,
         Relations, RelationsOptions, ThreadRoots,
@@ -185,6 +186,7 @@ use crate::{
         power_levels::{RoomPowerLevelChanges, RoomPowerLevelsExt},
         privacy_settings::RoomPrivacySettings,
     },
+    room_preview::RoomPreview,
     sync::RoomUpdate,
     utils::{IntoRawMessageLikeEventContent, IntoRawStateEventContent},
 };
@@ -195,6 +197,7 @@ pub mod identity_status_changes;
 /// Contains code related to requests to join a room.
 pub mod knock_requests;
 mod member;
+mod member_list;
 mod messages;
 pub mod power_levels;
 pub mod reply;
@@ -1020,6 +1023,11 @@ impl Room {
             .locks()
             .members_request_deduplicated_handler
             .run(self.room_id().to_owned(), async move {
+                // Taken before the request is sent, and held until its response has been
+                // handled: it makes the member events a sync writes in the meantime win
+                // over the older state this response describes.
+                let _guard = self.inner.start_members_request();
+
                 let request = get_member_events::v3::Request::new(self.inner.room_id().to_owned());
                 let response = self
                     .client
@@ -1044,12 +1052,70 @@ impl Room {
             .await
     }
 
+    /// Join the successor of this room, i.e. the room that replaced it when it
+    /// was tombstoned.
+    ///
+    /// The candidate servers of [`SuccessorRoom::via`] are passed along as
+    /// `via` parameters, which is what lets a user whose own server has never
+    /// seen the successor room follow the tombstone.
+    ///
+    /// Returns `None` if this room has not been tombstoned, or if its
+    /// `m.room.tombstone` event carries no replacement room.
+    ///
+    /// [`SuccessorRoom::via`]: crate::SuccessorRoom::via
+    pub async fn join_successor_room(&self) -> Result<Option<Room>> {
+        let Some(successor_room) = self.successor_room() else {
+            return Ok(None);
+        };
+
+        self.client
+            .join_room_by_id_or_alias((*successor_room.room_id).into(), &successor_room.via)
+            .await
+            .map(Some)
+    }
+
+    /// Preview the successor of this room, i.e. the room that replaced it when
+    /// it was tombstoned.
+    ///
+    /// As for [`Room::join_successor_room`], the candidate servers of
+    /// [`SuccessorRoom::via`] are passed along, so the preview works from a
+    /// server that has never seen the successor room.
+    ///
+    /// Returns `None` if this room has not been tombstoned, or if its
+    /// `m.room.tombstone` event carries no replacement room.
+    ///
+    /// [`SuccessorRoom::via`]: crate::SuccessorRoom::via
+    pub async fn successor_room_preview(&self) -> Result<Option<RoomPreview>> {
+        let Some(successor_room) = self.successor_room() else {
+            return Ok(None);
+        };
+
+        self.client
+            .get_room_preview((*successor_room.room_id).into(), successor_room.via)
+            .await
+            .map(Some)
+    }
+
     /// Request to update the encryption state for this room.
     ///
     /// It does nothing if the encryption state is already
     /// [`EncryptionState::Encrypted`] or [`EncryptionState::NotEncrypted`].
+    ///
+    /// It also does nothing for a room we are only invited to: the server
+    /// answers `/state` with a `M_FORBIDDEN` error in that case. The encryption
+    /// state of such a room is known only if its stripped state carried an
+    /// `m.room.encryption` event, and stays [`EncryptionState::Unknown`]
+    /// otherwise, until the room is joined.
     pub async fn request_encryption_state(&self) -> Result<()> {
         if !self.inner.encryption_state().is_unknown() {
+            return Ok(());
+        }
+
+        if self.state() == RoomState::Invited {
+            debug!(
+                room_id = ?self.room_id(),
+                "Not requesting the encryption state of a room we are only invited to,                  the server would deny it"
+            );
             return Ok(());
         }
 

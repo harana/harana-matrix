@@ -23,16 +23,16 @@ impl Room {
     /// Note that it clones the [`LatestEventValue`]! This can add pressure
     /// on the memory if used in a hot path.
     pub fn latest_event(&self) -> LatestEventValue {
-        self.info.read().latest_event_value.clone()
+        self.info.read().latest_event_value().clone()
     }
 
     /// Return the value of [`LatestEventValue::timestamp`].
     pub fn latest_event_timestamp(&self) -> Option<MilliSecondsSinceUnixEpoch> {
-        self.info.read().latest_event_value.timestamp()
+        self.info.read().latest_event_value().timestamp()
     }
 
     /// Return the value of [`LatestEventValue::is_unsent`].
     pub fn latest_event_is_unsent(&self) -> bool {
-        self.info.read().latest_event_value.is_unsent()
+        self.info.read().latest_event_value().is_unsent()
     }
 }

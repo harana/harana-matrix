@@ -37,14 +37,14 @@ use ruma::{
             message::{RoomMessageEventContent, RoomMessageEventContentWithoutRelation},
         },
     },
-    int, mxc_uri, owned_event_id, owned_user_id, room_id, thirdparty, user_id,
+    int, mxc_uri, owned_event_id, owned_user_id, room_id, server_name, thirdparty, user_id,
 };
 use serde_json::json;
 use stream_assert::assert_pending;
 use tokio::time::sleep;
 use wiremock::{
     Mock, ResponseTemplate,
-    matchers::{body_json, body_partial_json, header, method, path_regex},
+    matchers::{body_json, body_partial_json, header, method, path_regex, query_param},
 };
 
 use crate::{logged_in_client_with_server, mock_sync};
@@ -1136,6 +1136,99 @@ async fn test_enable_encryption_doesnt_stay_unknown() {
 
     assert!(room.latest_encryption_state().await.unwrap().is_encrypted());
     assert_matches!(room.encryption_state(), EncryptionState::Encrypted);
+}
+
+#[async_test]
+async fn test_join_successor_room_uses_the_tombstone_sender_as_via() {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+
+    let room_id = room_id!("!old:b.c");
+    let successor_room_id = room_id!("!new:d.e");
+    // The room was tombstoned by someone on another server, which is the server
+    // that knows the successor room; ours has never seen it.
+    let admin = user_id!("@admin:knows-the-successor.org");
+
+    let room = mock
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_state_event(
+                EventFactory::new()
+                    .room(room_id)
+                    .sender(admin)
+                    .room_tombstone("moved", successor_room_id),
+            ),
+        )
+        .await;
+
+    assert_matches!(room.successor_room(), Some(successor) => {
+        assert_eq!(successor.room_id, successor_room_id);
+        assert_eq!(successor.via, vec![server_name!("knows-the-successor.org").to_owned()]);
+    });
+
+    // The `via` is passed along to the join, so the successor room is routable.
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/_matrix/client/v3/join/.*"))
+        .and(query_param("via", "knows-the-successor.org"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "room_id": successor_room_id })),
+        )
+        .expect(1)
+        .mount(mock.server())
+        .await;
+
+    let joined = room.join_successor_room().await.unwrap().expect("the room was tombstoned");
+    assert_eq!(joined.room_id(), successor_room_id);
+}
+
+#[async_test]
+async fn test_join_successor_room_of_a_room_without_a_tombstone() {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    assert!(room.join_successor_room().await.unwrap().is_none());
+}
+
+#[async_test]
+async fn test_encryption_state_of_an_invited_room_comes_from_the_stripped_state() {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+    let user = user_id!("@example:localhost");
+
+    // The server answers `/state` with `M_FORBIDDEN` for a room we are only invited
+    // to, so no `/state` mock is mounted here: the request must never be sent.
+    let room = mock
+        .sync_room(
+            &client,
+            InvitedRoomBuilder::new(room_id)
+                .add_state_event(EventFactory::new().sender(user).room(room_id).room_encryption()),
+        )
+        .await;
+
+    assert_eq!(room.state(), RoomState::Invited);
+    assert!(room.latest_encryption_state().await.unwrap().is_encrypted());
+}
+
+#[async_test]
+async fn test_encryption_state_of_an_invited_room_stays_unknown_without_stripped_state() {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+
+    let room_id = room_id!("!a:b.c");
+
+    // The stripped state of the invite doesn't carry `m.room.encryption`, so the
+    // encryption state cannot be known. Asking the server is not an option, it
+    // would answer `M_FORBIDDEN`, so this must resolve to `Unknown` rather than
+    // fail.
+    let room = mock.sync_room(&client, InvitedRoomBuilder::new(room_id)).await;
+
+    assert_eq!(room.state(), RoomState::Invited);
+    assert_matches!(room.latest_encryption_state().await.unwrap(), EncryptionState::Unknown);
 }
 
 #[cfg(feature = "experimental-encrypted-state-events")]
