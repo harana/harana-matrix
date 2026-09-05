@@ -2044,6 +2044,46 @@ pub(crate) mod tests {
     }
 
     #[async_test]
+    async fn test_devices_stream_reports_deleted_devices() {
+        let manager = manager_test_helper(user_id(), device_id()).await;
+
+        // Given we know about the user's devices
+        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
+        manager.receive_keys_query_response(&request_id, &own_key_query()).await.unwrap();
+
+        let known_devices = manager.store.get_user_devices(user_id()).await.unwrap();
+        let deleted_device_id = known_devices
+            .keys()
+            .find(|id| *id != device_id())
+            .expect("The test data should contain a device other than our own")
+            .to_owned();
+
+        let stream = manager.store.devices_stream();
+        pin_mut!(stream);
+
+        // When a later `/keys/query` no longer lists one of them
+        let response = ruma_response_from_json(&json!({
+            "device_keys": {
+                user_id().to_string(): {},
+            },
+        }));
+        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
+        manager.receive_keys_query_response(&request_id, &response).await.unwrap();
+
+        // Then the update tells us which device disappeared
+        let update = assert_ready!(stream);
+
+        let deleted = update
+            .deleted
+            .get(user_id())
+            .expect("The update should mention the user whose device was deleted");
+        assert!(
+            deleted.contains_key(&deleted_device_id),
+            "The update should name the device which was deleted"
+        );
+    }
+
+    #[async_test]
     async fn test_identities_stream() {
         let manager = manager_test_helper(user_id(), device_id()).await;
         let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
@@ -2377,6 +2417,51 @@ pub(crate) mod tests {
     }
 
     #[async_test]
+    async fn test_pinning_a_stale_identity_does_not_revert_newer_keys() {
+        use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
+
+        let machine = common_verified_identity_changes_machine_setup().await;
+
+        // Given an identity we have read out of the store
+        let keys_query = DataSet::bob_keys_query_response_signed();
+        machine.mark_request_as_sent(&TransactionId::new(), &keys_query).await.unwrap();
+
+        let stale_identity =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        let old_master_key = stale_identity.master_key().to_owned();
+
+        // And a new set of cross-signing keys for that user which landed in the store
+        // after we read it
+        let keys_query = DataSet::bob_keys_query_response_rotated();
+        machine.mark_request_as_sent(&TransactionId::new(), &keys_query).await.unwrap();
+
+        let rotated_master_key = machine
+            .get_identity(DataSet::bob_id(), None)
+            .await
+            .unwrap()
+            .unwrap()
+            .other()
+            .unwrap()
+            .master_key()
+            .to_owned();
+        assert_ne!(old_master_key, rotated_master_key, "The identity should have been rotated");
+
+        // When we pin the stale copy of the identity
+        stale_identity.pin_current_master_key().await.unwrap();
+
+        // Then the newer keys are still the ones in the store: pinning must not write
+        // the copy we were holding back over them
+        let stored =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+
+        assert_eq!(
+            stored.master_key(),
+            &rotated_master_key,
+            "Pinning a stale identity must not revert the newer cross-signing keys"
+        );
+    }
+
+    #[async_test]
     async fn test_manager_verified_identity_changes_setup_on_updated_identities() {
         use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
 
@@ -2614,6 +2699,34 @@ pub(crate) mod tests {
                     .expect("Could not find session after update");
                 assert_matches!(updated.sender_data, SenderData::UnknownDevice { .. });
             }
+        }
+
+        #[async_test]
+        async fn test_a_legacy_session_is_not_downgraded() {
+            let manager = manager_test_helper(user_id(), device_id()).await;
+
+            // Given a session which we restored from a key backup, and which we know to
+            // be a legacy one
+            let account = Account::new(user_id());
+            let session = create_inbound_group_session(&account).await;
+            let exported = session.export().await;
+
+            let mut session = InboundGroupSession::from_export(&exported).unwrap();
+            session.sender_data =
+                SenderData::UnknownDevice { legacy_session: true, owner_check_failed: false };
+            assert!(session.has_been_imported());
+
+            // When a `/keys/query` gives us the sending device, which cannot be proven to
+            // own an imported session
+            let device_data = DeviceData::from_account(&account);
+            manager.update_sender_data_for_session(&mut session, &device_data).await.unwrap();
+
+            // Then the session is still a legacy one: downgrading it would hide its
+            // messages when insecure devices are excluded
+            assert_matches!(
+                session.sender_data,
+                SenderData::UnknownDevice { legacy_session: true, .. }
+            );
         }
 
         /// Create an InboundGroupSession sent from the given account

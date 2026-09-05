@@ -35,6 +35,32 @@ async fn test_stores_and_returns_room_settings() {
 }
 
 #[async_test]
+async fn test_cached_room_settings_stay_coherent_with_the_store() {
+    let machine = OlmMachine::new(tests::user_id(), tests::alice_device_id()).await;
+    let room_id = room_id!("!test:localhost");
+
+    // Given we have already asked for the settings of a room which has none, so the
+    // answer is cached
+    assert!(machine.room_settings(room_id).await.unwrap().is_none());
+    assert!(machine.room_settings(room_id).await.unwrap().is_none());
+
+    // When the settings are stored
+    let settings = RoomSettings {
+        algorithm: EventEncryptionAlgorithm::MegolmV1AesSha2,
+        #[cfg(feature = "experimental-encrypted-state-events")]
+        encrypt_state_events: false,
+        only_allow_trusted_devices: true,
+        session_rotation_period: Some(Duration::from_secs(10)),
+        session_rotation_period_messages: Some(1234),
+    };
+    machine.set_room_settings(room_id, &settings).await.unwrap();
+
+    // Then we see them, rather than the cached answer from before the write
+    assert_eq!(machine.room_settings(room_id).await.unwrap(), Some(settings.clone()));
+    assert_eq!(machine.room_settings(room_id).await.unwrap(), Some(settings));
+}
+
+#[async_test]
 async fn test_set_room_settings_rejects_invalid_algorithms() {
     let machine = OlmMachine::new(tests::user_id(), tests::alice_device_id()).await;
     let room_id = room_id!("!test:localhost");

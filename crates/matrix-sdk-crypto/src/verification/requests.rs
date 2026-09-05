@@ -1853,6 +1853,27 @@ mod tests {
 
         assert!(!bob_sas.is_cancelled());
         assert!(!alice_sas.is_cancelled());
+
+        // When the flow finishes
+        let done_content = ruma::events::key::verification::done::KeyVerificationDoneEventContent::new(
+            ruma::events::relation::Reference::new(event_id.to_owned()),
+        );
+        alice_request.receive_done(bob_id(), &(&done_content).into());
+
+        // Then the request still knows which device it verified, so that a client can
+        // tell the user what was just verified
+        assert!(alice_request.is_done());
+        assert_eq!(
+            alice_request.other_device_id().as_deref(),
+            Some(bob_device_data.device_id()),
+            "The device ID should still be available once the verification is done"
+        );
+        assert_eq!(alice_request.other_device_data().as_ref(), Some(&bob_device_data));
+
+        assert_let!(
+            VerificationRequestState::Done { other_device_data } = alice_request.state()
+        );
+        assert_eq!(other_device_data.as_ref(), Some(&bob_device_data));
     }
 
     #[async_test]
