@@ -489,7 +489,9 @@ impl Timeline {
         };
 
         match item.handle() {
-            TimelineItemHandle::Remote(event_id) => self.send_reply(content, event_id.to_owned()).await,
+            TimelineItemHandle::Remote(event_id) => {
+                self.send_reply(content, event_id.to_owned()).await
+            }
 
             TimelineItemHandle::Local(handle) => {
                 let enforce_thread = if self.controller.is_threaded() {

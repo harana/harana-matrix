@@ -322,7 +322,8 @@ pub enum DependentQueuedRequestKind {
 
 /// Whether an `m.thread` relation must be enforced on a queued reply.
 ///
-/// This is the storable counterpart of `matrix_sdk::room::reply::EnforceThread`.
+/// This is the storable counterpart of
+/// `matrix_sdk::room::reply::EnforceThread`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EnforceThreadInReply {
     /// A thread relation is enforced. If the replied-to event isn't in a

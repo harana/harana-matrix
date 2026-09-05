@@ -90,7 +90,7 @@ impl Builder {
                 // been redacted still has a latest event.
                 if let Some(thread_id) = thread_id
                     && extract_thread_root(event.raw()).as_deref() != Some(thread_id)
-                    && event.event_id().as_deref() != Some(thread_id)
+                    && event.event_id() != Some(thread_id)
                 {
                     return None;
                 }

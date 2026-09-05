@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    ops::Not,
-    sync::Arc,
-};
+#[cfg(feature = "e2e-encryption")]
+use std::collections::{BTreeMap, BTreeSet};
+use std::{collections::HashMap, ops::Not, sync::Arc};
 
 use eyeball::SharedObservable;
 use eyeball_im::VectorDiff;
@@ -381,7 +379,7 @@ impl Caches {
 
                     let known = linked_chunk
                         .revents()
-                        .any(|(_position, known)| known.event_id().as_deref() == Some(&*event_id));
+                        .any(|(_position, known)| known.event_id() == Some(&*event_id));
 
                     if known.not() {
                         new_events.push(event);

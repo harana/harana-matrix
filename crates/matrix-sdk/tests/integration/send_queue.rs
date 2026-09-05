@@ -4371,8 +4371,9 @@ async fn test_reply_to_a_local_echo() {
     assert_eq!(bodies[1]["m.relates_to"]["rel_type"], "m.thread");
     assert_eq!(bodies[1]["m.relates_to"]["event_id"], "$1");
     assert_eq!(bodies[1]["m.relates_to"]["m.in_reply_to"]["event_id"], "$1");
-    // `is_falling_back` defaults to `false` and is skipped when serializing: this is
-    // a genuine reply within the thread, not the unthreaded-clients fallback.
+    // `is_falling_back` defaults to `false` and is skipped when serializing: this
+    // is a genuine reply within the thread, not the unthreaded-clients
+    // fallback.
     assert!(bodies[1]["m.relates_to"]["is_falling_back"].is_null());
 }
 
@@ -4442,9 +4443,7 @@ async fn test_reply_to_a_local_echo_in_an_existing_thread() {
     q.set_enabled(true);
 
     assert_let_timeout!(Ok(RoomSendQueueUpdate::SentEvent { .. }) = watch.recv());
-    assert_let_timeout!(
-        Ok(RoomSendQueueUpdate::SentEvent { transaction_id, .. }) = watch.recv()
-    );
+    assert_let_timeout!(Ok(RoomSendQueueUpdate::SentEvent { transaction_id, .. }) = watch.recv());
     assert_eq!(transaction_id, reply_txn);
 
     // The reply is in the *existing* thread, and explicitly answers the event it
@@ -4455,7 +4454,8 @@ async fn test_reply_to_a_local_echo_in_an_existing_thread() {
     assert_eq!(bodies[1]["m.relates_to"]["rel_type"], "m.thread");
     assert_eq!(bodies[1]["m.relates_to"]["event_id"], thread_root.as_str());
     assert_eq!(bodies[1]["m.relates_to"]["m.in_reply_to"]["event_id"], "$1");
-    // `is_falling_back` defaults to `false` and is skipped when serializing: this is
-    // a genuine reply within the thread, not the unthreaded-clients fallback.
+    // `is_falling_back` defaults to `false` and is skipped when serializing: this
+    // is a genuine reply within the thread, not the unthreaded-clients
+    // fallback.
     assert!(bodies[1]["m.relates_to"]["is_falling_back"].is_null());
 }

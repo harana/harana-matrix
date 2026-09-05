@@ -146,10 +146,11 @@ use std::{
     time::Duration,
 };
 
+use as_variant::as_variant;
 use eyeball::SharedObservable;
 #[cfg(feature = "e2e-encryption")]
-use as_variant::as_variant;
 use matrix_sdk_base::crypto::{OlmError, SessionRecipientCollectionError};
+pub use matrix_sdk_base::store::EnforceThreadInReply;
 #[cfg(feature = "unstable-msc4274")]
 use matrix_sdk_base::store::FinishGalleryItemInfo;
 use matrix_sdk_base::{
@@ -177,9 +178,8 @@ use ruma::{
         room::{
             MediaSource,
             message::{
-                AddMentions, ForwardThread, FormattedBody, Relation, ReplyMetadata,
-                ReplyWithinThread, RoomMessageEventContent,
-                RoomMessageEventContentWithoutRelation,
+                AddMentions, FormattedBody, ForwardThread, Relation, ReplyMetadata,
+                ReplyWithinThread, RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
             },
         },
     },
@@ -195,8 +195,6 @@ use crate::{
     error::RetryKind,
     room::{WeakRoom, edit::EditedContent},
 };
-
-pub use matrix_sdk_base::store::EnforceThreadInReply;
 
 mod progress;
 mod upload;
@@ -1979,36 +1977,35 @@ impl QueueStorage {
         // Find the local echo being replied to, and take its thread relation while we
         // still can: once it has been sent, there is no guarantee the event is
         // reachable by event id (it may not have made it to any cache yet).
-        let replied_to_thread = match requests
-            .iter()
-            .find(|item| item.transaction_id == transaction_id)
-            .and_then(|item| as_variant!(&item.kind, QueuedRequestKind::Event { content } => content))
-        {
-            Some(content) => thread_relation_of(content),
+        let replied_to_thread =
+            match requests.iter().find(|item| item.transaction_id == transaction_id).and_then(
+                |item| as_variant!(&item.kind, QueuedRequestKind::Event { content } => content),
+            ) {
+                Some(content) => thread_relation_of(content),
 
-            None => {
-                // We didn't find it as a queued request; try to find it as a dependent
-                // queued request.
-                let dependent_requests =
-                    store.load_dependent_queued_requests(&self.room_id).await?;
+                None => {
+                    // We didn't find it as a queued request; try to find it as a dependent
+                    // queued request.
+                    let dependent_requests =
+                        store.load_dependent_queued_requests(&self.room_id).await?;
 
-                let Some(dependent) = dependent_requests.into_iter().find(|item| {
-                    item.is_own_event() && *item.own_transaction_id == *transaction_id
-                }) else {
-                    // We didn't find it as either a request or a dependent request, abort.
-                    return Ok(None);
-                };
+                    let Some(dependent) = dependent_requests.into_iter().find(|item| {
+                        item.is_own_event() && *item.own_transaction_id == *transaction_id
+                    }) else {
+                        // We didn't find it as either a request or a dependent request, abort.
+                        return Ok(None);
+                    };
 
-                // A reply to a reply that is itself waiting on a local echo: the thread of
-                // the inner one is the thread of the whole chain.
-                as_variant!(
-                    dependent.kind,
-                    DependentQueuedRequestKind::ReplyEvent { replied_to_thread, .. } =>
-                        replied_to_thread
-                )
-                .flatten()
-            }
-        };
+                    // A reply to a reply that is itself waiting on a local echo: the thread of
+                    // the inner one is the thread of the whole chain.
+                    as_variant!(
+                        dependent.kind,
+                        DependentQueuedRequestKind::ReplyEvent { replied_to_thread, .. } =>
+                            replied_to_thread
+                    )
+                    .flatten()
+                }
+            };
 
         // Record the dependent request.
         let reply_txn_id = ChildTransactionId::new();
@@ -2464,7 +2461,11 @@ impl QueueStorage {
                 }
             }
 
-            DependentQueuedRequestKind::ReplyEvent { content, replied_to_thread, enforce_thread } => {
+            DependentQueuedRequestKind::ReplyEvent {
+                content,
+                replied_to_thread,
+                enforce_thread,
+            } => {
                 let Some(parent_key) = parent_key else {
                     // Not applied yet, we should retry later => false.
                     return Ok(false);
@@ -3184,10 +3185,9 @@ impl SendHandle {
 
         // The relation is added when the replied-to event has been sent; what is stored
         // and echoed until then is the reply's own content.
-        let content = SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(
-            content.into(),
-        ))
-        .map_err(RoomSendQueueStorageError::JsonSerialization)?;
+        let content =
+            SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(content.into()))
+                .map_err(RoomSendQueueStorageError::JsonSerialization)?;
 
         let created_at = MilliSecondsSinceUnixEpoch::now();
 
@@ -3335,7 +3335,7 @@ pub struct SendRedactionHandle {
 
 impl SendRedactionHandle {
     /// Creates a new [`SendRedactionHandle`].
-#[cfg(test)]
+    #[cfg(test)]
     pub(crate) fn new(room: RoomSendQueue, transaction_id: OwnedTransactionId) -> Self {
         Self { room, transaction_id }
     }

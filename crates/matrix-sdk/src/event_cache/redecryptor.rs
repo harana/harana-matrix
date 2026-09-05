@@ -1264,7 +1264,7 @@ mod tests {
     use matrix_sdk_base::{
         cross_process_lock::CrossProcessLockGeneration,
         crypto::types::events::{ToDeviceEvent, room::encrypted::ToDeviceEncryptedEventContent},
-        deserialized_responses::{TimelineEventKind, ThreadSummaryStatus, VerificationState},
+        deserialized_responses::{ThreadSummaryStatus, TimelineEventKind, VerificationState},
         event_cache::{
             Event, Gap,
             store::{EventCacheStore, EventCacheStoreError, MemoryStore},
@@ -1739,10 +1739,11 @@ mod tests {
         // it lands in his event cache as a UTD.
         let alice_room = alice.get_room(room_id).expect("Alice should have access to the room");
 
-        let (event_receiver, mock) =
-            matrix_mock_server.mock_room_send().ok_with_capture(in_thread_reply_id, &*alice_user_id);
+        let (event_receiver, mock) = matrix_mock_server
+            .mock_room_send()
+            .ok_with_capture(in_thread_reply_id, &*alice_user_id);
         let (_guard, room_key) =
-            matrix_mock_server.mock_capture_put_to_device(&*alice_user_id).await;
+            matrix_mock_server.mock_capture_put_to_device(&alice_user_id).await;
 
         {
             let _guard = mock.mock_once().mount_as_scoped().await;

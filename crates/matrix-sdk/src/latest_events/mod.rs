@@ -1379,7 +1379,7 @@ mod tests {
         assert_matches!(
             room_stream.next().await,
             Some(LatestEventValue::Remote(value)) => {
-                assert_eq!(value.event_id().as_deref(), Some(main_timeline_id));
+                assert_eq!(value.event_id(), Some(main_timeline_id));
             }
         );
 
@@ -1388,7 +1388,7 @@ mod tests {
         assert_matches!(
             thread_stream.next().await,
             Some(LatestEventValue::Remote(value)) => {
-                assert_eq!(value.event_id().as_deref(), Some(in_thread_id));
+                assert_eq!(value.event_id(), Some(in_thread_id));
             }
         );
 
