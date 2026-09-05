@@ -317,9 +317,11 @@ where
         // A chunk identifier must be unique within a linked chunk. Reject the
         // insertion before touching anything, so a rejected insert leaves the
         // store untouched rather than half-relinked.
-        if chunks.iter().any(|ChunkRow { linked_chunk_id: linked_chunk_id_candidate, chunk, .. }| {
-            linked_chunk_id == linked_chunk_id_candidate && *chunk == new
-        }) {
+        if chunks.iter().any(
+            |ChunkRow { linked_chunk_id: linked_chunk_id_candidate, chunk, .. }| {
+                linked_chunk_id == linked_chunk_id_candidate && *chunk == new
+            },
+        ) {
             return Err(RelationalLinkedChunkError::DuplicateChunkIdentifier { identifier: new });
         }
 
@@ -952,8 +954,7 @@ mod tests {
         assert!(relational_linked_chunk.items_chunks.is_empty());
 
         // The same identifier is fine in a *different* linked chunk.
-        let other_linked_chunk_id =
-            OwnedLinkedChunkId::Room(room_id!("!r1:matrix.org").to_owned());
+        let other_linked_chunk_id = OwnedLinkedChunkId::Room(room_id!("!r1:matrix.org").to_owned());
         relational_linked_chunk
             .apply_updates(
                 other_linked_chunk_id.as_ref(),

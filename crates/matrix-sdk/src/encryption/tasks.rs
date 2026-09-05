@@ -21,7 +21,10 @@ use matrix_sdk_base::crypto::store::types::{RoomKeyBundleInfo, RoomPendingKeyBun
 use matrix_sdk_base::crypto::types::events::room::encrypted::{
     EncryptedEvent, RoomEventEncryptionScheme,
 };
-use matrix_sdk_common::failures_cache::FailuresCache;
+use matrix_sdk_common::{
+    failures_cache::FailuresCache,
+    task_monitor::{BackgroundTaskHandle, TaskMonitor},
+};
 #[cfg(not(feature = "experimental-encrypted-state-events"))]
 use ruma::events::room::encrypted::{EncryptedEventScheme, OriginalSyncRoomEncryptedEvent};
 #[cfg(feature = "experimental-encrypted-state-events")]
@@ -53,25 +56,20 @@ pub(crate) struct ClientTasks {
 pub(crate) struct BackupUploadingTask {
     sender: mpsc::UnboundedSender<()>,
     #[allow(dead_code)]
-    join_handle: JoinHandle<()>,
-}
-
-impl Drop for BackupUploadingTask {
-    fn drop(&mut self) {
-        #[cfg(not(target_family = "wasm"))]
-        self.join_handle.abort();
-    }
+    task_handle: BackgroundTaskHandle,
 }
 
 impl BackupUploadingTask {
-    pub(crate) fn new(client: WeakClient) -> Self {
+    pub(crate) fn new(task_monitor: &TaskMonitor, client: WeakClient) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
 
-        let join_handle = spawn(async move {
-            Self::listen(client, receiver).await;
-        });
+        let task_handle = task_monitor
+            .spawn_infinite_task("encryption::backup_uploading", async move {
+                Self::listen(client, receiver).await;
+            })
+            .abort_on_drop();
 
-        Self { sender, join_handle }
+        Self { sender, task_handle }
     }
 
     pub(crate) fn trigger_upload(&self) {
@@ -133,28 +131,23 @@ pub type RoomKeyInfo = (OwnedRoomId, String);
 pub(crate) struct BackupDownloadTask {
     sender: mpsc::UnboundedSender<RoomKeyDownloadRequest>,
     #[allow(dead_code)]
-    join_handle: JoinHandle<()>,
-}
-
-impl Drop for BackupDownloadTask {
-    fn drop(&mut self) {
-        #[cfg(not(target_family = "wasm"))]
-        self.join_handle.abort();
-    }
+    task_handle: BackgroundTaskHandle,
 }
 
 impl BackupDownloadTask {
     #[cfg(not(test))]
     const DOWNLOAD_DELAY_MILLIS: u64 = 100;
 
-    pub(crate) fn new(client: WeakClient) -> Self {
+    pub(crate) fn new(task_monitor: &TaskMonitor, client: WeakClient) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
 
-        let join_handle = spawn(async move {
-            Self::listen(client, receiver).await;
-        });
+        let task_handle = task_monitor
+            .spawn_infinite_task("encryption::backup_download", async move {
+                Self::listen(client, receiver).await;
+            })
+            .abort_on_drop();
 
-        Self { sender, join_handle }
+        Self { sender, task_handle }
     }
 
     /// Trigger a backup download for the keys for the given event.
@@ -431,17 +424,25 @@ impl BackupDownloadTaskListenerState {
 }
 
 pub(crate) struct BundleReceiverTask {
-    _startup_handle: JoinHandle<()>,
-    _listen_handle: JoinHandle<()>,
+    _startup_handle: BackgroundTaskHandle,
+    _listen_handle: BackgroundTaskHandle,
 }
 
 impl BundleReceiverTask {
     pub async fn new(client: &Client) -> Self {
         let stream = client.encryption().historic_room_key_stream().await.expect("E2EE tasks should only be initialized once we have logged in and have access to an OlmMachine");
         let weak_client = WeakClient::from_client(client);
+        let task_monitor = client.task_monitor();
+
         Self {
-            _listen_handle: spawn(Self::listen_task(weak_client.clone(), stream)),
-            _startup_handle: spawn(Self::startup_task(weak_client)),
+            _listen_handle: task_monitor.spawn_infinite_task(
+                "encryption::bundle_receiver_listen",
+                Self::listen_task(weak_client.clone(), stream),
+            ),
+            _startup_handle: task_monitor.spawn_finite_task(
+                "encryption::bundle_receiver_startup",
+                Self::startup_task(weak_client),
+            ),
         }
     }
 
