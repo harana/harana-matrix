@@ -472,6 +472,9 @@ fn collect_sessions(
             created_using_fallback_key: session_pickle.created_using_fallback_key,
             creation_time,
             last_use_time,
+            // libolm pickles don't record when a session last decrypted something, so
+            // migrated sessions fall back to creation order until they decrypt again.
+            last_decryption_time: None,
         };
 
         let session = Session::from_pickle(device_keys.clone(), pickle)?;

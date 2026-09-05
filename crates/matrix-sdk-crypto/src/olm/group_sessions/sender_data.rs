@@ -180,6 +180,41 @@ impl SenderData {
         )
     }
 
+    /// Was this session created before we started collecting trust information
+    /// about sessions?
+    ///
+    /// Only the two states that lack sender information carry the flag: once
+    /// we know who sent a session, whether it predates trust collection no
+    /// longer matters.
+    pub fn legacy_session(&self) -> bool {
+        match self {
+            SenderData::UnknownDevice { legacy_session, .. }
+            | SenderData::DeviceInfo { legacy_session, .. } => *legacy_session,
+            SenderData::VerificationViolation(_)
+            | SenderData::SenderUnverified(_)
+            | SenderData::SenderVerified(_) => false,
+        }
+    }
+
+    /// Return this [`SenderData`] with its legacy flag set, if it is in a state
+    /// that carries one.
+    ///
+    /// Used when recomputing the sender data of a session that was already
+    /// known to be legacy: the recomputation has no way of telling that the
+    /// session came from a backup or a key export, so the flag has to be
+    /// carried over rather than reset.
+    pub fn with_legacy_session(self, legacy: bool) -> Self {
+        match self {
+            SenderData::UnknownDevice { owner_check_failed, .. } => {
+                SenderData::UnknownDevice { legacy_session: legacy, owner_check_failed }
+            }
+            SenderData::DeviceInfo { device_keys, .. } => {
+                SenderData::DeviceInfo { device_keys, legacy_session: legacy }
+            }
+            other => other,
+        }
+    }
+
     /// Create a [`SenderData`] which contains no device info.
     pub fn unknown() -> Self {
         Self::UnknownDevice { legacy_session: false, owner_check_failed: false }

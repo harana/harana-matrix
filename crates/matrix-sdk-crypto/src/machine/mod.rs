@@ -2476,6 +2476,7 @@ impl OlmMachine {
     ) -> MegolmResult<DecryptedRoomEvent> {
         let _timer = timer!(tracing::Level::TRACE, "_method");
 
+        let raw_event = event;
         let event = event.deserialize()?;
 
         Span::current()
@@ -2496,6 +2497,16 @@ impl OlmMachine {
             #[cfg(feature = "experimental-algorithms")]
             RoomEventEncryptionScheme::MegolmV2AesSha2(c) => c.into(),
             RoomEventEncryptionScheme::Unknown(_) => {
+                // A redaction strips the `algorithm` field along with the rest of the
+                // content, so a redacted event is indistinguishable from one using an
+                // algorithm we don't know unless we look at `unsigned.redacted_because`.
+                // Reporting these as unsupported-algorithm failures used to inflate UTD
+                // rates with events that were never going to decrypt.
+                if is_redacted(raw_event) {
+                    debug!("Not decrypting a room event that has been redacted");
+                    return Err(MegolmError::RedactedEvent);
+                }
+
                 warn!("Received an encrypted room event with an unsupported algorithm");
                 return Err(EventError::UnsupportedAlgorithm.into());
             }
@@ -3366,6 +3377,24 @@ pub struct EncryptionSyncChanges<'a> {
     pub next_batch_token: Option<String>,
 }
 
+/// Has this event been redacted?
+///
+/// A redaction removes the `algorithm` and `ciphertext` of an
+/// `m.room.encrypted` event, leaving only `unsigned.redacted_because` to tell
+/// us that decryption was never going to be possible.
+fn is_redacted(raw_event: &Raw<EncryptedEvent>) -> bool {
+    #[derive(serde::Deserialize)]
+    struct UnsignedWithRedactedBecause {
+        redacted_because: Option<serde::de::IgnoredAny>,
+    }
+
+    raw_event
+        .get_field::<UnsignedWithRedactedBecause>("unsigned")
+        .ok()
+        .flatten()
+        .is_some_and(|unsigned| unsigned.redacted_because.is_some())
+}
+
 /// Convert a [`MegolmError`] into an [`UnableToDecryptInfo`] or a
 /// [`CryptoStoreError`].
 ///
@@ -3381,6 +3410,7 @@ fn megolm_error_to_utd_info(
     let reason = match error {
         EventError(_) => UnableToDecryptReason::MalformedEncryptedEvent,
         Decode(_) => UnableToDecryptReason::MalformedEncryptedEvent,
+        RedactedEvent => UnableToDecryptReason::Redacted,
         MissingRoomKey(maybe_withheld) => {
             UnableToDecryptReason::MissingMegolmSession { withheld_code: maybe_withheld }
         }

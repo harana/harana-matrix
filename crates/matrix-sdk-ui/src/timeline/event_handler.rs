@@ -274,8 +274,11 @@ impl TimelineAction {
                         );
 
                         // Let the hook know that we ran into an unable-to-decrypt that is added to
-                        // the timeline.
-                        if let Some(hook) = unable_to_decrypt_hook_manager {
+                        // the timeline. Failures that were never going to decrypt, such as an
+                        // event redacted before we saw it, are left out of the UTD reports.
+                        if let Some(hook) = unable_to_decrypt_hook_manager
+                            && !unable_to_decrypt_info.reason.is_expected()
+                        {
                             hook.on_utd(
                                 ev.event_id(),
                                 utd_cause,

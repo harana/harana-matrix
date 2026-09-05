@@ -102,6 +102,10 @@ struct PendingUtdReport {
 /// the UTD, the reporting will be delayed by the max delay at most; if the
 /// event could eventually get decrypted, it may be reported before the end of
 /// that delay.
+///
+/// A second grace period, set with [`Self::with_late_decryption_grace_period`],
+/// suppresses the report entirely for an event that decrypts shortly after
+/// being marked as a UTD.
 #[derive(Debug)]
 pub struct UtdHookManager {
     /// A Client associated with the UTD hook. This is used to access the store
@@ -113,6 +117,10 @@ pub struct UtdHookManager {
 
     /// An optional delay before marking the event as UTD ("grace period").
     max_delay: Option<Duration>,
+
+    /// An optional window after an event was marked as a UTD, inside which a
+    /// late decryption is treated as no UTD at all.
+    late_decryption_grace_period: Option<Duration>,
 
     /// A mapping of events we're going to report as UTDs, to the tasks to do
     /// so.
@@ -181,6 +189,7 @@ impl UtdHookManager {
             client,
             parent,
             max_delay: None,
+            late_decryption_grace_period: None,
             pending_delayed: Default::default(),
             reported_utds: Arc::new(AsyncMutex::new(bloom_filter)),
         }
@@ -188,10 +197,29 @@ impl UtdHookManager {
 
     /// Reports UTDs with the given max delay.
     ///
-    /// Note: late decryptions are always reported, even if there was a grace
-    /// period set for the reporting of the UTD.
+    /// Note: unless a late-decryption grace period is also configured with
+    /// [`Self::with_late_decryption_grace_period`], late decryptions are always
+    /// reported, even if there was a grace period set for the reporting of the
+    /// UTD.
     pub fn with_max_delay(mut self, delay: Duration) -> Self {
         self.max_delay = Some(delay);
+        self
+    }
+
+    /// Don't report an event at all when it gets decrypted within `period` of
+    /// having been marked as a UTD.
+    ///
+    /// Without this, an event that decrypts a moment after it reached the
+    /// timeline is still reported, with its `time_to_decrypt` filled in; Web
+    /// instead ignores decryptions that land within about four seconds, and
+    /// counting those events inflates measured UTD rates. Only decryptions
+    /// that arrive later than `period` are reported.
+    ///
+    /// This only has an effect together with [`Self::with_max_delay`]: without
+    /// a delay the UTD is reported as soon as it is seen, so there is nothing
+    /// left to suppress.
+    pub fn with_late_decryption_grace_period(mut self, period: Duration) -> Self {
+        self.late_decryption_grace_period = Some(period);
         self
     }
 
@@ -346,9 +374,22 @@ impl UtdHookManager {
         // We can also cancel the reporting task.
         pending_utd_report.report_task.abort();
 
+        let time_to_decrypt = pending_utd_report.marked_utd_at.elapsed();
+
+        // An event that decrypted almost immediately was never really a UTD for the
+        // user, so don't report it at all when it lands inside the grace period.
+        if self.late_decryption_grace_period.is_some_and(|period| time_to_decrypt < period) {
+            trace!(
+                %event_id,
+                ?time_to_decrypt,
+                "UtdHookManager: event decrypted within the grace period, not reporting it"
+            );
+            return;
+        }
+
         // Update the UTD Info struct with new data, then report it
         let mut info = pending_utd_report.utd_info;
-        info.time_to_decrypt = Some(pending_utd_report.marked_utd_at.elapsed());
+        info.time_to_decrypt = Some(time_to_decrypt);
         Self::report_utd(info, &self.parent, &self.client, &mut reported_utds_lock).await;
     }
 
@@ -731,5 +772,63 @@ mod tests {
 
         // And there aren't any pending delayed reports anymore.
         assert!(wrapper.pending_delayed.lock().unwrap().is_empty());
+    }
+
+    #[cfg(not(target_family = "wasm"))] // wasm32 has no time for that
+    #[async_test]
+    async fn test_late_decryption_inside_the_grace_period_is_not_reported() {
+        let hook = Arc::new(Dummy::default());
+
+        // Given a manager that ignores decryptions landing within 2 seconds,
+        let wrapper = UtdHookManager::new(hook.clone(), no_retry_test_client(None).await)
+            .with_max_delay(Duration::from_secs(60))
+            .with_late_decryption_grace_period(Duration::from_secs(2));
+
+        // When an event is marked as a UTD and decrypts a moment later,
+        wrapper
+            .on_utd(
+                event_id!("$1"),
+                UtdCause::Unknown,
+                MilliSecondsSinceUnixEpoch::now(),
+                user_id!("@a:b"),
+            )
+            .await;
+
+        sleep(Duration::from_millis(200)).await;
+        wrapper.on_late_decrypt(event_id!("$1")).await;
+
+        // Then it is not reported at all: it was never a UTD for the user.
+        assert!(hook.utds.lock().unwrap().is_empty());
+        assert!(wrapper.pending_delayed.lock().unwrap().is_empty());
+    }
+
+    #[cfg(not(target_family = "wasm"))] // wasm32 has no time for that
+    #[async_test]
+    async fn test_late_decryption_outside_the_grace_period_is_reported() {
+        let hook = Arc::new(Dummy::default());
+
+        // Given a manager with a very short grace period,
+        let wrapper = UtdHookManager::new(hook.clone(), no_retry_test_client(None).await)
+            .with_max_delay(Duration::from_secs(60))
+            .with_late_decryption_grace_period(Duration::from_millis(100));
+
+        // When an event is marked as a UTD and only decrypts well after that,
+        wrapper
+            .on_utd(
+                event_id!("$1"),
+                UtdCause::Unknown,
+                MilliSecondsSinceUnixEpoch::now(),
+                user_id!("@a:b"),
+            )
+            .await;
+
+        sleep(Duration::from_millis(500)).await;
+        wrapper.on_late_decrypt(event_id!("$1")).await;
+
+        // Then it is reported as a late decryption.
+        let utds = hook.utds.lock().unwrap();
+        assert_eq!(utds.len(), 1);
+        assert_eq!(utds[0].event_id, event_id!("$1"));
+        assert!(utds[0].time_to_decrypt.is_some());
     }
 }

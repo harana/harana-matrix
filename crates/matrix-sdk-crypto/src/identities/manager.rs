@@ -1225,6 +1225,15 @@ impl IdentityManager {
     ) -> Result<(), CryptoStoreError> {
         match SenderDataFinder::find_using_device_data(&self.store, device.clone(), session).await {
             Ok(sender_data) => {
+                // A session restored from a key backup or a key export is flagged as
+                // legacy so that its messages are still shown even though we can't
+                // attest to their sender. That flag lives on the sender data, and the
+                // recomputation above has no way of knowing where the session came
+                // from, so carry it over rather than silently downgrading the session
+                // and hiding its messages.
+                let sender_data =
+                    sender_data.with_legacy_session(session.sender_data.legacy_session());
+
                 debug!("Updating existing InboundGroupSession with new SenderData {sender_data:?}");
                 session.sender_data = sender_data;
             }
@@ -2033,6 +2042,43 @@ pub(crate) mod tests {
 
         let update = assert_ready!(stream);
         assert!(!update.new.is_empty(), "The device update should contain some devices");
+    }
+
+    #[async_test]
+    async fn test_devices_stream_reports_deleted_devices() {
+        let manager = manager_test_helper(user_id(), device_id()).await;
+
+        // Given a user whose devices we already know about,
+        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
+        manager.receive_keys_query_response(&request_id, &own_key_query()).await.unwrap();
+
+        let stream = manager.store.devices_stream();
+        pin_mut!(stream);
+
+        // When a later /keys/query reports that the user has no devices left,
+        let response: KeysQueryResponse = ruma_response_from_json(&json!({
+            "device_keys": { user_id().to_string(): {} },
+            "failures": {},
+        }));
+
+        let (request_id, _) = manager.build_key_query_for_users(vec![user_id()]);
+        let (device_changes, _) =
+            manager.receive_keys_query_response(&request_id, &response).await.unwrap();
+
+        assert!(
+            !device_changes.deleted.is_empty(),
+            "The devices that went away should be reported as deleted"
+        );
+
+        // Then a consumer of the stream can tell which devices disappeared.
+        let update = assert_ready!(stream);
+        let deleted = update.deleted.get(user_id()).expect("Our user should have lost devices");
+
+        assert_eq!(deleted.len(), device_changes.deleted.len());
+
+        for device in &device_changes.deleted {
+            assert!(deleted.contains_key(device.device_id()));
+        }
     }
 
     #[async_test]
