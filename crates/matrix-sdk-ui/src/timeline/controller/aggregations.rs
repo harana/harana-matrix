@@ -54,9 +54,10 @@ use tracing::{error, info, trace, warn};
 
 use super::{ObservableItemsTransaction, rfind_event_by_item_id};
 use crate::timeline::{
-    BeaconInfo, EventTimelineItem, LiveLocationState, MsgLikeContent, MsgLikeKind, PollState,
-    ReactionInfo, ReactionStatus, TimelineEventItemId, TimelineItem, TimelineItemContent,
-    event_item::beacon_info_matches,
+    BeaconInfo, EventSendState, EventTimelineItem, LiveLocationState, MsgLikeContent, MsgLikeKind,
+    PollState, ReactionInfo, ReactionStatus, TimelineEventItemId, TimelineItem,
+    TimelineItemContent,
+    event_item::{LocalEditState, beacon_info_matches},
 };
 
 #[derive(Clone)]
@@ -88,6 +89,10 @@ pub(in crate::timeline) struct PendingEdit {
     /// If provided, this is the identifier of a remote event item that included
     /// this bundled edit.
     pub bundled_item_owner: Option<OwnedEventId>,
+
+    /// Set when this edit is one of ours that the server hasn't acknowledged
+    /// yet, so a failure to send it can be surfaced on the item it edits.
+    pub local: Option<LocalEditState>,
 }
 
 /// Which kind of aggregation (related event) is this?
@@ -775,11 +780,18 @@ impl Aggregations {
             match &mut found.kind {
                 AggregationKind::PollResponse { .. }
                 | AggregationKind::PollEnd { .. }
-                | AggregationKind::Edit(..)
                 | AggregationKind::BeaconUpdate { .. }
                 | AggregationKind::BeaconStop { .. }
                 | AggregationKind::CallDeclined { .. } => {
                     // Nothing particular to do.
+                }
+
+                AggregationKind::Edit(pending_edit) => {
+                    // The edit reached the server, so it's not in flight anymore: stop
+                    // reporting it on the item it edits.
+                    pending_edit.local = None;
+
+                    set_item_local_edit(items, &target, None);
                 }
 
                 AggregationKind::Redaction { is_local } => {
@@ -802,6 +814,51 @@ impl Aggregations {
         }
 
         self.inverted_map.insert(to, target);
+        true
+    }
+
+    /// Record how the sending of an aggregation is going, and reflect it on
+    /// the item the aggregation applies to.
+    ///
+    /// An aggregation has no timeline item of its own, so a send failure would
+    /// otherwise go unreported: an edit stays visible as if it had been sent,
+    /// and the user has no way to retry it.
+    ///
+    /// Returns whether the aggregation was known.
+    pub fn set_aggregation_send_state(
+        &mut self,
+        aggregation_id: &TimelineEventItemId,
+        send_state: EventSendState,
+        items: &mut ObservableItemsTransaction<'_>,
+    ) -> bool {
+        let Some(target) = self.inverted_map.get(aggregation_id).cloned() else {
+            return false;
+        };
+
+        let Some(aggregations) = self.related_events.get_mut(&target) else {
+            return false;
+        };
+
+        let Some(found) = aggregations.iter_mut().find(|agg| agg.own_id == *aggregation_id) else {
+            return false;
+        };
+
+        // Only edits are reported on their target for now; the other kinds have no
+        // room for a send state on the item they apply to.
+        let AggregationKind::Edit(pending_edit) = &mut found.kind else {
+            return true;
+        };
+
+        match &mut pending_edit.local {
+            Some(local) => local.send_state = send_state,
+            None => {
+                pending_edit.local = Some(LocalEditState { send_state, send_handle: None });
+            }
+        }
+
+        let local = pending_edit.local.clone();
+        set_item_local_edit(items, &target, local);
+
         true
     }
 
@@ -932,7 +989,8 @@ fn edit_item(
         return false;
     };
 
-    let PendingEdit { kind: edit_kind, edit_json, encryption_info, bundled_item_owner: _ } = edit;
+    let PendingEdit { kind: edit_kind, edit_json, encryption_info, bundled_item_owner: _, local } =
+        edit;
 
     match (edit_kind, content) {
         (
@@ -984,7 +1042,38 @@ fn edit_item(
         *item = Cow::Owned(item.with_encryption_info(Some(encryption_info)));
     }
 
+    // The applied edit is the one the item now shows, so it's the one whose send
+    // state the item reports - `None` once it's been echoed back.
+    item.to_mut().local_edit = local;
+
     true
+}
+
+/// Report on the item `target` identifies the state of the edit of it that we
+/// are sending, if the item is in the timeline.
+///
+/// The edit's content has already been applied to the item; this only carries
+/// its send state, so re-resolving the edits isn't needed - and wouldn't work
+/// for a local echo anyway, which has no raw JSON to validate.
+fn set_item_local_edit(
+    items: &mut ObservableItemsTransaction<'_>,
+    target: &TimelineEventItemId,
+    local: Option<LocalEditState>,
+) {
+    let Some((idx, event_item)) = rfind_event_by_item_id(items, target) else {
+        trace!("couldn't find the edit's target {target:?}");
+        return;
+    };
+
+    if event_item.local_edit.is_none() && local.is_none() {
+        return;
+    }
+
+    let mut new_event_item = (*event_item).clone();
+    new_event_item.local_edit = local;
+
+    let new_item = TimelineItem::new(new_event_item, event_item.internal_id.to_owned());
+    items.replace(idx, new_item);
 }
 
 /// Find an item identified by the target identifier, and apply the aggregation

@@ -52,7 +52,7 @@ use super::{
     },
     date_dividers::DateDividerAdjuster,
     event_item::{
-        AnyOtherStateEventContentChange, EventSendState, EventTimelineItemKind,
+        AnyOtherStateEventContentChange, EventSendState, EventTimelineItemKind, LocalEditState,
         LocalEventTimelineItem, PollState, Profile, RemoteEventOrigin, RemoteEventTimelineItem,
         TimelineEventItemId,
     },
@@ -733,6 +733,16 @@ impl<'a, 'o> TimelineEventHandler<'a, 'o> {
 
         let encryption_info =
             as_variant!(&self.ctx.flow, Flow::Remote { encryption_info, .. } => encryption_info.clone()).flatten();
+
+        // An edit we're sending has no timeline item of its own, so its send state is
+        // reported on the item it edits; see `EventTimelineItem::local_edit`.
+        let local = as_variant!(&self.ctx.flow, Flow::Local { send_handle, .. } => {
+            LocalEditState {
+                send_state: EventSendState::NotSentYet { progress: None },
+                send_handle: send_handle.clone(),
+            }
+        });
+
         let aggregation = Aggregation::new(
             self.ctx.flow.timeline_item_id(),
             AggregationKind::Edit(PendingEdit {
@@ -740,6 +750,7 @@ impl<'a, 'o> TimelineEventHandler<'a, 'o> {
                 edit_json: self.ctx.flow.raw_event().cloned(),
                 encryption_info,
                 bundled_item_owner: None,
+                local,
             }),
         );
 

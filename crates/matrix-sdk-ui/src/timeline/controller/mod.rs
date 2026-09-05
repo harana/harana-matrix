@@ -1016,6 +1016,16 @@ impl<P: RoomDataProvider> TimelineController<P> {
                 }
 
                 trace!("Sent aggregation was not found");
+            } else if txn.meta.aggregations.set_aggregation_send_state(
+                &TimelineEventItemId::TransactionId(txn_id.to_owned()),
+                send_state,
+                &mut txn.items,
+            ) {
+                // An aggregation has no item of its own: a failure to send it is reported
+                // on the item it applies to, so it doesn't go unnoticed.
+                trace!("Updated the send state of an aggregation");
+                txn.commit();
+                return;
             }
 
             warn!("Timeline item not found, can't update send state");
