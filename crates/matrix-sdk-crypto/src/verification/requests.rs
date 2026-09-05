@@ -108,7 +108,13 @@ pub enum VerificationRequestState {
         other_device_data: DeviceData,
     },
     /// The verification flow that was started with this request has finished.
-    Done,
+    Done {
+        /// The device data of the device that was verified.
+        ///
+        /// `None` if another of our own devices answered the request, in which
+        /// case this device took no part in the verification.
+        other_device_data: Option<DeviceData>,
+    },
     /// The verification process has been cancelled.
     Cancelled(CancelInfo),
 }
@@ -135,7 +141,9 @@ impl From<&InnerRequest> for VerificationRequestState {
             InnerRequest::Passive(_) => {
                 Self::Cancelled(Cancelled::new(true, CancelCode::Accepted).into())
             }
-            InnerRequest::Done(_) => Self::Done,
+            InnerRequest::Done(s) => {
+                Self::Done { other_device_data: s.state.other_device_data.to_owned() }
+            }
             InnerRequest::Cancelled(s) => Self::Cancelled(s.state.to_owned().into()),
         }
     }
@@ -285,17 +293,29 @@ impl VerificationRequest {
     }
 
     /// The id of the other device that is participating in this verification.
+    ///
+    /// Remains available once the request is done, so a completion dialog can
+    /// name the device that was verified.
     pub fn other_device_id(&self) -> Option<OwnedDeviceId> {
+        self.other_device_data().map(|device_data| device_data.device_id().to_owned())
+    }
+
+    /// The device data of the other device that is participating in this
+    /// verification.
+    ///
+    /// Remains available once the request is done, so a completion dialog can
+    /// name the device that was verified. `None` before the other side has
+    /// responded, once the request has been cancelled, or when another of our
+    /// own devices answered it.
+    pub fn other_device_data(&self) -> Option<DeviceData> {
         match &*self.inner.read() {
-            InnerRequest::Requested(r) => Some(r.state.other_device_data.device_id().to_owned()),
-            InnerRequest::Ready(r) => Some(r.state.other_device_data.device_id().to_owned()),
-            InnerRequest::Transitioned(r) => {
-                Some(r.state.ready.other_device_data.device_id().to_owned())
+            InnerRequest::Requested(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Ready(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Transitioned(r) => Some(r.state.ready.other_device_data.to_owned()),
+            InnerRequest::Done(r) => r.state.other_device_data.to_owned(),
+            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
+                None
             }
-            InnerRequest::Created(_)
-            | InnerRequest::Passive(_)
-            | InnerRequest::Done(_)
-            | InnerRequest::Cancelled(_) => None,
         }
     }
 
@@ -933,8 +953,13 @@ impl InnerRequest {
 
     fn receive_done(&self, content: &DoneContent<'_>) -> Option<InnerRequest> {
         let state = InnerRequest::Done(match self {
-            InnerRequest::Transitioned(s) => s.clone().into_done(content),
-            InnerRequest::Passive(s) => s.clone().into_done(content),
+            InnerRequest::Transitioned(s) => {
+                let other_device_data = s.state.other_device_data.to_owned();
+                s.clone().into_done(content, Some(other_device_data))
+            }
+            // Another of our own devices answered the request, so this device
+            // never learned which device was verified.
+            InnerRequest::Passive(s) => s.clone().into_done(content, None),
             InnerRequest::Done(_)
             | InnerRequest::Ready(_)
             | InnerRequest::Created(_)
@@ -1011,13 +1036,17 @@ struct RequestState<S: Clone> {
 }
 
 impl<S: Clone> RequestState<S> {
-    fn into_done(self, _: &DoneContent<'_>) -> RequestState<Done> {
+    fn into_done(
+        self,
+        _: &DoneContent<'_>,
+        other_device_data: Option<DeviceData>,
+    ) -> RequestState<Done> {
         RequestState::<Done> {
             verification_cache: self.verification_cache,
             store: self.store,
             flow_id: self.flow_id,
             other_user_id: self.other_user_id,
-            state: Done {},
+            state: Done { other_device_data },
         }
     }
 
@@ -1619,7 +1648,11 @@ struct Passive {
 }
 
 #[derive(Clone, Debug)]
-struct Done {}
+struct Done {
+    /// The device data of the device that was verified, if this device took
+    /// part in the verification.
+    other_device_data: Option<DeviceData>,
+}
 
 #[cfg(test)]
 mod tests {
@@ -1632,8 +1665,13 @@ mod tests {
     use matrix_sdk_qrcode::QrVerificationData;
     use matrix_sdk_test::async_test;
     use ruma::{
-        UserId, event_id, events::key::verification::VerificationMethod, owned_event_id,
-        owned_room_id, room_id, to_device::DeviceIdOrAllDevices,
+        UserId, event_id,
+        events::{
+            key::verification::{VerificationMethod, done::KeyVerificationDoneEventContent},
+            relation::Reference,
+        },
+        owned_event_id, owned_room_id, room_id,
+        to_device::DeviceIdOrAllDevices,
     };
 
     use super::VerificationRequest;
@@ -1644,7 +1682,8 @@ mod tests {
             FlowId, Verification, VerificationStore,
             cache::VerificationCache,
             event_enums::{
-                CancelContent, OutgoingContent, ReadyContent, RequestContent, StartContent,
+                CancelContent, DoneContent, OutgoingContent, ReadyContent, RequestContent,
+                StartContent,
             },
             tests::{alice_id, bob_id, setup_stores},
         },
@@ -1811,6 +1850,18 @@ mod tests {
 
         assert!(!bob_sas.is_cancelled());
         assert!(!alice_sas.is_cancelled());
+
+        // Once the flow is done, the request still knows which device was verified,
+        // so a client can name it in a completion dialog.
+        let done_content =
+            KeyVerificationDoneEventContent::new(Reference::new(event_id.to_owned()));
+        alice_request.receive_done(bob_id(), &DoneContent::from(&done_content));
+
+        assert_let!(VerificationRequestState::Done { other_device_data } = alice_request.state());
+        assert_eq!(other_device_data.as_ref(), Some(&bob_device_data));
+
+        assert_eq!(alice_request.other_device_id().as_deref(), Some(bob_device_data.device_id()));
+        assert_eq!(alice_request.other_device_data().as_ref(), Some(&bob_device_data));
     }
 
     #[async_test]

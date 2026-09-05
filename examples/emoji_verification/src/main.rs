@@ -117,7 +117,9 @@ async fn request_verification_handler(client: Client, request: VerificationReque
                     break;
                 }
             }
-            VerificationRequestState::Done | VerificationRequestState::Cancelled(_) => break,
+            VerificationRequestState::Done { .. } | VerificationRequestState::Cancelled(_) => {
+                break;
+            }
         }
     }
 }

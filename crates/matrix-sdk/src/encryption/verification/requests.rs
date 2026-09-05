@@ -68,7 +68,13 @@ pub enum VerificationRequestState {
         verification: Verification,
     },
     /// The verification flow that was started with this request has finished.
-    Done,
+    Done {
+        /// The device data of the device that was verified.
+        ///
+        /// `None` if another of our own devices answered the request, in which
+        /// case this device took no part in the verification.
+        other_device_data: Option<DeviceData>,
+    },
     /// The verification process has been cancelled.
     Cancelled(CancelInfo),
 }
@@ -119,6 +125,24 @@ impl VerificationRequest {
     /// flow.
     pub fn other_user_id(&self) -> &ruma::UserId {
         self.inner.other_user()
+    }
+
+    /// Get the device data of the other device participating in this
+    /// verification flow.
+    ///
+    /// Remains available once the request is done, so a completion dialog can
+    /// name the device that was verified. `None` before the other side has
+    /// responded, once the request has been cancelled, or when another of our
+    /// own devices answered it.
+    pub fn other_device_data(&self) -> Option<DeviceData> {
+        self.inner.other_device_data()
+    }
+
+    /// Get the device id of the other device participating in this
+    /// verification flow. See [`VerificationRequest::other_device_data`] for
+    /// when this is available.
+    pub fn other_device_id(&self) -> Option<ruma::OwnedDeviceId> {
+        self.inner.other_device_id()
     }
 
     /// Is this a verification that is verifying one of our own devices.
@@ -238,7 +262,7 @@ impl VerificationRequest {
                     _ => unreachable!("We only support QR code and SAS verification"),
                 },
             },
-            Done => VerificationRequestState::Done,
+            Done { other_device_data } => VerificationRequestState::Done { other_device_data },
             Cancelled(c) => VerificationRequestState::Cancelled(c),
         }
     }
