@@ -707,10 +707,10 @@ impl Backups {
         // believing the download worked while the messages stay undecryptable. That is
         // different from the key not being in the backup at all, so say which it is.
         if decrypted_room_keys.is_empty()
-            && let Some(session_id) = unreadable_session_ids.first().cloned()
+            && let Some(session_id) = unreadable_sessions.first().cloned()
         {
             return Err(Error::UnreadableBackedUpRoomKeys {
-                count: unreadable_session_ids.len(),
+                count: unreadable_sessions.len(),
                 session_id,
             });
         }

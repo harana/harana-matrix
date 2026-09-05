@@ -2584,17 +2584,17 @@ mod tests {
     fn test_account_dirty_flag_tracks_real_changes() {
         // A brand new account has never been persisted.
         let mut account = Account::with_device_id(user_id!("@alice:localhost"), device_id!("DEV"));
-        assert!(account.dirty(), "A new account has to be written to the store");
+        assert!(account.is_dirty(), "A new account has to be written to the store");
         account.mark_as_shared();
 
         // Round-tripping through the store leaves it clean.
         let mut account = Account::from_pickle(account.pickle()).unwrap();
-        assert!(!account.dirty(), "An account restored from the store matches the store");
+        assert!(!account.is_dirty(), "An account restored from the store matches the store");
 
         // Reading it doesn't dirty it.
         let _ = account.one_time_keys();
         let _ = account.identity_keys();
-        assert!(!account.dirty());
+        assert!(!account.is_dirty());
 
         // Neither does setting a field to the value it already holds, which is what a
         // sync response that repeats the same one-time key count does.
@@ -2602,11 +2602,11 @@ mod tests {
         account.update_uploaded_key_count(count);
         account.mark_as_shared();
         account.mark_as_shared();
-        assert!(!account.dirty(), "A no-op update must not force a store write");
+        assert!(!account.is_dirty(), "A no-op update must not force a store write");
 
         // An actual change does dirty it.
         account.update_uploaded_key_count(count + 1);
-        assert!(account.dirty());
+        assert!(account.is_dirty());
     }
 
     #[test]

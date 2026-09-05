@@ -32,7 +32,11 @@ use matrix_sdk_base::{
 };
 use ruma::{
     EventId, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId,
-    events::{AnyRoomAccountDataEvent, receipt::ReceiptEventContent, relation::RelationType},
+    events::{
+        AnyRoomAccountDataEvent,
+        receipt::{ReceiptEventContent, ReceiptThread, ReceiptType},
+        relation::RelationType,
+    },
     serde::Raw,
 };
 use tokio::sync::{Notify, mpsc};

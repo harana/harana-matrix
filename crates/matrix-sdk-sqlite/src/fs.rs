@@ -38,27 +38,3 @@ pub(crate) async fn remove_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
         .expect("Removing a directory should never panic")
 }
 
-/// Delete a database file, together with the write-ahead log and shared-memory
-/// files SQLite keeps beside it.
-///
-/// Missing files are not an error: the point is to leave nothing behind.
-pub(crate) async fn remove_database_files(path: impl AsRef<Path>) -> io::Result<()> {
-    let path = path.as_ref().to_owned();
-
-    spawn_blocking(move || {
-        for suffix in ["", "-wal", "-shm"] {
-            let mut file = path.clone().into_os_string();
-            file.push(suffix);
-
-            match std::fs::remove_file(&file) {
-                Ok(()) => {}
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error),
-            }
-        }
-
-        Ok(())
-    })
-    .await
-    .expect("Removing a file should never panic")
-}
