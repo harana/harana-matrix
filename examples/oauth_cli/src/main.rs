@@ -476,6 +476,11 @@ impl OAuthCli {
                                     }
                                 }
 
+                                matrix_sdk_ui::sync_service::State::Backoff => {
+                                    // The sync service is waiting before restarting the
+                                    // syncs on its own; nothing to do here.
+                                }
+
                                 matrix_sdk_ui::sync_service::State::Error(_) | matrix_sdk_ui::sync_service::State::Offline => {
                                     num_errors += 1;
                                     num_running = 0;

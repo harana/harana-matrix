@@ -36,7 +36,7 @@ use matrix_sdk_crypto::{
 #[cfg(doc)]
 use ruma::DeviceId;
 #[cfg(feature = "e2e-encryption")]
-use ruma::events::room::{history_visibility::HistoryVisibility, member::MembershipState};
+use ruma::events::room::history_visibility::HistoryVisibility;
 use ruma::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::{self as api, sync::sync_events::v5},
@@ -44,7 +44,7 @@ use ruma::{
         StateEvent, StateEventType,
         ignored_user_list::IgnoredUserListEventContent,
         push_rules::{PushRulesEvent, PushRulesEventContent},
-        room::member::SyncRoomMemberEvent,
+        room::member::{MembershipState, SyncRoomMemberEvent},
     },
     push::Ruleset,
     time::Instant,
@@ -897,6 +897,9 @@ impl BaseClient {
 
         let mut ambiguity_map: HashMap<DisplayName, BTreeSet<OwnedUserId>> = Default::default();
 
+        let mut joined_member_count = 0u64;
+        let mut invited_member_count = 0u64;
+
         for raw_event in &response.chunk {
             let member = match raw_event.deserialize() {
                 Ok(ev) => ev,
@@ -916,9 +919,17 @@ impl BaseClient {
             // potentially races with the sync.
             // See <https://github.com/matrix-org/matrix-rust-sdk/issues/1205>.
 
-            #[cfg(feature = "e2e-encryption")]
             match member.membership() {
-                MembershipState::Join | MembershipState::Invite => {
+                MembershipState::Join => {
+                    joined_member_count = joined_member_count.saturating_add(1);
+
+                    #[cfg(feature = "e2e-encryption")]
+                    user_ids.insert(member.state_key().to_owned());
+                }
+                MembershipState::Invite => {
+                    invited_member_count = invited_member_count.saturating_add(1);
+
+                    #[cfg(feature = "e2e-encryption")]
                     user_ids.insert(member.state_key().to_owned());
                 }
                 _ => (),
@@ -961,6 +972,13 @@ impl BaseClient {
 
             let mut room_info = room.clone_info();
             room_info.mark_members_synced();
+            // We have the complete member list of the room, which is more reliable than
+            // the room summary: servers only send one when the counts changed, so a room
+            // we never got a summary for would otherwise keep reporting zero members.
+            room_info.update_member_counts_from_full_member_list(
+                joined_member_count,
+                invited_member_count,
+            );
             context.state_changes.add_room(room_info);
 
             processors::changes::save_and_apply(

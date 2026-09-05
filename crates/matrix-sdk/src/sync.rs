@@ -17,6 +17,10 @@
 use std::{
     collections::{BTreeMap, btree_map},
     fmt,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -214,8 +218,9 @@ impl Client {
 
             let room = Some(&room);
             self.handle_sync_events(HandlerKind::RoomAccountData, room, account_data).await?;
-            self.handle_sync_state_events(room, state).await?;
-            self.handle_sync_timeline_events(room, &timeline.events).await?;
+            let dispatched_state_events = self.handle_sync_state_events(room, state).await?;
+            self.handle_sync_timeline_events(room, &timeline.events, &dispatched_state_events)
+                .await?;
             // Handle ephemeral events after timeline, read receipts in here
             // could refer to timeline events from the same response.
             self.handle_sync_events(HandlerKind::EphemeralRoomData, room, ephemeral).await?;
@@ -236,8 +241,9 @@ impl Client {
 
             let room = Some(&room);
             self.handle_sync_events(HandlerKind::RoomAccountData, room, account_data).await?;
-            self.handle_sync_state_events(room, state).await?;
-            self.handle_sync_timeline_events(room, &timeline.events).await?;
+            let dispatched_state_events = self.handle_sync_state_events(room, state).await?;
+            self.handle_sync_timeline_events(room, &timeline.events, &dispatched_state_events)
+                .await?;
         }
 
         for (room_id, room_info) in &rooms.invited {
@@ -321,7 +327,7 @@ impl Client {
         &self,
         sync_settings: &mut crate::config::SyncSettings,
     ) -> Result<SyncResponse> {
-        let response = self.sync_once(sync_settings.clone()).await;
+        let response = self.sync_once_inner(sync_settings.clone()).await;
 
         match response {
             Ok(r) => {
@@ -370,5 +376,41 @@ where
         if let Err(error) = latest_events.listen_to_room(room_id).await {
             error!(?error, ?room_id, "Failed to listen to the latest event for this room");
         }
+    }
+}
+
+/// A RAII guard marking that a `/sync` session is currently running for a
+/// [`Client`].
+///
+/// At most one of these exists per [`Client`] at any point in time: it is what
+/// makes [`Client::sync_once`] and the sync loops
+/// ([`Client::sync`], [`Client::sync_stream`], …) refuse to run concurrently
+/// with each other.
+///
+/// [`Client::sync`]: crate::Client::sync
+/// [`Client::sync_once`]: crate::Client::sync_once
+/// [`Client::sync_stream`]: crate::Client::sync_stream
+#[derive(Debug)]
+pub(crate) struct SyncGuard {
+    is_syncing: Arc<AtomicBool>,
+}
+
+impl SyncGuard {
+    /// Try to mark the client as syncing.
+    ///
+    /// Returns [`Error::ConcurrentSync`] if another sync is already running for
+    /// this client.
+    pub(crate) fn try_new(is_syncing: &Arc<AtomicBool>) -> Result<Self> {
+        if is_syncing.swap(true, Ordering::AcqRel) {
+            Err(crate::Error::ConcurrentSync)
+        } else {
+            Ok(Self { is_syncing: is_syncing.clone() })
+        }
+    }
+}
+
+impl Drop for SyncGuard {
+    fn drop(&mut self) {
+        self.is_syncing.store(false, Ordering::Release);
     }
 }
