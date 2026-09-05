@@ -28,7 +28,10 @@ use tracing::{error, info};
 use zeroize::Zeroize;
 
 use crate::{
-    client::Client, error::ClientError, ruma::AuthData, runtime::get_runtime_handle,
+    client::Client,
+    error::ClientError,
+    ruma::{AuthData, UiaaChallenge},
+    runtime::get_runtime_handle,
     task_handle::TaskHandle,
 };
 
@@ -42,6 +45,32 @@ pub struct Encryption {
     /// the FFI `Client` and thus the SDK `Client` alive. Otherwise, we
     /// would need to repeat the hack done in the FFI `Client::drop` method.
     pub(crate) _client: Arc<Client>,
+}
+
+/// The outcome of an explicit call to [`Encryption::bootstrap_cross_signing`].
+#[derive(uniffi::Enum)]
+pub enum CrossSigningBootstrapOutcome {
+    /// A cross-signing identity was created and published.
+    Bootstrapped,
+
+    /// The account already had a cross-signing identity, which was left
+    /// untouched.
+    AlreadyBootstrapped,
+
+    /// The homeserver wants the user to authenticate before it accepts the
+    /// cross-signing keys. Answer `challenge` and call again with the matching
+    /// authentication data.
+    AuthenticationRequired {
+        /// The challenge the homeserver posed.
+        challenge: UiaaChallenge,
+    },
+
+    /// Cross-signing cannot be bootstrapped for this client, for instance
+    /// because it is not logged in or has no encryption support.
+    Unavailable {
+        /// Why it is unavailable.
+        message: String,
+    },
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
@@ -939,6 +968,67 @@ impl Encryption {
         }
     }
 
+    /// Bootstrap cross-signing for the logged-in account.
+    ///
+    /// Cross-signing is otherwise only set up implicitly, when the client is
+    /// built with `auto_enable_cross_signing`. This lets a client that
+    /// authenticates first and offers a security setup step afterwards trigger
+    /// it explicitly.
+    ///
+    /// An identity that already exists is never reset: the call reports
+    /// [`CrossSigningBootstrapOutcome::AlreadyBootstrapped`] and leaves it
+    /// alone. Use [`Encryption::reset_identity`] to replace one.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth_data` - The homeserver protects the upload of cross-signing keys
+    ///   with the [User-Interactive Authentication API][uiaa]. Leave this unset
+    ///   for the first attempt: the call then reports
+    ///   [`CrossSigningBootstrapOutcome::AuthenticationRequired`] with the
+    ///   challenge to answer, and it should be made again with the matching
+    ///   `auth_data`, carrying the session from the challenge.
+    ///
+    /// No private key material is returned, whatever the outcome.
+    ///
+    /// [uiaa]: https://spec.matrix.org/latest/client-server-api/#user-interactive-authentication-api
+    pub async fn bootstrap_cross_signing(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<CrossSigningBootstrapOutcome, ClientError> {
+        let Some(user_id) = self._client.inner.user_id() else {
+            return Ok(CrossSigningBootstrapOutcome::Unavailable {
+                message: "The client is not logged in".to_owned(),
+            });
+        };
+
+        // Never reset an identity that is already there.
+        if self.inner.get_user_identity(user_id).await?.is_some() {
+            return Ok(CrossSigningBootstrapOutcome::AlreadyBootstrapped);
+        }
+
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        match self.inner.bootstrap_cross_signing(auth_data).await {
+            Ok(()) => Ok(CrossSigningBootstrapOutcome::Bootstrapped),
+
+            Err(error) => {
+                if let Some(uiaa_info) = error.as_uiaa_response() {
+                    return Ok(CrossSigningBootstrapOutcome::AuthenticationRequired {
+                        challenge: uiaa_info.into(),
+                    });
+                }
+
+                if matches!(error, matrix_sdk::Error::NoOlmMachine) {
+                    return Ok(CrossSigningBootstrapOutcome::Unavailable {
+                        message: "Encryption is not set up for this client".to_owned(),
+                    });
+                }
+
+                Err(ClientError::from_err(error))
+            }
+        }
+    }
+
     /// Return whether the homeserver advertises support for MSC3814
     /// dehydrated devices.
     pub async fn is_dehydrated_device_supported(&self) -> Result<bool, DehydratedDeviceError> {
@@ -1127,7 +1217,8 @@ impl IdentityResetHandle {
     /// 3. Go through the cross-signing key reset flow
     /// 4. Finally, re-enable key backups only if they were enabled before
     pub async fn reset(&self, auth: Option<AuthData>) -> Result<(), ClientError> {
-        self.inner.reset(auth.map(Into::into)).await.map_err(ClientError::from_err)
+        let auth = auth.map(TryInto::try_into).transpose()?;
+        self.inner.reset(auth).await.map_err(ClientError::from_err)
     }
 
     pub async fn cancel(&self) {
@@ -1175,5 +1266,100 @@ pub struct OAuthCrossSigningResetInfo {
 impl From<&matrix_sdk::encryption::OAuthCrossSigningResetInfo> for OAuthCrossSigningResetInfo {
     fn from(value: &matrix_sdk::encryption::OAuthCrossSigningResetInfo) -> Self {
         Self { approval_url: value.approval_url.to_string() }
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests {
+    use std::sync::Arc;
+
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
+
+    use super::CrossSigningBootstrapOutcome;
+    use crate::client::Client;
+
+    /// Builds the FFI client over a mocked homeserver, logged in unless
+    /// `logged_in` says otherwise.
+    async fn ffi_client(server: &MatrixMockServer, logged_in: bool) -> Arc<Client> {
+        // The single-process lock keeps `Client::new` from demanding session
+        // delegates, which these tests have nothing to do with.
+        let builder = server.client_builder().on_builder(|builder| {
+            builder.cross_process_store_config(CrossProcessLockConfig::SingleProcess)
+        });
+        let sdk_client =
+            if logged_in { builder.build().await } else { builder.unlogged().build().await };
+
+        Arc::new(Client::new(sdk_client, None, None).await.expect("the FFI client is built"))
+    }
+
+    /// The key queries and uploads the olm machine makes on its own, which
+    /// these tests are not about.
+    async fn mock_key_endpoints(server: &MatrixMockServer) {
+        server.mock_query_keys().ok().mount().await;
+        server.mock_upload_keys().ok().mount().await;
+    }
+
+    /// The first attempt has no authentication data, and the homeserver
+    /// answers with the challenge to satisfy. The client has to be told what
+    /// to ask the user for rather than shown an opaque HTTP error.
+    #[tokio::test]
+    async fn test_a_uiaa_challenge_is_reported_with_its_session() {
+        let server = MatrixMockServer::new().await;
+        let client = ffi_client(&server, true).await;
+        mock_key_endpoints(&server).await;
+
+        server.mock_upload_cross_signing_keys().uiaa().mock_once().mount().await;
+
+        let outcome = client.encryption().bootstrap_cross_signing(None).await.unwrap();
+
+        let CrossSigningBootstrapOutcome::AuthenticationRequired { challenge } = outcome else {
+            panic!("the homeserver asked for authentication, which must be reported as such");
+        };
+
+        assert_eq!(challenge.session.as_deref(), Some("oFIJVvtEOCKmRUTYKTYIIPHL"));
+        assert_eq!(challenge.flows.len(), 1);
+        assert_eq!(challenge.flows[0].stages, ["m.login.password"]);
+    }
+
+    /// Once the keys are accepted, the identity exists; asking again must
+    /// leave it alone rather than replace it, which would invalidate every
+    /// signature the user's other devices have made.
+    #[tokio::test]
+    async fn test_an_existing_identity_is_left_alone() {
+        let server = MatrixMockServer::new().await;
+        let client = ffi_client(&server, true).await;
+        mock_key_endpoints(&server).await;
+
+        server.mock_upload_cross_signing_keys().ok().mock_once().mount().await;
+        server.mock_upload_cross_signing_signatures().ok().mock_once().mount().await;
+
+        let outcome = client.clone().encryption().bootstrap_cross_signing(None).await.unwrap();
+        assert!(
+            matches!(outcome, CrossSigningBootstrapOutcome::Bootstrapped),
+            "the first call sets the identity up"
+        );
+
+        // No upload is mocked for the second call: it must not make one.
+        let outcome = client.encryption().bootstrap_cross_signing(None).await.unwrap();
+        assert!(
+            matches!(outcome, CrossSigningBootstrapOutcome::AlreadyBootstrapped),
+            "an identity that is already there must not be reset"
+        );
+    }
+
+    /// A client that hasn't logged in has no account to bootstrap. That is a
+    /// reportable state, not an error.
+    #[tokio::test]
+    async fn test_a_client_that_is_not_logged_in_reports_it() {
+        let server = MatrixMockServer::new().await;
+        let client = ffi_client(&server, false).await;
+
+        let outcome = client.encryption().bootstrap_cross_signing(None).await.unwrap();
+
+        let CrossSigningBootstrapOutcome::Unavailable { message } = outcome else {
+            panic!("bootstrapping without a session must report why it cannot happen");
+        };
+        assert!(message.contains("not logged in"), "{message}");
     }
 }

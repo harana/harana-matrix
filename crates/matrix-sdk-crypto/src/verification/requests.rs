@@ -294,12 +294,28 @@ impl VerificationRequest {
     }
 
     /// The id of the other device that is participating in this verification.
+    ///
+    /// Remains available once the request is done, so a completion dialog can
+    /// name the device that was verified.
     pub fn other_device_id(&self) -> Option<OwnedDeviceId> {
+        self.other_device_data().map(|device_data| device_data.device_id().to_owned())
+    }
+
+    /// The device data of the other device that is participating in this
+    /// verification.
+    ///
+    /// Remains available once the request is done, so a completion dialog can
+    /// name the device that was verified. `None` before the other side has
+    /// responded, once the request has been cancelled, or when another of our
+    /// own devices answered it.
+    pub fn other_device_data(&self) -> Option<DeviceData> {
         match &*self.inner.read() {
-            InnerRequest::Requested(r) => Some(r.state.other_device_data.device_id().to_owned()),
-            InnerRequest::Ready(r) => Some(r.state.other_device_data.device_id().to_owned()),
-            InnerRequest::Transitioned(r) => {
-                Some(r.state.ready.other_device_data.device_id().to_owned())
+            InnerRequest::Requested(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Ready(r) => Some(r.state.other_device_data.to_owned()),
+            InnerRequest::Transitioned(r) => Some(r.state.ready.other_device_data.to_owned()),
+            InnerRequest::Done(r) => r.state.other_device_data.to_owned(),
+            InnerRequest::Created(_) | InnerRequest::Passive(_) | InnerRequest::Cancelled(_) => {
+                None
             }
             InnerRequest::Done(r) => {
                 r.state.other_device_data.as_ref().map(|d| d.device_id().to_owned())
@@ -1674,8 +1690,13 @@ mod tests {
     use matrix_sdk_qrcode::QrVerificationData;
     use matrix_sdk_test::async_test;
     use ruma::{
-        UserId, event_id, events::key::verification::VerificationMethod, owned_event_id,
-        owned_room_id, room_id, to_device::DeviceIdOrAllDevices,
+        UserId, event_id,
+        events::{
+            key::verification::{VerificationMethod, done::KeyVerificationDoneEventContent},
+            relation::Reference,
+        },
+        owned_event_id, owned_room_id, room_id,
+        to_device::DeviceIdOrAllDevices,
     };
 
     use super::VerificationRequest;
@@ -1686,7 +1707,8 @@ mod tests {
             FlowId, Verification, VerificationStore,
             cache::VerificationCache,
             event_enums::{
-                CancelContent, OutgoingContent, ReadyContent, RequestContent, StartContent,
+                CancelContent, DoneContent, OutgoingContent, ReadyContent, RequestContent,
+                StartContent,
             },
             tests::{alice_id, bob_id, setup_stores},
         },
@@ -1782,6 +1804,12 @@ mod tests {
 
         assert_matches!(bob_request.state(), VerificationRequestState::Cancelled { .. });
         assert_matches!(alice_request.state(), VerificationRequestState::Cancelled { .. });
+
+        // Nothing was verified, so there is no device to name afterwards.
+        assert!(bob_request.other_device_data().is_none());
+        assert!(bob_request.other_device_id().is_none());
+        assert!(alice_request.other_device_data().is_none());
+        assert!(alice_request.other_device_id().is_none());
     }
 
     #[async_test]
@@ -1853,6 +1881,18 @@ mod tests {
 
         assert!(!bob_sas.is_cancelled());
         assert!(!alice_sas.is_cancelled());
+
+        // Once the flow is done, the request still knows which device was verified,
+        // so a client can name it in a completion dialog.
+        let done_content =
+            KeyVerificationDoneEventContent::new(Reference::new(event_id.to_owned()));
+        alice_request.receive_done(bob_id(), &DoneContent::from(&done_content));
+
+        assert_let!(VerificationRequestState::Done { other_device_data } = alice_request.state());
+        assert_eq!(other_device_data.as_ref(), Some(&bob_device_data));
+
+        assert_eq!(alice_request.other_device_id().as_deref(), Some(bob_device_data.device_id()));
+        assert_eq!(alice_request.other_device_data().as_ref(), Some(&bob_device_data));
     }
 
     #[async_test]

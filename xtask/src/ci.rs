@@ -130,6 +130,7 @@ enum FeatureSet {
     NoEncryptionAndSqlite,
     SqliteCryptostore,
     ExperimentalEncryptedStateEvents,
+    RustlsRing,
 }
 
 #[derive(Subcommand, PartialEq, Eq, PartialOrd, Ord)]
@@ -293,6 +294,12 @@ fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
         (
             FeatureSet::ExperimentalEncryptedStateEvents,
             "--no-default-features --features experimental-encrypted-state-events,e2e-encryption,sqlite,testing",
+        ),
+        // ring rather than aws-lc-rs as the rustls provider, which is what
+        // Android builds use.
+        (
+            FeatureSet::RustlsRing,
+            "--no-default-features --features rustls-ring,e2e-encryption,sqlite,testing",
         ),
     ]);
 

@@ -46,6 +46,7 @@ const DEFAULT_MAX_TOTAL_SIZE_BYTES: u64 = 10 * 1024 * 1024;
 const DEFAULT_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
 
 mod log_listener;
+pub mod panic;
 mod rolling_writer;
 pub mod telemetry;
 pub mod tracing;
@@ -727,6 +728,10 @@ pub fn init_platform(
 
     #[cfg(target_os = "android")]
     android_platform::init();
+
+    // Installed last, so it chains to the panic hooks set up above and any
+    // registered `PanicListener` is notified after they have run.
+    panic::install_hook();
 
     Ok(())
 }

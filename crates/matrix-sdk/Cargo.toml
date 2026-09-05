@@ -77,6 +77,12 @@ reqwest-transport = ["dep:reqwest", "tokio-runtime"]
 # provider for rustls
 rustls-aws-lc-rs = ["reqwest-transport", "reqwest?/rustls"]
 
+# If enabled, ring is installed as the default crypto provider for rustls
+# instead of aws-lc-rs. Enable this instead of `rustls-aws-lc-rs` on targets
+# where aws-lc-rs misbehaves, notably some Android devices and emulators; see
+# https://github.com/matrix-org/matrix-rust-sdk/issues/6442.
+rustls-ring = ["reqwest-transport", "reqwest?/rustls-no-provider", "dep:rustls"]
+
 qrcode = ["e2e-encryption", "matrix-sdk-base/qrcode"]
 automatic-room-key-forwarding = ["e2e-encryption", "matrix-sdk-base/automatic-room-key-forwarding"]
 experimental-send-custom-to-device = ["e2e-encryption", "matrix-sdk-base/experimental-send-custom-to-device"]
@@ -198,6 +204,7 @@ tracing = { workspace = true, features = ["attributes"] }
 uniffi = { workspace = true, optional = true }
 url = { workspace = true, features = ["serde"] }
 urlencoding = "2.1.3"
+rustls = { workspace = true, optional = true, features = ["logging", "ring", "std", "tls12"] }
 uuid = { workspace = true, features = ["serde", "v4"], optional = true }
 vodozemac.workspace = true
 zeroize.workspace = true

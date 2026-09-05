@@ -39,6 +39,10 @@ impl From<&Level> for LogLevel {
 
 /// Trait that can be used to forward Rust logs over FFI to a language specific
 /// logger.
+///
+/// One method per severity, so a downstream logger can route by level, and the
+/// message is kept separate from the event's structured fields rather than
+/// being flattened into a single line.
 #[matrix_sdk_ffi_macros::export(callback_interface)]
 pub trait Logger: Send + Sync {
     /// Called every time the Rust side wants to post a log line.
@@ -184,6 +188,71 @@ impl Visit for FieldVisitor {
 
     fn record_error(&mut self, field: &Field, value: &(dyn std::error::Error + 'static)) {
         self.record(field, value.to_string());
+    }
+}
+
+impl<S: Subscriber> Layer<S> for LoggerWrapper {
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let metadata = event.metadata();
+        let target = metadata.target().to_owned();
+
+        let mut visitor = EventVisitor::default();
+        event.record(&mut visitor);
+
+        let EventVisitor { message, fields } = visitor;
+
+        let logger = self.inner.lock().unwrap();
+
+        match *metadata.level() {
+            Level::ERROR => logger.error(target, message, fields),
+            Level::WARN => logger.warn(target, message, fields),
+            Level::INFO => logger.info(target, message, fields),
+            Level::DEBUG => logger.debug(target, message, fields),
+            Level::TRACE => logger.trace(target, message, fields),
+        }
+    }
+}
+
+/// Splits an event into its `message` field and the rest of its fields.
+#[derive(Default)]
+struct EventVisitor {
+    message: String,
+    fields: HashMap<String, String>,
+}
+
+impl EventVisitor {
+    fn record(&mut self, field: &Field, value: fmt::Arguments<'_>) {
+        if field.name() == "message" {
+            let _ = write!(self.message, "{value}");
+        } else {
+            self.fields.insert(field.name().to_owned(), value.to_string());
+        }
+    }
+}
+
+impl Visit for EventVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        self.record(field, format_args!("{value:?}"));
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.record(field, format_args!("{value}"));
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        self.record(field, format_args!("{value}"));
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        self.record(field, format_args!("{value}"));
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        self.record(field, format_args!("{value}"));
+    }
+
+    fn record_error(&mut self, field: &Field, value: &(dyn std::error::Error + 'static)) {
+        self.record(field, format_args!("{value}"));
     }
 }
 

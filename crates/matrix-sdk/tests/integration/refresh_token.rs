@@ -185,7 +185,7 @@ async fn test_refresh_token() {
             let num_save_session_callback_calls = num_save_session_callback_calls.clone();
             Box::new(move |_client| {
                 *num_save_session_callback_calls.lock().unwrap() += 1;
-                Ok(())
+                Box::pin(async { Ok(()) })
             })
         })
         .unwrap();
@@ -240,6 +240,58 @@ async fn test_refresh_token() {
     assert_eq!(session_changes.try_recv(), Ok(SessionChange::TokensRefreshed));
 
     assert_eq!(session_changes.try_recv(), Err(TryRecvError::Empty));
+}
+
+/// The save callback returns a future, so a host that writes the session
+/// somewhere asynchronous does not have to block a thread inside it. The
+/// refresh must not report success until that future has run to completion,
+/// or the host would be told about tokens it has not stored yet.
+#[async_test]
+async fn test_the_save_session_callback_is_awaited_to_completion() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (builder, server) = test_client_builder_with_server().await;
+    let client = builder
+        .request_config(RequestConfig::new().disable_retry())
+        .server_versions([MatrixVersion::V1_3])
+        .build()
+        .await
+        .unwrap();
+    let auth = client.matrix_auth();
+
+    let stored = Arc::new(AtomicBool::new(false));
+    client
+        .set_session_callbacks(Box::new(|_| panic!("reload session never called")), {
+            let stored = stored.clone();
+            Box::new(move |_client| {
+                let stored = stored.clone();
+                Box::pin(async move {
+                    // Suspend, so this only finishes if the SDK polls the
+                    // future again rather than dropping it.
+                    tokio::task::yield_now().await;
+                    stored.store(true, Ordering::SeqCst);
+                    Ok(())
+                })
+            })
+        })
+        .unwrap();
+
+    auth.restore_session(session(), RoomLoadSettings::default()).await.unwrap();
+    assert!(!stored.load(Ordering::SeqCst));
+
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/refresh"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::REFRESH_TOKEN))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+
+    auth.refresh_access_token().await.unwrap();
+
+    assert!(
+        stored.load(Ordering::SeqCst),
+        "the refresh returned before the save callback's future had finished"
+    );
 }
 
 #[async_test]
@@ -709,7 +761,7 @@ async fn test_oauth_handle_refresh_tokens() {
             let num_save_session_callback_calls = num_save_session_callback_calls.clone();
             Box::new(move |_client| {
                 *num_save_session_callback_calls.lock().unwrap() += 1;
-                Ok(())
+                Box::pin(async { Ok(()) })
             })
         })
         .unwrap();
