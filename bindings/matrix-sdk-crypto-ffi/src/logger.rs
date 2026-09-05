@@ -114,3 +114,70 @@ pub fn set_logger(logger: Box<dyn Logger>) {
         .with(LoggerLayer { inner: logger }.with_filter(filter))
         .try_init();
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use tracing::Level;
+
+    use super::{LogEvent, Logger, LoggerLayer};
+
+    #[derive(Debug, Default)]
+    struct Recorder {
+        events: Mutex<Vec<(Level, LogEvent)>>,
+    }
+
+    impl Logger for Arc<Recorder> {
+        fn error(&self, event: LogEvent) {
+            self.events.lock().unwrap().push((Level::ERROR, event));
+        }
+
+        fn warn(&self, event: LogEvent) {
+            self.events.lock().unwrap().push((Level::WARN, event));
+        }
+
+        fn info(&self, event: LogEvent) {
+            self.events.lock().unwrap().push((Level::INFO, event));
+        }
+
+        fn debug(&self, event: LogEvent) {
+            self.events.lock().unwrap().push((Level::DEBUG, event));
+        }
+
+        fn trace(&self, event: LogEvent) {
+            self.events.lock().unwrap().push((Level::TRACE, event));
+        }
+    }
+
+    #[test]
+    fn test_events_reach_the_logger_by_level_with_their_fields_apart() {
+        use tracing_subscriber::{Layer, prelude::*};
+
+        let recorder = Arc::new(Recorder::default());
+        let layer = LoggerLayer { inner: Box::new(recorder.clone()) }
+            .with_filter(tracing_subscriber::filter::LevelFilter::TRACE);
+
+        tracing::subscriber::with_default(tracing_subscriber::registry().with(layer), || {
+            tracing::info!(session_id = "ABCDEF", count = 3, "Sharing a room key");
+            tracing::warn!("Careful");
+        });
+
+        let events = recorder.events.lock().unwrap();
+        assert_eq!(events.len(), 2);
+
+        // The level picks the method, and the message and the fields are handed over
+        // separately rather than flattened into one string.
+        let (level, event) = &events[0];
+        assert_eq!(*level, Level::INFO);
+        assert_eq!(event.message, "Sharing a room key");
+        assert_eq!(event.fields.get("session_id").map(String::as_str), Some("ABCDEF"));
+        assert_eq!(event.fields.get("count").map(String::as_str), Some("3"));
+        assert!(event.target.starts_with("matrix_sdk_crypto_ffi"));
+
+        let (level, event) = &events[1];
+        assert_eq!(*level, Level::WARN);
+        assert_eq!(event.message, "Careful");
+        assert!(event.fields.is_empty());
+    }
+}

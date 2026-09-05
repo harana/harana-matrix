@@ -1670,6 +1670,88 @@ mod test {
         assert!(!exists, "But now there is no backup");
     }
 
+    #[cfg(not(target_family = "wasm"))] // wasm32 has no time for that
+    #[async_test]
+    async fn test_the_done_of_an_earlier_upload_does_not_end_the_wait() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        server.mock_add_room_keys_version().ok().expect(1).mount().await;
+        client.encryption().backups().create().await.expect("We should be able to create a backup");
+
+        // Given room keys which have not been backed up yet
+        {
+            let machine = client.olm_machine().await;
+            machine
+                .as_ref()
+                .unwrap()
+                .store()
+                .import_exported_room_keys(vec![room_key()], |_, _| {})
+                .await
+                .expect("We should be able to import a room key");
+        }
+
+        // And an upload which finished before we started waiting
+        client.inner.e2ee.backup_state.upload_progress.set(UploadState::Done);
+
+        let backups = client.encryption().backups();
+        let wait_for_upload = backups.wait_for_upload();
+
+        // When we wait for the room keys to be uploaded, without triggering an upload
+        let result =
+            matrix_sdk_common::timeout::timeout(
+                async { wait_for_upload.await },
+                Duration::from_millis(300),
+            )
+            .await;
+
+        // Then the stale `Done` does not end the wait: those keys are still not backed
+        // up. (A real upload attempt failing is fine, that is not the stale `Done`.)
+        if let Ok(result) = result {
+            assert!(
+                result.is_err(),
+                "The wait should not have succeeded on an upload which finished before it started"
+            );
+        }
+    }
+
+    #[async_test]
+    async fn test_disable_deletes_a_backup_which_only_exists_on_the_server() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().logged_in_with_oauth().build().await;
+        let backups = client.encryption().backups();
+
+        // Given a backup which exists on the server while we hold no backup key, as
+        // happens when the recovery key was lost
+        assert!(!backups.are_enabled().await, "We should have no local backup key");
+
+        server.mock_room_keys_version().exists().expect(1).mount().await;
+        let delete = server.mock_delete_room_keys_version().ok().expect(1).mount_as_scoped().await;
+
+        // When we disable backups
+        backups.disable().await.expect("We should be able to delete a server-side backup");
+
+        // Then the server-side backup is deleted, rather than the call failing because
+        // backups are not enabled locally
+        drop(delete);
+    }
+
+    #[async_test]
+    async fn test_disable_reports_that_there_is_no_backup_at_all() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().logged_in_with_oauth().build().await;
+        let backups = client.encryption().backups();
+
+        // Given no backup locally and none on the server
+        server.mock_room_keys_version().none().expect(1).mount().await;
+
+        // When we disable backups
+        let error = backups.disable().await.expect_err("There is no backup to disable");
+
+        // Then we are told there is nothing to disable
+        assert_matches!(error, Error::BackupNotEnabled);
+    }
+
     #[async_test]
     async fn test_waiting_for_steady_state_resets_the_delay() {
         let server = MatrixMockServer::new().await;

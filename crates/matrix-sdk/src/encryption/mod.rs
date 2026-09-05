@@ -1647,6 +1647,8 @@ impl Encryption {
     ///
     /// * `auth_data` - The authentication data to send with the upload of the
     ///   cross-signing keys, if the homeserver asked for it in a previous call.
+    ///   Passing it always retries the upload, since the identity the earlier
+    ///   attempt created locally is not one the homeserver has accepted yet.
     pub async fn bootstrap_cross_signing_if_needed_with_outcome(
         &self,
         auth_data: Option<AuthData>,
@@ -1662,7 +1664,12 @@ impl Encryption {
 
         self.ensure_initial_key_query().await?;
 
-        if self.get_user_identity(&user_id).await?.is_some() {
+        // A caller who passes authentication data is answering a challenge from an
+        // earlier attempt, so the upload has to be retried. The identity exists
+        // locally at that point precisely because that attempt created it before the
+        // homeserver refused to publish it, so the check below would otherwise stop us
+        // from ever publishing it.
+        if auth_data.is_none() && self.get_user_identity(&user_id).await?.is_some() {
             return Ok(CrossSigningBootstrapOutcome::AlreadyPresent);
         }
 
@@ -2385,6 +2392,119 @@ mod tests {
         },
         test_utils::{logged_in_client, no_retry_test_client, set_client_session},
     };
+
+    #[async_test]
+    async fn test_bootstrap_cross_signing_without_a_crypto_machine() {
+        use crate::encryption::CrossSigningBootstrapOutcome;
+
+        // Given a client which is not logged in, so it has no crypto machine
+        let client = no_retry_test_client(None).await;
+
+        // When we ask it to bootstrap cross-signing
+        let outcome = client
+            .encryption()
+            .bootstrap_cross_signing_if_needed_with_outcome(None)
+            .await
+            .expect("Not being logged in is not a failure");
+
+        // Then we are told that cross-signing is unavailable
+        assert_eq!(outcome, CrossSigningBootstrapOutcome::Unavailable);
+    }
+
+    #[async_test]
+    async fn test_bootstrap_cross_signing_reports_an_existing_identity() {
+        use wiremock::matchers::path_regex;
+
+        use crate::encryption::CrossSigningBootstrapOutcome;
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+        let user_id = client.user_id().unwrap().to_string();
+
+        // Given an identity which exists, both locally and on the homeserver
+        let identity_request = {
+            let machine = client.olm_machine().await;
+            machine
+                .as_ref()
+                .unwrap()
+                .bootstrap_cross_signing(false)
+                .await
+                .unwrap()
+                .upload_signing_keys_req
+        };
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/.*/keys/query"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "master_keys": { user_id.clone(): identity_request.master_key },
+                "self_signing_keys": { user_id.clone(): identity_request.self_signing_key },
+                "user_signing_keys": { user_id.clone(): identity_request.user_signing_key },
+            })))
+            .mount(&server)
+            .await;
+
+        // When we ask to bootstrap cross-signing
+        let outcome = client
+            .encryption()
+            .bootstrap_cross_signing_if_needed_with_outcome(None)
+            .await
+            .expect("Bootstrapping an account which has an identity is not an error");
+
+        // Then nothing is done and we are told the identity was already there
+        assert_eq!(outcome, CrossSigningBootstrapOutcome::AlreadyPresent);
+    }
+
+    #[async_test]
+    async fn test_a_rejected_key_upload_is_not_retried_forever() {
+        use matrix_sdk_base::crypto::types::requests::AnyOutgoingRequest;
+        use wiremock::matchers::path;
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let olm_machine = client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().unwrap();
+
+        let has_key_upload = async |machine: &matrix_sdk_base::crypto::OlmMachine| {
+            machine
+                .outgoing_requests()
+                .await
+                .unwrap()
+                .iter()
+                .any(|r| matches!(r.request(), AnyOutgoingRequest::KeysUpload(_)))
+        };
+
+        // Given we have keys to upload
+        assert!(has_key_upload(olm_machine).await, "We should want to upload our keys");
+
+        // And a homeserver which rejects the upload, as it does when it already has
+        // these keys, e.g. because our crypto store lost the account
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/keys/upload"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                "errcode": "M_INVALID_PARAM",
+                "error": "One time key signed_curve25519:AAAAAA already exists. \
+                          Old key: key1; new key: key2",
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // When we send our outgoing requests
+        client
+            .send_outgoing_requests()
+            .await
+            .expect("A rejected key upload should not fail the whole batch");
+
+        // Then the request is not generated again: retrying it on every sync forever
+        // is what a restored session with an empty crypto store used to do
+        assert!(
+            !has_key_upload(olm_machine).await,
+            "The rejected key upload should have been marked as sent"
+        );
+
+        server.verify().await;
+    }
 
     #[async_test]
     async fn test_reaction_sending() {
