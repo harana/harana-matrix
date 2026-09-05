@@ -3486,13 +3486,148 @@ mod tests {
     };
     use matrix_sdk_test::{JoinedRoomBuilder, SyncResponseBuilder, async_test};
     use ruma::{
-        MilliSecondsSinceUnixEpoch, TransactionId,
-        events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
-        room_id,
+        EventId, MilliSecondsSinceUnixEpoch, TransactionId, event_id,
+        events::{
+            AnyMessageLikeEventContent,
+            relation::{Reply, Thread},
+            room::message::{Relation, RoomMessageEventContent},
+        },
+        owned_event_id, room_id, user_id,
     };
 
-    use super::canonicalize_dependent_requests;
+    use super::{
+        EnforceThreadInReply, canonicalize_dependent_requests, make_reply_to_local_echo,
+        thread_relation_of,
+    };
     use crate::{client::WeakClient, test_utils::logged_in_client};
+
+    /// The `m.relates_to` of a reply built by [`make_reply_to_local_echo`],
+    /// serialized, so the fields the specification names can be asserted on
+    /// directly.
+    fn reply_relation(
+        replied_to_thread: Option<Thread>,
+        enforce_thread: EnforceThreadInReply,
+    ) -> serde_json::Value {
+        let content = make_reply_to_local_echo(
+            RoomMessageEventContent::text_plain("the reply").into(),
+            event_id!("$replied_to"),
+            user_id!("@me:example.org"),
+            replied_to_thread.as_ref(),
+            enforce_thread,
+        );
+
+        serde_json::to_value(&content).unwrap()["m.relates_to"].clone()
+    }
+
+    fn thread_rooted_at(root: &EventId) -> Thread {
+        Thread::plain(root.to_owned(), root.to_owned())
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_starts_a_thread() {
+        // The replied-to event isn't in a thread, and a thread is enforced: the
+        // reply opens one rooted at the event it replies to.
+        let relation = reply_relation(None, EnforceThreadInReply::Threaded { is_reply: true });
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$replied_to");
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+        // A genuine reply within the thread, not the unthreaded-clients fallback.
+        assert!(relation["is_falling_back"].is_null());
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_joins_an_existing_thread() {
+        // The replied-to event is already in a thread: the reply joins *that*
+        // thread rather than opening a new one on the replied-to event.
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::Threaded { is_reply: true },
+        );
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$thread_root");
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+        assert!(relation["is_falling_back"].is_null());
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_not_a_reply_within_the_thread() {
+        // A plain message in the thread: its `m.in_reply_to` is only the fallback
+        // for thread-unaware clients, and says so.
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::Threaded { is_reply: false },
+        );
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$thread_root");
+        assert_eq!(relation["is_falling_back"], true);
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_forwards_the_thread() {
+        // `MaybeThreaded` forwards the replied-to event's thread when it has one…
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::MaybeThreaded,
+        );
+
+        assert_eq!(relation["rel_type"], "m.thread");
+        assert_eq!(relation["event_id"], "$thread_root");
+
+        // …and produces a plain reply when it doesn't.
+        let relation = reply_relation(None, EnforceThreadInReply::MaybeThreaded);
+
+        assert!(relation["rel_type"].is_null());
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+    }
+
+    #[test]
+    fn test_make_reply_to_local_echo_unthreaded() {
+        // `Unthreaded` drops the replied-to event's thread instead of forwarding
+        // it: the reply lands in the main timeline.
+        let relation = reply_relation(
+            Some(thread_rooted_at(event_id!("$thread_root"))),
+            EnforceThreadInReply::Unthreaded,
+        );
+
+        assert!(relation["rel_type"].is_null());
+        assert_eq!(relation["m.in_reply_to"]["event_id"], "$replied_to");
+    }
+
+    #[test]
+    fn test_thread_relation_of() {
+        // The thread of a local echo is read back from its serialized content, so
+        // a reply queued against it can join the same thread.
+        let mut in_thread = RoomMessageEventContent::text_plain("in a thread");
+        in_thread.relates_to = Some(Relation::Thread(thread_rooted_at(event_id!("$thread_root"))));
+
+        let content =
+            SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(in_thread))
+                .unwrap();
+        assert_eq!(
+            thread_relation_of(&content).map(|thread| thread.event_id),
+            Some(owned_event_id!("$thread_root"))
+        );
+
+        // An event outside of any thread has none…
+        let content = SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(
+            RoomMessageEventContent::text_plain("in the room"),
+        ))
+        .unwrap();
+        assert_eq!(thread_relation_of(&content).map(|thread| thread.event_id), None);
+
+        // …and neither does a plain reply, which is a relation of another kind.
+        let mut plain_reply = RoomMessageEventContent::text_plain("a reply");
+        plain_reply.relates_to =
+            Some(Relation::Reply(Reply::with_event_id(owned_event_id!("$target"))));
+
+        let content =
+            SerializableEventContent::new(&AnyMessageLikeEventContent::RoomMessage(plain_reply))
+                .unwrap();
+        assert_eq!(thread_relation_of(&content).map(|thread| thread.event_id), None);
+    }
 
     #[test]
     fn test_canonicalize_dependent_events_created_at() {

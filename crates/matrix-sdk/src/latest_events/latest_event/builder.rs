@@ -1866,6 +1866,119 @@ mod builder_tests {
     }
 
     #[async_test]
+    async fn test_remote_only_scans_the_events_of_its_own_thread() {
+        // A thread's latest event is the most recent event *of that thread*, not
+        // of the room; and the thread root belongs to its own thread, so a thread
+        // whose replies are all unsuitable still has one.
+
+        let room_id = room_id!("!r0");
+        let user_id = user_id!("@mnt_io:matrix.org");
+        let event_factory = EventFactory::new().sender(user_id).room(room_id);
+
+        let thread_root_id = event_id!("$thread_root");
+        let other_thread_root_id = event_id!("$other_thread_root");
+        let in_thread_id = event_id!("$in_thread");
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+
+        client
+            .event_cache_store()
+            .lock()
+            .await
+            .expect("Could not acquire the event cache lock")
+            .as_clean()
+            .expect("Could not acquire a clean event cache lock")
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            event_factory
+                                .text_msg("what do you think?")
+                                .event_id(thread_root_id)
+                                .into(),
+                            event_factory
+                                .text_msg("I think it's great")
+                                .in_thread(thread_root_id, thread_root_id)
+                                .event_id(in_thread_id)
+                                .into(),
+                            // Another thread entirely; must not be picked for the
+                            // thread above.
+                            event_factory
+                                .text_msg("unrelated thread root")
+                                .event_id(other_thread_root_id)
+                                .into(),
+                            event_factory
+                                .text_msg("in the other thread")
+                                .in_thread(other_thread_root_id, other_thread_root_id)
+                                .event_id(event_id!("$in_other_thread"))
+                                .into(),
+                            // The most recent event of the room, in no thread at all.
+                            event_factory
+                                .text_msg("anyways, lunch?")
+                                .event_id(event_id!("$main_timeline"))
+                                .into(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        let (room_event_cache, _) = event_cache.room(room_id).await.unwrap();
+
+        // Without a thread, the room's most recent event wins.
+        assert_remote_value_matches_room_message_with_body!(
+            Builder::new_remote(&room_event_cache, None, LatestEventValue::None, user_id, None).await
+            => with body = "anyways, lunch?"
+        );
+
+        // With a thread, only that thread's events are candidates.
+        assert_remote_value_matches_room_message_with_body!(
+            Builder::new_remote(&room_event_cache, Some(thread_root_id), LatestEventValue::None, user_id, None).await
+            => with body = "I think it's great"
+        );
+
+        assert_remote_value_matches_room_message_with_body!(
+            Builder::new_remote(&room_event_cache, Some(other_thread_root_id), LatestEventValue::None, user_id, None).await
+            => with body = "in the other thread"
+        );
+
+        // A thread nothing has replied to yet falls back on its root, which is one
+        // of its own events.
+        assert_remote_value_matches_room_message_with_body!(
+            Builder::new_remote(&room_event_cache, Some(event_id!("$main_timeline")), LatestEventValue::None, user_id, None).await
+            => with body = "anyways, lunch?"
+        );
+
+        // A thread the room knows nothing about has no value, and doesn't erase
+        // the one it may already have: the room isn't empty.
+        assert_matches!(
+            Builder::new_remote(
+                &room_event_cache,
+                Some(event_id!("$never_heard_of_it")),
+                LatestEventValue::None,
+                user_id,
+                None
+            )
+            .await,
+            None
+        );
+    }
+
+    #[async_test]
     async fn test_remote_is_scanning_event_backwards_from_event_cache() {
         let room_id = room_id!("!r0");
         let user_id = user_id!("@mnt_io:matrix.org");
