@@ -1,9 +1,10 @@
-use std::{future, ops::Deref, sync::Arc};
+use std::{collections::HashMap, future, ops::Deref, sync::Arc};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
 use matrix_sdk_common::cross_process_lock::{CrossProcessLock, CrossProcessLockConfig};
-use ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
+use matrix_sdk_common::locks::RwLock as StdRwLock;
+use ruma::{DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId};
 use tokio::sync::{Mutex, broadcast};
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{debug, trace, warn};
@@ -18,7 +19,7 @@ use crate::{
     store,
     store::{
         Changes, DynCryptoStore, IntoCryptoStore, RoomKeyInfo, RoomKeyWithheldInfo,
-        types::SecretsInboxItem,
+        types::{RoomSettings, SecretsInboxItem},
     },
 };
 
@@ -35,6 +36,16 @@ pub(crate) struct CryptoStoreWrapper {
 
     /// A cache for the Olm Sessions.
     sessions: SessionStore,
+
+    /// A cache for the per-room encryption settings.
+    ///
+    /// Reading these from the store means a database read and a decryption of
+    /// the stored value, and they sit on the critical path for displaying a
+    /// room's encryption status. They only change through
+    /// [`CryptoStoreWrapper::save_changes`], so they can be cached here. A
+    /// `None` value means the room has no settings stored, which is itself
+    /// worth remembering.
+    room_settings: StdRwLock<HashMap<OwnedRoomId, Option<RoomSettings>>>,
 
     /// The sender side of a broadcast stream that is notified whenever we get
     /// an update to an inbound group session.
@@ -73,12 +84,31 @@ impl CryptoStoreWrapper {
             device_id: device_id.to_owned(),
             store: store.into_crypto_store(),
             sessions: SessionStore::new(),
+            room_settings: Default::default(),
             room_keys_received_sender,
             room_keys_withheld_received_sender,
             secrets_broadcaster,
             identities_broadcaster,
             historic_room_key_bundles_broadcaster,
         }
+    }
+
+    /// Get the encryption settings for the given room.
+    ///
+    /// The settings are cached in memory, so that the common case of asking
+    /// for them repeatedly does not hit the store every time.
+    pub(crate) async fn get_room_settings(
+        &self,
+        room_id: &RoomId,
+    ) -> store::Result<Option<RoomSettings>> {
+        if let Some(settings) = self.room_settings.read().get(room_id) {
+            return Ok(settings.clone());
+        }
+
+        let settings = self.store.get_room_settings(room_id).await?;
+        self.room_settings.write().insert(room_id.to_owned(), settings.clone());
+
+        Ok(settings)
     }
 
     /// Save the set of changes to the store.
@@ -138,7 +168,18 @@ impl CryptoStoreWrapper {
             }
         }
 
+        let room_settings = changes.room_settings.clone();
+
         self.store.save_changes(changes).await?;
+
+        // Keep the cache in step with what we just wrote.
+        if !room_settings.is_empty() {
+            let mut cache = self.room_settings.write();
+
+            for (room_id, settings) in room_settings {
+                cache.insert(room_id, Some(settings));
+            }
+        }
 
         // If we updated our own public identity, log it for debugging purposes
         if tracing::level_enabled!(tracing::Level::DEBUG) {

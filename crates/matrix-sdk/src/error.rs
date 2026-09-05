@@ -406,6 +406,25 @@ pub enum Error {
     #[error("backups are not enabled")]
     BackupNotEnabled,
 
+    /// Room keys downloaded from the server-side key backup could not be read.
+    ///
+    /// The keys are on the server, but they either failed to deserialize or
+    /// could not be decrypted with our backup decryption key, so they are
+    /// either corrupt or were encrypted for a different backup. This is
+    /// distinct from the key simply not being in the backup, which is not an
+    /// error.
+    #[error(
+        "{count} room key(s) downloaded from the backup could not be read, \
+         for instance the session {session_id}: they are either corrupt or \
+         were encrypted with a different backup key"
+    )]
+    UnreadableBackedUpRoomKeys {
+        /// How many of the downloaded room keys could not be read.
+        count: usize,
+        /// The megolm session ID of one of them.
+        session_id: String,
+    },
+
     /// It's forbidden to ignore your own user.
     #[error("can't ignore the logged-in user")]
     CantIgnoreLoggedInUser,

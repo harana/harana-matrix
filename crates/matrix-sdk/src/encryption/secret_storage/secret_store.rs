@@ -424,6 +424,14 @@ impl SecretStore {
         let (request_id, request) = olm_machine.query_keys_for_users([olm_machine.user_id()]);
         self.client.keys_query(&request_id, request.device_keys).await?;
 
+        // Remember which keys the secret store actually held, so that we can tell
+        // apart a key which was not there from one which we failed to import.
+        let exported = [
+            (SecretName::CrossSigningMasterKey, export.master_key.is_some()),
+            (SecretName::CrossSigningSelfSigningKey, export.self_signing_key.is_some()),
+            (SecretName::CrossSigningUserSigningKey, export.user_signing_key.is_some()),
+        ];
+
         // Let's now try to import our private cross-signing keys.
         let status = olm_machine
             .import_cross_signing_keys(export)
@@ -456,6 +464,25 @@ impl SecretStore {
         }
 
         self.maybe_enable_backups().await?;
+
+        // A key which was in the secret store but is not in the store now was rejected,
+        // most likely because its private part does not match the public part the
+        // homeserver has. Recovery has not done what the user asked for, so say so
+        // instead of leaving them to retry the same recovery key forever.
+        let imported = [status.has_master, status.has_self_signing, status.has_user_signing];
+        let missing: Vec<_> = exported
+            .into_iter()
+            .zip(imported)
+            .filter_map(|((name, was_exported), was_imported)| {
+                (was_exported && !was_imported).then_some(name)
+            })
+            .collect();
+
+        if !missing.is_empty() {
+            error!(?missing, "Some cross-signing keys could not be imported from the secret store");
+
+            return Err(SecretStorageError::IncompleteCrossSigningImport { keys: missing });
+        }
 
         Ok(())
     }

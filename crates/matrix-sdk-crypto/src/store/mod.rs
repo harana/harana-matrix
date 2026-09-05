@@ -706,6 +706,18 @@ impl Store {
         self.inner.store.save_changes(changes).await
     }
 
+    /// Get the encryption settings for the given room.
+    ///
+    /// This goes through the [`CryptoStoreWrapper`], which caches the settings
+    /// in memory, rather than reading and decrypting them from the store on
+    /// every call.
+    pub(crate) async fn get_room_settings(
+        &self,
+        room_id: &RoomId,
+    ) -> Result<Option<types::RoomSettings>> {
+        self.inner.store.get_room_settings(room_id).await
+    }
+
     /// Given an `InboundGroupSession` which we have just received, see if we
     /// have a matching session already in the store, and determine how to
     /// handle it.

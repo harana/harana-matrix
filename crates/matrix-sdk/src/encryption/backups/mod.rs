@@ -669,6 +669,7 @@ impl Backups {
         olm_machine: &OlmMachine,
     ) -> Result<(), Error> {
         let mut decrypted_room_keys: Vec<_> = Vec::new();
+        let mut unreadable_session_ids: Vec<String> = Vec::new();
 
         for (room_id, room_keys) in backed_up_keys.rooms {
             for (session_id, room_key) in room_keys.sessions {
@@ -679,6 +680,7 @@ impl Backups {
                             "Couldn't deserialize a room key we downloaded from backups, session \
                              ID: {session_id}, error: {e:?}"
                         );
+                        unreadable_session_ids.push(session_id);
                         continue;
                     }
                 };
@@ -691,6 +693,7 @@ impl Backups {
                                 "Couldn't decrypt a room key we downloaded from backups, session \
                                  ID: {session_id}, error: {e:?}"
                             );
+                            unreadable_session_ids.push(session_id);
                             continue;
                         }
                     };
@@ -701,6 +704,19 @@ impl Backups {
                     room_key,
                 ));
             }
+        }
+
+        // If every key we got back was unreadable, the caller is otherwise left
+        // believing the download worked while the messages stay undecryptable. That is
+        // different from the key not being in the backup at all, so say which it is.
+        if decrypted_room_keys.is_empty()
+            && let Some(session_id) = unreadable_session_ids.first().cloned()
+        {
+            return Err(Error::UnreadableBackedUpRoomKeys {
+                count: unreadable_session_ids.len(),
+                session_id,
+            }
+            .into());
         }
 
         let result = olm_machine
