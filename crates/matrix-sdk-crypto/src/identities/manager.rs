@@ -1225,6 +1225,15 @@ impl IdentityManager {
     ) -> Result<(), CryptoStoreError> {
         match SenderDataFinder::find_using_device_data(&self.store, device.clone(), session).await {
             Ok(sender_data) => {
+                // A session that we imported from a backup or a key export is flagged as
+                // legacy, because we cannot retroactively establish who sent it. Learning
+                // about the sender's device does not change that, so carry the flag over:
+                // dropping it here would hide the session's messages from clients that
+                // exclude insecure devices. See issue #178.
+                let legacy_session =
+                    sender_data.legacy_session() || session.sender_data.legacy_session();
+                let sender_data = sender_data.with_legacy_session(legacy_session);
+
                 debug!("Updating existing InboundGroupSession with new SenderData {sender_data:?}");
                 session.sender_data = sender_data;
             }
@@ -2368,6 +2377,56 @@ pub(crate) mod tests {
         assert!(has_latch_violation);
     }
 
+    /// Regression test for issue #129: pinning through a stale
+    /// [`OtherUserIdentity`] used to write the whole in-memory identity back,
+    /// reverting cross-signing keys the store had already learned about.
+    #[async_test]
+    async fn test_pinning_a_stale_identity_does_not_revert_newer_keys() {
+        use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
+
+        let machine = common_verified_identity_changes_machine_setup().await;
+
+        // Given we know about Bob's identity...
+        machine
+            .mark_request_as_sent(&TransactionId::new(), &DataSet::bob_keys_query_response_signed())
+            .await
+            .unwrap();
+
+        let stale_identity =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        let old_master_key = stale_identity.master_key().get_first_key();
+
+        // ... and Bob then rotates it...
+        machine
+            .mark_request_as_sent(
+                &TransactionId::new(),
+                &DataSet::bob_keys_query_response_rotated(),
+            )
+            .await
+            .unwrap();
+
+        let new_master_key = machine
+            .get_identity(DataSet::bob_id(), None)
+            .await
+            .unwrap()
+            .unwrap()
+            .other()
+            .unwrap()
+            .master_key()
+            .get_first_key();
+        assert_ne!(old_master_key, new_master_key);
+
+        // ... when we pin through the handle we grabbed before the rotation...
+        stale_identity.pin_current_master_key().await.unwrap();
+
+        // ... then the store keeps the rotated keys, and the new identity is still
+        // waiting for the user to approve it.
+        let stored =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        assert_eq!(stored.master_key().get_first_key(), new_master_key);
+        assert!(stored.has_pin_violation());
+    }
+
     #[async_test]
     async fn test_manager_verified_identity_changes_setup_on_updated_identities() {
         use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
@@ -2606,6 +2665,47 @@ pub(crate) mod tests {
                     .expect("Could not find session after update");
                 assert_matches!(updated.sender_data, SenderData::UnknownDevice { .. });
             }
+        }
+
+        #[async_test]
+        async fn test_keeps_the_legacy_flag_when_the_device_shows_up() {
+            let manager = manager_test_helper(user_id(), device_id()).await;
+
+            // Given a session that we restored from a backup, and which is therefore
+            // flagged as legacy...
+            let account = Account::new(user_id());
+            let mut session = create_inbound_group_session(&account).await;
+            session.sender_data = SenderData::legacy();
+            manager
+                .store
+                .save_changes(Changes {
+                    inbound_group_sessions: vec![session.clone()],
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            // ... when a /keys/query tells us about the sending device...
+            manager
+                .update_sender_data_from_device_changes(&DeviceChanges {
+                    changed: vec![DeviceData::from_account(&account)],
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            // ... then we learn about the device, but the session stays legacy.
+            let updated = manager
+                .store
+                .get_inbound_group_session(session.room_id(), session.session_id())
+                .await
+                .unwrap()
+                .expect("Could not find session after update");
+
+            assert_matches!(
+                updated.sender_data,
+                SenderData::DeviceInfo { legacy_session: true, .. }
+            );
         }
 
         /// Create an InboundGroupSession sent from the given account

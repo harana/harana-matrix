@@ -414,10 +414,26 @@ impl Device {
     ///
     /// * `trust_state` - The new trust state that should be set for the device.
     pub async fn set_local_trust(&self, trust_state: LocalTrust) -> StoreResult<()> {
+        // Read the device back from the store before writing, rather than saving our
+        // own copy of it. Ours may have been built a while ago, and fields such as
+        // `deleted`, `withheld_code_sent` or the Olm wedging index may have moved on
+        // since; writing the whole in-memory object back would silently revert them.
+        // See issue #128.
+        let device_data = self
+            .verification_machine
+            .store
+            .get_device_data(self.user_id(), self.device_id())
+            .await?
+            .unwrap_or_else(|| self.inner.clone());
+
+        device_data.set_trust_state(trust_state);
+
+        // Keep our own copy in sync, so that callers holding on to this `Device` see
+        // the new trust state.
         self.inner.set_trust_state(trust_state);
 
         let changes = Changes {
-            devices: DeviceChanges { changed: vec![self.inner.clone()], ..Default::default() },
+            devices: DeviceChanges { changed: vec![device_data], ..Default::default() },
             ..Default::default()
         };
 

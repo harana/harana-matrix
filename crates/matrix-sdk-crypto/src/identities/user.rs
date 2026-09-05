@@ -30,7 +30,7 @@ use ruma::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[cfg(feature = "experimental-x509-identity-verification")]
 use crate::x509::X509Verifier;
@@ -447,9 +447,52 @@ impl OtherUserIdentity {
     pub async fn pin_current_master_key(&self) -> Result<(), CryptoStoreError> {
         info!(master_key = ?self.master_key.get_first_key(), "Pinning current identity for user '{}'", self.user_id());
         self.inner.pin();
-        let to_save = UserIdentityData::Other(self.inner.clone());
+
+        let Some(to_save) = self.identity_to_update().await? else { return Ok(()) };
+        to_save.pin();
+
+        self.save_identity(to_save).await
+    }
+
+    /// Read this identity back from the store, so that a targeted change can
+    /// be applied to the current data rather than to our own, possibly stale,
+    /// copy of it.
+    ///
+    /// Returns `None` when the stored identity no longer presents the master
+    /// key our copy was built from. In that case the identity changed
+    /// underneath us: writing our copy back would revert the new cross-signing
+    /// keys, and applying the change to the new identity would record a
+    /// decision the user never made about it. See issue #129.
+    async fn identity_to_update(&self) -> Result<Option<OtherUserIdentityData>, CryptoStoreError> {
+        let stored = self.verification_machine.store.get_user_identity(self.user_id()).await?;
+
+        match stored {
+            // Nothing stored yet, so there is nothing of ours to overwrite.
+            None => Ok(Some(self.inner.clone())),
+
+            Some(UserIdentityData::Other(stored))
+                if stored.master_key.get_first_key() == self.master_key.get_first_key() =>
+            {
+                Ok(Some(stored))
+            }
+
+            Some(_) => {
+                warn!(
+                    user_id = ?self.user_id(),
+                    master_key = ?self.master_key.get_first_key(),
+                    "The stored identity changed since we read it; not writing our stale copy back",
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    async fn save_identity(&self, identity: OtherUserIdentityData) -> Result<(), CryptoStoreError> {
         let changes = Changes {
-            identities: IdentityChanges { changed: vec![to_save], ..Default::default() },
+            identities: IdentityChanges {
+                changed: vec![UserIdentityData::Other(identity)],
+                ..Default::default()
+            },
             ..Default::default()
         };
         self.verification_machine.store.inner().save_changes(changes).await?;
@@ -487,13 +530,11 @@ impl OtherUserIdentity {
             "Withdrawing verification status and pinning current identity"
         );
         self.inner.withdraw_verification();
-        let to_save = UserIdentityData::Other(self.inner.clone());
-        let changes = Changes {
-            identities: IdentityChanges { changed: vec![to_save], ..Default::default() },
-            ..Default::default()
-        };
-        self.verification_machine.store.inner().save_changes(changes).await?;
-        Ok(())
+
+        let Some(to_save) = self.identity_to_update().await? else { return Ok(()) };
+        to_save.withdraw_verification();
+
+        self.save_identity(to_save).await
     }
 
     /// Test helper that marks that an identity has been previously verified and
