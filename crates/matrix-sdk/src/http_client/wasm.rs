@@ -18,12 +18,11 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use bytesize::ByteSize;
-use eyeball::SharedObservable;
 use ruma::api::{IncomingResponseExt as _, OutgoingRequest, error::FromHttpResponseError};
 
 #[cfg(feature = "reqwest-transport")]
 use super::response_to_http_response;
-use super::{HttpClient, TransmissionProgress};
+use super::{HttpClient, RequestProgress};
 use crate::{config::RequestConfig, error::HttpError};
 
 #[cfg(feature = "reqwest-transport")]
@@ -31,7 +30,9 @@ pub(super) async fn execute_request(
     client: &reqwest::Client,
     request: http::Request<Bytes>,
     _timeout: Option<Duration>,
-    _send_progress: SharedObservable<TransmissionProgress>,
+    // The `fetch` API this ends up on gives no view of the body being sent or
+    // received, so there is no progress to report.
+    _progress: RequestProgress,
 ) -> Result<http::Response<Bytes>, HttpError> {
     let request = reqwest::Request::try_from(request)?;
 
@@ -43,7 +44,7 @@ impl HttpClient {
         &self,
         request: http::Request<Bytes>,
         config: RequestConfig,
-        send_progress: SharedObservable<TransmissionProgress>,
+        progress: RequestProgress,
     ) -> Result<R::IncomingResponse, HttpError>
     where
         R: OutgoingRequest + Debug,
@@ -53,7 +54,8 @@ impl HttpClient {
 
         let before = ruma::time::Instant::now();
 
-        let response = self.inner.send_request(request, config.timeout, send_progress).await?;
+        let response =
+            self.inner.send_request_with_progress(request, config.timeout, progress).await?;
 
         let request_duration = ruma::time::Instant::now().saturating_duration_since(before);
         let status_code = response.status();
