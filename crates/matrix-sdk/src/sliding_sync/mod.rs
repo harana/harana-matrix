@@ -1992,20 +1992,30 @@ mod tests {
 
             olm_machine.update_tracked_users([alice]).await?;
 
-            for request in olm_machine.outgoing_requests().await? {
-                let response = match request.request() {
-                    AnyOutgoingRequest::KeysUpload(_) => AnyIncomingResponse::KeysUpload(
-                        &ruma_response_from_json(&json!({ "one_time_key_counts": {} })),
-                    ),
-                    AnyOutgoingRequest::KeysQuery(_) => {
-                        AnyIncomingResponse::KeysQuery(&ruma_response_from_json(&json!({
-                            "device_keys": { alice: {}, me: {} }
-                        })))
-                    }
-                    _ => panic!("unexpected outgoing request"),
-                };
+            // Draining once isn't enough: answering a `/keys/query` can schedule the
+            // next one. Loop until nothing is left, with a bound so a bug here can't
+            // hang the test.
+            for _ in 0..5 {
+                let requests = olm_machine.outgoing_requests().await?;
+                if requests.is_empty() {
+                    break;
+                }
 
-                olm_machine.mark_request_as_sent(request.request_id(), response).await?;
+                for request in requests {
+                    let response = match request.request() {
+                        AnyOutgoingRequest::KeysUpload(_) => AnyIncomingResponse::KeysUpload(
+                            &ruma_response_from_json(&json!({ "one_time_key_counts": {} })),
+                        ),
+                        AnyOutgoingRequest::KeysQuery(_) => {
+                            AnyIncomingResponse::KeysQuery(&ruma_response_from_json(&json!({
+                                "device_keys": { alice: {}, me: {} }
+                            })))
+                        }
+                        _ => panic!("unexpected outgoing request"),
+                    };
+
+                    olm_machine.mark_request_as_sent(request.request_id(), response).await?;
+                }
             }
 
             assert!(olm_machine.outgoing_requests().await?.is_empty());

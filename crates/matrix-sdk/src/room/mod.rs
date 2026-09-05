@@ -4543,11 +4543,29 @@ impl Room {
     /// This is like [`Self::subscribe_thread`], but it first checks if the user
     /// has already subscribed to a thread, so as to minimize sending
     /// unnecessary subscriptions which would be ignored by the server.
+    ///
+    /// An explicit unsubscription is sticky: once the user has unsubscribed
+    /// from a thread, only a manual subscription (`automatic` unset) can
+    /// subscribe them again.
     pub async fn subscribe_thread_if_needed(
         &self,
         thread_root: &EventId,
         automatic: Option<OwnedEventId>,
     ) -> Result<()> {
+        if automatic.is_some()
+            && let Some(stored) = self
+                .client
+                .state_store()
+                .load_thread_subscription(self.room_id(), thread_root)
+                .await?
+            && matches!(stored.status, ThreadSubscriptionStatus::Unsubscribed)
+        {
+            // The user explicitly unsubscribed from this thread; don't undo that on the
+            // next event landing in it.
+            trace!("not automatically subscribing to a thread the user unsubscribed from");
+            return Ok(());
+        }
+
         if let Some(prev_sub) = self.load_or_fetch_thread_subscription(thread_root).await? {
             // If we have a previous subscription, we should only send the new one if it's
             // manual and the previous one was automatic.

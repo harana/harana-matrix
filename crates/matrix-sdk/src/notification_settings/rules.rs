@@ -16,6 +16,20 @@ use crate::{
     notification_settings::{IsEncrypted, IsOneToOne},
 };
 
+/// The ID of the `Override` push rule that keeps the encrypted events of a
+/// room notifying.
+///
+/// A room set to [`RoomNotificationMode::MentionsAndKeywordsOnly`] gets a
+/// room-level `dont_notify` rule. In an encrypted room that would stop the
+/// homeserver from pushing anything at all: it can't read the ciphertext, so
+/// it can never tell that a message mentions the user, and the device never
+/// wakes up to find out. This rule keeps the encrypted events flowing; the
+/// client evaluates the push rules again on the decrypted event, where the
+/// room-level rule does apply, so non-mentions are still filtered out.
+pub(crate) fn encrypted_events_rule_id(room_id: &RoomId) -> String {
+    format!("{room_id}.encrypted")
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Rules {
     pub ruleset: Ruleset,
@@ -258,6 +272,7 @@ impl Rules {
                 }
                 Command::SetRoomPushRule { .. }
                 | Command::SetOverridePushRule { .. }
+                | Command::SetEncryptedEventsPushRule { .. }
                 | Command::SetKeywordPushRule { .. } => {
                     if let Ok(push_rule) = command.to_push_rule() {
                         _ = self.ruleset.insert(push_rule, None, None);

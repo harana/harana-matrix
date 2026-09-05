@@ -214,6 +214,20 @@ impl ReadReceiptsExt for ReadReceipts {
             return;
         };
 
+        // An edit isn't a new message: the user sees one message, so its
+        // notification is folded into the count of the event it replaces.
+        //
+        // A mention is the exception. Per the spec, the `m.mentions` of an edit
+        // only carries the users that weren't mentioned in the original event, so a
+        // highlighting edit is a mention the user hasn't been told about yet, and
+        // it counts as both a mention and a notification.
+        if matches!(extract_relation(event.raw()), Some((RelationType::Replacement, _)))
+            && !actions.iter().any(|action| action.is_highlight())
+        {
+            trace!("not counting a notification for an edit that introduces no mention");
+            return;
+        }
+
         for action in actions.iter() {
             if !has_notify && action.should_notify() {
                 self.num_notifications += 1;
@@ -706,7 +720,10 @@ mod tests {
         EventId, RoomId, UserId, event_id,
         events::{
             receipt::{ReceiptThread, ReceiptType},
-            room::{member::MembershipState, message::MessageType},
+            room::{
+                member::MembershipState,
+                message::{MessageType, RoomMessageEventContent},
+            },
         },
         owned_event_id,
         push::{Action, HighlightTweakValue, Tweak},
@@ -894,6 +911,45 @@ mod tests {
         receipts.process_event(&event, user_id);
         assert_eq!(receipts.num_unread, 1);
         assert_eq!(receipts.num_mentions, 0);
+        assert_eq!(receipts.num_notifications, 1);
+    }
+
+    #[test]
+    fn test_count_notifications_for_edits() {
+        fn make_edit(user_id: &UserId, push_actions: Vec<Action>) -> TimelineEvent {
+            let mut ev = EventFactory::new()
+                .text_msg("* A")
+                .edit(event_id!("$ida"), RoomMessageEventContent::text_plain("A").into())
+                .sender(user_id)
+                .event_id(event_id!("$idb"))
+                .into_event();
+            ev.set_push_actions(push_actions);
+            ev
+        }
+
+        let user_id = user_id!("@alice:example.org");
+        let bob = user_id!("@bob:example.org");
+
+        // An edit that notifies but doesn't mention the user is folded into the count
+        // of the event it replaces: it adds nothing.
+        let mut receipts = ReadReceipts::default();
+        receipts.process_event(&make_edit(bob, vec![Action::Notify]), user_id);
+        assert_eq!(receipts.num_unread, 0);
+        assert_eq!(receipts.num_mentions, 0);
+        assert_eq!(receipts.num_notifications, 0);
+
+        // An edit that mentions the user does count: per the spec its `m.mentions`
+        // only carries mentions that weren't in the original event.
+        let mut receipts = ReadReceipts::default();
+        receipts.process_event(
+            &make_edit(
+                bob,
+                vec![Action::Notify, Action::SetTweak(Tweak::Highlight(HighlightTweakValue::Yes))],
+            ),
+            user_id,
+        );
+        assert_eq!(receipts.num_unread, 0);
+        assert_eq!(receipts.num_mentions, 1);
         assert_eq!(receipts.num_notifications, 1);
     }
 
