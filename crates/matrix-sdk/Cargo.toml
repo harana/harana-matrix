@@ -98,7 +98,7 @@ experimental-push-secrets = [
     "ruma/unstable-msc4385",
 ]
 
-markdown = ["ruma/markdown"]
+markdown = ["dep:pulldown-cmark", "ruma/markdown"]
 socks = ["reqwest-transport", "reqwest?/socks"]
 # Requires a Tokio runtime: the local HTTP server is built on `axum`, which
 # only speaks Tokio.
@@ -162,6 +162,7 @@ mime2ext = "0.1.54"
 oauth2.workspace = true
 percent-encoding = "2.3.2"
 pin-project-lite.workspace = true
+pulldown-cmark = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 ruma = { workspace = true, features = [
     "rand",

@@ -19,7 +19,10 @@ use std::{
 };
 
 use extension_trait::extension_trait;
-use matrix_sdk::attachment::{BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo};
+use matrix_sdk::{
+    attachment::{BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo},
+    utils::formatted_body_from_markdown,
+};
 use ruma::{
     KeyDerivationAlgorithm as RumaKeyDerivationAlgorithm, MatrixToUri, MatrixUri as RumaMatrixUri,
     OwnedRoomId, OwnedUserId, SecondsSinceUnixEpoch, UInt, UserId, assign,
@@ -276,14 +279,24 @@ pub fn message_event_content_new(
 pub fn message_event_content_from_markdown(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
-    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::text_markdown(md)))
+    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Text(
+        match formatted_body_from_markdown(&md) {
+            Some(formatted) => RumaTextMessageEventContent::html(md, formatted.body),
+            None => RumaTextMessageEventContent::plain(md),
+        },
+    )))
 }
 
 #[matrix_sdk_ffi_macros::export]
 pub fn message_event_content_from_markdown_as_emote(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
-    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::emote_markdown(md)))
+    Arc::new(RoomMessageEventContentWithoutRelation::new(RumaMessageType::Emote(
+        match formatted_body_from_markdown(&md) {
+            Some(formatted) => RumaEmoteMessageEventContent::html(md, formatted.body),
+            None => RumaEmoteMessageEventContent::plain(md),
+        },
+    )))
 }
 
 #[matrix_sdk_ffi_macros::export]
@@ -1954,5 +1967,68 @@ mod galleries {
                 },
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_matches2::assert_let;
+    use ruma::events::room::message::MessageType as RumaMessageType;
+
+    use super::{
+        message_event_content_from_markdown, message_event_content_from_markdown_as_emote,
+    };
+
+    /// A body that markdown reads as list markup carrying no content at all is
+    /// sent verbatim, rather than as a list whose only item is empty. See
+    /// harana/harana-matrix#130.
+    #[test]
+    fn test_message_event_content_from_markdown_keeps_a_bare_list_marker_plain() {
+        for body in ["5.", "5. ", "5)", "10.", "* ", "- "] {
+            let content = message_event_content_from_markdown(body.to_owned());
+
+            assert_let!(RumaMessageType::Text(text) = &content.msgtype);
+            assert_eq!(text.body, body, "body: {body:?}");
+            assert!(text.formatted.is_none(), "body: {body:?}");
+        }
+    }
+
+    #[test]
+    fn test_message_event_content_from_markdown_still_formats_a_list_with_content() {
+        let content = message_event_content_from_markdown("5. buy milk".to_owned());
+
+        assert_let!(RumaMessageType::Text(text) = &content.msgtype);
+        assert_eq!(text.body, "5. buy milk");
+        assert_let!(Some(formatted) = &text.formatted);
+        assert_eq!(formatted.body, "<ol start=\"5\">\n<li>buy milk</li>\n</ol>\n");
+    }
+
+    #[test]
+    fn test_message_event_content_from_markdown_still_formats_other_markdown() {
+        let content = message_event_content_from_markdown("# Parsed".to_owned());
+
+        assert_let!(RumaMessageType::Text(text) = &content.msgtype);
+        assert_eq!(text.body, "# Parsed");
+        assert_let!(Some(formatted) = &text.formatted);
+        assert_eq!(formatted.body, "<h1>Parsed</h1>\n");
+    }
+
+    #[test]
+    fn test_message_event_content_from_markdown_as_emote_keeps_a_bare_list_marker_plain() {
+        let content = message_event_content_from_markdown_as_emote("5.".to_owned());
+
+        assert_let!(RumaMessageType::Emote(emote) = &content.msgtype);
+        assert_eq!(emote.body, "5.");
+        assert!(emote.formatted.is_none());
+    }
+
+    #[test]
+    fn test_message_event_content_from_markdown_as_emote_still_formats_other_markdown() {
+        let content = message_event_content_from_markdown_as_emote("*waves*".to_owned());
+
+        assert_let!(RumaMessageType::Emote(emote) = &content.msgtype);
+        assert_eq!(emote.body, "*waves*");
+        assert_let!(Some(formatted) = &emote.formatted);
+        assert_eq!(formatted.body, "<em>waves</em>");
     }
 }
