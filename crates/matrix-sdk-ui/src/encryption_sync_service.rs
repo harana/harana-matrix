@@ -75,6 +75,31 @@ impl EncryptionSyncService {
         client: Client,
         poll_and_network_timeouts: Option<(Duration, Duration)>,
     ) -> Result<Self, Error> {
+        Self::new_inner(client, poll_and_network_timeouts, true).await
+    }
+
+    /// Creates a new instance of an `EncryptionSyncService` for a short-lived,
+    /// one-off sync, such as the one a notification process runs to decrypt
+    /// a single event.
+    ///
+    /// Unlike [`Self::new`], the sync it manages doesn't mark all tracked
+    /// users' device lists as dirty when it starts. Such a process runs once
+    /// per push notification, always with a fresh sliding sync session, and
+    /// would otherwise trigger a `/keys/query` for every tracked user on every
+    /// single notification. Keeping the device lists up to date is the job of
+    /// the application's own long-running sync.
+    pub async fn new_for_notifications(
+        client: Client,
+        poll_and_network_timeouts: Option<(Duration, Duration)>,
+    ) -> Result<Self, Error> {
+        Self::new_inner(client, poll_and_network_timeouts, false).await
+    }
+
+    async fn new_inner(
+        client: Client,
+        poll_and_network_timeouts: Option<(Duration, Duration)>,
+        mark_tracked_users_dirty: bool,
+    ) -> Result<Self, Error> {
         // Make sure to use the same `conn_id` and caching store identifier, whichever
         // process is running this sliding sync. There must be at most one
         // sliding sync instance that enables the e2ee and to-device extensions.
@@ -86,6 +111,10 @@ impl EncryptionSyncService {
                 assign!(http::request::ToDevice::default(), { enabled: Some(true)}),
             )
             .with_e2ee_extension(assign!(http::request::E2EE::default(), { enabled: Some(true)}));
+
+        if !mark_tracked_users_dirty {
+            builder = builder.without_marking_tracked_users_dirty();
+        }
 
         if let Some((poll_timeout, network_timeout)) = poll_and_network_timeouts {
             builder = builder.poll_timeout(poll_timeout).network_timeout(network_timeout);

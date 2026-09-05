@@ -271,7 +271,11 @@ async fn test_sync_service_offline_mode() {
 
     mock_server.mock_versions().ok().expect(1..).mount().await;
 
-    assert_next_matches_with_timeout!(states, 1000, State::Running);
+    // The server is reachable again, but the syncs are not restarted immediately:
+    // the service backs off first, so that a server that keeps failing isn't
+    // hammered in a tight loop.
+    assert_next_matches_with_timeout!(states, 2000, State::Backoff);
+    assert_next_matches_with_timeout!(states, 5000, State::Running);
 }
 
 #[async_test]

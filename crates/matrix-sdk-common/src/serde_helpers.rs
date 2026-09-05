@@ -81,51 +81,6 @@ pub fn extract_relation(event: &Raw<AnySyncTimelineEvent>) -> Option<(RelationTy
     Some((relates_to.rel_type, relates_to.event_id?))
 }
 
-#[derive(Deserialize)]
-struct InReplyTo {
-    event_id: OwnedEventId,
-}
-
-#[derive(Deserialize)]
-struct ReplyRelatesTo {
-    /// Set on threaded events whose `m.in_reply_to` is only the rich-reply
-    /// fallback for thread-unaware clients, and thus doesn't represent an
-    /// actual reply.
-    #[serde(default)]
-    is_falling_back: bool,
-
-    #[serde(rename = "m.in_reply_to")]
-    in_reply_to: Option<InReplyTo>,
-}
-
-#[allow(missing_debug_implementations)]
-#[derive(Deserialize)]
-struct ReplyContent {
-    #[serde(rename = "m.relates_to")]
-    relates_to: Option<ReplyRelatesTo>,
-}
-
-/// Try to extract the event ID targeted by an explicit reply, from a raw
-/// timeline event.
-///
-/// The reply target is the field located at
-/// `content`.`m.relates_to`.`m.in_reply_to`.`event_id`.
-///
-/// Returns `None` if the event isn't a reply, if there was an issue during
-/// deserialization, or if the `m.in_reply_to` field is only the rich-reply
-/// fallback of a threaded event (i.e. `is_falling_back` is `true`): such a
-/// field points at the latest event of the thread, not at an event the sender
-/// meant to answer.
-pub fn extract_in_reply_to(event: &Raw<AnySyncTimelineEvent>) -> Option<OwnedEventId> {
-    let relates_to = event.get_field::<ReplyContent>("content").ok().flatten()?.relates_to?;
-
-    if relates_to.is_falling_back {
-        return None;
-    }
-
-    relates_to.in_reply_to.map(|in_reply_to| in_reply_to.event_id)
-}
-
 #[allow(missing_debug_implementations)]
 #[derive(Deserialize)]
 struct Relations {

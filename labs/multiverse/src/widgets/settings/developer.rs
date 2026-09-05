@@ -60,7 +60,8 @@ impl DeveloperSettingsView {
                                 sync_service::State::Idle
                                 | sync_service::State::Terminated
                                 | sync_service::State::Error(_)
-                                | sync_service::State::Offline => sync_service.start().await,
+                                | sync_service::State::Offline
+                                | sync_service::State::Backoff => sync_service.start().await,
                             }
                         }
                         SendQueue => {
@@ -84,6 +85,7 @@ impl Widget for &mut DeveloperSettingsView {
     {
         let sync_item = match self.sync_service.state().get() {
             sync_service::State::Running => ListItem::new("Sync [x]"),
+            sync_service::State::Backoff => ListItem::new("Sync [~]"),
             sync_service::State::Idle
             | sync_service::State::Terminated
             | sync_service::State::Error(_)

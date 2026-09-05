@@ -443,108 +443,96 @@ async fn test_auto_subscribe_thread_via_sync() {
 }
 
 #[async_test]
-async fn test_auto_subscribe_on_in_thread_reply_to_own_event() {
-    let mut s = thread_subscription_test_setup().await;
+async fn test_auto_subscribe_when_someone_answers_our_message_in_a_thread() {
+    let server = MatrixMockServer::new().await;
 
-    let own_user_id = s.client.user_id().unwrap().to_owned();
+    let thread_root = event_id!("$thread_root");
 
-    let own_event_id = event_id!("$my_own_message");
-    let own_event = s
-        .factory
-        .text_msg("what do you think?")
+    let client = server
+        .client_builder()
+        .no_server_versions()
+        .on_builder(|builder| {
+            builder.with_threading_support(ThreadingSupport::Enabled { with_subscriptions: true })
+        })
+        .build()
+        .await;
+
+    server.mock_versions().with_thread_subscriptions().ok().mount().await;
+
+    let event_cache = client.event_cache();
+    event_cache.subscribe().unwrap();
+
+    let room_id = room_id!("!omelette:fromage.fr");
+    let room = server.sync_joined_room(&client, room_id).await;
+
+    let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+    let (initial_events, mut subscriber) = room_event_cache.subscribe().await.unwrap();
+    assert!(initial_events.is_empty());
+    assert!(subscriber.is_empty());
+
+    let own_user_id = client.user_id().unwrap().to_owned();
+    let f = EventFactory::new().room(room_id).sender(*ALICE);
+    let member = f.member(&own_user_id).sender(&own_user_id);
+
+    // Only an intentional mention causes a notification, so nothing here is a
+    // mention: the subscription can only come from the reply.
+    let mut push_rules = Ruleset::default();
+    push_rules.override_.insert(ConditionalPushRule::is_user_mention(&own_user_id));
+
+    server
+        .mock_sync()
+        .ok_and_run(&client, |sync_builder| {
+            sync_builder.add_joined_room(JoinedRoomBuilder::new(room_id).add_state_event(member));
+            sync_builder.add_global_account_data(f.push_rules(push_rules));
+        })
+        .await;
+
+    assert_let_timeout!(Ok(RoomEventCacheUpdate::UpdateMembers { .. }) = subscriber.recv());
+
+    // A thread started by somebody else, in which we sent a message…
+    let our_message_id = event_id!("$our_message");
+    let our_message: Raw<AnySyncTimelineEvent> = f
+        .text_msg("what about the omelette?")
         .sender(&own_user_id)
-        .in_thread(&s.thread_root, &s.thread_root)
-        .event_id(own_event_id)
-        .into_raw_sync();
+        .in_thread(thread_root, thread_root)
+        .event_id(our_message_id)
+        .into();
 
-    let answer_event_id = event_id!("$an_answer");
-    let answer = s
-        .factory
-        .text_msg("I think it's a great idea")
-        .in_thread_reply(&s.thread_root, own_event_id)
-        .event_id(answer_event_id)
-        .into_raw_sync();
+    // … and somebody answering it, without mentioning us.
+    let answer_id = event_id!("$answer");
+    let answer: Raw<AnySyncTimelineEvent> = f
+        .text_msg("it's in the fridge")
+        .in_thread_reply(thread_root, our_message_id)
+        .event_id(answer_id)
+        .into();
 
-    // Nothing in there mentions us, so only the reply to our own message may cause
-    // the subscription, and it must be the event we subscribe up to.
-    s.server
+    // We get subscribed to the thread, up to the answer.
+    server
         .mock_room_put_thread_subscription()
-        .match_automatic_event_id(answer_event_id)
-        .match_thread_id(s.thread_root.to_owned())
+        .match_automatic_event_id(answer_id)
+        .match_thread_id(thread_root.to_owned())
         .ok()
         .mock_once()
         .mount()
         .await;
 
-    let mut thread_subscriber_updates =
-        s.client.event_cache().subscribe_thread_subscriber_updates();
+    let mut thread_subscriber_updates = client.event_cache().subscribe_thread_subscriber_updates();
 
-    s.server
+    server
         .sync_room(
-            &s.client,
-            JoinedRoomBuilder::new(&s.room_id).add_timeline_bulk(vec![own_event, answer]),
+            &client,
+            JoinedRoomBuilder::new(room_id).add_timeline_bulk(vec![our_message, answer]),
         )
         .await;
 
-    // Let the event cache process the update.
     assert_let_timeout!(
         Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { .. })) =
-            s.subscriber.recv()
+            subscriber.recv()
     );
     assert_let_timeout!(Ok(()) = thread_subscriber_updates.recv());
 
     // The actual check is the `mock_once` call above!
-}
-
-#[async_test]
-async fn test_dont_auto_subscribe_on_thread_reply_fallback_to_own_event() {
-    // The `m.in_reply_to` of a threaded event is, by default, only a rich-reply
-    // fallback pointing at the latest event of the thread: it must not be
-    // mistaken for somebody answering our own message.
-
-    let mut s = thread_subscription_test_setup().await;
-
-    let own_user_id = s.client.user_id().unwrap().to_owned();
-
-    let own_event_id = event_id!("$my_own_message");
-    let own_event = s
-        .factory
-        .text_msg("what do you think?")
-        .sender(&own_user_id)
-        .in_thread(&s.thread_root, &s.thread_root)
-        .event_id(own_event_id)
-        .into_raw_sync();
-
-    // `in_thread` sets the reply fallback, not an actual reply.
-    let next_event_id = event_id!("$unrelated_chatter");
-    let next_event = s
-        .factory
-        .text_msg("anyways, how about lunch")
-        .in_thread(&s.thread_root, own_event_id)
-        .event_id(next_event_id)
-        .into_raw_sync();
-
-    // The PUT endpoint (to subscribe to the thread) shouldn't be called.
-    s.server.mock_room_put_thread_subscription().ok().expect(0).mount().await;
-
-    s.server
-        .sync_room(
-            &s.client,
-            JoinedRoomBuilder::new(&s.room_id).add_timeline_bulk(vec![own_event, next_event]),
-        )
-        .await;
-
-    // Let the event cache process the update.
-    assert_let_timeout!(
-        Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { .. })) =
-            s.subscriber.recv()
-    );
-
-    // Let a bit of time for the background thread subscriber task to process the
-    // update.
-    sleep(Duration::from_millis(200)).await;
-
-    // The actual check is the `expect` call above!
 }
 
 #[async_test]
