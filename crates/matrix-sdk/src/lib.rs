@@ -15,6 +15,15 @@
 
 #![recursion_limit = "256"]
 #![doc = include_str!("../README.md")]
+//!
+//! # Matrix types
+//!
+//! The SDK's API is written in terms of the Matrix types from [`ruma`], which
+//! is re-exported here as [`matrix_sdk::ruma`][ruma] so that using them doesn't
+//! require a direct dependency on it. The ones that turn up in nearly every
+//! signature, such as [`OwnedUserId`][types::OwnedUserId] and
+//! [`Raw`][types::Raw], are collected in [`matrix_sdk::types`][types], which is
+//! the place to start.
 #![warn(missing_debug_implementations, missing_docs)]
 #![cfg_attr(target_family = "wasm", allow(clippy::arc_with_non_send_sync))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
