@@ -9,7 +9,7 @@ That means that we add features, merge PRs, fix bugs, update dependencies etc at
 We diverge in a number of ways:
 
 * *Everything* is pluggable so Tokio, Sqlite, Tantivy, TLS etc are all optional.
-* [Ruma](https://github.com/ruma/ruma), [Vodozemac](https://github.com/matrix-org/vodozemac), [Tuwunel](https://github.com/matrix-construct/tuwunel) have all been inlined to make the library simpler and improve velocity. 
+* [Ruma](https://github.com/ruma/ruma), [Vodozemac](https://github.com/harana/harana-olm), [Tuwunel](https://github.com/matrix-construct/tuwunel) have all been inlined to make the library simpler and improve velocity. 
 
 ## License
 

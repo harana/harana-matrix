@@ -123,7 +123,7 @@ uniffi_bindgen = { git = "https://github.com/mozilla/uniffi-rs.git", rev = "e5f4
 url = { version = "2.5.8", default-features = false }
 uuid = { version = "1.24.0", default-features = false }
 vergen-gitcl = { version = "1.0.8", default-features = false }
-vodozemac = { git = "https://github.com/matrix-org/vodozemac/", rev = "cfc4eee", features = ["insecure-pk-encryption", "experimental-session-config"] }
+vodozemac = { path = "crates/harana-olm", features = ["insecure-pk-encryption", "experimental-session-config"] }
 wasm-bindgen = { version = "0.2.105", default-features = false }
 wasm-bindgen-test = { version = "0.3.55", default-features = false, features = ["std"] }
 web-sys = { version = "0.3.103", default-features = false }
@@ -254,6 +254,9 @@ lto = false
 [patch.crates-io]
 async-compat = { git = "https://github.com/element-hq/async-compat", rev = "5a27c8b290f1f1dcfc0c4ec22c464e38528aa591" }
 const_panic = { git = "https://github.com/jplatte/const_panic", rev = "e0b317a9a7bde2d48a7d15b6a60d70e4a41d3b5f" }
+# Needed by the libolm interoperability tests in `crates/harana-olm`; the
+# released olm-rs does not build against current toolchains.
+olm-rs = { git = "https://github.com/poljar/olm-rs", rev = "9f7108c3b852c39bf1d0f09ccaafb9a1cf7bb83e" }
 
 [patch."https://github.com/ruma/ruma"]
 # Needed to disable checksums since they're incorrect in 32bit devices.
