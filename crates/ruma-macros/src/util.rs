@@ -164,7 +164,7 @@ pub(crate) fn m_prefix_name_to_type_name(name: &LitStr) -> syn::Result<Ident> {
     let s: String = name
         .strip_suffix(".*")
         .unwrap_or(name)
-        .split(&['.', '_'] as &[char])
+        .split(['.', '_'])
         .map(|s| s.chars().next().unwrap().to_uppercase().to_string() + &s[1..])
         .collect();
 

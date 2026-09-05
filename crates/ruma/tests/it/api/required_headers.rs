@@ -55,7 +55,7 @@ fn request_serde() {
         SupportedVersions { versions: [MatrixVersion::V1_1].into(), features: Default::default() };
 
     let mut http_req = req
-        .clone()
+        
         .try_into_http_request::<Vec<u8>>("https://homeserver.tld", (), Cow::Owned(supported))
         .unwrap();
     assert_matches!(http_req.headers().get(LOCATION), Some(_));
@@ -98,7 +98,7 @@ fn response_serde() {
     let res =
         Response { stuff: location.to_owned(), content_disposition: content_disposition.clone() };
 
-    let (parts, body) = res.clone().try_into_http_response::<Vec<u8>>().unwrap().into_parts();
+    let (parts, body) = res.try_into_http_response::<Vec<u8>>().unwrap().into_parts();
     let mut http_res = http::Response::from_parts(parts, body.as_slice());
 
     assert_matches!(http_res.headers().get(LOCATION), Some(_));

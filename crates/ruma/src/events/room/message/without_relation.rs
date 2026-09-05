@@ -137,9 +137,9 @@ impl RoomMessageEventContentWithoutRelation {
             .filter(|_| forward_thread == ForwardThread::Yes)
             .map(|thread| thread.event_id.clone());
         let relates_to = if let Some(event_id) = original_thread_id {
-            Relation::Thread(Thread::plain(event_id.to_owned(), original_event_id.to_owned()))
+            Relation::Thread(Thread::plain(event_id, original_event_id))
         } else {
-            Relation::Reply(Reply::with_event_id(original_event_id.to_owned()))
+            Relation::Reply(Reply::with_event_id(original_event_id))
         };
 
         if add_mentions == AddMentions::Yes {

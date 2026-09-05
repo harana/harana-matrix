@@ -222,17 +222,17 @@ mod tests {
     #[test]
     fn serialize_receipt() {
         let mut receipt = Receipt::default();
-        assert_to_canonical_json_eq!(receipt.clone(), json!({}));
+        assert_to_canonical_json_eq!(receipt, json!({}));
 
         receipt.thread = ReceiptThread::Main;
-        assert_to_canonical_json_eq!(receipt.clone(), json!({ "thread_id": "main" }));
+        assert_to_canonical_json_eq!(receipt, json!({ "thread_id": "main" }));
 
         receipt.thread = ReceiptThread::Thread(owned_event_id!("$abcdef76543"));
         assert_to_canonical_json_eq!(receipt, json!({ "thread_id": "$abcdef76543" }));
 
         let mut receipt =
             Receipt::new(MilliSecondsSinceUnixEpoch(1_664_702_144_365_u64.try_into().unwrap()));
-        assert_to_canonical_json_eq!(receipt.clone(), json!({ "ts": 1_664_702_144_365_u64 }));
+        assert_to_canonical_json_eq!(receipt, json!({ "ts": 1_664_702_144_365_u64 }));
 
         receipt.thread = ReceiptThread::try_from(Some("io.ruma.unknown")).unwrap();
         assert_to_canonical_json_eq!(

@@ -5,22 +5,16 @@
 //! document but will offer APIs focused on specificities of HTML in the Matrix
 //! specification..
 //!
-//! # Features
-//!
-//! * `matrix` - Allow to convert HTML elements data into enums with variants for elements and
-//!   attributes [suggested by the Matrix Specification][spec].
-//!
-//! [spec]: https://spec.matrix.org/v1.19/client-server-api/#mroommessage-msgtypes
 
 #![warn(missing_docs)]
 
 pub use html5ever::{Attribute, LocalName, Namespace, Prefix, QualName, tendril::StrTendril};
 
 mod helpers;
-mod html;
+mod dom;
 mod sanitizer_config;
 
-pub use self::{helpers::*, html::*, sanitizer_config::*};
+pub use self::{helpers::*, dom::*, sanitizer_config::*};
 
 /// What [HTML elements and attributes] should be kept by the sanitizer.
 ///

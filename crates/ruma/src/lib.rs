@@ -49,6 +49,10 @@
 #![warn(missing_docs)]
 // https://github.com/rust-lang/rust-clippy/issues/9029
 #![allow(clippy::derive_partial_eq_without_eq)]
+// Upstream ruma style; `&[] as &[u8]` in tests reads better than the alternatives.
+#![allow(trivial_casts)]
+// Upstream ruma allows this; most `new()`s here take required arguments in other endpoints.
+#![allow(clippy::new_without_default)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 // Lets this crate's own procedural macros resolve the `::ruma` paths they generate.

@@ -108,7 +108,7 @@ pub struct StickerEventContent {
 impl StickerEventContent {
     /// Creates a new `StickerEventContent` with the given body, image info and URL.
     pub fn new(body: String, info: ImageInfo, url: OwnedMxcUri) -> Self {
-        Self { body, info, source: StickerMediaSource::Plain(url.clone()), relates_to: None }
+        Self { body, info, source: StickerMediaSource::Plain(url), relates_to: None }
     }
 
     /// Creates a new `StickerEventContent` with the given body, image info, URL, and media source.

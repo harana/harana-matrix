@@ -385,7 +385,7 @@ mod tests {
         let message_with_preview: TextMessageEventContent =
             from_json_value(normal_preview).unwrap();
         let TextMessageEventContent { url_previews, .. } = message_with_preview;
-        assert!(url_previews.clone().unwrap().is_empty(), "Unexpectedly found url previews");
+        assert!(url_previews.unwrap().is_empty(), "Unexpectedly found url previews");
     }
 
     #[test]

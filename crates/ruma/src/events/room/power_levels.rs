@@ -1070,7 +1070,7 @@ mod tests {
             &AuthorizationRules::V12,
             vec![creator.to_owned()],
         );
-        v12_power_levels.users.insert(creator.clone(), int!(75));
+        v12_power_levels.users.insert(creator, int!(75));
         RoomPowerLevelsEventContent::try_from(v12_power_levels).unwrap_err();
     }
 }
