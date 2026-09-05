@@ -18,6 +18,8 @@ use std::{future::IntoFuture, time::Duration};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 use matrix_sdk_common::boxed_into_future;
 use thiserror::Error;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
@@ -57,6 +59,9 @@ pub enum SteadyStateError {
 pub struct WaitForSteadyState<'a> {
     pub(super) backups: &'a Backups,
     pub(super) progress: ChannelObservable<UploadState>,
+    /// Buffers upload states from the moment this future was created, so that
+    /// an upload finishing before the future is awaited is still observed.
+    pub(super) receiver: broadcast::Receiver<UploadState>,
     pub(super) timeout: Option<Duration>,
 }
 
@@ -91,11 +96,15 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let Self { backups, timeout, progress } = self;
+            let Self { backups, timeout, progress, receiver } = self;
 
             trace!("Creating a stream to wait for the steady state");
 
-            let mut progress_stream = progress.subscribe();
+            // The current value first, then everything buffered since this future was
+            // created. This mirrors `ChannelObservable::subscribe()`, but without the
+            // window between creating the future and awaiting it.
+            let mut progress_stream =
+                tokio_stream::once(Ok(progress.get())).chain(BroadcastStream::new(receiver));
 
             let old_delay = if let Some(delay) = timeout {
                 let mut lock = backups.client.inner.e2ee.backup_state.upload_delay.write().unwrap();
@@ -111,18 +120,26 @@ impl<'a> IntoFuture for WaitForSteadyState<'a> {
             trace!("Waiting for the upload steady state");
 
             let ret = if backups.are_enabled().await {
-                backups.maybe_trigger_backup();
-
                 let mut ret = Ok(());
 
-                // TODO: Do we want to be smart here and remember the count when we started
-                // waiting and prevent the total from increasing, in case new room
-                // keys arrive after we started waiting.
                 while let Some(state) = progress_stream.next().await {
                     trace!(?state, "Update state while waiting for the backup steady state");
 
                     match state {
                         Ok(UploadState::Done) => {
+                            // The upload task is done with the batch it was working on, which
+                            // isn't necessarily every key we know about: keys queued while we
+                            // were waiting are uploaded in a later batch. Only return once
+                            // nothing is left to upload.
+                            if backups.has_room_keys_to_upload().await {
+                                trace!(
+                                    "The upload task is done, but room keys arrived meanwhile; \
+                                     waiting for those too"
+                                );
+                                backups.maybe_trigger_backup();
+                                continue;
+                            }
+
                             ret = Ok(());
                             break;
                         }
