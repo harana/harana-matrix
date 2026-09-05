@@ -40,7 +40,7 @@ use ruma::{
     profile::{ProfileFieldName, UserProfileChanges, UserProfileUpdate},
     push::Ruleset,
     room_id,
-    room_version_rules::AuthorizationRules,
+    room_version_rules::{AuthorizationRules, RedactionRules},
     serde::Raw,
     uint, user_id,
 };
@@ -295,7 +295,7 @@ impl StateStoreIntegrationTests for DynStateStore {
         let redaction_evt: Raw<SyncRoomRedactionEvent> =
             f.room(room_id).sender(user_id()).redaction(topic_event_id).into_raw();
 
-        changes.add_redaction(room_id, topic_event_id, redaction_evt);
+        changes.add_redaction(room_id, redaction_evt, &RedactionRules::V11);
         self.save_changes(&changes).await?;
 
         let redacted_event = self
@@ -347,7 +347,7 @@ impl StateStoreIntegrationTests for DynStateStore {
         let mut changes = StateChanges::default();
         let redaction_evt: Raw<SyncRoomRedactionEvent> =
             f.room(room_id).sender(user_id()).redaction(event_id).into_raw();
-        changes.add_redaction(room_id, event_id, redaction_evt);
+        changes.add_redaction(room_id, redaction_evt, &RedactionRules::V11);
         self.save_changes(&changes).await?;
 
         // And the event is now redacted in the store.

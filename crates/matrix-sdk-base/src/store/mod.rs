@@ -46,7 +46,7 @@ use matrix_sdk_crypto::store::{DynCryptoStore, IntoCryptoStore};
 pub use matrix_sdk_store_encryption::Error as StoreEncryptionError;
 use observable_map::ObservableMap;
 use ruma::{
-    EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
+    OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
     events::{
         AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnyStrippedStateEvent,
         AnySyncStateEvent, EmptyStateKey, GlobalAccountDataEventType, RedactContent,
@@ -62,6 +62,7 @@ use ruma::{
         },
     },
     profile::UserProfileUpdate,
+    room_version_rules::RedactionRules,
     serde::Raw,
 };
 use serde::de::DeserializeOwned;
@@ -655,17 +656,32 @@ impl StateChanges {
             .insert(event.state_key().to_owned(), raw_event);
     }
 
-    /// Redact an event in the room
+    /// Redact an event in the room.
+    ///
+    /// The redacted event's ID is read off `redaction` itself. Which field
+    /// holds it depends on the room version, so `redaction_rules` has to say
+    /// which one to look at; a redaction that names no event under those rules
+    /// is dropped, since there is nothing for it to redact.
     pub fn add_redaction(
         &mut self,
         room_id: &RoomId,
-        redacted_event_id: &EventId,
         redaction: Raw<SyncRoomRedactionEvent>,
+        redaction_rules: &RedactionRules,
     ) {
-        self.redactions
-            .entry(room_id.to_owned())
-            .or_default()
-            .insert(redacted_event_id.to_owned(), redaction);
+        let event = match redaction.deserialize() {
+            Ok(event) => event,
+            Err(error) => {
+                warn!("Failed to deserialize a redaction, dropping it: {error}");
+                return;
+            }
+        };
+
+        let Some(redacts) = event.redacts(redaction_rules) else {
+            warn!("Ignoring a redaction that doesn't say which event it redacts");
+            return;
+        };
+
+        self.redactions.entry(room_id.to_owned()).or_default().insert(redacts.to_owned(), redaction);
     }
 
     /// Update the `StateChanges` struct with the given room with a new
@@ -877,10 +893,70 @@ mod tests {
 
     use assert_matches::assert_matches;
     use matrix_sdk_test::async_test;
-    use ruma::{owned_device_id, owned_user_id, room_id, user_id};
+    use ruma::{
+        events::room::redaction::SyncRoomRedactionEvent, owned_device_id, owned_event_id,
+        owned_user_id, room_id, room_version_rules::RedactionRules, serde::Raw, user_id,
+    };
+    use serde_json::json;
 
     use super::{BaseStateStore, MemoryStore, RoomLoadSettings};
     use crate::{RoomInfo, RoomState, SessionMeta, StateChanges, StateStore};
+
+    /// Before room version 11 the redacted event ID sits at the top level of a
+    /// redaction; from version 11 on it sits in the content. `add_redaction`
+    /// reads whichever one the rules point at, so the caller no longer has to
+    /// pull it out and hand it back.
+    #[test]
+    fn test_add_redaction_reads_the_event_id_the_rules_point_at() {
+        let room_id = room_id!("!room:example.org");
+
+        let redaction: Raw<SyncRoomRedactionEvent> = Raw::new(&json!({
+            "type": "m.room.redaction",
+            "event_id": "$redaction",
+            "sender": "@alice:example.org",
+            "origin_server_ts": 1,
+            "redacts": "$top_level",
+            "content": { "redacts": "$in_content" },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let mut before_v11 = StateChanges::default();
+        before_v11.add_redaction(room_id, redaction.clone(), &RedactionRules::V1);
+        assert_eq!(
+            before_v11.redactions[room_id].keys().collect::<Vec<_>>(),
+            vec![&owned_event_id!("$top_level")]
+        );
+
+        let mut from_v11 = StateChanges::default();
+        from_v11.add_redaction(room_id, redaction, &RedactionRules::V11);
+        assert_eq!(
+            from_v11.redactions[room_id].keys().collect::<Vec<_>>(),
+            vec![&owned_event_id!("$in_content")]
+        );
+    }
+
+    /// A redaction that names no event under the given rules has nothing to
+    /// redact, and must not take the rest of the sync down with it.
+    #[test]
+    fn test_add_redaction_drops_a_redaction_that_names_no_event() {
+        let room_id = room_id!("!room:example.org");
+
+        let redaction: Raw<SyncRoomRedactionEvent> = Raw::new(&json!({
+            "type": "m.room.redaction",
+            "event_id": "$redaction",
+            "sender": "@alice:example.org",
+            "origin_server_ts": 1,
+            "content": {},
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let mut changes = StateChanges::default();
+        changes.add_redaction(room_id, redaction, &RedactionRules::V11);
+
+        assert!(changes.redactions.is_empty());
+    }
 
     #[async_test]
     async fn test_set_session_meta() {
