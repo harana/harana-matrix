@@ -266,6 +266,44 @@ impl IdentityManager {
         Ok((devices, identities))
     }
 
+    /// Handle a `/keys/query` response that we didn't ask for ourselves.
+    ///
+    /// Users we are already tracking are dropped from the response before it is
+    /// processed, so that an out-of-band response can't race the device list
+    /// tracking and mark a tracked user as up to date with data we didn't
+    /// request.
+    pub async fn receive_out_of_band_keys_query_response(
+        &self,
+        response: &KeysQueryResponse,
+    ) -> OlmResult<(DeviceChanges, IdentityChanges)> {
+        let tracked_users = {
+            let cache = self.store.cache().await?;
+            self.key_query_manager.synced(&cache).await?.tracked_users()
+        };
+
+        let is_untracked = |user_id: &OwnedUserId| !tracked_users.contains(user_id);
+
+        let mut response = response.clone();
+        response.device_keys.retain(|user_id, _| is_untracked(user_id));
+        response.master_keys.retain(|user_id, _| is_untracked(user_id));
+        response.self_signing_keys.retain(|user_id, _| is_untracked(user_id));
+        response.user_signing_keys.retain(|user_id, _| is_untracked(user_id));
+
+        if response.device_keys.is_empty()
+            && response.master_keys.is_empty()
+            && response.self_signing_keys.is_empty()
+            && response.user_signing_keys.is_empty()
+        {
+            debug!("The out-of-band /keys/query response only contained tracked users, ignoring");
+
+            return Ok((Default::default(), Default::default()));
+        }
+
+        // A request ID we never handed out, so the response can't be mistaken for the
+        // answer to a request we have in flight and consume its sequence number.
+        self.receive_keys_query_response(&TransactionId::new(), &response).await
+    }
+
     async fn update_or_create_device(
         store: Store,
         device_keys: DeviceKeys,
@@ -1971,6 +2009,30 @@ pub(crate) mod tests {
         let devices = manager.store.get_user_devices(user_id()).await.unwrap();
         assert_eq!(devices.devices().count(), 1);
         assert_eq!(devices.devices().next().unwrap().device_id(), "LVWOVGOXME");
+    }
+
+    #[async_test]
+    async fn test_out_of_band_key_query_skips_tracked_users() {
+        let manager = manager_test_helper(user_id(), device_id()).await;
+
+        // Given a user we're not tracking, an out-of-band response is processed.
+        let (device_changes, identity_changes) =
+            manager.receive_out_of_band_keys_query_response(&own_key_query()).await.unwrap();
+
+        assert_eq!(device_changes.new.len(), 1);
+        assert_eq!(identity_changes.new.len(), 1);
+
+        // Once the user is tracked, the machine owns their device list, and an
+        // out-of-band response must not race the tracker.
+        manager.update_tracked_users([user_id()]).await.unwrap();
+
+        let (device_changes, identity_changes) =
+            manager.receive_out_of_band_keys_query_response(&own_key_query()).await.unwrap();
+
+        assert!(device_changes.new.is_empty());
+        assert!(device_changes.changed.is_empty());
+        assert!(identity_changes.new.is_empty());
+        assert!(identity_changes.changed.is_empty());
     }
 
     #[async_test]

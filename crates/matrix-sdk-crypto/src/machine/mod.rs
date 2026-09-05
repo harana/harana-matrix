@@ -954,6 +954,41 @@ impl OlmMachine {
         Ok(changes)
     }
 
+    /// Feed a `/keys/query` response into the [`OlmMachine`] that it did not
+    /// ask for.
+    ///
+    /// Normally a `/keys/query` response reaches the [`OlmMachine`] through
+    /// [`OlmMachine::mark_request_as_sent()`], answering a request the machine
+    /// built itself. This method is for the case where a consumer has device
+    /// keys for users the machine isn't tracking — users that aren't in any
+    /// encrypted room we share — and wants the machine to know about them, for
+    /// instance to show their verification state.
+    ///
+    /// Users the machine is already tracking are ignored, so that an
+    /// out-of-band response cannot race the machine's own device list tracking
+    /// and mark a tracked user as up to date with data the machine didn't ask
+    /// for. Call
+    /// [`OlmMachine::update_tracked_users()`] instead if you want those users
+    /// tracked from now on.
+    ///
+    /// Returns the devices and identities that were newly discovered or that
+    /// changed.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - Any `/keys/query` response.
+    pub async fn receive_keys_query(
+        &self,
+        response: &KeysQueryResponse,
+    ) -> OlmResult<(DeviceChanges, IdentityChanges)> {
+        let changes =
+            self.inner.identity_manager.receive_out_of_band_keys_query_response(response).await?;
+
+        self.inner.verification_machine.retry_pending_requests().await?;
+
+        Ok(changes)
+    }
+
     /// Get a request to upload E2EE keys to the server.
     ///
     /// Returns None if no keys need to be uploaded.

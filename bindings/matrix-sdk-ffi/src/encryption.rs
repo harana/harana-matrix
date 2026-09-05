@@ -744,6 +744,49 @@ impl Encryption {
         Ok(result?)
     }
 
+    /// Create and publish a cross-signing identity for the current user, if
+    /// they don't have one yet.
+    ///
+    /// A client that authenticates first and offers a security setup step
+    /// afterwards needs to be able to ask for this explicitly, rather than
+    /// relying on it happening while the client is being built.
+    ///
+    /// This never resets an existing identity: if one is already present, the
+    /// call reports [`CrossSigningBootstrapResult::AlreadyPresent`] and does
+    /// nothing. Use `resetIdentity` to replace an existing identity. No private
+    /// key material is returned.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth_data` - The authentication data to answer the user-interactive
+    ///   authentication challenge with. Pass `None` first: if the homeserver
+    ///   asks for authentication, the call reports
+    ///   [`CrossSigningBootstrapResult::AuthenticationRequired`] and can be
+    ///   retried with the data filled in.
+    pub async fn bootstrap_cross_signing(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<CrossSigningBootstrapResult, ClientError> {
+        // Bail out before touching anything if we already have a complete identity, so
+        // that a client calling this on every start can't lose the keys it has.
+        if let Some(status) = self.inner.cross_signing_status().await
+            && status.is_complete()
+        {
+            return Ok(CrossSigningBootstrapResult::AlreadyPresent);
+        }
+
+        match self.inner.bootstrap_cross_signing(auth_data.map(Into::into)).await {
+            Ok(()) => Ok(CrossSigningBootstrapResult::Created),
+            Err(error) => {
+                if error.as_uiaa_response().is_some() {
+                    Ok(CrossSigningBootstrapResult::AuthenticationRequired)
+                } else {
+                    Err(ClientError::from_err(error))
+                }
+            }
+        }
+    }
+
     /// Completely reset the current user's crypto identity: reset the cross
     /// signing keys, delete the existing backup and recovery key.
     pub async fn reset_identity(&self) -> Result<Option<Arc<IdentityResetHandle>>, ClientError> {
@@ -1083,6 +1126,19 @@ impl IdentityResetHandle {
     pub async fn cancel(&self) {
         self.inner.cancel().await;
     }
+}
+
+/// What happened when a client asked for a cross-signing identity to be set
+/// up.
+#[derive(uniffi::Enum)]
+pub enum CrossSigningBootstrapResult {
+    /// A cross-signing identity was created and published.
+    Created,
+    /// The user already had a cross-signing identity; nothing was changed.
+    AlreadyPresent,
+    /// The homeserver wants the user to authenticate before it accepts the new
+    /// keys. Retry with the authentication data filled in.
+    AuthenticationRequired,
 }
 
 #[derive(uniffi::Enum)]

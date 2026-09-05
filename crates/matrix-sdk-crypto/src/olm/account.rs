@@ -359,6 +359,16 @@ pub struct Account {
     /// from a `AccountPickle` that didn't use time-based fallback key
     /// rotation.
     fallback_creation_timestamp: Option<MilliSecondsSinceUnixEpoch>,
+    /// The number of one-time keys the homeserver reported having right after
+    /// our last successful upload.
+    ///
+    /// A sync response that reports fewer than this raced the upload and is
+    /// telling us about the state from before it. Acting on it made us decide
+    /// we had no keys on the server and upload a second full batch, so such a
+    /// count is ignored until the server confirms it has caught up. Not
+    /// persisted: it only matters between an upload and the sync that follows
+    /// it.
+    unconfirmed_key_count: Option<u64>,
     /// Has this account been modified since it was last written to the store?
     ///
     /// Persisting the account is expensive (it re-pickles the whole
@@ -455,6 +465,7 @@ impl Account {
             shared: false,
             uploaded_signed_key_count: 0,
             fallback_creation_timestamp: None,
+            unconfirmed_key_count: None,
             // A brand new account has never been written to the store.
             dirty: true,
         }
@@ -578,20 +589,41 @@ impl Account {
         };
 
         if let Some(count) = count.map(Into::into) {
-            let old_count = self.uploaded_key_count();
+            // A count lower than the one the homeserver gave us in the response to our
+            // last upload is from before that upload landed. Believing it makes us think
+            // the keys we just published are gone and generate a whole new batch on top
+            // of them.
+            let is_stale = self.unconfirmed_key_count.is_some_and(|unconfirmed| {
+                let stale = count < unconfirmed;
 
-            // Some servers might always return the key counts in the sync
-            // response, we don't want to the logs with noop changes if they do
-            // so.
-            if count != old_count {
-                debug!(
-                    "Updated uploaded one-time key count {} -> {count}.",
-                    self.uploaded_key_count(),
-                );
+                if stale {
+                    debug!(
+                        count,
+                        unconfirmed,
+                        "Ignoring a one-time key count from before our last upload landed"
+                    );
+                }
+
+                stale
+            });
+
+            if !is_stale {
+                // The server has caught up with our upload; later counts can be trusted
+                // again, including ones that drop as keys get claimed.
+                self.unconfirmed_key_count = None;
+
+                let old_count = self.uploaded_key_count();
+
+                // Some servers might always return the key counts in the sync
+                // response, we don't want to the logs with noop changes if they do
+                // so.
+                if count != old_count {
+                    debug!("Updated uploaded one-time key count {old_count} -> {count}.");
+                }
+
+                self.update_uploaded_key_count(count);
+                self.generate_one_time_keys_if_needed();
             }
-
-            self.update_uploaded_key_count(count);
-            self.generate_one_time_keys_if_needed();
         }
 
         // If the server supports fallback keys or if it did so in the past, shown by
@@ -826,6 +858,7 @@ impl Account {
             shared: pickle.shared,
             uploaded_signed_key_count: pickle.uploaded_signed_key_count,
             fallback_creation_timestamp: pickle.fallback_key_creation_timestamp,
+            unconfirmed_key_count: None,
             dirty: false,
         })
     }
@@ -1360,7 +1393,18 @@ impl Account {
         // First mark the current keys as published, as updating the key counts might
         // generate some new keys if we're still below the limit.
         self.mark_keys_as_published();
+
         self.update_key_counts(&response.one_time_key_counts, None, false);
+
+        // Remember what the server said it had, so a sync response that was already in
+        // flight and reports a smaller number can be recognised as stale. This has to
+        // happen after the update above, which would otherwise immediately see its own
+        // count as confirmation and clear the marker.
+        self.unconfirmed_key_count = response
+            .one_time_key_counts
+            .get(&OneTimeKeyAlgorithm::SignedCurve25519)
+            .copied()
+            .map(Into::into);
 
         Ok(())
     }
@@ -2288,5 +2332,52 @@ mod tests {
         // An actual change does dirty it.
         account.update_uploaded_key_count(count + 1);
         assert!(account.dirty());
+    }
+
+    #[test]
+    fn test_stale_one_time_key_count_is_ignored() {
+        use ruma::{UInt, api::client::keys::upload_keys, uint};
+
+        let mut account = Account::with_device_id(user_id!("@alice:localhost"), device_id!("DEV"));
+
+        // Given an account that just uploaded a full batch of one-time keys, which the
+        // server confirmed in the upload response,
+        let published = account.one_time_keys().len() as u64;
+        assert!(published > 0);
+
+        let counts = BTreeMap::from([(
+            OneTimeKeyAlgorithm::SignedCurve25519,
+            UInt::new(published).unwrap(),
+        )]);
+        account.receive_keys_upload_response(&upload_keys::v3::Response::new(counts)).unwrap();
+
+        assert_eq!(account.uploaded_key_count(), published);
+        assert!(account.one_time_keys().is_empty(), "The uploaded keys have been published");
+
+        // When a sync response that was already in flight reports the state from before
+        // the upload,
+        let stale = BTreeMap::from([(OneTimeKeyAlgorithm::SignedCurve25519, uint!(0))]);
+        account.update_key_counts(&stale, None, true);
+
+        // Then it is ignored: believing it made us upload a second full batch on top of
+        // the one the server already has.
+        assert_eq!(account.uploaded_key_count(), published);
+        assert!(account.one_time_keys().is_empty(), "No second batch should be generated");
+
+        // But once the server catches up, later counts are believed again, including
+        // ones that drop as keys get claimed.
+        let confirmed = BTreeMap::from([(
+            OneTimeKeyAlgorithm::SignedCurve25519,
+            UInt::new(published).unwrap(),
+        )]);
+        account.update_key_counts(&confirmed, None, true);
+
+        let consumed = BTreeMap::from([(
+            OneTimeKeyAlgorithm::SignedCurve25519,
+            UInt::new(published - 1).unwrap(),
+        )]);
+        account.update_key_counts(&consumed, None, true);
+
+        assert_eq!(account.uploaded_key_count(), published - 1);
     }
 }

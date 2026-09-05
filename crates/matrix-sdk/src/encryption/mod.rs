@@ -775,6 +775,13 @@ impl Client {
             AnyOutgoingRequest::KeysUpload(request) => {
                 let response = self.keys_upload(r.request_id(), request).await;
 
+                // A duplicate one-time key is a permanent failure: the server already has
+                // that key and will reject this request every time. Retrying it forever
+                // just hammers the homeserver and blocks every other outgoing request
+                // behind it, so the request is marked as sent below and the affected keys
+                // are dropped locally so fresh ones get generated.
+                let mut is_terminal = false;
+
                 if let Err(e) = &response {
                     match e.as_client_api_error() {
                         Some(e) if e.status_code == 400 => {
@@ -790,6 +797,10 @@ impl Client {
                                         .get_kv_data(StateStoreDataKey::OneTimeKeyAlreadyUploaded)
                                         .await?
                                         .is_some();
+
+                                    if message.starts_with("One time key") {
+                                        is_terminal = true;
+                                    }
 
                                     if message.starts_with("One time key") && !already_reported {
                                         let error_message =
@@ -833,7 +844,18 @@ impl Client {
                         _ => {}
                     }
 
-                    response?;
+                    if is_terminal {
+                        // Tell the `OlmMachine` the request is done with. It marks the
+                        // keys we tried to upload as published, which drops them from the
+                        // account so the next round generates keys the server hasn't seen.
+                        let response = ruma::api::client::keys::upload_keys::v3::Response::new(
+                            Default::default(),
+                        );
+
+                        self.mark_request_as_sent(r.request_id(), &response).await?;
+                    } else {
+                        response?;
+                    }
                 }
             }
             AnyOutgoingRequest::ToDeviceRequest(request) => {
