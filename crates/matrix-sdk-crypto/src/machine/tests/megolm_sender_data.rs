@@ -31,6 +31,7 @@ use vodozemac::Curve25519SecretKey;
 use crate::{
     Account, DecryptionSettings, DeviceData, EncryptionSettings, EncryptionSyncChanges, EventError,
     OlmError, OlmMachine, Session, TrustRequirement,
+    identities::user::testing::simulate_key_query_response_for_verification,
     machine::{
         DeviceKeyAlgorithm,
         test_helpers::{
@@ -333,6 +334,77 @@ async fn test_update_device_info_senderdata_on_keys_query() {
     let session = get_inbound_group_session_or_panic(&bob, &room_key_info).await;
 
     assert_matches!(session.sender_data, SenderData::SenderUnverified(_));
+}
+
+/// A sender's verification state can improve without any of their devices
+/// changing: we cross-sign them. The sessions their devices already sent us
+/// should pick that up, rather than keeping the shield they were decrypted
+/// with while messages received a moment later get a better one.
+#[async_test]
+async fn test_update_sender_unverified_senderdata_when_the_sender_becomes_verified() {
+    let (alice, bob) = get_machine_pair().await;
+    let mut bob_room_keys_received_stream = Box::pin(bob.store().room_keys_received_stream());
+
+    // Alice starts a megolm session and shares the key with Bob.
+    let room_id = room_id!("!test:example.org");
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+    let event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+    receive_to_device_event(&bob, &event, &decryption_settings).await;
+
+    let room_key_info = get_room_key_received_update(&mut bob_room_keys_received_stream);
+    let session = get_inbound_group_session_or_panic(&bob, &room_key_info).await;
+    assert_matches!(session.sender_data, SenderData::DeviceInfo { .. });
+
+    // Alice cross-signs her device, so Bob's session moves on to
+    // `SenderUnverified`.
+    let alice_bootstrap = alice.bootstrap_cross_signing(false).await.unwrap();
+    let alice_msk = alice_bootstrap.upload_signing_keys_req.master_key.clone().unwrap();
+    let alice_ssk = alice_bootstrap.upload_signing_keys_req.self_signing_key.clone().unwrap();
+    let kq_response = bootstrap_requests_to_keys_query_response(alice_bootstrap);
+    bob.receive_keys_query_response(&TransactionId::new(), &kq_response).await.unwrap();
+
+    let room_key_info = get_room_key_received_update(&mut bob_room_keys_received_stream);
+    let session = get_inbound_group_session_or_panic(&bob, &room_key_info).await;
+    assert_matches!(session.sender_data, SenderData::SenderUnverified(_));
+
+    // Now Bob verifies Alice. No device of hers changes; only her identity does.
+    bob.bootstrap_cross_signing(false).await.unwrap();
+    let bob_identity =
+        bob.get_identity(bob.user_id(), None).await.unwrap().unwrap().own().unwrap();
+    let alice_identity =
+        bob.get_identity(alice.user_id(), None).await.unwrap().unwrap().other().unwrap();
+    let signature_upload = alice_identity.verify().await.unwrap();
+
+    let kq_response = simulate_key_query_response_for_verification(
+        signature_upload,
+        bob_identity,
+        bob.user_id(),
+        alice.user_id(),
+        json!({ alice.user_id().as_str(): alice_msk }),
+        json!({ alice.user_id().as_str(): alice_ssk }),
+    );
+    bob.receive_keys_query_response(&TransactionId::new(), &kq_response).await.unwrap();
+
+    assert!(
+        bob.get_identity(alice.user_id(), None).await.unwrap().unwrap().is_verified(),
+        "Alice should be verified now",
+    );
+
+    // Then the session Alice sent before she was verified should have been
+    // updated too.
+    let room_key_info = get_room_key_received_update(&mut bob_room_keys_received_stream);
+    let session = get_inbound_group_session_or_panic(&bob, &room_key_info).await;
+
+    assert_matches!(session.sender_data, SenderData::SenderVerified(_));
 }
 
 /// Convenience wrapper for [`get_machine_pair_with_setup_sessions_test_helper`]

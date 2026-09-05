@@ -62,7 +62,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tokio::sync::{Mutex, Notify, OwnedRwLockWriteGuard, RwLock};
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-use tracing::{info, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 use types::{RoomKeyBundleInfo, StoredRoomKeyBundleData};
 use vodozemac::{Curve25519PublicKey, megolm::SessionOrdering};
 
@@ -77,7 +77,8 @@ use crate::{
     identities::{Device, DeviceData, UserDevices, UserIdentityData, user::UserIdentity},
     olm::{
         Account, ExportedRoomKey, ForwarderData, InboundGroupSession, PrivateCrossSigningIdentity,
-        SenderData, Session, StaticAccountData,
+        SenderData, SenderDataFinder, SenderDataType, Session, StaticAccountData,
+        sender_data_finder::SessionDeviceCheckError,
     },
     store::types::{RoomKeyWithheldEntry, SecretsInboxItem},
     types::{
@@ -837,6 +838,112 @@ impl Store {
     }
 
     /// Convenience helper to persist an array of [`InboundGroupSession`]s.
+    /// Recompute the [`SenderData`] of the inbound group sessions sent by the
+    /// given user's devices, for sessions currently in a state that a change
+    /// to the user's identity could improve.
+    ///
+    /// A sender's verification state can improve without any of their devices
+    /// changing: they get cross-signed by us, or a verification violation is
+    /// withdrawn. Only the device path used to trigger a recompute, so already
+    /// received messages kept the trust shield they were decrypted with while
+    /// new ones got the better one.
+    pub(crate) async fn update_sender_data_for_user(
+        &self,
+        user_id: &UserId,
+    ) -> Result<(), CryptoStoreError> {
+        // The states a better identity can lift a session out of. `SenderVerified`
+        // is the terminal good state and is left alone; downgrades are the business
+        // of whoever records the violation.
+        const IMPROVABLE: &[SenderDataType] = &[
+            SenderDataType::UnknownDevice,
+            SenderDataType::DeviceInfo,
+            SenderDataType::VerificationViolation,
+            SenderDataType::SenderUnverified,
+        ];
+
+        for device in self.get_device_data_for_user(user_id).await?.into_values() {
+            for sender_data_type in IMPROVABLE {
+                self.update_sender_data_for_sessions_for_device(&device, *sender_data_type).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Given a device, look for [`InboundGroupSession`]s whose sender data is
+    /// in the given state, and update it.
+    #[instrument(skip(self))]
+    pub(crate) async fn update_sender_data_for_sessions_for_device(
+        &self,
+        device: &DeviceData,
+        sender_data_type: SenderDataType,
+    ) -> Result<(), CryptoStoreError> {
+        const IGS_BATCH_SIZE: usize = 50;
+
+        let Some(curve_key) = device.curve25519_key() else { return Ok(()) };
+
+        let mut last_session_id: Option<String> = None;
+        loop {
+            let mut sessions = self
+                .get_inbound_group_sessions_for_device_batch(
+                    curve_key,
+                    sender_data_type,
+                    last_session_id,
+                    IGS_BATCH_SIZE,
+                )
+                .await?;
+
+            if sessions.is_empty() {
+                // end of the session list
+                return Ok(());
+            }
+
+            last_session_id = None;
+            for session in &mut sessions {
+                last_session_id = Some(session.session_id().to_owned());
+                self.update_sender_data_for_session(session, device).await?;
+            }
+            self.save_inbound_group_sessions(&sessions).await?;
+        }
+    }
+
+    /// Update the sender data on the given inbound group session, using the
+    /// given device data.
+    #[instrument(skip(self, device, session), fields(session_id = session.session_id()))]
+    async fn update_sender_data_for_session(
+        &self,
+        session: &mut InboundGroupSession,
+        device: &DeviceData,
+    ) -> Result<(), CryptoStoreError> {
+        match SenderDataFinder::find_using_device_data(self, device.clone(), session).await {
+            Ok(sender_data) => {
+                // A session restored from a key backup or a key export is flagged as
+                // legacy so that its messages are still shown even though we can't
+                // attest to their sender. That flag lives on the sender data, and the
+                // recomputation above has no way of knowing where the session came
+                // from, so carry it over rather than silently downgrading the session
+                // and hiding its messages.
+                let sender_data =
+                    sender_data.with_legacy_session(session.sender_data.legacy_session());
+
+                debug!("Updating existing InboundGroupSession with new SenderData {sender_data:?}");
+                session.sender_data = sender_data;
+            }
+            Err(SessionDeviceCheckError::CryptoStoreError(e)) => {
+                return Err(e);
+            }
+            Err(SessionDeviceCheckError::MismatchedIdentityKeys(e)) => {
+                warn!(
+                    ?session,
+                    ?device,
+                    "cannot update existing InboundGroupSession due to ownership error: {e}",
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn save_inbound_group_sessions(
         &self,
         sessions: &[InboundGroupSession],

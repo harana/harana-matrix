@@ -100,6 +100,7 @@ impl UserIdentity {
                     #[cfg(feature = "experimental-x509-identity-verification")]
                     x509_verifier,
                     verification_machine,
+                    store,
                 })
             }
         }
@@ -337,6 +338,11 @@ impl OwnUserIdentity {
             ..Default::default()
         };
         self.verification_machine.store.inner().save_changes(changes).await?;
+
+        // As above: our own past messages were recorded as a violation, and the
+        // violation is now withdrawn.
+        self.store.update_sender_data_for_user(self.user_id()).await?;
+
         Ok(())
     }
 }
@@ -354,6 +360,7 @@ pub struct OtherUserIdentity {
     pub(crate) inner: OtherUserIdentityData,
     pub(crate) own_identity: Option<OwnUserIdentityData>,
     pub(crate) verification_machine: VerificationMachine,
+    pub(crate) store: Store,
 
     #[cfg(feature = "experimental-x509-identity-verification")]
     pub(crate) x509_verifier: Option<X509Verifier>,
@@ -524,6 +531,12 @@ impl OtherUserIdentity {
             ..Default::default()
         };
         self.verification_machine.store.inner().save_changes(changes).await?;
+
+        // Sessions this user's devices sent us are recorded as a verification
+        // violation; now that the violation is withdrawn they should show the
+        // shield they would get if they arrived today.
+        self.store.update_sender_data_for_user(self.user_id()).await?;
+
         Ok(())
     }
 
@@ -1588,13 +1601,12 @@ pub(crate) mod tests {
             },
         },
         olm::{Account, PrivateCrossSigningIdentity},
-        store::{CryptoStoreWrapper, MemoryStore},
+        store::{CryptoStoreWrapper, MemoryStore, Store},
         types::{CrossSigningKey, MasterPubkey, SelfSigningPubkey, Signatures, UserSigningPubkey},
         verification::VerificationMachine,
     };
     #[cfg(feature = "experimental-x509-identity-verification")]
     use crate::{
-        store::Store,
         x509::{
             RustRawX509Signer, RustRawX509Verifier, X509Signer, X509Verifier,
             tests::{
@@ -2337,11 +2349,22 @@ pub(crate) mod tests {
 
         let verification_machine = get_verification_machine(&account).await;
         let own_identity_data = verification_machine.get_own_user_identity_data().await.unwrap();
+        let store = Store::new(
+            account.static_data().clone(),
+            verification_machine.store.private_identity.clone(),
+            Arc::new(CryptoStoreWrapper::new(
+                account.user_id(),
+                account.device_id(),
+                MemoryStore::new(),
+            )),
+            verification_machine.clone(),
+        );
 
         OtherUserIdentity {
             inner: other_user_identity_data,
             own_identity: Some(own_identity_data),
             verification_machine,
+            store,
             #[cfg(feature = "experimental-x509-identity-verification")]
             x509_verifier: None,
         }
