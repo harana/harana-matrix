@@ -1924,6 +1924,111 @@ async fn test_reloading_rooms_with_unsent_events() {
 }
 
 #[async_test]
+async fn test_reply_to_a_local_echo() {
+    use matrix_sdk_base::store::ReplyThreading;
+    use ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    let q = room.send_queue();
+    let mut global_watch = client.send_queue().subscribe();
+    let (local_echoes, mut watch) = q.subscribe().await.unwrap();
+    assert!(local_echoes.is_empty());
+
+    mock.mock_room_state_encryption().plain().mount().await;
+
+    // Keep the queue asleep while both events are queued, so the reply is really
+    // queued against an event that has no ID yet.
+    q.set_enabled(false);
+
+    let msg_handle = q.send(RoomMessageEventContent::text_plain("original").into()).await.unwrap();
+    let (txn1, _) = assert_update!((global_watch, watch) => local echo { body = "original" });
+
+    let reply_handle = msg_handle
+        .reply(
+            RoomMessageEventContentWithoutRelation::text_plain("reply"),
+            ReplyThreading::MaybeThreaded,
+        )
+        .await
+        .unwrap()
+        .expect("the reply was queued");
+
+    // The reply shows up as a local echo of its own, without a relation yet.
+    let (txn2, _) = assert_update!((global_watch, watch) => local echo { body = "reply" });
+    let _ = &reply_handle;
+
+    {
+        let (local_echoes, _) = q.subscribe().await.unwrap();
+        assert_eq!(local_echoes.len(), 2);
+        assert_eq!(local_echoes[0].transaction_id, txn1);
+        assert_eq!(local_echoes[1].transaction_id, txn2);
+    }
+
+    mock.mock_room_send()
+        .body_matches_partial_json(json!({ "body": "original" }))
+        .ok(event_id!("$original"))
+        .mock_once()
+        .mount()
+        .await;
+
+    // The reply only reaches the server once it points at the event it replies to.
+    mock.mock_room_send()
+        .body_matches_partial_json(json!({
+            "body": "reply",
+            "m.relates_to": { "m.in_reply_to": { "event_id": "$original" } },
+        }))
+        .ok(event_id!("$reply"))
+        .mock_once()
+        .mount()
+        .await;
+
+    q.set_enabled(true);
+
+    assert_update!((global_watch, watch) => sent { txn = txn1, event_id = event_id!("$original") });
+    assert_update!((global_watch, watch) => sent { txn = txn2, event_id = event_id!("$reply") });
+
+    assert!(watch.is_empty());
+}
+
+#[async_test]
+async fn test_reply_to_an_already_sent_event_is_refused() {
+    use matrix_sdk_base::store::ReplyThreading;
+    use ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+
+    let mock = MatrixMockServer::new().await;
+
+    let room_id = room_id!("!a:b.c");
+    let client = mock.client_builder().build().await;
+    let room = mock.sync_joined_room(&client, room_id).await;
+
+    let q = room.send_queue();
+    let mut global_watch = client.send_queue().subscribe();
+    let (_, mut watch) = q.subscribe().await.unwrap();
+
+    mock.mock_room_state_encryption().plain().mount().await;
+    mock.mock_room_send().ok(event_id!("$original")).mock_once().mount().await;
+
+    let msg_handle = q.send(RoomMessageEventContent::text_plain("original").into()).await.unwrap();
+    let (txn1, _) = assert_update!((global_watch, watch) => local echo { body = "original" });
+    assert_update!((global_watch, watch) => sent { txn = txn1, event_id = event_id!("$original") });
+
+    // There's no local echo to hang the reply off anymore; the caller is expected
+    // to reply to the remote event instead.
+    let reply = msg_handle
+        .reply(
+            RoomMessageEventContentWithoutRelation::text_plain("reply"),
+            ReplyThreading::MaybeThreaded,
+        )
+        .await
+        .unwrap();
+    assert!(reply.is_none());
+}
+
+#[async_test]
 async fn test_reactions() {
     let mock = MatrixMockServer::new().await;
 

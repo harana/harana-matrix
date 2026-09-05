@@ -94,7 +94,7 @@ pub use self::{
     send_queue::{
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
         FinishUploadThumbnailInfo, QueueWedgeError, QueuedRequest, QueuedRequestKind,
-        SentMediaInfo, SentMediaItem, SentRequestKey, SerializableEventContent,
+        ReplyThreading, SentMediaInfo, SentMediaItem, SentRequestKey, SerializableEventContent,
     },
     traits::{
         ComposerDraft, ComposerDraftType, DraftAttachment, DraftAttachmentContent, DraftThumbnail,

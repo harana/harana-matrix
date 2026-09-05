@@ -22,7 +22,10 @@ use ruma::{
     TransactionId, UInt,
     events::{
         AnyMessageLikeEventContent, MessageLikeEventContent as _, RawExt as _,
-        room::{MediaSource, message::RoomMessageEventContent},
+        room::{
+            MediaSource,
+            message::{RoomMessageEventContent, RoomMessageEventContentWithoutRelation},
+        },
     },
     serde::Raw,
 };
@@ -249,6 +252,21 @@ pub enum DependentQueuedRequestKind {
         key: String,
     },
 
+    /// A reply to the event this request depends on should be sent.
+    ///
+    /// A reply carries the event ID of what it replies to, and a local echo
+    /// doesn't have one: the relation is filled in once the replied-to event
+    /// has been sent and the server has given it an ID.
+    ReplyEvent {
+        /// The content of the reply, without its relation.
+        ///
+        /// `Box`ed so that it doesn't grow the whole enum.
+        content: Box<RoomMessageEventContentWithoutRelation>,
+
+        /// How the reply should relate to a thread.
+        threading: ReplyThreading,
+    },
+
     /// Upload a file or thumbnail depending on another file or thumbnail
     /// upload.
     #[serde(alias = "UploadFileWithThumbnail")]
@@ -299,6 +317,29 @@ pub enum DependentQueuedRequestKind {
         /// Metadata about the gallery items.
         item_infos: Vec<FinishGalleryItemInfo>,
     },
+}
+
+/// How a queued reply should relate to a thread.
+///
+/// This is the serializable counterpart of
+/// `matrix_sdk::room::reply::EnforceThread`, which can't be stored as is.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum ReplyThreading {
+    /// A thread relation is enforced: if the replied-to event isn't in a
+    /// thread, the reply starts one.
+    Threaded {
+        /// Whether the reply is also a rich reply to its target, within that
+        /// thread.
+        is_reply: bool,
+    },
+
+    /// A thread relation isn't enforced; the replied-to event's own thread
+    /// relation, if it has one, is forwarded.
+    MaybeThreaded,
+
+    /// A thread relation isn't enforced, and the replied-to event's thread
+    /// relation is *not* forwarded.
+    Unthreaded,
 }
 
 /// If parent_is_thumbnail_upload is missing, we assume the request is for a
@@ -573,6 +614,10 @@ impl DependentQueuedRequest {
             }
             DependentQueuedRequestKind::FinishUpload { .. } => {
                 // This one graduates into a new media event.
+                true
+            }
+            DependentQueuedRequestKind::ReplyEvent { .. } => {
+                // This one graduates into a new message event.
                 true
             }
             #[cfg(feature = "unstable-msc4274")]

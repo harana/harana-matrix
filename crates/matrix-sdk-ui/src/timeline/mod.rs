@@ -36,6 +36,7 @@ use matrix_sdk::{
         reply::{EnforceThread, Reply},
     },
     send_queue::{RoomSendQueueError, SendHandle},
+    store::ReplyThreading,
     task_monitor::BackgroundTaskHandle,
 };
 use mime::Mime;
@@ -446,13 +447,45 @@ impl Timeline {
     ///
     /// * `content` - The content of the reply.
     ///
-    /// * `in_reply_to` - The ID of the event to reply to.
+    /// * `in_reply_to` - The event to reply to. It may be a local echo: the
+    ///   reply is then queued behind it, and gets its relation once the server
+    ///   has given the replied-to event an ID.
     #[instrument(skip(self, content))]
     pub async fn send_reply(
         &self,
         content: RoomMessageEventContentWithoutRelation,
-        in_reply_to: OwnedEventId,
+        in_reply_to: TimelineEventItemId,
     ) -> Result<SendHandle, Error> {
+        let in_reply_to = match in_reply_to {
+            TimelineEventItemId::EventId(event_id) => event_id,
+
+            item_id @ TimelineEventItemId::TransactionId(_) => {
+                let items = self.items().await;
+                let Some((_pos, item)) = rfind_event_by_item_id(&items, &item_id) else {
+                    return Err(Error::EventNotInTimeline(item_id));
+                };
+
+                match item.handle() {
+                    // The event has been sent in the meantime; reply to it as a remote one.
+                    TimelineItemHandle::Remote(event_id) => event_id.to_owned(),
+
+                    TimelineItemHandle::Local(handle) => {
+                        let threading = match self.controller.thread_root() {
+                            // In a thread, a reply to a local echo is an in-thread reply.
+                            Some(_) => ReplyThreading::Threaded { is_reply: false },
+                            None => ReplyThreading::MaybeThreaded,
+                        };
+
+                        return handle
+                            .reply(content, threading)
+                            .await
+                            .map_err(RoomSendQueueError::StorageError)?
+                            .ok_or(Error::EventNotInTimeline(item_id));
+                    }
+                }
+            }
+        };
+
         let reply = self
             .infer_reply(Some(in_reply_to))
             .await
@@ -472,7 +505,7 @@ impl Timeline {
         description: Option<String>,
         zoom_level: Option<ZoomLevel>,
         asset_type: Option<AssetType>,
-        in_reply_to: Option<OwnedEventId>,
+        in_reply_to: Option<TimelineEventItemId>,
     ) -> Result<SendHandle, Error> {
         let mut content = LocationMessageEventContent::new(body, geo_uri.clone());
 
@@ -488,9 +521,8 @@ impl Timeline {
         let msgtype = MessageType::Location(content);
 
         match in_reply_to {
-            Some(event_id) => {
-                self.send_reply(RoomMessageEventContentWithoutRelation::new(msgtype), event_id)
-                    .await
+            Some(item_id) => {
+                self.send_reply(RoomMessageEventContentWithoutRelation::new(msgtype), item_id).await
             }
             None => self.send(RoomMessageEventContent::new(msgtype).into()).await,
         }

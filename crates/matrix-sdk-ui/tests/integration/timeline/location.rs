@@ -133,7 +133,7 @@ async fn test_send_location_as_reply() {
             None,
             None,
             None,
-            Some(event_id_from_bob.to_owned()),
+            Some(event_id_from_bob.into()),
         )
         .await
         .unwrap();

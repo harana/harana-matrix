@@ -160,7 +160,7 @@ use matrix_sdk_base::{
     store::{
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind, DynStateStore,
         FinishUploadThumbnailInfo, QueueWedgeError, QueuedRequest, QueuedRequestKind,
-        SentMediaInfo, SentRequestKey, SerializableEventContent,
+        ReplyThreading, SentMediaInfo, SentRequestKey, SerializableEventContent,
     },
     task_monitor::BackgroundTaskHandle,
 };
@@ -175,7 +175,11 @@ use ruma::{
         relation::Annotation,
         room::{
             MediaSource,
-            message::{FormattedBody, RoomMessageEventContent},
+            encrypted::Relation as EncryptedRelation,
+            message::{
+                AddMentions, FormattedBody, ForwardThread, ReplyMetadata, ReplyWithinThread,
+                RoomMessageEventContent, RoomMessageEventContentWithoutRelation,
+            },
         },
     },
     serde::Raw,
@@ -2126,6 +2130,52 @@ impl QueueStorage {
         Ok(Some(reaction_txn_id))
     }
 
+    /// Queue a reply to a request that hasn't been sent yet, as a dependent
+    /// request of it.
+    ///
+    /// Returns the transaction id of the reply, or `None` if the replied-to
+    /// request isn't in the queue anymore.
+    async fn reply(
+        &self,
+        transaction_id: &TransactionId,
+        content: RoomMessageEventContentWithoutRelation,
+        threading: ReplyThreading,
+        created_at: MilliSecondsSinceUnixEpoch,
+    ) -> Result<Option<ChildTransactionId>, RoomSendQueueStorageError> {
+        let guard = self.store.lock().await;
+        let client = guard.client()?;
+        let store = client.state_store();
+
+        let requests = store.load_send_queue_requests(&self.room_id).await?;
+
+        // If the replied-to event has already been sent, there's nothing to depend on.
+        if !requests.iter().any(|item| item.transaction_id == transaction_id) {
+            // It may still be a dependent request that hasn't graduated yet, like a
+            // media event whose upload is in flight.
+            let dependent_requests = store.load_dependent_queued_requests(&self.room_id).await?;
+            if !dependent_requests
+                .into_iter()
+                .filter_map(|item| item.is_own_event().then_some(item.own_transaction_id))
+                .any(|child_txn| *child_txn == *transaction_id)
+            {
+                return Ok(None);
+            }
+        }
+
+        let reply_txn_id = ChildTransactionId::new();
+        store
+            .save_dependent_queued_request(
+                &self.room_id,
+                transaction_id,
+                reply_txn_id.clone(),
+                created_at,
+                DependentQueuedRequestKind::ReplyEvent { content: Box::new(content), threading },
+            )
+            .await?;
+
+        Ok(Some(reply_txn_id))
+    }
+
     /// Returns a list of the local echoes, that is, all the requests that we're
     /// about to send but that haven't been sent yet (or are being sent).
     async fn local_echoes(
@@ -2209,6 +2259,28 @@ impl QueueStorage {
                         applies_to: dep.parent_transaction_id,
                     },
                 }),
+
+                DependentQueuedRequestKind::ReplyEvent { content, .. } => {
+                    // The reply doesn't carry its relation yet - the event it replies to
+                    // hasn't been given an ID - but it's an event of its own, so it shows
+                    // up as a local echo like any other.
+                    Some(LocalEcho {
+                        transaction_id: dep.own_transaction_id.clone().into(),
+                        content: LocalEchoContent::Event {
+                            serialized_event: SerializableEventContent::new(
+                                &RoomMessageEventContent::from(*content).into(),
+                            )
+                            .ok()?,
+                            send_handle: SendHandle {
+                                room: room.clone(),
+                                transaction_id: dep.own_transaction_id.into(),
+                                media_handles: vec![],
+                                created_at: dep.created_at,
+                            },
+                            send_error: None,
+                        },
+                    })
+                }
 
                 DependentQueuedRequestKind::UploadFileOrThumbnail { .. } => {
                     // Don't reflect these: only the associated event is interesting to observers.
@@ -2494,6 +2566,67 @@ impl QueueStorage {
                     // Not applied yet, we should retry later => false.
                     return Ok(false);
                 }
+            }
+
+            DependentQueuedRequestKind::ReplyEvent { content, threading } => {
+                let Some(parent_key) = parent_key else {
+                    // The replied-to event hasn't been sent yet, we should retry later.
+                    return Ok(false);
+                };
+
+                let SentRequestKey::Event { event_id, event, event_type } = parent_key else {
+                    return Err(RoomSendQueueError::StorageError(
+                        RoomSendQueueStorageError::InvalidParentKey,
+                    ));
+                };
+
+                // A local echo is always one of our own events, and the spec says not to
+                // mention oneself, so a reply to one never adds mentions.
+                let own_user_id =
+                    client.user_id().ok_or(RoomSendQueueError::RoomDisappeared)?.to_owned();
+
+                // Forward the replied-to event's thread relation, if it has one.
+                let thread = SerializableEventContent::from_raw(event, event_type)
+                    .deserialize()
+                    .ok()
+                    .and_then(|content| content.relation())
+                    .and_then(|relation| {
+                        as_variant::as_variant!(relation, EncryptedRelation::Thread)
+                    });
+
+                let metadata = ReplyMetadata::new(&event_id, &own_user_id, thread.as_ref());
+                let content = *content;
+
+                let reply = match threading {
+                    ReplyThreading::Threaded { is_reply } => content.make_for_thread(
+                        metadata,
+                        if is_reply { ReplyWithinThread::Yes } else { ReplyWithinThread::No },
+                        AddMentions::No,
+                    ),
+                    ReplyThreading::MaybeThreaded => {
+                        content.make_reply_to(metadata, ForwardThread::Yes, AddMentions::No)
+                    }
+                    ReplyThreading::Unthreaded => {
+                        content.make_reply_to(metadata, ForwardThread::No, AddMentions::No)
+                    }
+                };
+
+                let reply = AnyMessageLikeEventContent::from(reply);
+                let serializable = SerializableEventContent::from_raw(
+                    Raw::new(&reply).map_err(RoomSendQueueStorageError::JsonSerialization)?,
+                    reply.event_type().to_string(),
+                );
+
+                store
+                    .save_send_queue_request(
+                        &self.room_id,
+                        dependent_request.own_transaction_id.into(),
+                        dependent_request.created_at,
+                        serializable.into(),
+                        Self::HIGH_PRIORITY,
+                    )
+                    .await
+                    .map_err(RoomSendQueueStorageError::StateStoreError)?;
             }
 
             DependentQueuedRequestKind::UploadFileOrThumbnail {
@@ -3149,6 +3282,70 @@ impl SendHandle {
         Ok(())
     }
 
+    /// Send a reply to the event as soon as it's sent.
+    ///
+    /// A reply carries the event ID of the event it replies to, which this
+    /// event doesn't have yet: the reply is queued behind it, and its relation
+    /// filled in once the server has given the replied-to event an ID. This is
+    /// what makes it possible to reply to a message that is still on its way,
+    /// or that hasn't left the device at all because it's offline.
+    ///
+    /// Returns `Ok(None)` if the reply couldn't be queued because the event is
+    /// already a remote one; use [`Room::make_reply_event`] and the send queue
+    /// directly in that case.
+    ///
+    /// [`Room::make_reply_event`]: crate::Room::make_reply_event
+    #[instrument(skip(self, content), fields(room_id = %self.room.inner.room.room_id(), txn_id = %self.transaction_id))]
+    pub async fn reply(
+        &self,
+        content: RoomMessageEventContentWithoutRelation,
+        threading: ReplyThreading,
+    ) -> Result<Option<SendHandle>, RoomSendQueueStorageError> {
+        trace!("received an intent to reply");
+
+        let created_at = MilliSecondsSinceUnixEpoch::now();
+        let echo_content = content.clone();
+
+        let Some(reply_txn_id) = self
+            .room
+            .inner
+            .queue
+            .reply(&self.transaction_id, content, threading, created_at)
+            .await?
+        else {
+            debug!("local echo doesn't exist anymore, can't reply");
+            return Ok(None);
+        };
+
+        trace!("successfully queued reply");
+
+        // Wake up the queue, in case the room was asleep before the sending.
+        self.room.inner.notifier.notify_one();
+
+        let send_handle = SendHandle {
+            room: self.room.clone(),
+            transaction_id: reply_txn_id.clone().into(),
+            media_handles: vec![],
+            created_at,
+        };
+
+        // The reply has no relation yet - it can't, the event it replies to has no ID
+        // - but it is an event of its own, so it shows up as a local echo.
+        self.room.send_update(RoomSendQueueUpdate::NewLocalEvent(LocalEcho {
+            transaction_id: reply_txn_id.into(),
+            content: LocalEchoContent::Event {
+                serialized_event: SerializableEventContent::new(
+                    &RoomMessageEventContent::from(echo_content).into(),
+                )
+                .map_err(RoomSendQueueStorageError::JsonSerialization)?,
+                send_handle: send_handle.clone(),
+                send_error: None,
+            },
+        }));
+
+        Ok(Some(send_handle))
+    }
+
     /// Send a reaction to the event as soon as it's sent.
     ///
     /// If returning `Ok(None)`; this means the reaction couldn't be sent
@@ -3328,7 +3525,8 @@ fn canonicalize_dependent_requests(
 
             DependentQueuedRequestKind::UploadFileOrThumbnail { .. }
             | DependentQueuedRequestKind::FinishUpload { .. }
-            | DependentQueuedRequestKind::ReactEvent { .. } => {
+            | DependentQueuedRequestKind::ReactEvent { .. }
+            | DependentQueuedRequestKind::ReplyEvent { .. } => {
                 // These requests can't be canonicalized, push them as is.
                 prevs.push(d);
             }

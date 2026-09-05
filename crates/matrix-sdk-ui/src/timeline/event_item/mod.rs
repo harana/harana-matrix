@@ -136,6 +136,24 @@ pub enum TimelineEventItemId {
     EventId(OwnedEventId),
 }
 
+impl From<OwnedEventId> for TimelineEventItemId {
+    fn from(value: OwnedEventId) -> Self {
+        Self::EventId(value)
+    }
+}
+
+impl From<&EventId> for TimelineEventItemId {
+    fn from(value: &EventId) -> Self {
+        Self::EventId(value.to_owned())
+    }
+}
+
+impl From<OwnedTransactionId> for TimelineEventItemId {
+    fn from(value: OwnedTransactionId) -> Self {
+        Self::TransactionId(value)
+    }
+}
+
 /// An handle that usually allows to perform an action on a timeline event.
 ///
 /// If the item represents a remote item, then the event id is usually
