@@ -684,6 +684,9 @@ impl SyncServiceInner {
 ///             "We have entered the offline mode, the server seems to be
 ///              unavailable"
 ///         ),
+///         State::Backoff => eprintln!(
+///             "The syncs failed; waiting a bit before restarting them"
+///         ),
 ///         State::Terminated => {
 ///             eprintln!("The sync service has been gracefully terminated");
 ///             break;
