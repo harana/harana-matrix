@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Fixed
+
+- Drop the sync token when the ignored user list changes, so the next sync is
+  an initial sync. Ignoring or unignoring a user changes which events the
+  server returns, and an incremental sync leaves the events it will no longer
+  send cached locally.
+  ([#42](https://github.com/harana/harana-matrix/issues/42))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 ### Added

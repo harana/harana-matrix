@@ -1,4 +1,5 @@
-//! (De)serializable types for the [Matrix Application Service API][appservice-api].
+//! (De)serializable types for the [Matrix Application Service
+//! API][appservice-api].
 //!
 //! Only the registration file is vendored here: the transaction endpoints the
 //! homeserver pushes to an appservice are not used by this workspace.

@@ -24,7 +24,7 @@ use tracing::{error, instrument, trace};
 use super::Context;
 use crate::{
     Result, StoreError,
-    store::{BaseStateStore, StateStoreExt as _},
+    store::{BaseStateStore, StateStore as _, StateStoreDataKey, StateStoreExt as _},
 };
 
 /// Save the [`StateChanges`] from the [`Context`] inside the [`BaseStateStore`]
@@ -61,10 +61,30 @@ pub async fn save_and_apply(
         state_store.get_account_data_event_static().await.ok().flatten();
 
     save_changes(&context, state_store, state_store_guard, sync_token).await?;
-    apply_changes(&context, ignore_user_list_changes, previous_ignored_user_list);
+    let ignored_user_list_changed =
+        apply_changes(&context, ignore_user_list_changes, previous_ignored_user_list);
     broadcast_room_info_notable_updates(&context, state_store, state_store_guard)?;
 
+    // Ignoring or unignoring a user changes which events the server will return,
+    // but it says nothing about the ones we have already cached. Dropping the sync
+    // token makes the next sync an initial one, so the local view is rebuilt from
+    // what the server sends now rather than from what it sent when the ignore list
+    // was different.
+    if ignored_user_list_changed {
+        trace!("the ignored user list changed, forgetting the sync token");
+        forget_sync_token(state_store).await?;
+    }
+
     trace!("applied changes");
+
+    Ok(())
+}
+
+/// Drop the sync token, in memory and in the store, so that the next sync is an
+/// initial sync.
+async fn forget_sync_token(state_store: &BaseStateStore) -> Result<()> {
+    *state_store.sync_token.write().await = None;
+    state_store.remove_kv_data(StateStoreDataKey::SyncToken).await?;
 
     Ok(())
 }
@@ -84,11 +104,13 @@ async fn save_changes(
     Ok(())
 }
 
+/// Returns whether the ignored user list changed with these
+/// [`StateChanges`](crate::StateChanges).
 fn apply_changes(
     context: &Context,
     ignore_user_list_changes: &SharedObservable<Vec<String>>,
     previous_ignored_user_list: Option<Raw<IgnoredUserListEvent>>,
-) {
+) -> bool {
     if let Some(event) =
         context.state_changes.account_data.get(&GlobalAccountDataEventType::IgnoredUserList)
     {
@@ -112,9 +134,13 @@ fn apply_changes(
                 {
                     if user_ids != prev_user_ids {
                         ignore_user_list_changes.set(user_ids);
+
+                        return true;
                     }
                 } else {
                     ignore_user_list_changes.set(user_ids);
+
+                    return true;
                 }
             }
 
@@ -123,6 +149,8 @@ fn apply_changes(
             }
         }
     }
+
+    false
 }
 
 fn broadcast_room_info_notable_updates(
