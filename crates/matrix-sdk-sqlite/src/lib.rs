@@ -25,6 +25,7 @@
 mod connection;
 #[cfg(feature = "crypto-store")]
 mod crypto_store;
+mod encryption;
 mod error;
 #[cfg(feature = "event-cache-store")]
 mod event_cache_store;
@@ -39,10 +40,25 @@ use std::{
     cmp::max,
     fmt,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use deadpool::managed::PoolConfig;
+use matrix_sdk_store_encryption::{StoreCipherProvider, StoreCodec};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
+
+use self::encryption::EncryptionConfig;
+pub use self::encryption::SecretStoreCipherProvider;
+
+/// The cipher and codec traits [`SqliteStoreConfig`] takes, re-exported so
+/// that using them does not mean depending on
+/// [`matrix_sdk_store_encryption`] directly.
+pub mod pluggable {
+    pub use matrix_sdk_store_encryption::{
+        CodecError, JsonCodec, MessagePackCodec, StoreCipherBackend, StoreCipherProvider,
+        StoreCodec, StoreCodecExt,
+    };
+}
 
 #[cfg(feature = "crypto-store")]
 pub use self::crypto_store::SqliteCryptoStore;
@@ -56,6 +72,33 @@ pub use self::state_store::{DATABASE_NAME as STATE_STORE_DATABASE_NAME, SqliteSt
 
 #[cfg(test)]
 matrix_sdk_test_utils::init_tracing_for_tests!();
+
+/// The `tracing` targets this store's modules log under.
+///
+/// Clients that let their users tune log levels per SDK component read these
+/// rather than spelling out module paths, so that swapping the store backend
+/// swaps its log targets with it.
+pub mod log_targets {
+    /// The target [`SqliteEventCacheStore`] logs under.
+    ///
+    /// [`SqliteEventCacheStore`]: crate::SqliteEventCacheStore
+    pub const EVENT_CACHE_STORE: &str = "matrix_sdk_sqlite::event_cache_store";
+
+    /// The target [`SqliteStateStore`] logs under.
+    ///
+    /// [`SqliteStateStore`]: crate::SqliteStateStore
+    pub const STATE_STORE: &str = "matrix_sdk_sqlite::state_store";
+
+    /// The target [`SqliteCryptoStore`] logs under.
+    ///
+    /// [`SqliteCryptoStore`]: crate::SqliteCryptoStore
+    pub const CRYPTO_STORE: &str = "matrix_sdk_sqlite::crypto_store";
+
+    /// The target [`SqliteMediaStore`] logs under.
+    ///
+    /// [`SqliteMediaStore`]: crate::SqliteMediaStore
+    pub const MEDIA_STORE: &str = "matrix_sdk_sqlite::media_store";
+}
 
 /// An enum used to store the secret that gives access to a store
 #[derive(Clone, Debug, PartialEq, Zeroize, ZeroizeOnDrop)]
@@ -73,6 +116,8 @@ pub struct SqliteStoreConfig {
     path: PathBuf,
     /// Secret to open the store, if any
     secret: Option<Secret>,
+    /// How the store encrypts and serializes what it writes.
+    encryption: EncryptionConfig,
     /// The pool configuration for [`deadpool`].
     pool_config: PoolConfig,
     /// The runtime configuration to apply when opening an SQLite connection.
@@ -84,6 +129,7 @@ impl fmt::Debug for SqliteStoreConfig {
         formatter
             .debug_struct("SqliteStoreConfig")
             .field("path", &self.path)
+            .field("encryption", &self.encryption)
             .field("pool_config", &self.pool_config)
             .field("runtime_config", &self.runtime_config)
             .finish_non_exhaustive()
@@ -108,6 +154,7 @@ impl SqliteStoreConfig {
             pool_config: PoolConfig::new(max(POOL_MINIMUM_SIZE, num_cpus::get_physical() * 4)),
             runtime_config: RuntimeConfig::default(),
             secret: None,
+            encryption: EncryptionConfig::default(),
         }
     }
 
@@ -152,6 +199,51 @@ impl SqliteStoreConfig {
     /// Define the key if the store is encoded.
     pub fn key(mut self, key: Option<&[u8; 32]>) -> Self {
         self.secret = key.map(|key| Secret::Key(Box::new(*key)));
+        self
+    }
+
+    /// Encrypt the store with a cipher of your own, instead of the default one
+    /// derived from [`Self::passphrase`] or [`Self::key`].
+    ///
+    /// Use this to keep the store's key material somewhere the process cannot
+    /// leak it — an OS keychain, a Secure Enclave, an HSM, a KMS — or to
+    /// encrypt with a cipher suite of your choosing.
+    ///
+    /// This takes precedence over any secret set on this config: when a
+    /// provider is installed, [`Self::passphrase`] and [`Self::key`] are
+    /// ignored. Passing `None` restores the default behaviour.
+    ///
+    /// Swapping the cipher of a store that already holds data makes that data
+    /// unreadable, so this has to be decided before the store is first
+    /// opened.
+    pub fn cipher_provider(mut self, provider: Option<Arc<dyn StoreCipherProvider>>) -> Self {
+        self.encryption.cipher_provider = provider;
+        self
+    }
+
+    /// Write opaque values in a format of your own, instead of MessagePack.
+    ///
+    /// This codec is used for the store's opaque value columns, and for the
+    /// envelope encrypted values are wrapped in.
+    ///
+    /// Swapping the codec of a store that already holds data makes that data
+    /// unreadable, so this has to be decided before the store is first
+    /// opened.
+    pub fn value_codec(mut self, codec: Arc<dyn StoreCodec>) -> Self {
+        self.encryption.value_codec = codec;
+        self
+    }
+
+    /// Write Matrix payloads in a format of your own, instead of JSON.
+    ///
+    /// Note that other clients sharing this database, and other parts of the
+    /// SDK, expect to find JSON in these columns.
+    ///
+    /// Swapping the codec of a store that already holds data makes that data
+    /// unreadable, so this has to be decided before the store is first
+    /// opened.
+    pub fn json_codec(mut self, codec: Arc<dyn StoreCodec>) -> Self {
+        self.encryption.json_codec = codec;
         self
     }
 
@@ -246,6 +338,25 @@ impl SqliteStoreConfig {
     /// Returns the runtime configuration.
     pub(crate) fn runtime_config(&self) -> RuntimeConfig {
         self.runtime_config
+    }
+
+    /// Returns how the store should encrypt and serialize what it writes.
+    ///
+    /// A [`Self::cipher_provider`] set explicitly wins over the secret set by
+    /// [`Self::passphrase`] or [`Self::key`]; without either, the store stays
+    /// unencrypted.
+    pub(crate) fn encryption_config(&self) -> EncryptionConfig {
+        let mut config = self.encryption.clone();
+
+        if config.cipher_provider.is_none() {
+            config.cipher_provider = self.secret.clone().map(|secret| {
+                let provider: Arc<dyn StoreCipherProvider> =
+                    Arc::new(SecretStoreCipherProvider::new(secret));
+                provider
+            });
+        }
+
+        config
     }
 
     /// Build a pool of active connections to a particular database.

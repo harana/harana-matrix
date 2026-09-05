@@ -168,9 +168,19 @@ impl BackupUploadingTask {
     pub(crate) async fn listen(client: WeakClient, mut receiver: mpsc::UnboundedReceiver<()>) {
         while receiver.recv().await.is_some() {
             if let Some(client) = client.get() {
+                let backups = client.encryption().backups();
+
+                // Skip the upload attempt entirely if backups aren't enabled, so we don't
+                // spam the logs with a warning on every single sync for clients (e.g. bots)
+                // that never set up key backup.
+                if !backups.are_enabled().await {
+                    trace!("Not backing up room keys because backups are not enabled");
+                    continue;
+                }
+
                 let upload_progress = &client.inner.e2ee.backup_state.upload_progress;
 
-                if let Err(e) = client.encryption().backups().backup_room_keys().await {
+                if let Err(e) = backups.backup_room_keys().await {
                     upload_progress.set(UploadState::Error);
                     warn!("Error backing up room keys {e:?}");
                     // Note: it's expected we're not `continue`ing here, because

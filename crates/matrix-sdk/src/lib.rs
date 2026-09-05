@@ -25,8 +25,9 @@ pub use matrix_sdk_base::{
     CallIntentConsensus, ComposerDraft, ComposerDraftType, DraftAttachment, DraftAttachmentContent,
     DraftThumbnail, EncryptionState, PredecessorRoom, QueueWedgeError, Room as BaseRoom,
     RoomCreateWithCreatorEventContent, RoomDisplayName, RoomHero, RoomHeroWithProfile, RoomInfo,
-    RoomMember as BaseRoomMember, RoomMemberships, RoomRecencyStamp, RoomState, SessionMeta,
-    StateChanges, StateStore, StoreError, SuccessorRoom, ThreadingSupport, deserialized_responses,
+    RoomMember as BaseRoomMember, RoomMembersUpdate, RoomMemberships, RoomRecencyStamp, RoomState,
+    SessionMeta, StateChanges, StateStore, StoreError, SuccessorRoom, ThreadingSupport,
+    deserialized_responses,
     store::{self, DynStateStore, MemoryStore, StateStoreExt},
 };
 pub use matrix_sdk_common::*;
@@ -65,13 +66,13 @@ pub mod sync;
 #[cfg(feature = "experimental-widgets")]
 pub mod widget;
 
-#[cfg(feature = "experimental-search")]
+#[cfg(feature = "experimental-search-core")]
 pub mod message_search;
 
 pub use account::Account;
 pub use authentication::{AuthApi, AuthSession, SessionTokens};
 pub use client::homeserver_capabilities::HomeserverCapabilities;
-#[cfg(feature = "experimental-search")]
+#[cfg(feature = "experimental-search-core")]
 pub mod search_index;
 pub use client::{
     Client, ClientBuildError, ClientBuilder, LoopCtrl, ServerVendorInfo, SessionChange,
@@ -87,9 +88,13 @@ pub use http_client::{HttpSend, SupportedAuthScheme, SupportedPathBuilder, Trans
 #[cfg(all(feature = "e2e-encryption", feature = "sqlite"))]
 pub use matrix_sdk_sqlite::SqliteCryptoStore;
 #[cfg(feature = "sqlite")]
+pub use matrix_sdk_sqlite::log_targets as sqlite_log_targets;
+#[cfg(feature = "sqlite")]
+pub use matrix_sdk_sqlite::pluggable as store_encryption;
+#[cfg(feature = "sqlite")]
 pub use matrix_sdk_sqlite::{
-    STATE_STORE_DATABASE_NAME, SqliteEventCacheStore, SqliteMediaStore, SqliteStateStore,
-    SqliteStoreConfig,
+    STATE_STORE_DATABASE_NAME, SecretStoreCipherProvider, SqliteEventCacheStore, SqliteMediaStore,
+    SqliteStateStore, SqliteStoreConfig,
 };
 pub use media::Media;
 pub use pusher::Pusher;

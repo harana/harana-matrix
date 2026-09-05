@@ -45,7 +45,11 @@ pub(super) struct LatestEvent {
     weak_room: WeakRoom,
 
     /// The thread (if any) owning this latest event.
-    _thread_id: Option<OwnedEventId>,
+    ///
+    /// When set, only the events of that thread contribute to the value: the
+    /// in-thread events and the thread root for the remote side, and the local
+    /// events sent to that thread for the send queue side.
+    thread_id: Option<OwnedEventId>,
 
     /// A buffer of the current [`LatestEventValue`]s computed for local events
     /// seen by the send queue. See [`BufferOfValuesForLocalEvents`] to learn
@@ -62,7 +66,9 @@ impl LatestEvent {
         thread_id: Option<&EventId>,
     ) -> With<Self, IsLatestEventValueNone> {
         let latest_event_value = match thread_id {
-            Some(_thread_id) => LatestEventValue::default(),
+            // A thread's latest event isn't part of the `RoomInfo`; it is computed from the
+            // event cache and the send queue, on the first update.
+            Some(_) => LatestEventValue::default(),
             None => weak_room.get().map(|room| room.latest_event()).unwrap_or_default(),
         };
         let is_none = latest_event_value.is_none();
@@ -70,7 +76,7 @@ impl LatestEvent {
         With {
             result: Self {
                 weak_room: weak_room.clone(),
-                _thread_id: thread_id.map(ToOwned::to_owned),
+                thread_id: thread_id.map(ToOwned::to_owned),
                 buffer_of_values_for_local_events: BufferOfValuesForLocalEvents::new(),
                 current_value: SharedObservable::new_async(latest_event_value),
             },
@@ -114,8 +120,14 @@ impl LatestEvent {
         }
 
         let current_event = self.current_value.get().await;
-        let new_value =
-            Builder::new_remote(room_event_cache, current_event, own_user_id, power_levels).await;
+        let new_value = Builder::new_remote(
+            room_event_cache,
+            self.thread_id.as_deref(),
+            current_event,
+            own_user_id,
+            power_levels,
+        )
+        .await;
 
         trace!(value = ?new_value, "Computed a remote `LatestEventValue`");
 
@@ -145,6 +157,7 @@ impl LatestEvent {
             send_queue_update,
             &mut self.buffer_of_values_for_local_events,
             room_event_cache,
+            self.thread_id.as_deref(),
             current_event,
             own_user_id,
             power_levels,

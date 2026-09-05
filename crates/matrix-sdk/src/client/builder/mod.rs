@@ -16,11 +16,11 @@
 mod homeserver_config;
 mod store_provider;
 
-#[cfg(feature = "experimental-search")]
+#[cfg(feature = "experimental-search-core")]
 use std::collections::HashMap;
 #[cfg(feature = "sqlite")]
 use std::path::Path;
-#[cfg(any(feature = "experimental-search", feature = "sqlite"))]
+#[cfg(feature = "sqlite")]
 use std::path::PathBuf;
 use std::{
     collections::BTreeSet,
@@ -41,6 +41,8 @@ use matrix_sdk_base::{
     BaseClient, DmRoomDefinition, ThreadingSupport, store::StoreConfig, ttl::TtlValue,
 };
 use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
+#[cfg(feature = "experimental-search-core")]
+use matrix_sdk_search::backend::SearchIndexProvider;
 #[cfg(feature = "sqlite")]
 use matrix_sdk_sqlite::SqliteStoreConfig;
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
@@ -51,7 +53,7 @@ use ruma::{
     presence::PresenceState,
 };
 use thiserror::Error;
-#[cfg(feature = "experimental-search")]
+#[cfg(feature = "experimental-search-core")]
 use tokio::sync::Mutex;
 use tokio::sync::OnceCell;
 use tracing::{Span, debug, field::debug, instrument};
@@ -62,10 +64,10 @@ use super::{Client, ClientInner};
 use crate::encryption::EncryptionSettings;
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
 use crate::http_client::HttpSettings;
-#[cfg(feature = "experimental-search")]
+#[cfg(feature = "experimental-search-core")]
 use crate::search_index::SearchIndex;
-#[cfg(feature = "experimental-search")]
-use crate::search_index::SearchIndexStoreKind;
+#[cfg(feature = "experimental-search-core")]
+use crate::search_index::{SearchIndexStoreKind, default_search_index_provider};
 use crate::{
     HttpError, IdParseError,
     authentication::AuthCtx,
@@ -140,8 +142,8 @@ pub struct ClientBuilder {
     enable_automatic_back_pagination: bool,
     cross_process_lock_config: CrossProcessLockConfig,
     threading_support: ThreadingSupport,
-    #[cfg(feature = "experimental-search")]
-    search_index_store_kind: SearchIndexStoreKind,
+    #[cfg(feature = "experimental-search-core")]
+    search_index_provider: Arc<dyn SearchIndexProvider>,
     #[cfg(feature = "experimental-x509-identity-verification")]
     x509_signer: Option<Arc<dyn RawX509Signer>>,
     #[cfg(feature = "experimental-x509-identity-verification")]
@@ -184,8 +186,8 @@ impl ClientBuilder {
                 holder_name: Self::DEFAULT_CROSS_PROCESS_STORE_LOCKS_HOLDER_NAME.to_owned(),
             },
             threading_support: ThreadingSupport::Disabled,
-            #[cfg(feature = "experimental-search")]
-            search_index_store_kind: SearchIndexStoreKind::InMemory,
+            #[cfg(feature = "experimental-search-core")]
+            search_index_provider: default_search_index_provider(),
             #[cfg(feature = "experimental-x509-identity-verification")]
             x509_signer: None,
             #[cfg(feature = "experimental-x509-identity-verification")]
@@ -683,10 +685,63 @@ impl ClientBuilder {
         self
     }
 
-    /// The base directory in which each room's index directory will be stored.
-    #[cfg(feature = "experimental-search")]
+    /// Where the built-in search backend should keep each room's index.
+    ///
+    /// This selects one of the built-in backend's storage modes; see
+    /// [`Self::search_index_provider`] to search with a different engine
+    /// altogether.
+    #[cfg(feature = "experimental-search-core")]
     pub fn search_index_store(mut self, kind: SearchIndexStoreKind) -> Self {
-        self.search_index_store_kind = kind;
+        self.search_index_provider = kind.into_provider();
+        self
+    }
+
+    /// Search messages with a full-text engine of your own, instead of the
+    /// built-in one.
+    ///
+    /// The provider is asked for an index the first time each room is indexed
+    /// or searched. This overrides any store set with
+    /// [`Self::search_index_store`].
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - The search backend to create each room's index with.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use matrix_sdk::Client;
+    /// # use matrix_sdk_search::{
+    /// #     backend::{RoomSearchIndex, SearchIndexProvider},
+    /// #     error::IndexError,
+    /// # };
+    /// # use ruma::RoomId;
+    /// #[derive(Debug)]
+    /// struct MyEngine;
+    ///
+    /// impl SearchIndexProvider for MyEngine {
+    ///     fn create_index(
+    ///         &self,
+    ///         room_id: &RoomId,
+    ///     ) -> Result<Box<dyn RoomSearchIndex>, IndexError> {
+    ///         # let _ = room_id;
+    ///         // … open this room's index in your engine of choice …
+    ///         # unimplemented!()
+    ///     }
+    /// }
+    ///
+    /// # async {
+    /// let client = Client::builder()
+    ///     .homeserver_url("http://localhost:8080")
+    ///     .search_index_provider(Arc::new(MyEngine))
+    ///     .build()
+    ///     .await?;
+    /// # anyhow::Ok(()) };
+    /// ```
+    #[cfg(feature = "experimental-search-core")]
+    pub fn search_index_provider(mut self, provider: Arc<dyn SearchIndexProvider>) -> Self {
+        self.search_index_provider = provider;
         self
     }
 
@@ -814,9 +869,9 @@ impl ClientBuilder {
         let latest_events = OnceCell::new();
         let thread_subscriptions_catchup = OnceCell::new();
 
-        #[cfg(feature = "experimental-search")]
+        #[cfg(feature = "experimental-search-core")]
         let search_index =
-            SearchIndex::new(Arc::new(Mutex::new(HashMap::new())), self.search_index_store_kind);
+            SearchIndex::new(Arc::new(Mutex::new(HashMap::new())), self.search_index_provider);
 
         let inner = ClientInner::new(
             auth_ctx,
@@ -839,7 +894,7 @@ impl ClientBuilder {
             #[cfg(feature = "e2e-encryption")]
             self.enable_share_history_on_invite,
             self.cross_process_lock_config,
-            #[cfg(feature = "experimental-search")]
+            #[cfg(feature = "experimental-search-core")]
             search_index,
             thread_subscriptions_catchup,
             self.media_fetcher.clone(),
@@ -1192,11 +1247,12 @@ pub(crate) mod tests {
         assert_matches!(sanitize_server_name("https://matrix.server.org/something"), Err(_))
     }
 
-    // Note: Due to a limitation of the http mocking library the following tests all
-    // supply an http:// url, to `server_name_or_homeserver_url` rather than the plain server name,
+    // Note: Due to a limitation of the http mocking library the following tests
+    // all supply an http:// url, to `server_name_or_homeserver_url` rather than the plain server name,
     // otherwise  the builder will prepend https:// and the request will fail. In practice, this
-    // isn't a problem as the builder first strips the scheme and then checks if the
-    // name is a valid server name, so it is a close enough approximation.
+    // isn't a problem as the builder first strips the scheme and then checks if
+    // the name is a valid server name, so it is a close enough
+    // approximation.
 
     #[async_test]
     async fn test_discovery_invalid_server() {
@@ -1227,8 +1283,8 @@ pub(crate) mod tests {
 
     #[async_test]
     async fn test_discovery_web_server() {
-        // Given a random web server that isn't a Matrix homeserver or hosting the
-        // well-known file for one.
+        // Given a random web server that isn't a Matrix homeserver or hosting
+        // the well-known file for one.
         let server = MockServer::start().await;
         let mut builder = ClientBuilder::new();
 
@@ -1281,8 +1337,8 @@ pub(crate) mod tests {
 
     #[async_test]
     async fn test_discovery_well_known_legacy() {
-        // Given a base server with a well-known file that points to a homeserver that
-        // doesn't support sliding sync.
+        // Given a base server with a well-known file that points to a
+        // homeserver that doesn't support sliding sync.
         let server = MockServer::start().await;
         let homeserver = make_mock_homeserver().await;
         let mut builder = ClientBuilder::new();
@@ -1300,7 +1356,8 @@ pub(crate) mod tests {
         let client = builder.build().await.unwrap();
 
         // Then a client should be built with native support for sliding sync.
-        // It's native support because it's the default. Nothing is checked here.
+        // It's native support because it's the default. Nothing is checked
+        // here.
         assert!(client.sliding_sync_version().is_native());
     }
 
@@ -1311,12 +1368,12 @@ pub(crate) mod tests {
             .server_name(&ServerName::parse("example.org").unwrap())
             .disable_well_known_lookup(true);
 
-        // When building it. Note that no mock server is involved: the whole point is
-        // that not a single request is made.
+        // When building it. Note that no mock server is involved: the whole
+        // point is that not a single request is made.
         let error = builder.build().await.unwrap_err();
 
-        // Then the operation should fail, rather than assume that the server name is
-        // also the homeserver.
+        // Then the operation should fail, rather than assume that the server
+        // name is also the homeserver.
         assert_matches!(error, ClientBuildError::WellKnownLookupDisabled);
 
         // And the same goes for its insecure counterpart.
@@ -1332,8 +1389,9 @@ pub(crate) mod tests {
 
     #[async_test]
     async fn test_discovery_server_name_or_url_with_well_known_lookup_disabled() {
-        // Given a homeserver that also serves a well-known file, which must never be
-        // requested. `MockServer` verifies the expectation when it is dropped.
+        // Given a homeserver that also serves a well-known file, which must
+        // never be requested. `MockServer` verifies the expectation
+        // when it is dropped.
         let homeserver = make_mock_homeserver().await;
         Mock::given(method("GET"))
             .and(path("/.well-known/matrix/client"))
@@ -1360,8 +1418,9 @@ pub(crate) mod tests {
 
     #[async_test]
     async fn test_homeserver_url_never_contacts_the_server_name() {
-        // Given a deployment where the server name serves a well-known that points to
-        // the underlying homeserver (hosted on an unrelated domain in this test).
+        // Given a deployment where the server name serves a well-known that
+        // points to the underlying homeserver (hosted on an unrelated
+        // domain in this test).
         let mock_server = MockServer::start().await;
         let address = *mock_server.address();
         let port = address.port();
@@ -1399,7 +1458,8 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        // Then homeserver should be the only host that was contacted while building.
+        // Then homeserver should be the only host that was contacted while
+        // building.
         let resolved_hosts = resolver.hosts.lock().unwrap();
         assert!(!resolved_hosts.is_empty(), "The homeserver should have been contacted");
         assert!(
