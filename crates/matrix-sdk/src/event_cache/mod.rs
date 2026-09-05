@@ -48,7 +48,7 @@ use tokio::sync::{
     broadcast::{Receiver, Sender, channel},
     mpsc,
 };
-use tracing::{error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::{
     Client,
@@ -140,6 +140,10 @@ pub enum EventCacheError {
     /// An error has been observed while back- or forward- paginating.
     #[error(transparent)]
     PaginationError(Arc<crate::Error>),
+
+    /// An error has been observed while reading a room's retention policy.
+    #[error(transparent)]
+    RetentionPolicy(Arc<crate::Error>),
 
     /// An error has been observed while initiating an event-focused timeline.
     #[error(transparent)]
@@ -485,6 +489,59 @@ impl EventCache {
     /// This will notify any live observers that the room has been cleared.
     pub async fn clear_all_rooms(&self) -> Result<()> {
         self.inner.clear_all_rooms().await
+    }
+
+    /// Delete, in every room whose cache is loaded, the events that fall
+    /// outside the room's retention policy, and clear the local media they
+    /// refer to.
+    ///
+    /// The policy is the effective one for each room, per [MSC1763]. The
+    /// server's retention configuration is fetched once and reused across
+    /// rooms. A homeserver that doesn't implement MSC1763, or a room with no
+    /// effective policy, keeps all of its events.
+    ///
+    /// Rooms whose cache isn't loaded are left alone: their events are purged
+    /// the next time they are loaded and this is called.
+    ///
+    /// Nothing schedules this: it deletes the user's messages, so when a sweep
+    /// happens is left to the caller.
+    ///
+    /// Returns the total number of events that were removed.
+    ///
+    /// [MSC1763]: https://github.com/matrix-org/matrix-spec-proposals/pull/1763
+    pub async fn purge_expired_events(&self) -> Result<usize> {
+        let client = self.inner.client()?;
+
+        let config = match client.get_retention_configuration().await {
+            Ok(config) => config,
+
+            Err(error) if error.is_endpoint_not_implemented() => {
+                debug!(
+                    "the homeserver doesn't implement the MSC1763 retention configuration \
+                     endpoint; nothing to purge"
+                );
+                return Ok(0);
+            }
+
+            Err(error) => return Err(EventCacheError::RetentionPolicy(Arc::new(error.into()))),
+        };
+
+        let caches_for_all_rooms = self.inner.by_room.read().await;
+
+        let mut total = 0;
+
+        for (room_id, caches) in caches_for_all_rooms.iter() {
+            match caches.room().purge_expired_events_with_server_config(&config).await {
+                Ok(num_removed) => total += num_removed,
+
+                // One room failing to be swept mustn't stop the others.
+                Err(error) => {
+                    warn!(%room_id, "failed to purge the expired events of a room: {error}");
+                }
+            }
+        }
+
+        Ok(total)
     }
 
     /// Subscribe to room _generic_ updates.

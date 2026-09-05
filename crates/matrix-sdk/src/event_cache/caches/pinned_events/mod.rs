@@ -160,12 +160,19 @@ impl<'a> StateLockWriteGuard<'a, PinnedEventsCacheState> {
 
         self.state.chunk.reset();
 
-        // The events must stay in the store, so these updates must not reach it.
-        let _ = self.state.chunk.store_updates().take();
+        // Resetting drops the linked chunk's chunks, and its first one is recreated
+        // lazily, pushing an update of its own the first time it is looked at. Force
+        // that to happen now, so the drain below catches it instead of letting it
+        // reach the store on some later, unrelated write.
+        let _ = self.state.chunk.events().next();
 
         // Nobody is listening, and a new subscriber receives the events reloaded
         // from the store, so these diffs are of no use to anyone.
         let _ = self.state.chunk.updates_as_vector_diffs();
+
+        // The events must stay in the store, so none of these updates may reach it.
+        // Drained last, after everything above has had a chance to push.
+        let _ = self.state.chunk.store_updates().take();
 
         self.state.unloaded = true;
 
