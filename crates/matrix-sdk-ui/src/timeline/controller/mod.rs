@@ -70,8 +70,8 @@ pub(super) use self::{
 use super::{
     DateDividerMode, EmbeddedEvent, Error, EventSendState, EventTimelineItem, InReplyToDetails,
     MediaUploadProgress, Profile, RedactedMessage, TimelineDetails, TimelineEventItemId,
-    TimelineFocus, TimelineItem, TimelineItemContent, TimelineItemKind, TimelineReadReceiptTracking,
-    VirtualTimelineItem,
+    TimelineFocus, TimelineItem, TimelineItemContent, TimelineItemKind,
+    TimelineReadReceiptTracking, VirtualTimelineItem,
     algorithms::{rfind_event_by_id, rfind_event_item},
     event_item::{ReactionStatus, RemoteEventOrigin},
     item::TimelineUniqueId,

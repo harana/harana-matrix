@@ -26,8 +26,8 @@ use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;
 use crate::timeline::{
-    DateDividerMode, VirtualTimelineItem, controller::TimelineSettings,
-    tests::TestTimelineBuilder, traits::RoomDataProvider as _,
+    DateDividerMode, VirtualTimelineItem, controller::TimelineSettings, tests::TestTimelineBuilder,
+    traits::RoomDataProvider as _,
 };
 
 #[async_test]

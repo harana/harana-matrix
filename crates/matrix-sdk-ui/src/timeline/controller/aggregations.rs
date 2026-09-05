@@ -56,8 +56,7 @@ use super::{ObservableItemsTransaction, rfind_event_by_item_id};
 use crate::timeline::{
     BeaconInfo, EventTimelineItem, LiveLocationState, MsgLikeContent, MsgLikeKind, PollState,
     ReactionInfo, ReactionStatus, RedactedMessage, TimelineEventItemId, TimelineItem,
-    TimelineItemContent,
-    event_item::beacon_info_matches,
+    TimelineItemContent, event_item::beacon_info_matches,
 };
 
 #[derive(Clone)]
