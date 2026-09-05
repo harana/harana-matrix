@@ -354,7 +354,7 @@ mod tests {
         ];
 
         assert_eq!(
-            super::via_servers(users.iter().map(|user_id| *user_id)),
+            super::via_servers(users.iter().copied()),
             vec![
                 server_name!("one.example").to_owned(),
                 server_name!("two.example").to_owned(),

@@ -249,7 +249,7 @@ fn power_level_at_least(member: &RoomMember, level: i64) -> bool {
 fn sort_members(members: &mut [RoomMember], sort: RoomMemberSortOrder) {
     match sort {
         RoomMemberSortOrder::Name => {
-            members.sort_by(|a, b| compare_by_name(a, b));
+            members.sort_by(compare_by_name);
         }
         RoomMemberSortOrder::PowerLevelThenName => {
             members.sort_by(|a, b| {

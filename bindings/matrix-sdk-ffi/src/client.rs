@@ -3664,7 +3664,10 @@ mod tests {
     };
 
     use crate::{
-        client::{CreateRoomParameters, JoinRule, OpenIdToken, RoomPreset, RoomVisibility},
+        client::{
+            CreateRoomParameters, InitialStateEventParameters, JoinRule, OpenIdToken, RoomPreset,
+            RoomVisibility,
+        },
         room::RoomHistoryVisibility,
     };
 
@@ -3684,6 +3687,11 @@ mod tests {
             history_visibility_override: Some(RoomHistoryVisibility::Shared),
             canonical_alias: Some("#a-room:example.com".to_owned()),
             is_space: true,
+            initial_state: Some(vec![InitialStateEventParameters {
+                event_type: "org.example.marker".to_owned(),
+                state_key: "abcdef".to_owned(),
+                content: r#"{"hello":"world"}"#.to_owned(),
+            }]),
         };
 
         let request: create_room::v3::Request =
@@ -3707,6 +3715,11 @@ mod tests {
             initial_state.iter().any(|e| e.event_type() == StateEventType::RoomHistoryVisibility)
         );
         assert_eq!(request.room_alias_name, Some("#a-room:example.com".to_owned()));
+        // The caller's own initial state events are passed through as they are.
+        assert!(initial_state.iter().any(|e| {
+            e.event_type() == StateEventType::from("org.example.marker")
+                && e.state_key() == "abcdef"
+        }));
 
         let room_type = request
             .creation_content
