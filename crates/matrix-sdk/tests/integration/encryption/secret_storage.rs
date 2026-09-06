@@ -580,6 +580,7 @@ async fn test_incomplete_cross_signing_import_is_reported() {
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
     let (client, server) = no_retry_test_client_with_server().await;
     client.restore_session(session).await.unwrap();
