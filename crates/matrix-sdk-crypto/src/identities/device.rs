@@ -189,7 +189,17 @@ impl Device {
         &self,
         session: &InboundGroupSession,
     ) -> Result<bool, MismatchedIdentityKeysError> {
-        if session.has_been_imported() {
+        if session.is_trusted_forward() {
+            // The session arrived as an `m.forwarded_room_key` that another of our
+            // own devices, which we have verified, marked as trusted under MSC3879.
+            //
+            // The Olm channel it came over binds the *forwarder's* keys, not the
+            // creator's, so the proof described below is missing. What stands in its
+            // place is a device we trust telling us it had that proof - which is what
+            // MSC3879 is for, and is the only thing that lets a key we asked another
+            // of our devices for be shown as anything but unverified.
+            Ok(self.curve25519_key() == Some(session.sender_key()))
+        } else if session.has_been_imported() {
             // An imported room key means that we did not receive the room key as a
             // `m.room_key` event when the room key was initially exchanged.
             //
@@ -485,7 +495,14 @@ impl Device {
                 session.export().await
             };
 
-            export.try_into()?
+            let mut content: ForwardedRoomKeyContent = export.try_into()?;
+
+            // Tell the recipient whether we can vouch for this session, per MSC3879.
+            // Saying nothing is the safe answer, and is what a session we ourselves
+            // restored from a backup or a file gets.
+            content.set_trusted(session.is_trusted_for_forwarding());
+
+            content
         };
 
         let event_type = content.event_type().to_owned();

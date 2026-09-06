@@ -298,6 +298,20 @@ pub enum Error {
     #[error("The olm machine isn't yet available")]
     NoOlmMachine,
 
+    /// A key backup could not be created because we do not hold the private
+    /// part of the cross-signing master key.
+    ///
+    /// A backup signed only by the device that created it stops being
+    /// verifiable once that device is deleted, leaving a later session no way
+    /// to tell whether the backup's auth data was tampered with. Set
+    /// cross-signing up first.
+    #[cfg(feature = "e2e-encryption")]
+    #[error(
+        "the backup can't be signed with the cross-signing master key, so a future session \
+         would have no way to trust it"
+    )]
+    BackupNotCrossSigned,
+
     /// An error de/serializing type for the `StateStore`
     #[error(transparent)]
     SerdeJson(#[from] JsonError),

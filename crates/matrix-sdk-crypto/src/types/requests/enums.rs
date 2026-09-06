@@ -195,6 +195,12 @@ impl<'a> From<&'a KeysClaimResponse> for AnyIncomingResponse<'a> {
     }
 }
 
+impl<'a> From<&'a SigningKeysUploadResponse> for AnyIncomingResponse<'a> {
+    fn from(response: &'a SigningKeysUploadResponse) -> Self {
+        AnyIncomingResponse::SigningKeysUpload(response)
+    }
+}
+
 impl<'a> From<&'a SignatureUploadResponse> for AnyIncomingResponse<'a> {
     fn from(response: &'a SignatureUploadResponse) -> Self {
         AnyIncomingResponse::SignatureUpload(response)

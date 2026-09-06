@@ -947,8 +947,13 @@ async fn test_failed_members_response() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_backup_enable_new_user() -> Result<()> {
-    let encryption_settings =
-        EncryptionSettings { auto_enable_backups: true, ..Default::default() };
+    // A backup has to carry a signature from the cross-signing master key, so
+    // cross-signing has to be bootstrapped before one can be created.
+    let encryption_settings = EncryptionSettings {
+        auto_enable_backups: true,
+        auto_enable_cross_signing: true,
+        ..Default::default()
+    };
 
     let alice = SyncTokenAwareClient::new(
         TestClientBuilder::new("alice")

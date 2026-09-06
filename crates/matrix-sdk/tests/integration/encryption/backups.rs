@@ -75,6 +75,21 @@ const ROOM_KEY: &[u8] = b"\
         HztoSJUr/2Y\n\
         -----END MEGOLM SESSION DATA-----";
 
+/// Set up a private cross-signing identity for the client, without uploading
+/// anything.
+///
+/// Creating a backup requires a cross-signing master key signature, so a test
+/// that creates one needs an identity to sign with.
+async fn bootstrap_cross_signing_locally(client: &Client) {
+    let olm_machine = client.olm_machine_for_testing().await;
+    olm_machine
+        .as_ref()
+        .expect("The client should have an OlmMachine")
+        .bootstrap_cross_signing(false)
+        .await
+        .expect("We should be able to create a cross-signing identity");
+}
+
 fn matrix_session_example() -> MatrixSession {
     MatrixSession {
         homeserver: None,
@@ -170,6 +185,7 @@ async fn test_create() -> TestResult {
         assert_eq!(counter, 3, "We should have gone through 3 states");
     });
 
+    bootstrap_cross_signing_locally(&client).await;
     client.encryption().backups().create().await.expect("We should be able to create a new backup");
 
     assert_eq!(
@@ -242,6 +258,7 @@ async fn test_creation_failure() -> TestResult {
         assert_eq!(counter, 3, "We should have gone through 3 states");
     });
 
+    bootstrap_cross_signing_locally(&client).await;
     client
         .encryption()
         .backups()
@@ -289,6 +306,7 @@ async fn test_disabling() -> TestResult {
         "We should initially be in the unknown state"
     );
 
+    bootstrap_cross_signing_locally(&client).await;
     client.encryption().backups().create().await.expect("We should be able to create a new backup");
 
     assert_eq!(
@@ -397,6 +415,7 @@ async fn test_backup_resumption() -> TestResult {
 
     client.restore_session(session.to_owned()).await?;
 
+    bootstrap_cross_signing_locally(&client).await;
     client.encryption().backups().create().await.expect("We should be able to create a new backup");
 
     assert_eq!(client.encryption().backups().state(), BackupState::Enabled);
@@ -452,6 +471,7 @@ async fn setup_backups(client: &Client, server: &wiremock::MockServer) {
         "We should initially be in the unknown state"
     );
 
+    bootstrap_cross_signing_locally(client).await;
     backups.create().await.expect("We should be able to create a new backup");
 
     assert_eq!(
@@ -763,6 +783,7 @@ async fn test_incremental_upload_of_keys() -> TestResult {
 
     setup_create_room_and_send_message_mocks(&server).await;
 
+    bootstrap_cross_signing_locally(&client).await;
     backups.create().await.expect("We should be able to create a new backup");
 
     let alice_room = client
@@ -841,6 +862,7 @@ async fn test_incremental_upload_of_keys_sliding_sync() -> TestResult {
 
     setup_create_room_and_send_message_mocks(&server).await;
 
+    bootstrap_cross_signing_locally(&client).await;
     backups.create().await.expect("We should be able to create a new backup");
 
     let invite = vec![];
@@ -1478,12 +1500,10 @@ async fn test_a_backed_up_room_key_we_cannot_read_is_reported() -> TestResult {
         .await;
 
     // When we download it
-    let error = client
-        .encryption()
-        .backups()
-        .download_room_key(room_id, session_id)
-        .await
-        .expect_err("A room key we cannot read should not be reported as a successful download");
+    let error =
+        client.encryption().backups().download_room_key(room_id, session_id).await.expect_err(
+            "A room key we cannot read should not be reported as a successful download",
+        );
 
     // Then we are told that the key is unreadable, rather than the failure being
     // swallowed and the message staying stuck as a UTD with no explanation

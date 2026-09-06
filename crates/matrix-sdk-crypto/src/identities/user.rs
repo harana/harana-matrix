@@ -100,6 +100,7 @@ impl UserIdentity {
                     #[cfg(feature = "experimental-x509-identity-verification")]
                     x509_verifier,
                     verification_machine,
+                    store,
                 })
             }
         }
@@ -337,6 +338,11 @@ impl OwnUserIdentity {
             ..Default::default()
         };
         self.verification_machine.store.inner().save_changes(changes).await?;
+
+        // As above: our own past messages were recorded as a violation, and the
+        // violation is now withdrawn.
+        self.store.update_sender_data_for_user(self.user_id()).await?;
+
         Ok(())
     }
 }
@@ -354,6 +360,7 @@ pub struct OtherUserIdentity {
     pub(crate) inner: OtherUserIdentityData,
     pub(crate) own_identity: Option<OwnUserIdentityData>,
     pub(crate) verification_machine: VerificationMachine,
+    pub(crate) store: Store,
 
     #[cfg(feature = "experimental-x509-identity-verification")]
     pub(crate) x509_verifier: Option<X509Verifier>,
@@ -497,7 +504,8 @@ impl OtherUserIdentity {
     /// keys, and applying the change to the new identity would record a
     /// decision the user never made about it.
     async fn identity_to_update(&self) -> Result<Option<OtherUserIdentityData>, CryptoStoreError> {
-        let stored = self.verification_machine.store.inner().get_user_identity(self.user_id()).await?;
+        let stored =
+            self.verification_machine.store.inner().get_user_identity(self.user_id()).await?;
 
         match stored {
             // Nothing stored yet, so there is nothing of ours to overwrite.
@@ -567,7 +575,14 @@ impl OtherUserIdentity {
         let Some(to_save) = self.identity_to_update().await? else { return Ok(()) };
         to_save.withdraw_verification();
 
-        self.save_identity(to_save).await
+        self.save_identity(to_save).await?;
+
+        // Sessions this user's devices sent us are recorded as a verification
+        // violation; now that the violation is withdrawn they should show the
+        // shield they would get if they arrived today.
+        self.store.update_sender_data_for_user(self.user_id()).await?;
+
+        Ok(())
     }
 
     /// Test helper that marks that an identity has been previously verified and
@@ -1620,6 +1635,14 @@ pub(crate) mod tests {
         UserIdentityData,
         testing::{device, get_other_identity, get_own_identity},
     };
+    #[cfg(feature = "experimental-x509-identity-verification")]
+    use crate::x509::{
+        RustRawX509Signer, RustRawX509Verifier, X509Signer, X509Verifier,
+        tests::{
+            ca_cert, cert_and_key_with_email_in_subject_distinguished_name,
+            cert_and_key_with_email_signed_by, create_rust_signer_and_verifier,
+        },
+    };
     use crate::{
         CrossSigningKeyExport, OlmMachine, OtherUserIdentity, OtherUserIdentityData,
         identities::{
@@ -1631,20 +1654,9 @@ pub(crate) mod tests {
             },
         },
         olm::{Account, PrivateCrossSigningIdentity},
-        store::{CryptoStoreWrapper, MemoryStore},
+        store::{CryptoStoreWrapper, MemoryStore, Store},
         types::{CrossSigningKey, MasterPubkey, SelfSigningPubkey, Signatures, UserSigningPubkey},
         verification::VerificationMachine,
-    };
-    #[cfg(feature = "experimental-x509-identity-verification")]
-    use crate::{
-        store::Store,
-        x509::{
-            RustRawX509Signer, RustRawX509Verifier, X509Signer, X509Verifier,
-            tests::{
-                ca_cert, cert_and_key_with_email_in_subject_distinguished_name,
-                cert_and_key_with_email_signed_by, create_rust_signer_and_verifier,
-            },
-        },
     };
 
     #[test]
@@ -2308,11 +2320,23 @@ pub(crate) mod tests {
         let bob_identity_data =
             bob_verification_machine.get_own_user_identity_data().await.unwrap();
 
+        let bob_store = Store::new(
+            bob_account.static_data().clone(),
+            bob_verification_machine.store.private_identity.clone(),
+            Arc::new(CryptoStoreWrapper::new(
+                bob_account.user_id(),
+                bob_account.device_id(),
+                MemoryStore::new(),
+            )),
+            bob_verification_machine.clone(),
+        );
+
         // When Bob checks Alice's identity without using X.509
         let mut bobs_view_of_alice = OtherUserIdentity {
             inner: alice_identity_data.clone(),
             own_identity: Some(bob_identity_data),
             verification_machine: bob_verification_machine.clone(),
+            store: bob_store,
             x509_verifier: None,
         };
 
@@ -2424,11 +2448,22 @@ pub(crate) mod tests {
 
         let verification_machine = get_verification_machine(&account).await;
         let own_identity_data = verification_machine.get_own_user_identity_data().await.unwrap();
+        let store = Store::new(
+            account.static_data().clone(),
+            verification_machine.store.private_identity.clone(),
+            Arc::new(CryptoStoreWrapper::new(
+                account.user_id(),
+                account.device_id(),
+                MemoryStore::new(),
+            )),
+            verification_machine.clone(),
+        );
 
         OtherUserIdentity {
             inner: other_user_identity_data,
             own_identity: Some(own_identity_data),
             verification_machine,
+            store,
             #[cfg(feature = "experimental-x509-identity-verification")]
             x509_verifier: None,
         }

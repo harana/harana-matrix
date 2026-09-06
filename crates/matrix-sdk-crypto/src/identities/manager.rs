@@ -37,10 +37,7 @@ use crate::{
     CryptoStoreError, LocalTrust, OwnUserIdentity, SignatureError, UserIdentity,
     error::OlmResult,
     identities::{DeviceData, OtherUserIdentityData, OwnUserIdentityData, UserIdentityData},
-    olm::{
-        InboundGroupSession, PrivateCrossSigningIdentity, SenderDataFinder, SenderDataType,
-        sender_data_finder::SessionDeviceCheckError,
-    },
+    olm::{PrivateCrossSigningIdentity, SenderDataType},
     store::{
         KeyQueryManager, Result as StoreResult, Store,
         caches::{SequenceNumber, StoreCache, StoreCacheGuard},
@@ -239,6 +236,16 @@ impl IdentityManager {
         // that the application does not call `OlmMachine::receive_sync_changes`
         // at the same time as `OlmMachine::mark_request_as_sent`).
         self.update_sender_data_from_device_changes(&devices).await?;
+
+        // A user's verification state can improve without any of their devices
+        // changing: their identity gets cross-signed by us, or the identity we
+        // recorded a violation against is confirmed. The sessions their devices
+        // sent us keep the sender data they were decrypted with unless we go and
+        // recompute it, so already received messages would keep a worse trust
+        // shield than messages received a moment later.
+        for identity in identities.new.iter().chain(identities.changed.iter()) {
+            self.store.update_sender_data_for_user(identity.user_id()).await?;
+        }
 
         // if this request is one of those we expected to be in flight, pass the
         // sequence number back to the store so that it can mark devices up to
@@ -1201,7 +1208,8 @@ impl IdentityManager {
             // worried about races leading us to getting stuck in the
             // UnknownDevice state, so we'll paper over that by doing this check
             // on device updates too.
-            self.update_sender_data_for_sessions_for_device(device, SenderDataType::UnknownDevice)
+            self.store
+                .update_sender_data_for_sessions_for_device(device, SenderDataType::UnknownDevice)
                 .await?;
 
             // 2. If, and only if, the device is now correctly cross-signed (ie,
@@ -1215,84 +1223,9 @@ impl IdentityManager {
             // it's *way* easier just to use the same logic.
             let device_owner_identity = self.store.get_user_identity(device.user_id()).await?;
             if device_owner_identity.is_some_and(|id| device.is_cross_signed_by_owner(&id)) {
-                self.update_sender_data_for_sessions_for_device(device, SenderDataType::DeviceInfo)
+                self.store
+                    .update_sender_data_for_sessions_for_device(device, SenderDataType::DeviceInfo)
                     .await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Given a device, look for [`InboundGroupSession`]s whose sender data is
-    /// in the given state, and update it.
-    #[instrument(skip(self))]
-    async fn update_sender_data_for_sessions_for_device(
-        &self,
-        device: &DeviceData,
-        sender_data_type: SenderDataType,
-    ) -> Result<(), CryptoStoreError> {
-        const IGS_BATCH_SIZE: usize = 50;
-
-        let Some(curve_key) = device.curve25519_key() else { return Ok(()) };
-
-        let mut last_session_id: Option<String> = None;
-        loop {
-            let mut sessions = self
-                .store
-                .get_inbound_group_sessions_for_device_batch(
-                    curve_key,
-                    sender_data_type,
-                    last_session_id,
-                    IGS_BATCH_SIZE,
-                )
-                .await?;
-
-            if sessions.is_empty() {
-                // end of the session list
-                return Ok(());
-            }
-
-            last_session_id = None;
-            for session in &mut sessions {
-                last_session_id = Some(session.session_id().to_owned());
-                self.update_sender_data_for_session(session, device).await?;
-            }
-            self.store.save_inbound_group_sessions(&sessions).await?;
-        }
-    }
-
-    /// Update the sender data on the given inbound group session, using the
-    /// given device data.
-    #[instrument(skip(self, device, session), fields(session_id = session.session_id()))]
-    async fn update_sender_data_for_session(
-        &self,
-        session: &mut InboundGroupSession,
-        device: &DeviceData,
-    ) -> Result<(), CryptoStoreError> {
-        match SenderDataFinder::find_using_device_data(&self.store, device.clone(), session).await {
-            Ok(sender_data) => {
-                // A session restored from a key backup or a key export is flagged as
-                // legacy so that its messages are still shown even though we can't
-                // attest to their sender. That flag lives on the sender data, and the
-                // recomputation above has no way of knowing where the session came
-                // from, so carry it over rather than silently downgrading the session
-                // and hiding its messages.
-                let legacy_session =
-                    sender_data.legacy_session() || session.sender_data.legacy_session();
-                let sender_data = sender_data.with_legacy_session(legacy_session);
-
-                debug!("Updating existing InboundGroupSession with new SenderData {sender_data:?}");
-                session.sender_data = sender_data;
-            }
-            Err(SessionDeviceCheckError::CryptoStoreError(e)) => {
-                return Err(e);
-            }
-            Err(SessionDeviceCheckError::MismatchedIdentityKeys(e)) => {
-                warn!(
-                    ?session,
-                    ?device,
-                    "cannot update existing InboundGroupSession due to ownership error: {e}",
-                );
             }
         }
 
@@ -2896,7 +2829,7 @@ pub(crate) mod tests {
 
         // We create an `IdentityManager` that uses the "current" X.509 signer
         let manager = {
-            let account = Account::with_device_id(&user_id, device_id);
+            let account = Account::with_device_id(user_id, device_id);
             let identity =
                 PrivateCrossSigningIdentity::for_account(&account, Some(&x509_signer_current))
                     .await
@@ -2976,7 +2909,7 @@ pub(crate) mod tests {
             crate::x509::tests::signers_with_different_validity();
 
         // We create a cross-signing identity signed with the current signer.
-        let account = Account::with_device_id(&user_id, device_id);
+        let account = Account::with_device_id(user_id, device_id);
         let identity =
             PrivateCrossSigningIdentity::for_account(&account, Some(&x509_signer_current))
                 .await

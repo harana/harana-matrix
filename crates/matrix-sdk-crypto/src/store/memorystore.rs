@@ -809,6 +809,24 @@ impl CryptoStore for MemoryStore {
         Ok(result)
     }
 
+    async fn clear_received_room_key_bundle_data(
+        &self,
+        room_id: &RoomId,
+        user_id: &UserId,
+    ) -> Result<()> {
+        let mut guard = self.room_key_bundles.write();
+
+        if let Some(bundles) = guard.get_mut(room_id) {
+            bundles.remove(user_id);
+
+            if bundles.is_empty() {
+                guard.remove(room_id);
+            }
+        }
+
+        Ok(())
+    }
+
     async fn get_pending_key_bundle_details_for_room(
         &self,
         room_id: &RoomId,
@@ -1675,6 +1693,14 @@ mod integration_tests {
             room_id: &RoomId,
         ) -> Result<bool, Self::Error> {
             self.0.has_downloaded_all_room_keys(room_id).await
+        }
+
+        async fn clear_received_room_key_bundle_data(
+            &self,
+            room_id: &RoomId,
+            user_id: &UserId,
+        ) -> Result<(), Self::Error> {
+            self.0.clear_received_room_key_bundle_data(room_id, user_id).await
         }
 
         async fn get_pending_key_bundle_details_for_room(

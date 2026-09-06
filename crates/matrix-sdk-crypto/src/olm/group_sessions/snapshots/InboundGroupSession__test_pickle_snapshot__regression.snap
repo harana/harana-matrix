@@ -26,6 +26,7 @@ expression: pickle
   "forwarder_data": null,
   "room_id": "!test:localhost",
   "imported": false,
+  "trusted_forward": false,
   "backed_up": false,
   "history_visibility": "shared",
   "algorithm": "m.megolm.v1.aes-sha2",

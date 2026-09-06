@@ -1095,6 +1095,16 @@ trait SqliteObjectCryptoStoreExt: SqliteAsyncConnExt {
             .optional()?)
     }
 
+    async fn delete_received_room_key_bundle(&self, room_id: Key, sender_user: Key) -> Result<()> {
+        self.execute(
+            "DELETE FROM received_room_key_bundle WHERE room_id = ? AND sender_user_id = ?",
+            (room_id, sender_user),
+        )
+        .await?;
+
+        Ok(())
+    }
+
     async fn get_room_pending_key_bundle(&self, room_id: Key) -> Result<Option<Vec<u8>>> {
         Ok(self
             .query_one(
@@ -1828,6 +1838,17 @@ impl CryptoStore for SqliteCryptoStore {
             .await?
             .map(|value| self.deserialize_value(&value))
             .transpose()
+    }
+
+    async fn clear_received_room_key_bundle_data(
+        &self,
+        room_id: &RoomId,
+        user_id: &UserId,
+    ) -> Result<()> {
+        let room_id = self.encode_key("received_room_key_bundle", room_id);
+        let user_id = self.encode_key("received_room_key_bundle", user_id);
+
+        self.write().await?.delete_received_room_key_bundle(room_id, user_id).await
     }
 
     async fn has_downloaded_all_room_keys(&self, room_id: &RoomId) -> Result<bool> {

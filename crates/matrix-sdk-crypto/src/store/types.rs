@@ -185,6 +185,23 @@ impl Changes {
     }
 }
 
+/// Whether a server-side key backup could be tied to something we trust.
+///
+/// The auth data of a key backup is signed, and a client is meant to check
+/// those signatures before treating the keys it holds as having come from the
+/// account's own devices. Keys from a backup that fails that check could have
+/// been put there by anyone who can write to the account's backup, so they are
+/// not evidence of who sent the original messages.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackupAuthenticity {
+    /// The backup's auth data carries a signature from our own device, our own
+    /// user identity, or another device we have verified.
+    Authenticated,
+
+    /// We found no signature we trust on the backup's auth data.
+    Unauthenticated,
+}
+
 /// This struct is used to remember whether an identity has undergone a change
 /// or remains the same as the one we already know about.
 ///

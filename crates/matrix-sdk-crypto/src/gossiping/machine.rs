@@ -819,12 +819,25 @@ impl GossipMachine {
         // at. For this, we need an outbound session because this
         // information is recorded there.
         } else if let Some(outbound) = outbound_session {
-            match outbound.sharing_view().get_share_state(&device.inner) {
+            let sharing_view = outbound.sharing_view();
+
+            match sharing_view.get_share_state(&device.inner) {
                 ShareState::Shared { message_index, olm_wedging_index: _ } => {
                     Ok(Some(message_index))
                 }
                 ShareState::SharedButChangedSenderKey => Err(KeyForwardDecision::ChangedSenderKey),
-                ShareState::NotShared => Err(KeyForwardDecision::OutboundSessionNotShared),
+                ShareState::NotShared => {
+                    // We may have meant to share with this device and found we could
+                    // not establish an Olm session with it, in which case we told it so
+                    // and recorded where the session had got to. It is now asking for
+                    // the session, so answer from there: sharing from the ratchet's
+                    // current position instead would leave everything sent between the
+                    // failure and now permanently undecryptable for it.
+                    match sharing_view.withheld_no_olm_index(&device.inner) {
+                        Some(message_index) => Ok(Some(message_index)),
+                        None => Err(KeyForwardDecision::OutboundSessionNotShared),
+                    }
+                }
             }
         // Otherwise, there's not enough info to decide if we can safely share
         // the session.
@@ -1154,7 +1167,20 @@ impl GossipMachine {
         event: &DecryptedForwardedRoomKeyEvent,
     ) -> Result<Option<InboundGroupSession>, CryptoStoreError> {
         match InboundGroupSession::try_from(event) {
-            Ok(session) => {
+            Ok(mut session) => {
+                // `should_accept_forward` has already established the other two
+                // conditions MSC3879 puts on trusting a forward: the forwarder is
+                // another device of our own user, and it is verified. What is left is
+                // whether the forwarder itself vouched for the session.
+                if event.content.trusted() {
+                    trace!(
+                        session_id = session.session_id(),
+                        "The forwarding device vouched for this session",
+                    );
+
+                    session.mark_as_trusted_forward();
+                }
+
                 let new_session = self.inner.store.merge_received_group_session(session).await?;
                 if new_session.is_some() {
                     self.mark_as_done(info).await?;
@@ -1647,6 +1673,95 @@ mod tests {
         assert!(machine.outgoing_to_device_requests().await.unwrap().is_empty());
     }
 
+    /// A forwarded key is only as good as what the forwarder can say about it.
+    /// MSC3879 has the forwarder say so explicitly, and only a forward marked
+    /// trusted - from a device of our own that we have verified, which
+    /// `should_accept_forward` has already established - lets the session be
+    /// attributed to its creator.
+    #[async_test]
+    #[cfg(feature = "automatic-room-key-forwarding")]
+    async fn test_a_trusted_forward_is_recorded_as_such() {
+        let machine = get_machine_test_helper().await;
+        let account = account();
+
+        let second_account = alice_2_account();
+        let alice_device = DeviceData::from_account(&second_account);
+        alice_device.set_trust_state(LocalTrust::Verified);
+        machine.inner.store.save_device_data(std::slice::from_ref(&alice_device)).await.unwrap();
+
+        let (outbound, session) = account.create_group_session_pair_with_defaults(room_id()).await;
+        let result = outbound.encrypt("m.dummy", &message_like_event_content!({})).await;
+        let room_event = wrap_encrypted_content(machine.user_id(), result.content);
+
+        let receive_forward = async |trusted: bool| {
+            machine.create_outgoing_key_request(session.room_id(), &room_event).await.unwrap();
+
+            let requests = machine.outgoing_to_device_requests().await.unwrap();
+            let request_id = requests[0].request_id.clone();
+            machine.mark_outgoing_request_as_sent(&request_id).await.unwrap();
+
+            let export = session.export_at_index(0).await;
+            let mut content: ForwardedRoomKeyContent = export.try_into().unwrap();
+            content.set_trusted(trusted);
+
+            let event = DecryptedOlmV1Event::new(
+                alice_id(),
+                alice_id(),
+                alice_device.ed25519_key().unwrap(),
+                None,
+                content,
+            );
+
+            machine
+                .receive_forwarded_room_key(alice_device.curve25519_key().unwrap(), &event)
+                .await
+                .unwrap()
+                .expect("The forwarded key should have been accepted")
+        };
+
+        // A forward the sender could not vouch for stays unattributable: the Olm
+        // channel binds the forwarder's keys, not the creator's.
+        let session = receive_forward(false).await;
+        assert!(!session.is_trusted_forward());
+        assert!(
+            !session.is_trusted_for_forwarding(),
+            "A forward we could not trust must not be passed on as trusted either",
+        );
+
+        // A trusted one is attributed to the device the forwarder named.
+        let session = receive_forward(true).await;
+        assert!(session.is_trusted_forward());
+    }
+
+    /// We must only tell another device that a session can be trusted if it
+    /// reached us in a way that ties it to its creator.
+    #[async_test]
+    async fn test_only_a_session_we_can_vouch_for_is_forwarded_as_trusted() {
+        let account = account();
+        let (_, session) = account.create_group_session_pair_with_defaults(room_id()).await;
+
+        assert!(
+            session.is_trusted_for_forwarding(),
+            "A session we created ourselves can be vouched for",
+        );
+
+        let mut imported = session;
+        imported.mark_as_imported();
+
+        assert!(
+            !imported.is_trusted_for_forwarding(),
+            "A session restored from a backup or a file export cannot be vouched for",
+        );
+
+        let mut forwarded = imported.clone();
+        forwarded.mark_as_trusted_forward();
+
+        assert!(
+            forwarded.is_trusted_for_forwarding(),
+            "A session another of our verified devices vouched for can be passed on",
+        );
+    }
+
     #[async_test]
     #[cfg(feature = "automatic-room-key-forwarding")]
     async fn test_receive_forwarded_key() {
@@ -1876,6 +1991,53 @@ mod tests {
 
         // However once our device is trusted, we share the entire session.
         assert_matches!(machine.should_share_key(&own_device, &other_inbound).await, Ok(None));
+    }
+
+    /// A device we could not reach when the session was first shared is missing
+    /// every message from that point on. When it later asks for the session, it
+    /// has to be answered from there: answering from wherever the ratchet has
+    /// got to by then leaves everything sent in between undecryptable for it
+    /// forever.
+    #[async_test]
+    #[cfg(feature = "automatic-room-key-forwarding")]
+    async fn test_a_key_request_after_a_no_olm_is_answered_from_the_failed_index() {
+        let machine = get_machine_test_helper().await;
+        let account = account();
+
+        let bob_device = DeviceData::from_account(&bob_account());
+        machine.inner.store.save_device_data(&[bob_device]).await.unwrap();
+        let bob_device =
+            machine.inner.store.get_device(bob_id(), bob_device_id()).await.unwrap().unwrap();
+        bob_device.set_trust_state(LocalTrust::Verified);
+
+        let (outbound, inbound) = account.create_group_session_pair_with_defaults(room_id()).await;
+
+        // Two messages go out, then we find we cannot establish an Olm session with
+        // Bob's device and tell it so.
+        for _ in 0..2 {
+            outbound.encrypt_helper("foo".to_owned()).await;
+        }
+        outbound.mark_withheld_no_olm_to(bob_device.user_id(), bob_device.device_id()).await;
+
+        // Three more messages go out under the same session, which Bob's device is
+        // also missing.
+        for _ in 0..3 {
+            outbound.encrypt_helper("foo".to_owned()).await;
+        }
+
+        let mut changes = Changes::default();
+        changes.outbound_group_sessions.push(outbound.clone());
+        changes.inbound_group_sessions.push(inbound.clone());
+        machine.inner.store.save_changes(changes).await.unwrap();
+        machine.inner.outbound_group_sessions.insert(outbound.clone());
+
+        // Bob's device asks for the session. It should get it from where it started
+        // missing messages, not from index 5.
+        assert_matches!(
+            machine.should_share_key(&bob_device, &inbound).await,
+            Ok(Some(2)),
+            "The session should be shared from the index we could not reach the device at",
+        );
     }
 
     #[cfg(feature = "automatic-room-key-forwarding")]

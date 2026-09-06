@@ -12,152 +12,249 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Detection of replayed Megolm events.
+//! Detection of replayed Megolm messages.
 //!
-//! Every message encrypted with a Megolm session carries a message index, and
-//! a given index is only ever used for one message. An attacker who can inject
-//! events into a room can therefore take a ciphertext the room has already
-//! seen and present it again as a new event: it decrypts perfectly, and
-//! without a check like this one it is shown as a new message, attributed to
-//! the original sender, at a time of the attacker's choosing.
+//! A Megolm ratchet index identifies one message within a session. Nothing in
+//! the ciphertext ties it to the event it arrived in, so a server, or anyone
+//! else able to inject events into a room, can take a ciphertext it has already
+//! seen and hand it back under a new event ID or a new timestamp. Decryption
+//! succeeds, and without a check the message shows up a second time, attributed
+//! to the original sender, at a place in the timeline the sender never chose.
+//!
+//! [`ReplayProtection`] remembers which event each `(session ID, ratchet
+//! index)` pair was first seen in, and reports a mismatch when the same pair
+//! turns up in a different event.
 
 use std::collections::{HashMap, VecDeque};
 
-use matrix_sdk_common::locks::Mutex as StdMutex;
-use ruma::{EventId, OwnedEventId};
-use tracing::warn;
+use ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId};
 
-/// How many `(session, message index)` pairs we remember.
+/// How many Megolm sessions we keep replay records for.
 ///
-/// This is a bounded, in-memory record, so a long-lived client eventually
-/// forgets the oldest events it has seen. The entries are small and this is
-/// generous enough to cover the events a user is realistically looking at.
-const MAX_TRACKED_MESSAGE_INDICES: usize = 20_000;
+/// Records are kept in memory only, so this bounds what a room with a lot of
+/// key rotation can cost us. Evicting a session's records means a replay of one
+/// of its messages is no longer detected, which is the same position we are in
+/// after a restart.
+const MAX_TRACKED_SESSIONS: usize = 1000;
 
-/// A Megolm message index we have already decrypted, and the event it belonged
-/// to.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct MessageIndexKey {
-    session_id: String,
-    message_index: u32,
+/// How many ratchet indices we keep replay records for, per session.
+const MAX_TRACKED_INDICES_PER_SESSION: usize = 5000;
+
+/// The event a given ratchet index was first decrypted in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct EventFingerprint {
+    event_id: OwnedEventId,
+    origin_server_ts: MilliSecondsSinceUnixEpoch,
 }
 
-/// Remembers which Megolm message indices we have already seen, so that the
-/// same index turning up on a different event can be spotted.
+/// The replay records of a single Megolm session.
 #[derive(Debug, Default)]
-pub(crate) struct ReplayProtection {
-    inner: StdMutex<Inner>,
+struct SessionRecords {
+    by_index: HashMap<u32, EventFingerprint>,
+    /// Insertion order of `by_index`, so the oldest record can be dropped once
+    /// the per-session cap is reached.
+    insertion_order: VecDeque<u32>,
 }
 
-#[derive(Debug, Default)]
-struct Inner {
-    seen: HashMap<MessageIndexKey, OwnedEventId>,
-    /// The keys in insertion order, so that the oldest can be dropped once we
-    /// reach [`MAX_TRACKED_MESSAGE_INDICES`].
-    insertion_order: VecDeque<MessageIndexKey>,
-}
-
-impl ReplayProtection {
-    /// Record that the given event was decrypted with the given Megolm session
-    /// and message index.
-    ///
-    /// Returns the event ID we had already recorded for this
-    /// `(session, message index)` pair if it is a *different* event, i.e. if
-    /// this looks like a replay. Decrypting the same event again, which
-    /// happens routinely, is not a replay and returns `None`.
-    pub(crate) fn check_and_record(
-        &self,
-        session_id: &str,
+impl SessionRecords {
+    /// Record `fingerprint` at `message_index`, returning the fingerprint we
+    /// already had for that index, if any.
+    fn record(
+        &mut self,
         message_index: u32,
-        event_id: &EventId,
-    ) -> Option<OwnedEventId> {
-        let key = MessageIndexKey { session_id: session_id.to_owned(), message_index };
-
-        let mut inner = self.inner.lock();
-
-        if let Some(known_event_id) = inner.seen.get(&key) {
-            return (known_event_id != event_id).then(|| known_event_id.to_owned());
+        fingerprint: EventFingerprint,
+    ) -> Option<&EventFingerprint> {
+        if self.by_index.contains_key(&message_index) {
+            // Not `if let`: the borrow of `self.by_index` has to end before the
+            // `else` branch can insert into it.
+            return self.by_index.get(&message_index);
         }
 
-        if inner.insertion_order.len() >= MAX_TRACKED_MESSAGE_INDICES
-            && let Some(oldest) = inner.insertion_order.pop_front()
+        if self.insertion_order.len() >= MAX_TRACKED_INDICES_PER_SESSION
+            && let Some(oldest) = self.insertion_order.pop_front()
         {
-            inner.seen.remove(&oldest);
+            self.by_index.remove(&oldest);
         }
 
-        inner.seen.insert(key.clone(), event_id.to_owned());
-        inner.insertion_order.push_back(key);
+        self.by_index.insert(message_index, fingerprint);
+        self.insertion_order.push_back(message_index);
 
         None
     }
+}
 
-    /// Log that we have spotted a replayed event.
-    pub(crate) fn warn_about_replay(
+/// The outcome of checking one decrypted event against the replay records.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ReplayCheck {
+    /// This `(session, index)` pair had not been seen, or was last seen in this
+    /// very event. Decrypting the same event twice, which happens whenever a
+    /// timeline is rebuilt or an event is decrypted again after its key
+    /// arrives, is not a replay.
+    Ok,
+
+    /// This `(session, index)` pair was first seen in a different event.
+    Replayed {
+        /// The event the ratchet index was originally decrypted in.
+        original_event_id: OwnedEventId,
+    },
+}
+
+/// Remembers which event each Megolm ratchet index was first seen in.
+///
+/// The records live in memory for the lifetime of the
+/// [`OlmMachine`](crate::OlmMachine). A replayed message that arrives in a
+/// later process is not detected, but the copy that is kept and shown is then
+/// the first one seen in that process, so the timeline still holds one copy of
+/// the message rather than two.
+#[derive(Debug, Default)]
+pub(crate) struct ReplayProtection {
+    sessions: HashMap<String, SessionRecords>,
+    /// Insertion order of `sessions`, so the least recently added session can
+    /// be dropped once the cap is reached.
+    insertion_order: VecDeque<String>,
+}
+
+impl ReplayProtection {
+    /// Check a freshly decrypted event against the records, and remember it if
+    /// this is the first time we see its ratchet index.
+    pub(crate) fn check(
+        &mut self,
         session_id: &str,
         message_index: u32,
-        event_id: &EventId,
-        original_event_id: &EventId,
-    ) {
-        warn!(
-            session_id,
-            message_index,
-            ?event_id,
-            ?original_event_id,
-            "Refusing to decrypt an event which reuses the Megolm message index of \
-             another event: it is a replay of that event"
-        );
+        event_id: &ruma::EventId,
+        origin_server_ts: MilliSecondsSinceUnixEpoch,
+    ) -> ReplayCheck {
+        let fingerprint = EventFingerprint { event_id: event_id.to_owned(), origin_server_ts };
+
+        if !self.sessions.contains_key(session_id) {
+            if self.insertion_order.len() >= MAX_TRACKED_SESSIONS
+                && let Some(oldest) = self.insertion_order.pop_front()
+            {
+                self.sessions.remove(&oldest);
+            }
+
+            self.sessions.insert(session_id.to_owned(), SessionRecords::default());
+            self.insertion_order.push_back(session_id.to_owned());
+        }
+
+        let records = self.sessions.get_mut(session_id).expect("we just inserted the session");
+
+        match records.record(message_index, fingerprint.clone()) {
+            None => ReplayCheck::Ok,
+            Some(existing) if *existing == fingerprint => ReplayCheck::Ok,
+            Some(existing) => {
+                ReplayCheck::Replayed { original_event_id: existing.event_id.clone() }
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ruma::event_id;
+    use ruma::{MilliSecondsSinceUnixEpoch, event_id};
 
-    use super::{MAX_TRACKED_MESSAGE_INDICES, ReplayProtection};
+    use super::{
+        MAX_TRACKED_INDICES_PER_SESSION, MAX_TRACKED_SESSIONS, ReplayCheck, ReplayProtection,
+    };
 
-    #[test]
-    fn test_first_use_of_an_index_is_accepted() {
-        let protection = ReplayProtection::default();
-
-        assert_eq!(protection.check_and_record("session", 0, event_id!("$1")), None);
-        assert_eq!(protection.check_and_record("session", 1, event_id!("$2")), None);
-        // A different session may use the same index.
-        assert_eq!(protection.check_and_record("other", 0, event_id!("$3")), None);
+    fn ts(millis: u64) -> MilliSecondsSinceUnixEpoch {
+        MilliSecondsSinceUnixEpoch(millis.try_into().unwrap())
     }
 
     #[test]
-    fn test_decrypting_the_same_event_again_is_not_a_replay() {
-        let protection = ReplayProtection::default();
+    fn test_first_sighting_of_an_index_is_accepted() {
+        let mut protection = ReplayProtection::default();
 
-        assert_eq!(protection.check_and_record("session", 0, event_id!("$1")), None);
-        assert_eq!(protection.check_and_record("session", 0, event_id!("$1")), None);
-    }
-
-    #[test]
-    fn test_reusing_an_index_for_another_event_is_a_replay() {
-        let protection = ReplayProtection::default();
-
-        assert_eq!(protection.check_and_record("session", 0, event_id!("$1")), None);
         assert_eq!(
-            protection.check_and_record("session", 0, event_id!("$2")),
-            Some(event_id!("$1").to_owned()),
-            "The index was already used by another event"
+            protection.check("session", 0, event_id!("$one:localhost"), ts(1)),
+            ReplayCheck::Ok
+        );
+        assert_eq!(
+            protection.check("session", 1, event_id!("$two:localhost"), ts(2)),
+            ReplayCheck::Ok
         );
     }
 
     #[test]
-    fn test_the_record_is_bounded() {
-        let protection = ReplayProtection::default();
+    fn test_decrypting_the_same_event_again_is_not_a_replay() {
+        let mut protection = ReplayProtection::default();
 
-        for index in 0..MAX_TRACKED_MESSAGE_INDICES + 10 {
-            let event_id = format!("$event{index}");
-            let event_id = <&ruma::EventId>::try_from(event_id.as_str()).unwrap();
+        assert_eq!(
+            protection.check("session", 0, event_id!("$one:localhost"), ts(1)),
+            ReplayCheck::Ok
+        );
+        assert_eq!(
+            protection.check("session", 0, event_id!("$one:localhost"), ts(1)),
+            ReplayCheck::Ok,
+            "re-decrypting an event we have already seen must not be reported as a replay"
+        );
+    }
 
-            assert_eq!(protection.check_and_record("session", index as u32, event_id), None);
+    #[test]
+    fn test_same_index_in_a_different_event_is_a_replay() {
+        let mut protection = ReplayProtection::default();
+
+        assert_eq!(
+            protection.check("session", 0, event_id!("$one:localhost"), ts(1)),
+            ReplayCheck::Ok
+        );
+        assert_eq!(
+            protection.check("session", 0, event_id!("$two:localhost"), ts(1)),
+            ReplayCheck::Replayed { original_event_id: event_id!("$one:localhost").to_owned() },
+        );
+    }
+
+    #[test]
+    fn test_same_event_id_with_a_moved_timestamp_is_a_replay() {
+        let mut protection = ReplayProtection::default();
+
+        assert_eq!(
+            protection.check("session", 0, event_id!("$one:localhost"), ts(1)),
+            ReplayCheck::Ok
+        );
+        assert_eq!(
+            protection.check("session", 0, event_id!("$one:localhost"), ts(9)),
+            ReplayCheck::Replayed { original_event_id: event_id!("$one:localhost").to_owned() },
+        );
+    }
+
+    #[test]
+    fn test_indices_are_tracked_per_session() {
+        let mut protection = ReplayProtection::default();
+
+        assert_eq!(
+            protection.check("session1", 0, event_id!("$one:localhost"), ts(1)),
+            ReplayCheck::Ok
+        );
+        assert_eq!(
+            protection.check("session2", 0, event_id!("$two:localhost"), ts(1)),
+            ReplayCheck::Ok,
+            "the same index in a different session is a different message"
+        );
+    }
+
+    #[test]
+    fn test_the_number_of_tracked_sessions_is_bounded() {
+        let mut protection = ReplayProtection::default();
+
+        for i in 0..MAX_TRACKED_SESSIONS + 1 {
+            protection.check(&format!("session{i}"), 0, event_id!("$one:localhost"), ts(1));
         }
 
-        let inner = protection.inner.lock();
-        assert_eq!(inner.seen.len(), MAX_TRACKED_MESSAGE_INDICES);
-        assert_eq!(inner.insertion_order.len(), MAX_TRACKED_MESSAGE_INDICES);
+        assert_eq!(protection.sessions.len(), MAX_TRACKED_SESSIONS);
+        assert!(!protection.sessions.contains_key("session0"), "the oldest session was evicted");
+    }
+
+    #[test]
+    fn test_the_number_of_tracked_indices_per_session_is_bounded() {
+        let mut protection = ReplayProtection::default();
+
+        for i in 0..MAX_TRACKED_INDICES_PER_SESSION as u32 + 1 {
+            protection.check("session", i, event_id!("$one:localhost"), ts(1));
+        }
+
+        let records = &protection.sessions["session"];
+        assert_eq!(records.by_index.len(), MAX_TRACKED_INDICES_PER_SESSION);
+        assert!(!records.by_index.contains_key(&0), "the oldest index was evicted");
     }
 }

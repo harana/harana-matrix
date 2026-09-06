@@ -80,6 +80,7 @@ use crate::{
     error::{EventError, MegolmError, MegolmResult, OlmError, OlmResult, SetRoomSettingsError},
     gossiping::GossipMachine,
     identities::{Device, IdentityManager, UserDevices, user::UserIdentity},
+    machine::replay_protection::{ReplayCheck, ReplayProtection},
     olm::{
         Account, CrossSigningStatus, EncryptionSettings, IdentityKeys, InboundGroupSession,
         KnownSenderData, OlmDecryptionInfo, PrivateCrossSigningIdentity, SenderData,
@@ -278,9 +279,10 @@ pub struct OlmMachineInner {
     /// and the collision reproduces on every retry. Handing back the same
     /// request keeps that from happening.
     outgoing_keys_upload_request: StdRwLock<Option<(OwnedTransactionId, UploadKeysRequest)>>,
-    /// Record of the Megolm message indices we have already decrypted, used to
-    /// detect an event which replays a ciphertext we have seen before.
-    replay_protection: ReplayProtection,
+    /// Which event each Megolm ratchet index was first decrypted in, so that a
+    /// ciphertext replayed under a different event ID or timestamp can be
+    /// rejected rather than shown twice.
+    replay_protection: StdRwLock<ReplayProtection>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -295,7 +297,6 @@ impl std::fmt::Debug for OlmMachine {
 
 impl OlmMachine {
     const CURRENT_GENERATION_STORE_KEY: &'static str = "generation-counter";
-    const HAS_MIGRATED_VERIFICATION_LATCH: &'static str = "HAS_MIGRATED_VERIFICATION_LATCH";
 
     /// Create a new memory based OlmMachine.
     ///
@@ -534,9 +535,17 @@ impl OlmMachine {
             x509_signer,
         );
 
-        // FIXME: We might want in the future a more generic high-level data migration
-        // mechanism (at the store wrapper layer).
-        Self::migration_post_verified_latch_support(&store, &identity_manager).await?;
+        // Migrations of the store's *contents*, as opposed to a backend's schema.
+        // These run above the backends, so they are written once rather than once
+        // per backend.
+        crate::store::migrations::run_data_migrations(
+            &crate::store::migrations::DataMigrationContext {
+                store: &store,
+                identity_manager: &identity_manager,
+            },
+            &crate::store::migrations::builtin_data_migrations(),
+        )
+        .await?;
 
         Ok(Self::new_helper(
             &device_id,
@@ -546,28 +555,6 @@ impl OlmMachine {
             identity,
             maybe_backup_key,
         ))
-    }
-
-    // The sdk now support verified identity change detection.
-    // This introduces a new local flag (`verified_latch` on
-    // `OtherUserIdentityData`). In order to ensure that this flag is up-to-date and
-    // for the sake of simplicity we force a re-download of tracked users by marking
-    // them as dirty.
-    //
-    // pub(crate) visibility for testing.
-    pub(crate) async fn migration_post_verified_latch_support(
-        store: &Store,
-        identity_manager: &IdentityManager,
-    ) -> Result<(), CryptoStoreError> {
-        let maybe_migrate_for_identity_verified_latch =
-            store.get_custom_value(Self::HAS_MIGRATED_VERIFICATION_LATCH).await?.is_none();
-
-        if maybe_migrate_for_identity_verified_latch {
-            identity_manager.mark_all_tracked_users_as_dirty(store.cache().await?).await?;
-
-            store.set_custom_value(Self::HAS_MIGRATED_VERIFICATION_LATCH, vec![0]).await?
-        }
-        Ok(())
     }
 
     /// Get the crypto store associated with this `OlmMachine` instance.
@@ -2374,23 +2361,7 @@ impl OlmMachine {
         let result = session.decrypt(event).await;
         match result {
             Ok((decrypted_event, message_index)) => {
-                // A Megolm message index is only ever used once, so the same index turning
-                // up on a second event means somebody re-sent a ciphertext we have already
-                // seen, hoping we would show it again as a new message.
-                if let Some(original_event_id) = self.inner.replay_protection.check_and_record(
-                    session.session_id(),
-                    message_index,
-                    &event.event_id,
-                ) {
-                    ReplayProtection::warn_about_replay(
-                        session.session_id(),
-                        message_index,
-                        &event.event_id,
-                        &original_event_id,
-                    );
-
-                    return Err(MegolmError::ReplayedMessageIndex { original_event_id });
-                }
+                self.check_for_replay(event, content.session_id(), message_index)?;
 
                 let encryption_info = self.get_encryption_info(&session, &event.sender).await?;
 
@@ -2421,6 +2392,51 @@ impl OlmMachine {
                     error
                 },
             ),
+        }
+    }
+
+    /// Check that the ratchet index this event decrypted at has not already
+    /// been decrypted in a different event.
+    ///
+    /// A Megolm ciphertext says nothing about the event it belongs to, so a
+    /// homeserver, or anyone else who can inject events into the room, can take
+    /// a ciphertext it has seen and send it again under a new event ID or with
+    /// a different timestamp. It decrypts perfectly well, and without this
+    /// check the message is shown a second time, attributed to its original
+    /// sender, at a point in the timeline the sender never chose.
+    ///
+    /// Decrypting the *same* event again is not a replay: that happens
+    /// routinely when a timeline is rebuilt, or when an event is retried after
+    /// its room key arrives.
+    fn check_for_replay(
+        &self,
+        event: &EncryptedEvent,
+        session_id: &str,
+        message_index: u32,
+    ) -> MegolmResult<()> {
+        let check = self.inner.replay_protection.write().check(
+            session_id,
+            message_index,
+            &event.event_id,
+            event.origin_server_ts,
+        );
+
+        match check {
+            ReplayCheck::Ok => Ok(()),
+            ReplayCheck::Replayed { original_event_id } => {
+                warn!(
+                    session_id,
+                    message_index,
+                    ?original_event_id,
+                    "Refusing to decrypt a replayed Megolm message"
+                );
+
+                Err(MegolmError::ReplayedMessage {
+                    session_id: session_id.to_owned(),
+                    message_index,
+                    original_event_id,
+                })
+            }
         }
     }
 
@@ -2724,6 +2740,46 @@ impl OlmMachine {
             return Err(MegolmError::StateKeyVerificationFailed);
         }
         Ok(())
+    }
+
+    /// Try again to decrypt the events bundled in the `unsigned` object of an
+    /// event we have already decrypted.
+    ///
+    /// A bundled aggregation - an edit, or the latest event of a thread - is a
+    /// separate encrypted event, and it can be undecryptable while the event
+    /// carrying it is not. Nothing about the outer event changes when the
+    /// bundled event's room key finally arrives, so a caller holding a
+    /// decrypted event with a bundled UTD has to come back and ask.
+    ///
+    /// Returns `true` if the bundled decryption results changed, in which case
+    /// `event` has been updated in place and should be stored again.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` - An event we previously decrypted, whose `unsigned` object
+    ///   still holds the bundled events as they arrived.
+    /// * `room_id` - The ID of the room the event was sent to.
+    /// * `decryption_settings` - The settings to decrypt the bundled events
+    ///   with.
+    pub async fn retry_decryption_of_bundled_events(
+        &self,
+        event: &mut DecryptedRoomEvent,
+        room_id: &RoomId,
+        decryption_settings: &DecryptionSettings,
+    ) -> MegolmResult<bool> {
+        let mut json: JsonObject = serde_json::from_str(event.event.json().get())?;
+
+        let unsigned_encryption_info =
+            self.decrypt_unsigned_events(&mut json, room_id, decryption_settings).await;
+
+        if unsigned_encryption_info == event.unsigned_encryption_info {
+            return Ok(false);
+        }
+
+        event.event = serde_json::from_value::<Raw<AnyTimelineEvent>>(json.into())?;
+        event.unsigned_encryption_info = unsigned_encryption_info;
+
+        Ok(true)
     }
 
     /// Try to decrypt the events bundled in the `unsigned` object of the given
@@ -3384,12 +3440,6 @@ impl OlmMachine {
     pub(crate) fn identity_manager(&self) -> &IdentityManager {
         &self.inner.identity_manager
     }
-
-    /// Returns a store key, only useful for testing purposes.
-    #[cfg(test)]
-    pub(crate) fn key_for_has_migrated_verification_latch() -> &'static str {
-        Self::HAS_MIGRATED_VERIFICATION_LATCH
-    }
 }
 
 fn sender_data_to_verification_state(
@@ -3529,11 +3579,11 @@ fn megolm_error_to_utd_info(
         JsonError(_) => UnableToDecryptReason::PayloadDeserializationFailure,
         MismatchedIdentityKeys(_) => UnableToDecryptReason::MismatchedIdentityKeys,
         SenderIdentityNotTrusted(level) => UnableToDecryptReason::SenderIdentityNotTrusted(level),
-        ReplayedMessageIndex { original_event_id } => {
-            UnableToDecryptReason::ReplayedMessageIndex { original_event_id }
-        }
         #[cfg(feature = "experimental-encrypted-state-events")]
         StateKeyVerificationFailed => UnableToDecryptReason::StateKeyVerificationFailed,
+        ReplayedMessage { original_event_id, .. } => {
+            UnableToDecryptReason::ReplayedMessageIndex { original_event_id }
+        }
 
         // Pass through crypto store errors, which indicate a problem with our
         // application, rather than a UTD.
@@ -3589,8 +3639,6 @@ impl From<DecryptToDeviceError> for OlmError {
 }
 
 mod replay_protection;
-
-use replay_protection::ReplayProtection;
 
 #[cfg(test)]
 pub(crate) mod test_helpers;

@@ -80,7 +80,10 @@ use crate::{
     session_manager::CollectStrategy,
     store::{
         CryptoStore, MemoryStore,
-        types::{BackupDecryptionKey, Changes, DeviceChanges, PendingChanges, RoomKeyInfo},
+        types::{
+            BackupAuthenticity, BackupDecryptionKey, Changes, DeviceChanges, PendingChanges,
+            RoomKeyInfo,
+        },
     },
     types::{
         DeviceKeys, SignedKey, SigningKeys,
@@ -906,9 +909,10 @@ async fn test_setting_the_local_trust_does_not_clobber_other_changes() {
     // And a change to the stored device made after we read it, as another part of
     // the SDK would do. Round-trip it through serialization so that it really is a
     // separate object, as it would be with a store that persists to disk.
-    let stored: DeviceData =
-        json_convert(&machine.store().get_device_data(alice, alice_device_id).await.unwrap().unwrap())
-            .unwrap();
+    let stored: DeviceData = json_convert(
+        &machine.store().get_device_data(alice, alice_device_id).await.unwrap().unwrap(),
+    )
+    .unwrap();
     stored.mark_withheld_code_as_sent();
     machine
         .store()
@@ -969,10 +973,7 @@ async fn test_a_redacted_event_is_not_reported_as_a_utd() {
         .unwrap()
         .inbound_group_session
         .unwrap();
-    bob.store()
-        .save_inbound_group_sessions(std::slice::from_ref(&group_session))
-        .await
-        .unwrap();
+    bob.store().save_inbound_group_sessions(std::slice::from_ref(&group_session)).await.unwrap();
 
     // Given an event which the server redacted before we got to decrypt it: the
     // content, including the algorithm, has been stripped
@@ -1052,10 +1053,7 @@ async fn test_replayed_megolm_message_index_is_rejected() {
         .unwrap()
         .inbound_group_session
         .unwrap();
-    bob.store()
-        .save_inbound_group_sessions(std::slice::from_ref(&group_session))
-        .await
-        .unwrap();
+    bob.store().save_inbound_group_sessions(std::slice::from_ref(&group_session)).await.unwrap();
 
     let content = RoomMessageEventContent::text_plain("It is a secret to everybody");
     let encrypted = alice
@@ -1094,7 +1092,7 @@ async fn test_replayed_megolm_message_index_is_rejected() {
         .await
         .expect_err("We should refuse to decrypt a replayed event");
 
-    assert_let!(MegolmError::ReplayedMessageIndex { original_event_id } = error);
+    assert_let!(MegolmError::ReplayedMessage { original_event_id, .. } = error);
     assert_eq!(original_event_id, "$original:example.org");
 }
 
@@ -1192,6 +1190,232 @@ async fn test_megolm_encryption() {
     if let Some(igs) = room_keys_received_stream.next().now_or_never() {
         panic!("Session stream unexpectedly returned update: {igs:?}");
     }
+}
+
+/// A session restored from a backup used to lose everything we had established
+/// about its sender, so its messages showed as coming from nobody in
+/// particular even though the backup was written by one of our own devices.
+#[async_test]
+async fn test_sender_data_survives_a_round_trip_through_an_authenticated_backup() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    // Alice shares a room key with Bob, who ends up with sender data for it.
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+    let event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let session = bob
+        .store()
+        .with_transaction(async |tr| {
+            let res = bob
+                .decrypt_to_device_event(tr, &event, &mut Changes::default(), &decryption_settings)
+                .await?;
+            Ok(res)
+        })
+        .await
+        .unwrap()
+        .inbound_group_session
+        .unwrap();
+    bob.store().save_inbound_group_sessions(std::slice::from_ref(&session)).await.unwrap();
+
+    let original_sender_data = session.sender_data.clone();
+    assert_matches!(original_sender_data, SenderData::DeviceInfo { .. });
+
+    let exported = session.export().await;
+    assert!(exported.sender_data.is_some(), "The export should carry the sender data");
+
+    // A fresh client restoring that key from a backup it trusts gets the sender
+    // data back.
+    let carol = OlmMachine::new(user_id(), alice_device_id()).await;
+    carol
+        .store()
+        .import_backed_up_room_keys(
+            vec![exported],
+            "1",
+            BackupAuthenticity::Authenticated,
+            |_, _| {},
+        )
+        .await
+        .unwrap();
+
+    let restored = carol
+        .store()
+        .get_inbound_group_session(room_id, session.session_id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_matches!(restored.sender_data, SenderData::DeviceInfo { .. });
+}
+
+/// Anyone who can write to the account's key backup can put keys in it, so
+/// keys from a backup we cannot tie to our own identity or to a verified device
+/// must not get the benefit of the doubt that sessions predating sender data
+/// collection get.
+#[async_test]
+async fn test_keys_from_an_unauthenticated_backup_are_not_legacy_sessions() {
+    let data = json!({
+       "algorithm": "m.megolm.v1.aes-sha2",
+       "room_id": "!room:id",
+       "sender_key": "FOvlmz18LLI3k/llCpqRoKT90+gFF8YhuL+v1YBXHlw",
+       "session_id": "/2K+V777vipCxPZ0gpY9qcpz1DYaXwuMRIu0UEP0Wa0",
+       "session_key": "AQAAAAAclzWVMeWBKH+B/WMowa3rb4ma3jEl6n5W4GCs9ue65CruzD3ihX+85pZ9hsV9Bf6fvhjp76WNRajoJYX0UIt7aosjmu0i+H+07hEQ0zqTKpVoSH0ykJ6stAMhdr6Q4uW5crBmdTTBIsqmoWsNJZKKoE2+ldYrZ1lrFeaJbjBIY/9ivle++74qQsT2dIKWPanKc9Q2Gl8LjESLtFBD9Fmt",
+       "sender_claimed_keys": {
+           "ed25519": "F4P7f1Z0RjbiZMgHk1xBCG3KC4/Ng9PmxLJ4hQ13sHA"
+       },
+       "forwarding_curve25519_key_chain": []
+    });
+
+    let room_id = owned_room_id!("!room:id");
+    let session_id = "/2K+V777vipCxPZ0gpY9qcpz1DYaXwuMRIu0UEP0Wa0";
+
+    let exported_key = || {
+        let backed_up_room_key: BackedUpRoomKey = serde_json::from_value(data.clone()).unwrap();
+        ExportedRoomKey::from_backed_up_room_key(
+            room_id.clone(),
+            session_id.into(),
+            backed_up_room_key,
+        )
+    };
+
+    // A backup whose signatures we trust: the session is grandfathered, as a
+    // session from before we started collecting sender data would be.
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+    machine
+        .store()
+        .import_backed_up_room_keys(
+            vec![exported_key()],
+            "1",
+            BackupAuthenticity::Authenticated,
+            |_, _| {},
+        )
+        .await
+        .unwrap();
+
+    let session =
+        machine.store().get_inbound_group_session(&room_id, session_id).await.unwrap().unwrap();
+    assert_matches!(session.sender_data, SenderData::UnknownDevice { legacy_session: true, .. });
+
+    // A backup we could not authenticate: it is not.
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+    machine
+        .store()
+        .import_backed_up_room_keys(
+            vec![exported_key()],
+            "1",
+            BackupAuthenticity::Unauthenticated,
+            |_, _| {},
+        )
+        .await
+        .unwrap();
+
+    let session =
+        machine.store().get_inbound_group_session(&room_id, session_id).await.unwrap().unwrap();
+    assert_matches!(session.sender_data, SenderData::UnknownDevice { legacy_session: false, .. });
+}
+
+/// A Megolm ciphertext says nothing about the event it arrived in, so a
+/// homeserver can take one it has seen and hand it back under a new event ID.
+/// The second copy must be refused, while a genuine second look at the *same*
+/// event must still decrypt.
+#[async_test]
+async fn test_a_replayed_megolm_ciphertext_is_rejected() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+
+    let to_device_event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let group_session = bob
+        .store()
+        .with_transaction(async |tr| {
+            let res = bob
+                .decrypt_to_device_event(
+                    tr,
+                    &to_device_event,
+                    &mut Changes::default(),
+                    &decryption_settings,
+                )
+                .await?;
+            Ok(res)
+        })
+        .await
+        .unwrap()
+        .inbound_group_session
+        .unwrap();
+    bob.store().save_inbound_group_sessions(&[group_session]).await.unwrap();
+
+    let content = RoomMessageEventContent::text_plain("It is a secret to everybody");
+    let result = alice
+        .encrypt_room_event(room_id, AnyMessageLikeEventContent::RoomMessage(content))
+        .await
+        .unwrap();
+
+    let origin_server_ts = MilliSecondsSinceUnixEpoch::now();
+    let encrypted_event = |event_id: &str| {
+        json_convert(&json!({
+            "event_id": event_id,
+            "origin_server_ts": origin_server_ts,
+            "sender": alice.user_id(),
+            "type": "m.room.encrypted",
+            "content": result.content,
+        }))
+        .unwrap()
+    };
+
+    let original = encrypted_event("$original:example.org");
+
+    bob.decrypt_room_event(&original, room_id, &decryption_settings)
+        .await
+        .expect("The first sighting of the event should decrypt");
+
+    // Decrypting the very same event again is not a replay: that happens
+    // whenever a timeline is rebuilt.
+    bob.decrypt_room_event(&original, room_id, &decryption_settings)
+        .await
+        .expect("Decrypting the same event a second time should still work");
+
+    // The same ciphertext under a different event ID is one.
+    let replay = encrypted_event("$replay:example.org");
+    assert_let!(
+        Err(MegolmError::ReplayedMessage { original_event_id, message_index, .. }) =
+            bob.decrypt_room_event(&replay, room_id, &decryption_settings).await
+    );
+    assert_eq!(original_event_id, ruma::event_id!("$original:example.org"));
+    assert_eq!(message_index, 0);
+
+    // `try_decrypt_room_event` reports it as a UTD rather than an error.
+    assert_let!(
+        RoomEventDecryptionResult::UnableToDecrypt(utd_info) =
+            bob.try_decrypt_room_event(&replay, room_id, &decryption_settings).await.unwrap()
+    );
+    assert_eq!(
+        utd_info.reason,
+        UnableToDecryptReason::ReplayedMessageIndex {
+            original_event_id: ruma::event_id!("$original:example.org").to_owned()
+        }
+    );
 }
 
 /// Helper function to set up end-to-end Megolm encryption between two devices.
@@ -2288,6 +2512,131 @@ async fn test_olm_machine_with_custom_account() {
     );
 }
 
+/// A bundled aggregation is a separate encrypted event, so it can be a UTD
+/// while the event carrying it decrypted fine. Nothing about the outer event
+/// changes when the bundled event's room key arrives, so there has to be a way
+/// to ask again without re-decrypting the outer event.
+#[async_test]
+async fn test_retry_decryption_of_bundled_events() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let give_bob_the_room_key = async |alice: &OlmMachine, bob: &OlmMachine| {
+        let to_device_requests = alice
+            .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+            .await
+            .unwrap();
+        let event = ToDeviceEvent::new(
+            alice.user_id().to_owned(),
+            to_device_requests_to_content(to_device_requests),
+        );
+
+        bob.store()
+            .with_transaction(async |tr| {
+                let res = bob
+                    .decrypt_to_device_event(
+                        tr,
+                        &event,
+                        &mut Changes::default(),
+                        &decryption_settings,
+                    )
+                    .await?;
+                Ok(res)
+            })
+            .await
+            .unwrap()
+            .inbound_group_session
+            .unwrap()
+    };
+
+    // Bob gets the key for the original message.
+    let session = give_bob_the_room_key(&alice, &bob).await;
+    bob.store().save_inbound_group_sessions(&[session]).await.unwrap();
+
+    let original = alice
+        .encrypt_room_event(room_id, RoomMessageEventContent::text_plain("original"))
+        .await
+        .unwrap();
+
+    // The edit is sent under a new session that Bob does not have.
+    alice.discard_room_key(room_id).await.unwrap();
+    let edit_session = give_bob_the_room_key(&alice, &bob).await;
+
+    let original_event_id = ruma::event_id!("$original:example.org");
+    let edit_content = RoomMessageEventContent::text_plain("edited").make_replacement(
+        ruma::events::room::message::ReplacementMetadata::new(original_event_id.to_owned(), None),
+    );
+    let edit = alice.encrypt_room_event(room_id, edit_content).await.unwrap();
+
+    let event = json_convert(&json!({
+        "event_id": original_event_id,
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+        "sender": alice.user_id(),
+        "type": "m.room.encrypted",
+        "content": original.content,
+        "unsigned": {
+            "m.relations": {
+                "m.replace": {
+                    "event_id": "$edit:example.org",
+                    "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+                    "sender": alice.user_id(),
+                    "type": "m.room.encrypted",
+                    "content": edit.content,
+                },
+            },
+        },
+    }))
+    .unwrap();
+
+    // The outer event decrypts, the bundled edit does not.
+    let mut decrypted =
+        bob.decrypt_room_event(&event, room_id, &decryption_settings).await.unwrap();
+
+    assert_let!(Some(info) = &decrypted.unsigned_encryption_info);
+    assert_matches!(
+        info.get(&UnsignedEventLocation::RelationsReplace).unwrap(),
+        UnsignedDecryptionResult::UnableToDecrypt(_)
+    );
+
+    // Asking again before the key arrives changes nothing.
+    assert!(
+        !bob.retry_decryption_of_bundled_events(&mut decrypted, room_id, &decryption_settings)
+            .await
+            .unwrap(),
+        "Nothing should have changed while the room key is still missing",
+    );
+
+    // The room key for the edit arrives.
+    bob.store().save_inbound_group_sessions(&[edit_session]).await.unwrap();
+
+    assert!(
+        bob.retry_decryption_of_bundled_events(&mut decrypted, room_id, &decryption_settings)
+            .await
+            .unwrap(),
+        "The bundled edit should have been decrypted now",
+    );
+
+    assert_let!(Some(info) = &decrypted.unsigned_encryption_info);
+    assert_matches!(
+        info.get(&UnsignedEventLocation::RelationsReplace).unwrap(),
+        UnsignedDecryptionResult::Decrypted(_)
+    );
+
+    // ... and the decrypted edit is now part of the event itself.
+    assert_let!(
+        AnyTimelineEvent::MessageLike(AnyMessageLikeEvent::RoomMessage(message)) =
+            decrypted.event.deserialize().unwrap()
+    );
+    let message = message.as_original().unwrap();
+    let replace = message.unsigned.relations.replace.as_ref().unwrap();
+    assert_let!(Some(Relation::Replacement(replacement)) = &replace.content.relates_to);
+    assert_eq!(replacement.new_content.msgtype.body(), "edited");
+}
+
 #[async_test]
 async fn test_unsigned_decryption() {
     let (alice, bob) =
@@ -2614,12 +2963,9 @@ async fn test_mark_all_tracked_users_as_dirty() {
     // Mark them as not dirty.
     store.save_tracked_users(&[(damir, false), (ben, false), (ivan, false)]).await.unwrap();
 
-    // Let's imagine the migration has been done: this is useful so that tracked
-    // users are not marked as dirty when creating the `OlmMachine`.
-    store
-        .set_custom_value(OlmMachine::key_for_has_migrated_verification_latch(), vec![0])
-        .await
-        .unwrap();
+    // Let's imagine the data migrations have been run: this is useful so that
+    // tracked users are not marked as dirty when creating the `OlmMachine`.
+    crate::store::migrations::mark_all_data_migrations_as_done(&store).await.unwrap();
 
     let alice = OlmMachineBuilder::new(user_id(), alice_device_id())
         .with_crypto_store(store)
@@ -2672,9 +3018,15 @@ async fn test_verified_latch_migration() {
     // Ensure it does so only once
     alice_store.save_tracked_users(&to_track_not_dirty).await.unwrap();
 
-    OlmMachine::migration_post_verified_latch_support(alice_store, alice.identity_manager())
-        .await
-        .unwrap();
+    crate::store::migrations::run_data_migrations(
+        &crate::store::migrations::DataMigrationContext {
+            store: alice_store,
+            identity_manager: alice.identity_manager(),
+        },
+        &crate::store::migrations::builtin_data_migrations(),
+    )
+    .await
+    .unwrap();
 
     // Migration already done, so user should not be marked as dirty
     alice_store.load_tracked_users().await.unwrap().iter().for_each(|tu| {

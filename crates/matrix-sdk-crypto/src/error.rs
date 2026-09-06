@@ -15,7 +15,9 @@
 use std::collections::BTreeMap;
 
 use matrix_sdk_common::deserialized_responses::{VerificationLevel, WithheldCode};
-use ruma::{CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedUserId};
+use ruma::{
+    CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedUserId,
+};
 use serde::{Serializer, ser::SerializeMap};
 use serde_json::Error as SerdeError;
 use thiserror::Error;
@@ -154,11 +156,22 @@ pub enum MegolmError {
     #[error("the event was redacted before it could be decrypted")]
     RedactedEvent,
 
-    /// The event reuses the Megolm message index of an event we have already
-    /// decrypted, so it is a replay of that event rather than a new message.
-    #[error("the event replays the Megolm message index of the event {original_event_id}")]
-    ReplayedMessageIndex {
-        /// The event which originally used this message index.
+    /// The event replays a Megolm ratchet index we have already decrypted in a
+    /// different event.
+    ///
+    /// The ciphertext is genuine, but the event carrying it is not the one the
+    /// sender sent: someone able to inject events into the room has taken a
+    /// ciphertext they saw and put it back under a new event ID or timestamp.
+    #[error(
+        "the event replays message index {message_index} of session {session_id}, \
+        which was first decrypted in {original_event_id}"
+    )]
+    ReplayedMessage {
+        /// The Megolm session the replayed message belongs to.
+        session_id: String,
+        /// The ratchet index that was replayed.
+        message_index: u32,
+        /// The event the ratchet index was originally decrypted in.
         original_event_id: OwnedEventId,
     },
 }

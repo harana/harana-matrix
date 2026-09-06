@@ -371,6 +371,19 @@ pub trait CryptoStore: AsyncTraitDeps {
         user_id: &UserId,
     ) -> Result<Option<StoredRoomKeyBundleData>, Self::Error>;
 
+    /// Forget the room key bundle data received from the given user for the
+    /// given room.
+    ///
+    /// Called once the bundle has been imported, or found to be unusable. The
+    /// bundle names an encrypted file on the media repository and carries the
+    /// key to decrypt it, so there is no reason to keep it once it has served
+    /// its purpose. Doing nothing when there is no such bundle is not an error.
+    async fn clear_received_room_key_bundle_data(
+        &self,
+        room_id: &RoomId,
+        user_id: &UserId,
+    ) -> Result<(), Self::Error>;
+
     /// Check whether we are awaiting a key bundle for the given room, and if so
     /// return the details
     async fn get_pending_key_bundle_details_for_room(
@@ -672,6 +685,14 @@ impl<T: CryptoStore> CryptoStore for EraseCryptoStoreError<T> {
         user_id: &UserId,
     ) -> Result<Option<StoredRoomKeyBundleData>> {
         self.0.get_received_room_key_bundle_data(room_id, user_id).await.map_err(Into::into)
+    }
+
+    async fn clear_received_room_key_bundle_data(
+        &self,
+        room_id: &RoomId,
+        user_id: &UserId,
+    ) -> Result<()> {
+        self.0.clear_received_room_key_bundle_data(room_id, user_id).await.map_err(Into::into)
     }
 
     async fn has_downloaded_all_room_keys(&self, room_id: &RoomId) -> Result<bool, Self::Error> {

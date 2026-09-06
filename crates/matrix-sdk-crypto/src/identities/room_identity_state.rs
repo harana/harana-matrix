@@ -1101,7 +1101,7 @@ mod tests {
         use crate::{
             Account,
             olm::PrivateCrossSigningIdentity,
-            store::{CryptoStoreWrapper, MemoryStore},
+            store::{CryptoStoreWrapper, MemoryStore, Store},
             verification::VerificationMachine,
         };
 
@@ -1121,20 +1121,32 @@ mod tests {
         let other_user_identity_data =
             OtherUserIdentityData::from_private(&*private_identity.lock().await).await;
 
+        let verification_machine = VerificationMachine::new(
+            account.clone(),
+            Arc::new(Mutex::new(PrivateCrossSigningIdentity::new(account.user_id().to_owned()))),
+            Arc::new(CryptoStoreWrapper::new(
+                account.user_id(),
+                account.device_id(),
+                MemoryStore::new(),
+            )),
+        );
+
+        let store = Store::new(
+            account.static_data().clone(),
+            private_identity.clone(),
+            Arc::new(CryptoStoreWrapper::new(
+                account.user_id(),
+                account.device_id(),
+                MemoryStore::new(),
+            )),
+            verification_machine.clone(),
+        );
+
         UserIdentity::Other(OtherUserIdentity {
             inner: other_user_identity_data,
             own_identity: None,
-            verification_machine: VerificationMachine::new(
-                account.clone(),
-                Arc::new(Mutex::new(PrivateCrossSigningIdentity::new(
-                    account.user_id().to_owned(),
-                ))),
-                Arc::new(CryptoStoreWrapper::new(
-                    account.user_id(),
-                    account.device_id(),
-                    MemoryStore::new(),
-                )),
-            ),
+            verification_machine,
+            store,
             #[cfg(feature = "experimental-x509-identity-verification")]
             x509_verifier: None,
         })

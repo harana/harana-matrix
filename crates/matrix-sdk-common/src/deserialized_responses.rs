@@ -1111,7 +1111,7 @@ impl UnsignedEventLocation {
 }
 
 /// The result of the decryption of an event bundled in an `unsigned` object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UnsignedDecryptionResult {
     /// The event was successfully decrypted.
     Decrypted(Arc<EncryptionInfo>),
@@ -1131,7 +1131,7 @@ impl UnsignedDecryptionResult {
 }
 
 /// Metadata about an event that could not be decrypted.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UnableToDecryptInfo {
     /// The ID of the session used to encrypt the message, if it used the
     /// `m.megolm.v1.aes-sha2` algorithm.

@@ -1670,6 +1670,26 @@ impl_crypto_store! {
         Ok(result)
     }
 
+    async fn clear_received_room_key_bundle_data(
+        &self,
+        room_id: &RoomId,
+        user_id: &UserId,
+    ) -> Result<()> {
+        let key = self.serializer.encode_key(keys::RECEIVED_ROOM_KEY_BUNDLES, (room_id, user_id));
+
+        let transaction = self
+            .inner
+            .transaction(keys::RECEIVED_ROOM_KEY_BUNDLES)
+            .with_mode(TransactionMode::Readwrite)
+            .build()?;
+
+        transaction.object_store(keys::RECEIVED_ROOM_KEY_BUNDLES)?.delete(&key).build()?;
+
+        transaction.commit().await?;
+
+        Ok(())
+    }
+
     async fn has_downloaded_all_room_keys(&self, room_id: &RoomId) -> Result<bool> {
         let key = self.serializer.encode_key(keys::ROOM_KEY_BACKUPS_FULLY_DOWNLOADED, room_id);
         let result = self
@@ -1909,10 +1929,11 @@ async fn save_store_cipher(
     db: &Database,
     export: &Vec<u8>,
 ) -> Result<(), IndexeddbCryptoStoreError> {
-    let tx: Transaction<'_> =
-        db.transaction("matrix-sdk-crypto").with_mode(TransactionMode::Readwrite)
-            .with_options(strict_durability())
-            .build()?;
+    let tx: Transaction<'_> = db
+        .transaction("matrix-sdk-crypto")
+        .with_mode(TransactionMode::Readwrite)
+        .with_options(strict_durability())
+        .build()?;
     let ob = tx.object_store("matrix-sdk-crypto")?;
 
     ob.put(&JsValue::from_serde(&export)?)

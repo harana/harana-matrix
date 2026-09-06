@@ -206,6 +206,18 @@ pub struct InboundGroupSession {
     /// correct.
     imported: bool,
 
+    /// A flag recording whether this session arrived as an
+    /// `m.forwarded_room_key` that the forwarder marked as trusted, per
+    /// [MSC3879], and that we accepted as such - which means the forwarder was
+    /// another device of our own that we have verified.
+    ///
+    /// Such a session is imported, so the Olm channel gives us no proof of who
+    /// created it; the attribution instead rests on a device we trust vouching
+    /// for it.
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    trusted_forward: bool,
+
     /// The messaging algorithm of this [`InboundGroupSession`] as defined by
     /// the [spec]. Will be one of the `m.megolm.*` algorithms.
     ///
@@ -303,6 +315,7 @@ impl InboundGroupSession {
             forwarder_data,
             room_id: room_id.into(),
             imported: false,
+            trusted_forward: false,
             algorithm: encryption_algorithm.into(),
             backed_up: AtomicBool::new(false).into(),
             shared_history,
@@ -399,6 +412,7 @@ impl InboundGroupSession {
             forwarder_data: self.forwarder_data.clone(),
             room_id: self.room_id().to_owned(),
             imported: self.imported,
+            trusted_forward: self.trusted_forward,
             backed_up: self.backed_up(),
             history_visibility: self.history_visibility.as_ref().clone(),
             algorithm: (*self.algorithm).to_owned(),
@@ -456,6 +470,8 @@ impl InboundGroupSession {
             sender_claimed_keys: (*self.creator_info.signing_keys).clone(),
             session_key,
             shared_history: self.shared_history,
+            sender_data: Some(self.sender_data.clone()),
+            forwarder_data: self.forwarder_data.clone(),
         }
     }
 
@@ -479,6 +495,7 @@ impl InboundGroupSession {
             forwarder_data,
             room_id,
             imported,
+            trusted_forward,
             backed_up,
             history_visibility,
             algorithm,
@@ -504,6 +521,7 @@ impl InboundGroupSession {
             backed_up: AtomicBool::from(backed_up).into(),
             algorithm: algorithm.into(),
             imported,
+            trusted_forward,
             shared_history,
         })
     }
@@ -533,6 +551,37 @@ impl InboundGroupSession {
     /// opposed to being directly received as an `m.room_key` event.
     pub fn has_been_imported(&self) -> bool {
         self.imported
+    }
+
+    /// Did this session arrive as a forward that we accepted as trusted, under
+    /// [MSC3879]?
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    pub fn is_trusted_forward(&self) -> bool {
+        self.trusted_forward
+    }
+
+    /// May we tell another device that this session can be trusted, when
+    /// forwarding it under [MSC3879]?
+    ///
+    /// True if the session reached us in a way that ties it to its creator: we
+    /// created it, or it arrived as an `m.room_key`, or it arrived as a forward
+    /// we accepted as trusted. A session restored from a backup or a file
+    /// export is none of those - our backups are not the kind whose contents we
+    /// could vouch for - so we say nothing about it.
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    pub fn is_trusted_for_forwarding(&self) -> bool {
+        !self.imported || self.trusted_forward
+    }
+
+    /// Record that this session arrived as a trusted forward.
+    ///
+    /// Only the gossip machine should call this, and only once it has
+    /// established that the forwarder is another of our own devices and is
+    /// verified.
+    pub(crate) fn mark_as_trusted_forward(&mut self) {
+        self.trusted_forward = true;
     }
 
     /// Check if the [`InboundGroupSession`] is better than the given other
@@ -718,6 +767,12 @@ pub struct PickledInboundGroupSession {
     /// Flag remembering if the session was directly sent to us by the sender
     /// or if it was imported.
     pub imported: bool,
+    /// Flag remembering whether the session arrived as a forward that we
+    /// accepted as trusted, under [MSC3879].
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    #[serde(default)]
+    pub trusted_forward: bool,
     /// Flag remembering if the session has been backed up.
     #[serde(default)]
     pub backed_up: bool,
@@ -794,6 +849,7 @@ impl HistoricRoomKey {
             first_known_index,
             room_id: room_id.to_owned(),
             imported: true,
+            trusted_forward: false,
             algorithm: algorithm.to_owned().into(),
             backed_up: AtomicBool::from(false).into(),
             shared_history: true,
@@ -814,6 +870,11 @@ impl TryFrom<&ExportedRoomKey> for InboundGroupSession {
             sender_claimed_keys,
             forwarding_curve25519_key_chain: _,
             shared_history,
+            // Sender data from an export is only honoured where the export can be
+            // authenticated, which is a decision for the importer to make, so the
+            // conversion itself never trusts it.
+            sender_data: _,
+            forwarder_data: _,
         } = key;
 
         let config = OutboundGroupSession::session_config(algorithm)?;
@@ -835,6 +896,7 @@ impl TryFrom<&ExportedRoomKey> for InboundGroupSession {
             first_known_index,
             room_id: room_id.to_owned(),
             imported: true,
+            trusted_forward: false,
             algorithm: algorithm.to_owned().into(),
             backed_up: AtomicBool::from(false).into(),
             shared_history: *shared_history,
@@ -867,6 +929,7 @@ impl From<&ForwardedMegolmV1AesSha2Content> for InboundGroupSession {
             first_known_index,
             room_id: value.room_id.to_owned(),
             imported: true,
+            trusted_forward: false,
             algorithm: EventEncryptionAlgorithm::MegolmV1AesSha2.into(),
             backed_up: AtomicBool::from(false).into(),
             shared_history: false,
@@ -895,6 +958,7 @@ impl From<&ForwardedMegolmV2AesSha2Content> for InboundGroupSession {
             first_known_index,
             room_id: value.room_id.to_owned(),
             imported: true,
+            trusted_forward: false,
             algorithm: EventEncryptionAlgorithm::MegolmV1AesSha2.into(),
             backed_up: AtomicBool::from(false).into(),
             shared_history: false,
@@ -1087,6 +1151,7 @@ mod tests {
                 "forwarder_data":null,
                 "room_id":"!test:localhost",
                 "imported":false,
+                "trusted_forward":false,
                 "backed_up":false,
                 "shared_history":false,
                 "history_visibility":"shared",
