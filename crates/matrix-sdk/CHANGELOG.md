@@ -6,8 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Add `ClientBuilder::discovery_cache_timeout`, which sets how long the
+  homeserver discovery data stays usable before the client refreshes it, and
+  `Client::rediscover`, which expires the stored copies and fetches them
+  again rather than waiting for the timeout.
+  ([#36](https://github.com/harana/harana-matrix/issues/36))
+
 ### Fixed
 
+- Persist the sliding sync `pos` in the event cache store rather than the
+  crypto store. A client built without encryption could not resume from its
+  previous position, because the crypto store it was kept in did not exist. A
+  `pos` written by an older version is migrated out of the crypto store the
+  first time it is read.
+  ([#250](https://github.com/harana/harana-matrix/issues/250))
 - Stop retrying a `/keys/upload` the server rejects with "One time key ...
   already exists". The request is now marked as sent, so it no longer blocks
   everything queued behind it, cross-signing bootstrap included.

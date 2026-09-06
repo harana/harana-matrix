@@ -40,7 +40,7 @@ use crate::{
     event_cache_store::{
         migrations::current::keys,
         transaction::IndexeddbEventCacheStoreTransaction,
-        types::{ChunkType, InBandEvent, Lease, OutOfBandEvent, Thread},
+        types::{ChunkType, InBandEvent, KeyValue, Lease, OutOfBandEvent, Thread},
     },
     serializer::indexed_type::{IndexedTypeSerializer, traits::Indexed},
     transaction::TransactionError,
@@ -709,6 +709,39 @@ impl EventCacheStore for IndexeddbEventCacheStore {
 
     async fn reopen(&self) -> Result<(), Self::Error> {
         Ok(())
+    }
+
+    #[instrument(skip(self, key))]
+    async fn get_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        let transaction =
+            self.transaction(&[KeyValue::OBJECT_STORE], IdbTransactionMode::Readonly)?;
+
+        Ok(transaction.get_key_value_by_key(key).await?.map(|key_value| key_value.value))
+    }
+
+    #[instrument(skip(self, key, value))]
+    async fn set_custom_value(&self, key: &[u8], value: Vec<u8>) -> Result<(), Self::Error> {
+        let transaction =
+            self.transaction(&[KeyValue::OBJECT_STORE], IdbTransactionMode::Readwrite)?;
+
+        transaction.put_key_value(&KeyValue { key: key.to_owned(), value })?;
+        transaction.commit().await?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, key))]
+    async fn remove_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        let transaction =
+            self.transaction(&[KeyValue::OBJECT_STORE], IdbTransactionMode::Readwrite)?;
+
+        let previous = transaction.get_key_value_by_key(key).await?.map(|kv| kv.value);
+        if previous.is_some() {
+            transaction.delete_key_value_by_key(key).await?;
+        }
+        transaction.commit().await?;
+
+        Ok(previous)
     }
 }
 

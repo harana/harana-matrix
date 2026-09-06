@@ -64,6 +64,7 @@ mod keys {
     // Tables
     pub const LINKED_CHUNKS: &str = "linked_chunks";
     pub const EVENTS: &str = "events";
+    pub const KEY_VALUE: &str = "key_value";
 }
 
 /// The database name.
@@ -677,6 +678,15 @@ async fn run_migrations(conn: &SqliteAsyncConn, version: u8) -> Result<()> {
                 "../migrations/event_cache_store/017_threads_with_thread_infos.sql"
             ))?;
             txn.set_db_version(17)
+        })
+        .await?;
+    }
+
+    if version < 18 {
+        debug!("Upgrading database to version 18");
+        conn.with_transaction(|txn| {
+            txn.execute_batch(include_str!("../migrations/event_cache_store/018_key_value.sql"))?;
+            txn.set_db_version(18)
         })
         .await?;
     }
@@ -1850,6 +1860,53 @@ impl EventCacheStore for SqliteEventCacheStore {
 
     async fn get_size(&self) -> Result<Option<usize>, Self::Error> {
         self.get_db_size().await
+    }
+
+    #[instrument(skip(self, key))]
+    async fn get_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let key = self.encryption.encode_key(keys::KEY_VALUE, key);
+        let Some(value) = self
+            .read()
+            .await?
+            .query_row("SELECT value FROM key_value WHERE key = ?", (key,), |row| {
+                row.get::<_, Vec<u8>>(0)
+            })
+            .await
+            .optional()?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(self.encryption.decode_value(&value)?.into_owned()))
+    }
+
+    #[instrument(skip(self, key, value))]
+    async fn set_custom_value(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
+        let key = self.encryption.encode_key(keys::KEY_VALUE, key);
+        let value = self.encryption.encode_value(value)?;
+
+        self.write()
+            .await?
+            .execute(
+                "INSERT INTO key_value (key, value) VALUES (?1, ?2) \
+                 ON CONFLICT (key) DO UPDATE SET value = ?2",
+                (key, value),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, key))]
+    async fn remove_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let previous = self.get_custom_value(key).await?;
+
+        if previous.is_some() {
+            let key = self.encryption.encode_key(keys::KEY_VALUE, key);
+            self.write().await?.execute("DELETE FROM key_value WHERE key = ?", (key,)).await?;
+        }
+
+        Ok(previous)
     }
 }
 

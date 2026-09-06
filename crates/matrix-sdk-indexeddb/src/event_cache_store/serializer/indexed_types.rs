@@ -27,6 +27,7 @@
 //! These types mimic the structure of the object stores and indices created in
 //! [`crate::event_cache_store::migrations`].
 
+use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
 use matrix_sdk_base::linked_chunk::{ChunkIdentifier, LinkedChunkId};
 use matrix_sdk_crypto::CryptoStoreError;
 use ruma::{EventId, RoomId, events::relation::RelationType};
@@ -41,7 +42,7 @@ use crate::{
             INDEXED_KEY_LOWER_EVENT_POSITION, INDEXED_KEY_UPPER_CHUNK_IDENTIFIER,
             INDEXED_KEY_UPPER_EVENT_INDEX, INDEXED_KEY_UPPER_EVENT_POSITION,
         },
-        types::{Chunk, Event, Gap, Lease, Position, Thread},
+        types::{Chunk, Event, Gap, KeyValue, Lease, Position, Thread},
     },
     serializer::{
         indexed_type::{
@@ -157,6 +158,74 @@ impl IndexedKeyComponentBounds<Lease> for IndexedLeaseIdKey {
 
     fn upper_key_components() -> Self::KeyComponents<'static> {
         INDEXED_KEY_UPPER_STRING.as_str()
+    }
+}
+
+/// A (possibly) encrypted representation of a [`KeyValue`]
+pub type IndexedKeyValueContent = MaybeEncrypted;
+
+/// Represents the [`KEY_VALUE`][1] object store.
+///
+/// [1]: crate::event_cache_store::migrations::v8::create_key_value_object_store
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IndexedKeyValue {
+    /// The primary key of the object store.
+    pub id: IndexedKeyValueIdKey,
+    /// The (possibly encrypted) content - i.e., a [`KeyValue`].
+    pub content: IndexedKeyValueContent,
+}
+
+impl Indexed for KeyValue {
+    type IndexedType = IndexedKeyValue;
+
+    const OBJECT_STORE: &'static str = keys::KEY_VALUE;
+
+    type Error = CryptoStoreError;
+
+    fn to_indexed(
+        &self,
+        serializer: &SafeEncodeSerializer,
+    ) -> Result<Self::IndexedType, Self::Error> {
+        Ok(IndexedKeyValue {
+            id: <IndexedKeyValueIdKey as IndexedKey<KeyValue>>::encode(&self.key, serializer),
+            content: serializer.maybe_encrypt_value(self)?,
+        })
+    }
+
+    fn from_indexed(
+        indexed: Self::IndexedType,
+        serializer: &SafeEncodeSerializer,
+    ) -> Result<Self, Self::Error> {
+        serializer.maybe_decrypt_value(indexed.content)
+    }
+}
+
+/// The value associated with the [primary key](IndexedKeyValue::id) of the
+/// [`KEY_VALUE`][1] object store, which is constructed from the value in
+/// [`KeyValue::key`]. This value may or may not be hashed depending on the
+/// provided [`IndexeddbSerializer`].
+///
+/// The key is arbitrary bytes, so it is base64-encoded before it is handed to
+/// the serializer, which only encodes strings.
+///
+/// [1]: crate::event_cache_store::migrations::v8::create_key_value_object_store
+pub type IndexedKeyValueIdKey = String;
+
+impl IndexedKey<KeyValue> for IndexedKeyValueIdKey {
+    type KeyComponents<'a> = &'a [u8];
+
+    fn encode(components: Self::KeyComponents<'_>, serializer: &SafeEncodeSerializer) -> Self {
+        serializer.encode_key_as_string(keys::KEY_VALUE, BASE64.encode(components))
+    }
+}
+
+impl IndexedKeyComponentBounds<KeyValue> for IndexedKeyValueIdKey {
+    fn lower_key_components() -> Self::KeyComponents<'static> {
+        &[]
+    }
+
+    fn upper_key_components() -> Self::KeyComponents<'static> {
+        INDEXED_KEY_UPPER_STRING.as_bytes()
     }
 }
 

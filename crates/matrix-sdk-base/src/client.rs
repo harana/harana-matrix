@@ -1585,7 +1585,9 @@ mod tests {
     use crate::{
         DmRoomDefinition, RoomDisplayName, RoomInfoNotableUpdateReasons, RoomState, SessionMeta,
         client::ThreadingSupport,
-        store::{RoomLoadSettings, StateStoreExt, StoreConfig},
+        store::{
+            RoomLoadSettings, StateStoreDataKey, StateStoreDataValue, StateStoreExt, StoreConfig,
+        },
         test_utils::logged_in_base_client,
     };
     #[cfg(feature = "unstable-msc4426")]
@@ -2394,6 +2396,55 @@ mod tests {
 
         assert_let!(Some(ignored) = subscriber.next().await);
         assert!(ignored.is_empty());
+    }
+
+    #[async_test]
+    async fn test_an_ignored_user_list_change_forces_an_initial_sync() {
+        let client = logged_in_base_client(Some(user_id!("@alice:example.org"))).await;
+
+        let f = EventFactory::new();
+        let mut sync_builder = SyncResponseBuilder::new();
+
+        // A sync without an ignored user list change keeps its token, so the next
+        // sync is incremental.
+        let response = sync_builder.build_sync_response();
+        let first_token = response.next_batch.clone();
+        client.receive_sync_response(response).await.unwrap();
+
+        assert_eq!(client.sync_token().await.as_ref(), Some(&first_token));
+        assert_let!(
+            Some(StateStoreDataValue::SyncToken(stored_token)) =
+                client.state_store().get_kv_data(StateStoreDataKey::SyncToken).await.unwrap()
+        );
+        assert_eq!(stored_token, first_token);
+
+        // Ignoring a user changes which events the server will send, so the token
+        // is dropped and the next sync is an initial one.
+        let response = sync_builder
+            .add_global_account_data(f.ignored_user_list([(*BOB).into()]))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        assert!(client.sync_token().await.is_none());
+        assert!(
+            client.state_store().get_kv_data(StateStoreDataKey::SyncToken).await.unwrap().is_none()
+        );
+
+        // The same list again is not a change, so the token survives.
+        let response = sync_builder
+            .add_global_account_data(f.ignored_user_list([(*BOB).into()]))
+            .build_sync_response();
+        let token = response.next_batch.clone();
+        client.receive_sync_response(response).await.unwrap();
+
+        assert_eq!(client.sync_token().await.as_ref(), Some(&token));
+
+        // Unignoring is a change too.
+        let response =
+            sync_builder.add_global_account_data(f.ignored_user_list([])).build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        assert!(client.sync_token().await.is_none());
     }
 
     #[async_test]

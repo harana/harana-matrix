@@ -8,12 +8,19 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- [**breaking**] Add `CryptoStore::delete_sessions`, so Olm sessions can be
+  removed from a store. Third-party `CryptoStore` implementations need to
+  implement it. ([#86](https://github.com/harana/harana-matrix/issues/86))
 - Add `SenderData::legacy_session` and `SenderData::with_legacy_session`, to
   read and carry over the legacy flag when a session's sender data is
   recomputed. ([#178](https://github.com/harana/harana-matrix/issues/178))
 
 ### Fixed
 
+- Cap the number of Olm sessions kept per sender key at 8 and drop the least
+  recently used ones beyond that. Sessions were only ever added, so a device
+  we repeatedly failed to decrypt from grew the store without a bound.
+  ([#86](https://github.com/harana/harana-matrix/issues/86))
 - Keep the legacy flag on an inbound group session restored from a backup when
   a `/keys/query` later tells us about the sending device. The session used to
   be downgraded, hiding its messages wherever insecure devices are excluded.

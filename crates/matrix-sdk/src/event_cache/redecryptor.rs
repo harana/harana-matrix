@@ -1541,6 +1541,18 @@ mod tests {
             self.memory_store.reopen().await
         }
 
+        async fn get_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+            self.memory_store.get_custom_value(key).await
+        }
+
+        async fn set_custom_value(&self, key: &[u8], value: Vec<u8>) -> Result<(), Self::Error> {
+            self.memory_store.set_custom_value(key, value).await
+        }
+
+        async fn remove_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+            self.memory_store.remove_custom_value(key).await
+        }
+
         async fn try_take_leased_lock(
             &self,
             lease_duration_ms: u32,
