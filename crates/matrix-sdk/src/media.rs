@@ -32,7 +32,6 @@ use mime::Mime;
 use ruma::{
     MilliSecondsSinceUnixEpoch, MxcUri, OwnedMxcUri, TransactionId, UInt,
     api::{
-        Metadata,
         client::{authenticated_media, media},
         error::ErrorKind,
     },
@@ -661,10 +660,10 @@ impl Media {
         ts: Option<MilliSecondsSinceUnixEpoch>,
     ) -> Result<Option<Box<RawJsonValue>>> {
         // Use the authenticated endpoint when the server supports it.
-        let supported_versions = self.client.supported_versions().await?;
-
-        let use_auth = authenticated_media::get_media_preview::v1::Request::PATH_BUILDER
-            .is_supported(&supported_versions);
+        let use_auth = self
+            .client
+            .supports_endpoint::<authenticated_media::get_media_preview::v1::Request>()
+            .await?;
 
         if use_auth {
             let mut request =
@@ -818,10 +817,9 @@ impl MediaFetcher for DefaultMediaFetcher {
                 .timeout(Some(Duration::MAX));
 
             // Use the authenticated endpoints when the server supports it.
-            let supported_versions = client.supported_versions().await?;
-
-            let use_auth = authenticated_media::get_content::v1::Request::PATH_BUILDER
-                .is_supported(&supported_versions);
+            let use_auth = client
+                .supports_endpoint::<authenticated_media::get_content::v1::Request>()
+                .await?;
 
             match &request.source {
                 MediaSource::Encrypted(file) => {

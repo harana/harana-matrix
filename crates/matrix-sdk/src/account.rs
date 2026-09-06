@@ -37,7 +37,6 @@ use ruma::profile::{CallProfileField, StatusProfileField};
 use ruma::{
     ClientSecret, MxcUri, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId, SessionId, UInt, UserId,
     api::{
-        Metadata,
         client::{
             account::{
                 add_3pid, change_password, deactivate, delete_3pid, get_3pids,
@@ -141,9 +140,7 @@ impl Account {
 
         // Prefer the endpoint to delete profile fields, if it is supported.
         if name.is_none() {
-            let versions = self.client.supported_versions().await?;
-
-            if delete_profile_field::v3::Request::PATH_BUILDER.is_supported(&versions) {
+            if self.client.supports_endpoint::<delete_profile_field::v3::Request>().await? {
                 return self.delete_profile_field(ProfileFieldName::DisplayName).await;
             }
         }
@@ -243,9 +240,7 @@ impl Account {
 
         // Prefer the endpoint to delete profile fields, if it is supported.
         if url.is_none() {
-            let versions = self.client.supported_versions().await?;
-
-            if delete_profile_field::v3::Request::PATH_BUILDER.is_supported(&versions) {
+            if self.client.supports_endpoint::<delete_profile_field::v3::Request>().await? {
                 return self.delete_profile_field(ProfileFieldName::AvatarUrl).await;
             }
         }

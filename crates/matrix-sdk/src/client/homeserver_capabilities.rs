@@ -3,7 +3,6 @@ use std::sync::Arc;
 use matrix_sdk_base::{StateStoreDataKey, StateStoreDataValue, StoreError, ttl::TtlValue};
 use ruma::{
     api::{
-        Metadata,
         client::{
             discovery::get_capabilities::{
                 self,
@@ -291,10 +290,9 @@ impl HomeserverCapabilities {
     ///
     /// [Matrix spec]: https://spec.matrix.org/latest/client-server-api/#mprofile_fields-capability
     async fn homeserver_supports_extended_profile_fields(&self) -> crate::Result<bool> {
-        let supported_versions = self.client.supported_versions().await?;
         // If the homeserver supports the endpoint to delete profile fields, it supports
         // extended profile fields.
-        Ok(delete_profile_field::v3::Request::PATH_BUILDER.is_supported(&supported_versions))
+        Ok(self.client.supports_endpoint::<delete_profile_field::v3::Request>().await?)
     }
 }
 

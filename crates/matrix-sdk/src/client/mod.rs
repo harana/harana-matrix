@@ -53,6 +53,7 @@ use ruma::{
     RoomAliasId, RoomId, RoomOrAliasId, ServerName, UInt, UserId,
     api::{
         FeatureFlag, MatrixVersion, Metadata, OutgoingRequest, SupportedVersions,
+        path_builder::VersionHistory,
         client::{
             account::whoami,
             alias::{create_alias, delete_alias, get_alias},
@@ -2857,6 +2858,39 @@ impl Client {
         Ok(self.supported_versions().await?.features)
     }
 
+    /// Whether the homeserver advertises support for the given endpoint.
+    ///
+    /// This is how the SDK decides between two ways of doing the same thing
+    /// when the newer one isn't available everywhere yet: an endpoint counts as
+    /// supported when the homeserver advertises a Matrix version that has it,
+    /// or the unstable feature flag it shipped behind.
+    ///
+    /// The answer is derived from the same cached
+    /// [`Client::supported_versions`] the request path itself consults, so
+    /// asking here and then sending the request agree with each other.
+    ///
+    /// Note that this errs towards `false`: an endpoint that names neither a
+    /// stable version nor a feature flag cannot be detected this way, and a
+    /// homeserver is not supposed to advertise a Matrix version unless it
+    /// implements all of it.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use matrix_sdk::{Client, ruma::api::client::media::get_media_preview};
+    /// # async fn example(client: Client) -> anyhow::Result<()> {
+    /// if client.supports_endpoint::<get_media_preview::v1::Request>().await? {
+    ///     // Ask the homeserver for a URL preview.
+    /// }
+    /// # anyhow::Ok(()) }
+    /// ```
+    pub async fn supports_endpoint<R>(&self) -> HttpResult<bool>
+    where
+        R: Metadata<PathBuilder = VersionHistory>,
+    {
+        Ok(R::PATH_BUILDER.is_supported(&self.supported_versions().await?))
+    }
+
     /// Empty the supported versions and unstable features cache.
     ///
     /// Since the SDK caches the supported versions, it's possible to have a
@@ -4080,9 +4114,8 @@ impl Client {
         }
 
         // Use the authenticated endpoint when the server supports it.
-        let supported_versions = self.supported_versions().await?;
-        let use_auth = authenticated_media::get_media_config::v1::Request::PATH_BUILDER
-            .is_supported(&supported_versions);
+        let use_auth =
+            self.supports_endpoint::<authenticated_media::get_media_config::v1::Request>().await?;
 
         let upload_size = if use_auth {
             self.send(authenticated_media::get_media_config::v1::Request::default())
