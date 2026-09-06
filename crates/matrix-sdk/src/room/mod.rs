@@ -5194,6 +5194,11 @@ mod tests {
 
         let room = client.get_room(&DEFAULT_TEST_ROOM_ID).expect("Room should exist");
 
+        // `preshare_room_key` fetches the member list first, and this test has no
+        // homeserver to fetch it from. The sync above already carried the only
+        // member, so tell the room it is not missing any.
+        room.mark_members_synced();
+
         // Step 1, preshare the room keys.
         room.preshare_room_key().await.unwrap();
 

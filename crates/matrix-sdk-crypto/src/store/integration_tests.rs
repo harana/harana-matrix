@@ -261,7 +261,7 @@ macro_rules! cryptostore_integration_tests {
 
                 let bundle_data = StoredRoomKeyBundleData {
                     sender_user: sender.clone(),
-                    sender_key: vodozemac::Curve25519PublicKey::from_base64(
+                    sender_key: $crate::vodozemac::Curve25519PublicKey::from_base64(
                         "LTpv2DGMhggPAXO02+7f68CNEp6A7DcS1c1c3RRAWDs",
                     )
                     .unwrap(),
