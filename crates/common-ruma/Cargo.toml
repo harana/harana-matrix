@@ -282,15 +282,15 @@ unstable-msc4495 = [
 ]
 
 [dependencies]
-common-types = { path = "../common-types", version = "0.16.0" }
-common-events = { path = "../common-events", version = "0.16.0" }
+common-types = { path = "../common-types" }
+common-events = { path = "../common-events" }
 
-common-appservice-api = { path = "../common-appservice-api", version = "0.16.0", optional = true }
-common-client-api = { path = "../common-client-api", version = "0.16.0", optional = true }
-common-federation-api = { path = "../common-federation-api", version = "0.16.0", optional = true }
-common-html = { path = "../common-html", version = "0.16.0", optional = true }
-common-signatures = { path = "../common-signatures", version = "0.16.0", optional = true }
-common-state-res = { path = "../common-state-res", version = "0.16.0", optional = true }
+common-appservice-api = { path = "../common-appservice-api", optional = true }
+common-client-api = { path = "../common-client-api", optional = true }
+common-federation-api = { path = "../common-federation-api", optional = true }
+common-html = { path = "../common-html", optional = true }
+common-signatures = { path = "../common-signatures", optional = true }
+common-state-res = { path = "../common-state-res", optional = true }
 
 [dev-dependencies]
 assert_matches2.workspace = true

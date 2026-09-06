@@ -16,9 +16,9 @@ all-features = true
 default = []
 
 [dependencies]
-common-types = { path = "../common-types", version = "0.16.0" }
-common-events = { path = "../common-events", version = "0.16.0" }
-common-signatures = { path = "../common-signatures", version = "0.16.0" }
+common-types = { path = "../common-types" }
+common-events = { path = "../common-events" }
+common-signatures = { path = "../common-signatures" }
 base64.workspace = true
 js_int = { version = "0.2.2", features = ["serde"] }
 serde.workspace = true

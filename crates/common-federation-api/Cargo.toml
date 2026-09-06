@@ -30,9 +30,9 @@ unstable-msc4125 = []
 unstable-msc4495 = ["common-types/unstable-msc4495", "common-events/unstable-msc4495"]
 
 [dependencies]
-common-types = { path = "../common-types", version = "0.16.0" }
-common-events = { path = "../common-events", version = "0.16.0" }
-common-signatures = { path = "../common-signatures", version = "0.16.0" }
+common-types = { path = "../common-types" }
+common-events = { path = "../common-events" }
+common-signatures = { path = "../common-signatures" }
 bytes = "1.11.1"
 headers = "0.4.0"
 http = { workspace = true, features = ["std"] }

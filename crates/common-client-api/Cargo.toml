@@ -64,8 +64,8 @@ unstable-msc4466 = []
 unstable-msc4480 = ["unstable-msc4354"]
 
 [dependencies]
-common-types = { path = "../common-types", version = "0.16.0" }
-common-events = { path = "../common-events", version = "0.16.0" }
+common-types = { path = "../common-types" }
+common-events = { path = "../common-events" }
 as_variant.workspace = true
 assign = "1.1.1"
 bytes = "1.11.1"

@@ -18,7 +18,7 @@ default = []
 unstable-msc4286 = []
 
 [dependencies]
-common-types = { path = "../common-types", version = "0.16.0" }
+common-types = { path = "../common-types" }
 as_variant.workspace = true
 html5ever = "0.39.0"
 tracing = { workspace = true, features = ["attributes"] }

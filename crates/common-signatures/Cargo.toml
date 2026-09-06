@@ -16,8 +16,8 @@ all-features = true
 default = []
 
 [dependencies]
-common-types = { path = "../common-types", version = "0.16.0" }
-common-events = { path = "../common-events", version = "0.16.0" }
+common-types = { path = "../common-types" }
+common-events = { path = "../common-events" }
 base64.workspace = true
 ed25519-dalek = { version = "3.0.0", features = ["alloc", "pkcs8"] }
 pkcs8 = { version = "0.11.0", features = ["alloc"] }

@@ -82,8 +82,8 @@ unstable-msc4494 = ["common-types/unstable-msc4494"]
 unstable-msc4495 = ["common-types/unstable-msc4495"]
 
 [dependencies]
-common-types = { path = "../common-types", version = "0.16.0" }
-common-html = { path = "../common-html", version = "0.16.0", optional = true }
+common-types = { path = "../common-types" }
+common-html = { path = "../common-html", optional = true }
 as_variant.workspace = true
 assign = "1.1.1"
 base64.workspace = true
