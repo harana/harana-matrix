@@ -190,6 +190,10 @@ where
         let Self { client, request, config, progress } = self;
 
         Box::pin(async move {
+            // Refresh the access token if it is about to expire, so that this request
+            // doesn't have to fail first to have it refreshed.
+            client.refresh_access_token_if_expiring().await;
+
             let res = Box::pin(client.send_inner(request.clone(), config, progress.clone())).await;
 
             if let Err(e) = &res

@@ -4087,7 +4087,6 @@ dependencies = [
  "ruma",
  "serde",
  "serde_json",
- "thiserror 2.0.19",
  "tokio",
  "tracing",
 ]
@@ -4168,7 +4167,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
- "tracing",
 ]
 
 [[package]]
@@ -4678,7 +4676,8 @@ dependencies = [
 [[package]]
 name = "olm-rs"
 version = "2.2.0"
-source = "git+https://github.com/poljar/olm-rs?rev=9f7108c3b852c39bf1d0f09ccaafb9a1cf7bb83e#9f7108c3b852c39bf1d0f09ccaafb9a1cf7bb83e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6c2c7054110ce4d7b4756d7b7fe507fea9413968ad0ef8f1d043d504aec725"
 dependencies = [
  "getrandom 0.2.17",
  "olm-sys",
@@ -4690,7 +4689,8 @@ dependencies = [
 [[package]]
 name = "olm-sys"
 version = "1.3.2"
-source = "git+https://github.com/poljar/olm-sys?rev=fcd8f12352025df7fa666dd5be797dc97d1f3734#fcd8f12352025df7fa666dd5be797dc97d1f3734"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2afecf25624989021f9f0f157f7152102fd147b89445d08449739f216002d339"
 dependencies = [
  "cmake",
  "fs_extra",
@@ -5751,39 +5751,6 @@ dependencies = [
 [[package]]
 name = "ruma"
 version = "0.16.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "assign",
- "js_int",
- "js_option",
- "language-tags",
- "ruma-appservice-api",
- "ruma-client-api",
- "ruma-common",
- "ruma-events",
- "ruma-federation-api",
- "ruma-html",
- "ruma-signatures",
- "ruma-state-res",
- "web-time",
-]
-
-[[package]]
-name = "ruma-appservice-api"
-version = "0.16.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "js_int",
- "ruma-common",
- "ruma-events",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ruma-client-api"
-version = "0.24.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
 dependencies = [
  "as_variant",
  "assert_matches2",
@@ -5869,37 +5836,6 @@ dependencies = [
  "serde",
  "syn 3.0.3",
  "toml 1.1.2+spec-1.1.0",
-]
-
-[[package]]
-name = "ruma-signatures"
-version = "0.21.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "base64 0.22.1",
- "ed25519-dalek",
- "pkcs8",
- "rand 0.10.2",
- "ruma-common",
- "ruma-events",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "ruma-state-res"
-version = "0.17.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "js_int",
- "ruma-common",
- "ruma-events",
- "ruma-signatures",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tracing",
 ]
 
 [[package]]

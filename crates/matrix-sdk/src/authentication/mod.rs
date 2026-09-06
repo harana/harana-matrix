@@ -14,10 +14,11 @@
 
 //! Types and functions related to authentication in Matrix.
 
-use std::{fmt, sync::Arc};
+use std::{fmt, sync::Arc, time::Duration};
 
 use matrix_sdk_base::{SessionMeta, locks::Mutex};
 use matrix_sdk_common::BoxFuture;
+use ruma::time::Instant;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex as AsyncMutex, OnceCell, broadcast};
 
@@ -49,6 +50,12 @@ impl fmt::Debug for SessionTokens {
     }
 }
 
+/// How long before an access token expires we try to refresh it.
+///
+/// Refreshing this far ahead means the token is still valid while the refresh
+/// is in flight, so a request made in the meantime does not fail.
+const TOKEN_REFRESH_LEEWAY: Duration = Duration::from_secs(60);
+
 /// The tokens for a user session and their state.
 pub(crate) struct SessionTokensState {
     /// The inner tokens.
@@ -61,6 +68,14 @@ pub(crate) struct SessionTokensState {
     /// access token to try to refresh it, or wait for it to be refreshed. If we
     /// make a request without the access token we will get the wrong error.
     access_token_expired: bool,
+
+    /// When the access token expires, if the server said so when it issued it.
+    ///
+    /// This is not persisted with the session: it is only known for a token
+    /// this process obtained itself, at login or at a refresh. A restored
+    /// session falls back to refreshing reactively, when the homeserver
+    /// rejects the token.
+    expires_at: Option<Instant>,
 }
 
 pub(crate) type SessionCallbackError = Box<dyn std::error::Error + Send + Sync>;
@@ -151,18 +166,69 @@ impl AuthCtx {
         self.tokens.get().is_some_and(|tokens| !tokens.lock().access_token_expired)
     }
 
-    /// Set the current session tokens.
+    /// Set the current session tokens, without knowing when they expire.
     pub(crate) fn set_session_tokens(&self, session_tokens: SessionTokens) {
+        self.set_session_tokens_with_expiry(session_tokens, None);
+    }
+
+    /// Set the current session tokens, along with the lifetime the server gave
+    /// the access token, if it gave one.
+    ///
+    /// The lifetime is what lets the client refresh the token before it
+    /// expires, rather than after a request has already been rejected.
+    pub(crate) fn set_session_tokens_with_expiry(
+        &self,
+        session_tokens: SessionTokens,
+        expires_in: Option<Duration>,
+    ) {
         let session_tokens = SessionTokensState {
             inner: session_tokens,
             // We just got the tokens, so we assume that they are not expired.
             access_token_expired: false,
+            expires_at: expires_in.map(|expires_in| Instant::now() + expires_in),
         };
 
         if let Some(tokens) = self.tokens.get() {
             *tokens.lock() = session_tokens;
         } else {
             let _ = self.tokens.set(Mutex::new(session_tokens));
+        }
+    }
+
+    /// Whether the access token is close enough to its expiration that it
+    /// should be refreshed before making another request with it.
+    ///
+    /// Always `false` when the lifetime of the access token is unknown, which
+    /// is the case for a restored session: there is nothing to act on until
+    /// the homeserver rejects the token.
+    pub(crate) fn access_token_expires_soon(&self) -> bool {
+        let Some(tokens) = self.tokens.get() else {
+            return false;
+        };
+        let tokens = tokens.lock();
+
+        tokens
+            .expires_at
+            .is_some_and(|expires_at| Instant::now() + TOKEN_REFRESH_LEEWAY >= expires_at)
+    }
+
+    /// Whether a token refresh is happening right now, in this process.
+    ///
+    /// Requests made by a refresh must not wait for that refresh to finish, or
+    /// they would deadlock it: they go out with the token that is still
+    /// current instead.
+    pub(crate) fn refresh_in_progress(&self) -> bool {
+        self.refresh_token_lock.try_lock().is_err()
+    }
+
+    /// Forget when the access token expires.
+    ///
+    /// Called when refreshing ahead of the expiration failed: without this,
+    /// every subsequent request would try to refresh again, since the
+    /// expiration only moves further into the past.
+    pub(crate) fn forget_access_token_expiry(&self) {
+        if let Some(tokens) = self.tokens.get() {
+            tokens.lock().expires_at = None;
         }
     }
 

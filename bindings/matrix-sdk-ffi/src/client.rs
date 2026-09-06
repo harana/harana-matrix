@@ -3378,6 +3378,9 @@ impl Session {
                 let matrix_sdk::authentication::matrix::MatrixSession {
                     meta: matrix_sdk::SessionMeta { user_id, device_id },
                     tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                    // This type has carried the homeserver of its own since before the
+                    // SDK's session did, and it is the one the caller passed in.
+                    homeserver: _,
                 } = a.session().context("Missing session")?;
 
                 Ok(Session {
@@ -3395,6 +3398,7 @@ impl Session {
                 let matrix_sdk::authentication::oauth::UserSession {
                     meta: matrix_sdk::SessionMeta { user_id, device_id },
                     tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                    homeserver: _,
                 } = api.user_session().context("Missing session")?;
                 let client_id = api.client_id().context("OAuth client ID is missing.")?.clone();
                 let oauth_data = OAuthSessionData { client_id };
@@ -3427,7 +3431,7 @@ impl TryFrom<Session> for AuthSession {
             refresh_token,
             user_id,
             device_id,
-            homeserver_url: _,
+            homeserver_url,
             oauth_data: oauth_data_string,
             sliding_sync_version: _,
         } = value;
@@ -3442,6 +3446,7 @@ impl TryFrom<Session> for AuthSession {
                     device_id: device_id.into(),
                 },
                 tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                homeserver: Url::parse(&homeserver_url).ok(),
             };
 
             let session = OAuthSession { client_id: oauth_data.client_id, user: user_session };
@@ -3455,6 +3460,7 @@ impl TryFrom<Session> for AuthSession {
                     device_id: device_id.into(),
                 },
                 tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                homeserver: Url::parse(&homeserver_url).ok(),
             };
 
             Ok(AuthSession::Matrix(session))

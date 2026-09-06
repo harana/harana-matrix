@@ -1045,7 +1045,9 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
         // there will often not be any, and only emitting a single
         // `VectorDiff::Clear` should be much more efficient to process for
         // subscribers.
-        if self.items.has_local() {
+        let has_local = self.items.has_local();
+
+        if has_local {
             // Remove all remote events and virtual items that aren't date dividers.
             self.items.for_each(|entry| {
                 if entry.is_remote_event()
@@ -1076,7 +1078,10 @@ impl<'a, P: RoomDataProvider> TimelineStateTransaction<'a, P> {
             self.items.clear();
         }
 
-        self.meta.clear();
+        // The local echoes that were kept above must keep their aggregations, or a
+        // reset racing one of them leaves it stuck: nothing would map its
+        // transaction id to its event id when the send queue reports it sent.
+        self.meta.clear(has_local);
 
         debug!(remaining_items = self.items.len(), "Timeline cleared");
     }

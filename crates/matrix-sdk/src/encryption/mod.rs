@@ -66,8 +66,11 @@ use ruma::{
     api::{
         client::{
             keys::{
-                get_keys, upload_keys, upload_signatures::v3::Request as UploadSignaturesRequest,
-                upload_signing_keys::v3::Request as UploadSigningKeysRequest,
+                get_keys, upload_keys,
+                upload_signatures::v3::Request as UploadSignaturesRequest,
+                upload_signing_keys::v3::{
+                    Request as UploadSigningKeysRequest, Response as UploadSigningKeysResponse,
+                },
             },
             message::send_message_event,
             to_device::send_event_to_device::v3::{
@@ -387,7 +390,12 @@ impl CrossSigningResetHandle {
                     "Repeatedly PUTting to keys/device_signing/upload until it works \
                     or we hit a permanent failure."
                 );
-                while let Err(e) = self.client.send(upload_request.clone()).await {
+                let response = loop {
+                    let e = match self.client.send(upload_request.clone()).await {
+                        Ok(response) => break response,
+                        Err(e) => e,
+                    };
+
                     if *self.is_cancelled.lock().await {
                         return Ok(());
                     }
@@ -410,8 +418,9 @@ impl CrossSigningResetHandle {
                         a short delay."
                     );
                     sleep(RETRY_EVERY).await;
-                }
+                };
 
+                self.client.mark_cross_signing_identity_as_published(&response).await;
                 self.client.send(self.signatures_request.clone()).await?;
 
                 Ok(())
@@ -601,6 +610,41 @@ impl Client {
             )
             .mark_request_as_sent(request_id, response)
             .await?)
+    }
+
+    /// Record that our cross-signing identity reached the homeserver.
+    ///
+    /// The upload of the cross-signing keys is made by the `Client` rather than
+    /// driven by the `OlmMachine`, so the machine only learns that the keys
+    /// were published if it is told, and that is what makes
+    /// [`CrossSigningStatus::is_published`] mean anything. An identity that we
+    /// hold but never published looks complete here while every other device
+    /// still sees ours as unverified, so this is also what tells us that the
+    /// upload needs retrying.
+    ///
+    /// A failure to write that down is not a failure to publish: the keys did
+    /// reach the homeserver. It only costs a redundant upload the next time
+    /// the identity is checked, so it is logged rather than reported.
+    ///
+    /// [`CrossSigningStatus::is_published`]:
+    ///     matrix_sdk_base::crypto::olm::CrossSigningStatus::is_published
+    pub(crate) async fn mark_cross_signing_identity_as_published(
+        &self,
+        response: &UploadSigningKeysResponse,
+    ) {
+        use matrix_sdk_base::crypto::types::requests::AnyIncomingResponse;
+
+        // The request ID is unused for this response: the machine has no outstanding
+        // request to match it against, since the `Client` sent it.
+        if let Err(error) = self
+            .mark_request_as_sent(
+                &TransactionId::new(),
+                AnyIncomingResponse::SigningKeysUpload(response),
+            )
+            .await
+        {
+            error!("Couldn't record that the cross-signing keys were published: {error:?}");
+        }
     }
 
     /// Query the server for users device keys.
@@ -1501,7 +1545,9 @@ impl Encryption {
         if let Some(req) = upload_keys_req {
             self.client.send_outgoing_request(req).await?;
         }
-        self.client.send(upload_signing_keys_req).await?;
+        let response = self.client.send(upload_signing_keys_req).await?;
+        self.client.mark_cross_signing_identity_as_published(&response).await;
+
         self.client.send(upload_signatures_req).await?;
 
         Ok(())
@@ -1568,23 +1614,27 @@ impl Encryption {
             self.client.send_outgoing_request(req).await?;
         }
 
-        if let Err(error) = self.client.send(upload_signing_keys_req.clone()).await {
-            if let Ok(Some(auth_type)) = CrossSigningResetAuthType::new(&error) {
-                let client = self.client.clone();
+        match self.client.send(upload_signing_keys_req.clone()).await {
+            Err(error) => {
+                if let Ok(Some(auth_type)) = CrossSigningResetAuthType::new(&error) {
+                    let client = self.client.clone();
 
-                Ok(Some(CrossSigningResetHandle::new(
-                    client,
-                    upload_signing_keys_req,
-                    upload_signatures_req,
-                    auth_type,
-                )))
-            } else {
-                Err(error.into())
+                    Ok(Some(CrossSigningResetHandle::new(
+                        client,
+                        upload_signing_keys_req,
+                        upload_signatures_req,
+                        auth_type,
+                    )))
+                } else {
+                    Err(error.into())
+                }
             }
-        } else {
-            self.client.send(upload_signatures_req).await?;
+            Ok(response) => {
+                self.client.mark_cross_signing_identity_as_published(&response).await;
+                self.client.send(upload_signatures_req).await?;
 
-            Ok(None)
+                Ok(None)
+            }
         }
     }
 
@@ -1654,13 +1704,34 @@ impl Encryption {
         &self,
         auth_data: Option<AuthData>,
     ) -> Result<()> {
-        let olm_machine = self.client.olm_machine().await;
-        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
-        let user_id = olm_machine.user_id();
+        let (user_id, status) = {
+            let olm_machine = self.client.olm_machine().await;
+            let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
+
+            (olm_machine.user_id().to_owned(), olm_machine.cross_signing_status().await)
+        };
 
         self.ensure_initial_key_query().await?;
 
-        if self.client.encryption().get_user_identity(user_id).await?.is_none() {
+        // An identity we hold but never managed to publish is the case worth retrying:
+        // we think we are cross-signed while the homeserver never got the keys, so
+        // everybody else still sees this device as unverified, and nothing else ever
+        // tries that upload again.
+        let unpublished_identity = status.is_complete() && !status.is_published;
+
+        if unpublished_identity {
+            warn!(
+                "The cross-signing identity was never published, publishing it again \
+                 rather than leaving this device unverified to everybody else."
+            );
+        }
+
+        if unpublished_identity
+            || self.client.encryption().get_user_identity(&user_id).await?.is_none()
+        {
+            // Uploading keys that are already on the homeserver is what
+            // `bootstrap_cross_signing` does for an identity it already has: it doesn't
+            // create a new one, so this cannot lose the keys we hold.
             self.bootstrap_cross_signing(auth_data).await?;
         }
 

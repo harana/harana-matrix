@@ -456,6 +456,58 @@ async fn test_backpaginate_many_times_with_many_iterations() {
 }
 
 #[async_test]
+async fn test_backpaginate_with_an_empty_response_and_an_unchanged_token() {
+    // A server may answer a back-pagination with no events and the very token the
+    // request was made with. Asking again would get the same answer, so the
+    // pagination must stop instead of looping, and the timeline must be told the
+    // start has been reached rather than left loading forever.
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let event_cache = client.event_cache();
+    event_cache.subscribe().unwrap();
+
+    let room_id = room_id!("!omelette:fromage.fr");
+    let f = EventFactory::new().room(room_id).sender(user_id!("@a:b.c"));
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("heyo").event_id(event_id!("$1")))
+                .set_timeline_prev_batch("prev_batch".to_owned())
+                .set_timeline_limited(),
+        )
+        .await;
+
+    let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+    let (events, mut room_stream) = room_event_cache.subscribe().await.unwrap();
+    wait_for_initial_events(events, &mut room_stream).await;
+
+    // The server keeps handing back the token it was given, with nothing to show
+    // for it. `mock_once` makes a second request fail the test.
+    server
+        .mock_room_messages()
+        .match_from("prev_batch")
+        .ok(RoomMessagesResponseTemplate::default().end_token("prev_batch"))
+        .mock_once()
+        .mount()
+        .await;
+
+    let pagination = room_event_cache.pagination();
+
+    let outcome = pagination.run_backwards_until(20).await.unwrap();
+    assert!(outcome.events.is_empty());
+    assert!(outcome.reached_start);
+
+    // And the cache remembers it, so a second pagination doesn't hit the network
+    // either.
+    let outcome = pagination.run_backwards_until(20).await.unwrap();
+    assert!(outcome.events.is_empty());
+    assert!(outcome.reached_start);
+}
+
+#[async_test]
 async fn test_backpaginate_many_times_with_one_iteration() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;

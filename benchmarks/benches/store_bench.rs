@@ -58,6 +58,7 @@ pub fn restore_session(c: &mut Criterion) {
             device_id: owned_device_id!("DEVICE_ID"),
         },
         tokens: SessionTokens { access_token: "OHEY".to_owned(), refresh_token: None },
+        homeserver: None,
     };
 
     // Start the benchmark.

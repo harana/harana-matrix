@@ -645,7 +645,7 @@ impl Client {
     /// # Arguments
     ///
     /// * `homeserver_url` - The new URL to use.
-    fn set_homeserver(&self, homeserver_url: Url) {
+    pub(crate) fn set_homeserver(&self, homeserver_url: Url) {
         let mut homeserver = self.inner.homeserver.write().unwrap();
         let mut server = self.inner.server.write().unwrap();
 
@@ -1845,6 +1845,55 @@ impl Client {
         }
     }
 
+    /// Abort the requests this client still has in flight.
+    ///
+    /// Called at the end of logging out, together with
+    /// [`Client::stop_background_tasks`]: a request that is still waiting for
+    /// an answer belongs to the session that just ended, and there is nothing
+    /// useful the answer can be used for. Requests made after this are
+    /// unaffected: this ends a session, it doesn't close the client.
+    pub(crate) fn cancel_in_flight_requests(&self) {
+        self.inner.http_client.cancel_in_flight_requests();
+    }
+
+    /// Refresh the access token if it is about to expire.
+    ///
+    /// The homeserver tells us how long an access token is valid for when it
+    /// issues one, at login and at every refresh. Acting on that is what keeps
+    /// a request from being sent with a token that has just expired, paying
+    /// for a round trip and surfacing a transient failure; the reactive
+    /// refresh, on `M_UNKNOWN_TOKEN`, stays as the fallback for the tokens
+    /// whose lifetime we don't know, such as a restored session's.
+    ///
+    /// Errors are swallowed: this is an optimisation, and the request that
+    /// follows still has the reactive path behind it. A failed refresh does
+    /// drop the expiration, so that every later request doesn't try again.
+    pub(crate) async fn refresh_access_token_if_expiring(&self) {
+        if !self.inner.auth_ctx.handle_refresh_tokens
+            || !self.inner.auth_ctx.access_token_expires_soon()
+        {
+            return;
+        }
+
+        // A refresh makes requests of its own, and those come back through here: they
+        // must not wait for the refresh that is sending them, and there is nothing to
+        // wait for anyway, since the token is still valid for the duration of the
+        // leeway.
+        if self.inner.auth_ctx.refresh_in_progress() {
+            trace!("Token refresh: a refresh is already happening, not waiting for it.");
+            return;
+        }
+
+        trace!("Token refresh: the access token is about to expire, refreshing it.");
+
+        if let Err(error) = self.refresh_access_token().await {
+            warn!("Token refresh: refreshing before expiration failed: {error}");
+            // Don't try again on every subsequent request: an expiration in the past
+            // would make all of them think a refresh is due.
+            self.inner.auth_ctx.forget_access_token_expiry();
+        }
+    }
+
     /// Refresh the access token using the authentication API used to log into
     /// this session.
     ///
@@ -2962,7 +3011,79 @@ impl Client {
 
         well_known_cache.set_value(well_known.clone());
 
-        well_known.into_data()
+        let well_known = well_known.into_data();
+
+        // The file we just fetched is the homeserver's own statement of where it
+        // lives, so a base URL that no longer matches means it moved.
+        if let Some(response) = &well_known {
+            self.follow_well_known_homeserver(&response.homeserver.base_url);
+        }
+
+        well_known
+    }
+
+    /// Point this client at the homeserver the well-known file advertises, if
+    /// that is not where it is pointed already.
+    ///
+    /// Doing nothing when [`ClientBuilder::respect_login_well_known`] was
+    /// turned off is what makes a manual homeserver URL stick: that is for
+    /// setups where the URL requests go to is deliberately not the one
+    /// discovery hands out, a proxy being the usual reason.
+    ///
+    /// [`ClientBuilder::respect_login_well_known`]:
+    ///     crate::ClientBuilder::respect_login_well_known
+    fn follow_well_known_homeserver(&self, base_url: &str) {
+        if !self.inner.respect_login_well_known {
+            return;
+        }
+
+        let Ok(homeserver) = Url::parse(base_url) else {
+            warn!("The well-known file advertises a homeserver URL we can't parse: {base_url}");
+            return;
+        };
+
+        if homeserver == self.homeserver() {
+            return;
+        }
+
+        info!(
+            from = %self.homeserver(),
+            to = %homeserver,
+            "The homeserver moved, following the well-known file to its new address",
+        );
+        self.set_homeserver(homeserver);
+    }
+
+    /// Check whether the homeserver has moved, and follow it there if it has.
+    ///
+    /// A homeserver's address is not forever: the `.well-known` file the
+    /// server name points at can start advertising another one, and a client
+    /// that only ever read that file when it first logged in goes on talking
+    /// to an address that may stop answering. There is no notification for
+    /// this, so a client that means to survive a move should call this from
+    /// time to time -- at startup, or once a day -- rather than continuously.
+    ///
+    /// Returns whether the homeserver moved. When it did, the session's
+    /// homeserver has changed too and should be saved again: see
+    /// [`MatrixSession::homeserver`].
+    ///
+    /// Does nothing when the lookup was disabled with
+    /// [`Client::disable_well_known_lookup()`] or when the client was built
+    /// with [`ClientBuilder::respect_login_well_known(false)`][respect]: an
+    /// explicitly configured homeserver URL is meant for setups, such as a
+    /// proxy, where discovery is deliberately not in charge.
+    ///
+    /// [`MatrixSession::homeserver`]:
+    ///     crate::authentication::matrix::MatrixSession::homeserver
+    /// [respect]: crate::ClientBuilder::respect_login_well_known
+    pub async fn revalidate_homeserver(&self) -> Result<bool> {
+        let before = self.homeserver();
+
+        // The point is to ask the server again, so the cached answer won't do.
+        self.reset_well_known().await?;
+        self.refresh_well_known_cache().await;
+
+        Ok(self.homeserver() != before)
     }
 
     /// Whether this client is allowed to look up the homeserver's
@@ -5029,6 +5150,68 @@ pub(crate) mod tests {
         // again.
         sleep(Duration::from_secs(1)).await;
         assert_matches!(client.inner.caches.supported_versions.value(), CachedValue::Cached(value) if !value.has_expired());
+    }
+
+    #[async_test]
+    async fn test_revalidating_the_homeserver_follows_a_move() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().unlogged().build().await;
+        let previous_homeserver = client.homeserver();
+
+        // The server answers where it always did, but its well-known file now points
+        // somewhere else: this is what a homeserver that moved looks like to a client
+        // that only ever read that file when it first logged in.
+        let moved = server
+            .mock_well_known()
+            .ok_with_homeserver_url("https://elsewhere.example.org")
+            .expect(1..)
+            .named("well-known of the server that moved")
+            .mount_as_scoped()
+            .await;
+
+        assert!(client.revalidate_homeserver().await.unwrap(), "the homeserver moved");
+        assert_eq!(client.homeserver(), Url::parse("https://elsewhere.example.org").unwrap());
+        assert_ne!(client.homeserver(), previous_homeserver);
+
+        drop(moved);
+    }
+
+    #[async_test]
+    async fn test_revalidating_the_homeserver_reports_no_move_when_it_stayed() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().unlogged().build().await;
+        let homeserver = client.homeserver();
+
+        server.mock_well_known().ok().expect(1..).named("well-known").mount().await;
+
+        assert!(!client.revalidate_homeserver().await.unwrap(), "the homeserver stayed put");
+        assert_eq!(client.homeserver(), homeserver);
+    }
+
+    #[async_test]
+    async fn test_a_manually_set_homeserver_is_not_moved_by_discovery() {
+        let server = MatrixMockServer::new().await;
+        // A homeserver URL that was configured rather than discovered: a proxy in
+        // front of the homeserver is the usual reason, and discovery knows nothing
+        // about it.
+        let client = server
+            .client_builder()
+            .unlogged()
+            .on_builder(|builder| builder.respect_login_well_known(false))
+            .build()
+            .await;
+        let homeserver = client.homeserver();
+
+        server
+            .mock_well_known()
+            .ok_with_homeserver_url("https://elsewhere.example.org")
+            .expect(1..)
+            .named("well-known")
+            .mount()
+            .await;
+
+        assert!(!client.revalidate_homeserver().await.unwrap());
+        assert_eq!(client.homeserver(), homeserver);
     }
 
     #[async_test]
