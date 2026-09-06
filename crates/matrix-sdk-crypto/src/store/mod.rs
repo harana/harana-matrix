@@ -67,9 +67,9 @@ use types::{RoomKeyBundleInfo, StoredRoomKeyBundleData};
 use vodozemac::{Curve25519PublicKey, megolm::SessionOrdering};
 
 use self::types::{
-    Changes, CrossSigningKeyExport, DeviceChanges, DeviceUpdates, IdentityChanges, IdentityUpdates,
-    PendingChanges, RoomKeyInfo, RoomKeyWithheldInfo, RoomPendingKeyBundleDetails, RoomSettings,
-    UserKeyQueryResult,
+    BackupAuthenticity, Changes, CrossSigningKeyExport, DeviceChanges, DeviceUpdates,
+    IdentityChanges, IdentityUpdates, PendingChanges, RoomKeyInfo, RoomKeyWithheldInfo,
+    RoomPendingKeyBundleDetails, RoomSettings, UserKeyQueryResult,
 };
 use crate::{
     CrossSigningStatus, OwnUserIdentityData, RoomKeyImportResult,
@@ -1717,6 +1717,57 @@ impl Store {
         progress_listener: impl Fn(usize, usize),
     ) -> Result<RoomKeyImportResult> {
         self.import_room_keys(exported_keys, None, progress_listener).await
+    }
+
+    /// Import room keys downloaded from a server-side key backup.
+    ///
+    /// # Arguments
+    ///
+    /// * `exported_keys` - The keys, already decrypted with the backup
+    ///   decryption key.
+    /// * `backup_version` - The version of the backup they came from.
+    /// * `authenticity` - Whether the backup's auth data carries a signature we
+    ///   trust. Keys from a backup we cannot authenticate are not grandfathered
+    ///   as legacy sessions, so a client asking for cross-signed senders only
+    ///   will refuse to show their messages rather than showing them with a
+    ///   warning.
+    /// * `progress_listener` - Called with `(processed, total)` after each key.
+    pub async fn import_backed_up_room_keys(
+        &self,
+        exported_keys: Vec<ExportedRoomKey>,
+        backup_version: &str,
+        authenticity: BackupAuthenticity,
+        progress_listener: impl Fn(usize, usize),
+    ) -> Result<RoomKeyImportResult> {
+        let sessions = exported_keys.iter().filter_map(|key| {
+            let session: std::result::Result<InboundGroupSession, _> = key.try_into();
+
+            match session {
+                Ok(mut session) => {
+                    if authenticity == BackupAuthenticity::Unauthenticated {
+                        // A backup we cannot tie to our own identity or to a verified
+                        // device tells us nothing about who sent these keys, so the
+                        // sessions must not claim the benefit of the doubt that
+                        // sessions predating sender data collection get.
+                        session.sender_data = SenderData::unknown();
+                    }
+
+                    Some(session)
+                }
+                Err(e) => {
+                    warn!(
+                        sender_key = key.sender_key().to_base64(),
+                        room_id = ?key.room_id(),
+                        session_id = key.session_id(),
+                        error = ?e,
+                        "Couldn't import a room key from a backup."
+                    );
+                    None
+                }
+            }
+        });
+
+        self.import_sessions_impl(sessions, Some(backup_version), progress_listener).await
     }
 
     async fn import_sessions_impl(

@@ -127,7 +127,7 @@ impl SignatureState {
 
     /// Did we find a valid signature?
     pub fn signed(self) -> bool {
-        self == SignatureState::ValidButNotTrusted && self == SignatureState::ValidAndTrusted
+        self == SignatureState::ValidButNotTrusted || self == SignatureState::ValidAndTrusted
     }
 }
 

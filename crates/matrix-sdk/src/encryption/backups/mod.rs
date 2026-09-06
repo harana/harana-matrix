@@ -29,7 +29,7 @@ use matrix_sdk_base::crypto::types::events::room::encrypted::EncryptedEvent;
 use matrix_sdk_base::crypto::{
     OlmMachine, RoomKeyImportResult,
     backups::MegolmV1BackupKey,
-    store::types::BackupDecryptionKey,
+    store::types::{BackupAuthenticity, BackupDecryptionKey},
     types::{RoomKeyBackupInfo, requests::KeysBackupRequest},
 };
 #[cfg(feature = "experimental-push-secrets")]
@@ -40,8 +40,9 @@ use ruma::{
     OwnedRoomId, RoomId, TransactionId,
     api::{
         client::backup::{
-            RoomKeyBackup, add_backup_keys, create_backup_version, get_backup_keys,
-            get_backup_keys_for_room, get_backup_keys_for_session, get_latest_backup_info,
+            RoomKeyBackup, add_backup_keys, create_backup_version, get_backup_info,
+            get_backup_keys, get_backup_keys_for_room, get_backup_keys_for_session,
+            get_latest_backup_info,
         },
         error::ErrorKind,
     },
@@ -629,6 +630,66 @@ impl Backups {
         Ok(())
     }
 
+    /// Check whether the backup we are about to import keys from carries a
+    /// signature we trust.
+    ///
+    /// Anyone who can write to the account's key backup can put keys in it, so
+    /// keys from a backup whose auth data we cannot tie to our own identity or
+    /// to a device we have verified say nothing about who sent the original
+    /// messages. Telling the [`OlmMachine`] which of the two we have lets it
+    /// refuse to show those messages to a client that asked for cross-signed
+    /// senders only, rather than showing them behind a warning.
+    ///
+    /// A backup whose auth data we cannot fetch or parse is treated as
+    /// unauthenticated: the safe answer is the one that shows less.
+    async fn backup_authenticity(
+        &self,
+        backup_version: &str,
+        olm_machine: &OlmMachine,
+    ) -> BackupAuthenticity {
+        let request = get_backup_info::v3::Request::new(backup_version.to_owned());
+
+        let backup_info = match self.client.send(request).await {
+            Ok(response) => response.algorithm.deserialize_as::<RoomKeyBackupInfo>(),
+            Err(error) => {
+                warn!(
+                    backup_version,
+                    ?error,
+                    "Could not fetch the backup info to check the backup's signatures",
+                );
+                return BackupAuthenticity::Unauthenticated;
+            }
+        };
+
+        let backup_info = match backup_info {
+            Ok(info) => info,
+            Err(error) => {
+                warn!(
+                    backup_version,
+                    ?error,
+                    "Could not parse the auth data of the backup we are importing keys from",
+                );
+                return BackupAuthenticity::Unauthenticated;
+            }
+        };
+
+        match olm_machine.backup_machine().verify_backup(backup_info, false).await {
+            Ok(verification) if verification.trusted() => BackupAuthenticity::Authenticated,
+            Ok(_) => {
+                warn!(
+                    backup_version,
+                    "Importing keys from a backup we could not tie to our own identity or to a \
+                     verified device",
+                );
+                BackupAuthenticity::Unauthenticated
+            }
+            Err(error) => {
+                warn!(backup_version, ?error, "Could not check the signatures on the backup");
+                BackupAuthenticity::Unauthenticated
+            }
+        }
+    }
+
     /// Decrypt and forward a response containing backed up room keys to the
     /// [`OlmMachine`].
     ///
@@ -680,9 +741,16 @@ impl Backups {
             }
         }
 
+        let authenticity = self.backup_authenticity(backup_version, olm_machine).await;
+
         let result = olm_machine
             .store()
-            .import_room_keys(decrypted_room_keys, Some(backup_version), |_, _| {})
+            .import_backed_up_room_keys(
+                decrypted_room_keys,
+                backup_version,
+                authenticity,
+                |_, _| {},
+            )
             .await?;
 
         // Since we can't use the usual room keys stream from the `OlmMachine`

@@ -80,7 +80,10 @@ use crate::{
     session_manager::CollectStrategy,
     store::{
         CryptoStore, MemoryStore,
-        types::{BackupDecryptionKey, Changes, DeviceChanges, PendingChanges, RoomKeyInfo},
+        types::{
+            BackupAuthenticity, BackupDecryptionKey, Changes, DeviceChanges, PendingChanges,
+            RoomKeyInfo,
+        },
     },
     types::{
         DeviceKeys, SignedKey, SigningKeys,
@@ -906,6 +909,78 @@ async fn test_megolm_encryption() {
     if let Some(igs) = room_keys_received_stream.next().now_or_never() {
         panic!("Session stream unexpectedly returned update: {igs:?}");
     }
+}
+
+/// Anyone who can write to the account's key backup can put keys in it, so
+/// keys from a backup we cannot tie to our own identity or to a verified device
+/// must not get the benefit of the doubt that sessions predating sender data
+/// collection get.
+#[async_test]
+async fn test_keys_from_an_unauthenticated_backup_are_not_legacy_sessions() {
+    let data = json!({
+       "algorithm": "m.megolm.v1.aes-sha2",
+       "room_id": "!room:id",
+       "sender_key": "FOvlmz18LLI3k/llCpqRoKT90+gFF8YhuL+v1YBXHlw",
+       "session_id": "/2K+V777vipCxPZ0gpY9qcpz1DYaXwuMRIu0UEP0Wa0",
+       "session_key": "AQAAAAAclzWVMeWBKH+B/WMowa3rb4ma3jEl6n5W4GCs9ue65CruzD3ihX+85pZ9hsV9Bf6fvhjp76WNRajoJYX0UIt7aosjmu0i+H+07hEQ0zqTKpVoSH0ykJ6stAMhdr6Q4uW5crBmdTTBIsqmoWsNJZKKoE2+ldYrZ1lrFeaJbjBIY/9ivle++74qQsT2dIKWPanKc9Q2Gl8LjESLtFBD9Fmt",
+       "sender_claimed_keys": {
+           "ed25519": "F4P7f1Z0RjbiZMgHk1xBCG3KC4/Ng9PmxLJ4hQ13sHA"
+       },
+       "forwarding_curve25519_key_chain": []
+    });
+
+    let room_id = owned_room_id!("!room:id");
+    let session_id = "/2K+V777vipCxPZ0gpY9qcpz1DYaXwuMRIu0UEP0Wa0";
+
+    let exported_key = || {
+        let backed_up_room_key: BackedUpRoomKey = serde_json::from_value(data.clone()).unwrap();
+        ExportedRoomKey::from_backed_up_room_key(
+            room_id.clone(),
+            session_id.into(),
+            backed_up_room_key,
+        )
+    };
+
+    // A backup whose signatures we trust: the session is grandfathered, as a
+    // session from before we started collecting sender data would be.
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+    machine
+        .store()
+        .import_backed_up_room_keys(
+            vec![exported_key()],
+            "1",
+            BackupAuthenticity::Authenticated,
+            |_, _| {},
+        )
+        .await
+        .unwrap();
+
+    let session =
+        machine.store().get_inbound_group_session(&room_id, session_id).await.unwrap().unwrap();
+    assert_matches!(
+        session.sender_data,
+        SenderData::UnknownDevice { legacy_session: true, .. }
+    );
+
+    // A backup we could not authenticate: it is not.
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+    machine
+        .store()
+        .import_backed_up_room_keys(
+            vec![exported_key()],
+            "1",
+            BackupAuthenticity::Unauthenticated,
+            |_, _| {},
+        )
+        .await
+        .unwrap();
+
+    let session =
+        machine.store().get_inbound_group_session(&room_id, session_id).await.unwrap().unwrap();
+    assert_matches!(
+        session.sender_data,
+        SenderData::UnknownDevice { legacy_session: false, .. }
+    );
 }
 
 /// A Megolm ciphertext says nothing about the event it arrived in, so a
