@@ -25,9 +25,14 @@ default = []
 # needs neither `client` nor `server`.
 appservice-api-s = []
 
+# State resolution and the checks performed on receipt of a PDU. Vendored from
+# `ruma-state-res`, see `src/state_res.rs`.
+state-res = ["signatures"]
+
 # Everything the vendored test suite needs. Not meant for downstream use.
 full = [
     "appservice-api-s",
+    "state-res",
     "client",
     "server",
     "federation-api",
