@@ -77,23 +77,23 @@ const ROOM_KEY: &[u8] = b"\
 
 fn matrix_session_example() -> MatrixSession {
     MatrixSession {
+        homeserver: None,
         meta: SessionMeta {
             user_id: owned_user_id!("@example:morpheus.localhost"),
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
-        homeserver: None,
     }
 }
 
 fn matrix_session_example2() -> MatrixSession {
     MatrixSession {
+        homeserver: None,
         meta: SessionMeta {
             user_id: owned_user_id!("@example2:morpheus.localhost"),
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
-        homeserver: None,
     }
 }
 

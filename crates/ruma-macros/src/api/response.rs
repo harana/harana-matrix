@@ -24,6 +24,13 @@ pub fn expand_response(attrs: ResponseAttrs, item: syn::ItemStruct) -> TokenStre
 
     let error_ty = attrs.error_ty_or_default(&ruma_common);
     let status_ident = attrs.status_or_default();
+    // `#[derive(Response)]` reads its settings back off `#[ruma_api(..)]`, so
+    // anything set on `#[response(..)]` has to be passed along there.
+    let manual_body_serde = if attrs.manual_body_serde {
+        quote! { , manual_body_serde }
+    } else {
+        TokenStream::new()
+    };
 
     cfg_if! {
         // Make the macro expand the internal derives, such that Rust Analyzer's expand macro helper can
@@ -33,7 +40,7 @@ pub fn expand_response(attrs: ResponseAttrs, item: syn::ItemStruct) -> TokenStre
 
             let mut derive_input = item.clone();
             derive_input.attrs.push(parse_quote! {
-                #[ruma_api(error = #error_ty, status = #status_ident)]
+                #[ruma_api(error = #error_ty, status = #status_ident #manual_body_serde)]
             });
             crate::util::cfg_expand_struct(&mut derive_input);
 
@@ -44,7 +51,7 @@ pub fn expand_response(attrs: ResponseAttrs, item: syn::ItemStruct) -> TokenStre
         } else {
             let extra_derive = quote! { #ruma_macros::Response };
             let ruma_api_attribute = quote! {
-                #[ruma_api(error = #error_ty, status = #status_ident)]
+                #[ruma_api(error = #error_ty, status = #status_ident #manual_body_serde)]
             };
             let response_impls = quote! {};
         }

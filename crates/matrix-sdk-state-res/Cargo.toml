@@ -16,8 +16,9 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [dependencies]
-# The vendored `ruma` has no `state-res` feature: state resolution lives here, not there.
-ruma = { workspace = true }
+# This crate is the store-backed adapter over `ruma::state_res`, which the
+# vendored `ruma` exposes behind its `state-res` feature.
+ruma = { workspace = true, features = ["state-res"] }
 thiserror.workspace = true
 tracing.workspace = true
 

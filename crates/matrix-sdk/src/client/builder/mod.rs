@@ -26,6 +26,7 @@ use std::{
     collections::BTreeSet,
     fmt,
     sync::{Arc, RwLock as StdRwLock},
+    time::Duration,
 };
 
 #[cfg(feature = "sqlite")]
@@ -128,6 +129,7 @@ pub struct ClientBuilder {
     request_config: RequestConfig,
     respect_login_well_known: bool,
     well_known_lookup_disabled: bool,
+    discovery_cache_timeout: Duration,
     server_versions: Option<BTreeSet<MatrixVersion>>,
     handle_refresh_tokens: bool,
     base_client: Option<BaseClient>,
@@ -168,6 +170,7 @@ impl ClientBuilder {
             request_config: Default::default(),
             respect_login_well_known: true,
             well_known_lookup_disabled: false,
+            discovery_cache_timeout: Client::DEFAULT_DISCOVERY_CACHE_TIMEOUT,
             server_versions: None,
             handle_refresh_tokens: false,
             base_client: None,
@@ -471,6 +474,25 @@ impl ClientBuilder {
     /// [`Client::well_known_rtc_transports`]: crate::Client::well_known_rtc_transports
     pub fn disable_well_known_lookup(mut self, disable: bool) -> Self {
         self.well_known_lookup_disabled = disable;
+        self
+    }
+
+    /// How long a discovery result stays usable before it is fetched again.
+    ///
+    /// The homeserver's `/.well-known/matrix/client` file, its supported
+    /// Matrix versions and its capabilities are persisted in the store with
+    /// the time they were fetched, so a restart doesn't re-run discovery.
+    /// Past this timeout the stored copy is still served, and a refresh is
+    /// started in the background through the normal request path, so a stale
+    /// entry never blocks startup.
+    ///
+    /// Defaults to [`Client::DEFAULT_DISCOVERY_CACHE_TIMEOUT`] (one day). A
+    /// deployment that moves its homeserver or turns capabilities on and off
+    /// often wants a shorter one; [`Duration::ZERO`] refreshes on every
+    /// startup. To force a refresh at a moment of the client's choosing,
+    /// rather than on a timer, use [`Client::rediscover`].
+    pub fn discovery_cache_timeout(mut self, timeout: Duration) -> Self {
+        self.discovery_cache_timeout = timeout;
         self
     }
 
@@ -893,6 +915,7 @@ impl ClientBuilder {
             well_known,
             self.respect_login_well_known,
             self.well_known_lookup_disabled,
+            self.discovery_cache_timeout,
             event_cache,
             self.enable_automatic_back_pagination,
             send_queue,

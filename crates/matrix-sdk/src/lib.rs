@@ -24,7 +24,67 @@
 //! signature, such as [`OwnedUserId`][types::OwnedUserId] and
 //! [`Raw`][types::Raw], are collected in [`matrix_sdk::types`][types], which is
 //! the place to start.
+//!
+//! # Matrix versions
+//!
+//! The types and endpoints this SDK is built on model the [Matrix
+//! specification] up to **v1.19**, the newest value of
+//! [`MatrixVersion`][ruma::api::MatrixVersion]. That is the ceiling: it says
+//! what the SDK knows how to speak, not what any given homeserver answers to.
+//!
+//! ## What the SDK does with the server's answer
+//!
+//! A [`Client`] asks the homeserver for its `/_matrix/client/versions` at
+//! startup and keeps the answer, so it knows both the Matrix versions the
+//! server implements and the unstable feature flags it advertises. That answer
+//! is persisted in the store alongside the time it was fetched, refreshed once
+//! older than [`ClientBuilder::discovery_cache_timeout`], and can be refreshed
+//! on demand with [`Client::rediscover`].
+//!
+//! The SDK then adapts to it, rather than assuming a version:
+//!
+//! * **Endpoint versions.** Every request carries the history of the paths it
+//!   has lived at. The path is chosen per request from what the server
+//!   advertises: the stable path when the server implements the Matrix version
+//!   that stabilised it, the unstable path when it only advertises the feature
+//!   flag the endpoint shipped behind, and an error when it offers neither.
+//!   Nothing has to be configured for this.
+//! * **Picking between two ways of doing one thing.** Where an older and a
+//!   newer endpoint both exist and the choice changes behaviour rather than
+//!   just the URL (authenticated media, deleting a profile field), the SDK asks
+//!   whether the newer one is supported and falls back if it isn't.
+//!   [`Client::supports_endpoint`] is that question, and is available to
+//!   callers making the same kind of choice in their own code.
+//! * **Room versions.** Rules that differ per room version, such as where a
+//!   redaction names the event it redacts, are read off the room's own version
+//!   rather than the server's.
+//!
+//! ## Inspecting and steering it
+//!
+//! * [`Client::supported_versions`] returns the versions and feature flags
+//!   together, [`Client::server_versions`] and [`Client::unstable_features`]
+//!   one each.
+//! * [`Client::supports_endpoint`] answers the question for one endpoint.
+//! * [`ClientBuilder::server_versions`] supplies the answer up front for a
+//!   server whose versions are already known, which skips the request.
+//! * [`Client::rediscover`] re-asks, for a server that has been upgraded
+//!   underneath a running client.
+//!
+//! Note that a homeserver advertising a Matrix version is a claim to implement
+//! all of it, so an endpoint that names neither a stable version nor a feature
+//! flag cannot be detected: [`Client::supports_endpoint`] answers `false` for
+//! it, and the only way to find out is to send the request.
+//!
+//! [Matrix specification]: https://spec.matrix.org/v1.19/
+//! [`Client`]: crate::Client
+//! [`ClientBuilder::discovery_cache_timeout`]: crate::ClientBuilder::discovery_cache_timeout
+//! [`ClientBuilder::server_versions`]: crate::ClientBuilder::server_versions
 #![warn(missing_debug_implementations, missing_docs)]
+// Async methods must hand back futures that can be spawned on a
+// multi-threaded runtime, which is what consumers of this crate do with
+// them. WASM has no threads and its host types are not `Send`, so the lint
+// is only applied elsewhere.
+#![cfg_attr(not(target_family = "wasm"), deny(clippy::future_not_send))]
 #![cfg_attr(target_family = "wasm", allow(clippy::arc_with_non_send_sync))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
