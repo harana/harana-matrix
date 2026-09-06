@@ -66,7 +66,8 @@ use ruma::{
     api::{
         client::{
             keys::{
-                get_keys, upload_keys, upload_signatures::v3::Request as UploadSignaturesRequest,
+                get_keys, upload_keys,
+                upload_signatures::v3::Request as UploadSignaturesRequest,
                 upload_signing_keys::v3::{
                     Request as UploadSigningKeysRequest, Response as UploadSigningKeysResponse,
                 },

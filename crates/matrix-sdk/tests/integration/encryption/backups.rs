@@ -82,6 +82,7 @@ fn matrix_session_example() -> MatrixSession {
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
+        homeserver: None,
     }
 }
 
@@ -92,6 +93,7 @@ fn matrix_session_example2() -> MatrixSession {
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
+        homeserver: None,
     }
 }
 

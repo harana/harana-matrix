@@ -589,7 +589,7 @@ impl OAuth {
     pub fn user_session(&self) -> Option<UserSession> {
         let meta = self.client.session_meta()?.to_owned();
         let tokens = self.client.session_tokens()?;
-        Some(UserSession { meta, tokens })
+        Some(UserSession { meta, tokens, homeserver: Some(self.client.homeserver()) })
     }
 
     /// The full OAuth 2.0 session of this client.
@@ -731,7 +731,16 @@ impl OAuth {
         session: OAuthSession,
         room_load_settings: RoomLoadSettings,
     ) -> Result<()> {
-        let OAuthSession { client_id, user: UserSession { meta, tokens } } = session;
+        let OAuthSession { client_id, user: UserSession { meta, tokens, homeserver } } = session;
+
+        // A session that knows where it came from spares us the `.well-known` lookup
+        // that discovering the homeserver again would cost, and works offline.
+        if let Some(homeserver) = &homeserver
+            && *homeserver != self.client.homeserver()
+        {
+            debug!(%homeserver, "Using the homeserver stored with the session");
+            self.client.set_homeserver(homeserver.clone());
+        }
 
         let data = OAuthAuthData { client_id, authorization_data: Default::default() };
 
@@ -1802,6 +1811,19 @@ pub struct UserSession {
     /// The tokens used for authentication.
     #[serde(flatten)]
     pub tokens: SessionTokens,
+
+    /// The URL of the homeserver this session belongs to.
+    ///
+    /// Kept with the session so that restoring it doesn't need to discover the
+    /// homeserver again, which costs a request to the server's `.well-known`
+    /// file at every start and fails when the device is offline. See
+    /// [`MatrixSession::homeserver`], which does the same for a session of the
+    /// native Matrix authentication API.
+    ///
+    /// [`MatrixSession::homeserver`]:
+    ///     crate::authentication::matrix::MatrixSession::homeserver
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homeserver: Option<Url>,
 }
 
 /// The data necessary to validate a response from the Token endpoint in the

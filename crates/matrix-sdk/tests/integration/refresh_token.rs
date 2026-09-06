@@ -44,6 +44,7 @@ fn session() -> MatrixSession {
             access_token: "1234".to_owned(),
             refresh_token: Some("abcd".to_owned()),
         },
+        homeserver: None,
     }
 }
 
@@ -1021,11 +1022,7 @@ async fn test_a_token_without_a_known_lifetime_is_not_refreshed_ahead_of_time() 
         .on_builder(|builder| builder.handle_refresh_tokens())
         .build()
         .await;
-    client
-        .matrix_auth()
-        .restore_session(session(), RoomLoadSettings::default())
-        .await
-        .unwrap();
+    client.matrix_auth().restore_session(session(), RoomLoadSettings::default()).await.unwrap();
 
     client.whoami().await.unwrap();
 }

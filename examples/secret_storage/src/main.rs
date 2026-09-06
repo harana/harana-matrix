@@ -116,6 +116,7 @@ async fn restore_client(cli: &Cli) -> Result<Client> {
     let session = AuthSession::Matrix(MatrixSession {
         meta: SessionMeta { user_id: cli.user_id.to_owned(), device_id: cli.device_id.to_owned() },
         tokens: SessionTokens { access_token: cli.access_token.to_owned(), refresh_token: None },
+        homeserver: None,
     });
 
     client.restore_session(session).await?;
