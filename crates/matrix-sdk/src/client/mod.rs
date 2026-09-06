@@ -373,6 +373,12 @@ pub(crate) struct ClientInner {
     /// information present in the login response.
     respect_login_well_known: bool,
 
+    /// How long the discovery data of the homeserver stays usable before it is
+    /// refreshed, see [`ClientBuilder::discovery_cache_timeout`].
+    ///
+    /// [`ClientBuilder::discovery_cache_timeout`]: crate::ClientBuilder::discovery_cache_timeout
+    discovery_cache_timeout: Duration,
+
     /// Whether all the `.well-known/matrix/client` lookups are disabled.
     ///
     /// See [`ClientBuilder::disable_well_known_lookup`].
@@ -478,6 +484,7 @@ impl ClientInner {
         well_known: CachedValue<TtlValue<Option<WellKnownResponse>>>,
         respect_login_well_known: bool,
         well_known_lookup_disabled: bool,
+        discovery_cache_timeout: Duration,
         event_cache: OnceCell<EventCache>,
         enable_automatic_back_pagination: bool,
         send_queue: Arc<SendQueueData>,
@@ -516,6 +523,7 @@ impl ClientInner {
             // ballast for all observers to catch up.
             room_updates_sender: broadcast::Sender::new(32),
             respect_login_well_known,
+            discovery_cache_timeout,
             well_known_lookup_disabled: StdRwLock::new(well_known_lookup_disabled),
             sync_beat: event_listener::Event::new(),
             is_syncing: Arc::new(AtomicBool::new(false)),
@@ -2674,7 +2682,7 @@ impl Client {
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = cached_supported_versions.value()
-                    && !value.has_expired()
+                    && !value.has_expired_after(self.inner.discovery_cache_timeout)
                 {
                     return Ok(value.into_data());
                 }
@@ -2784,7 +2792,9 @@ impl Client {
 
         // Spawn a task to refresh the cache if it has expired and we have a
         // valid access token.
-        if value.has_expired() && self.auth_ctx().has_valid_access_token() {
+        if value.has_expired_after(self.inner.discovery_cache_timeout)
+            && self.auth_ctx().has_valid_access_token()
+        {
             debug!("spawning task to refresh supported versions cache");
 
             let client = self.clone();
@@ -2882,7 +2892,7 @@ impl Client {
         };
 
         // Spawn a task to refresh the cache if it has expired.
-        if value.has_expired() {
+        if value.has_expired_after(self.inner.discovery_cache_timeout) {
             debug!("spawning task to refresh well-known cache");
 
             let client = self.clone();
@@ -2910,7 +2920,7 @@ impl Client {
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = well_known_cache.value()
-                    && !value.has_expired()
+                    && !value.has_expired_after(self.inner.discovery_cache_timeout)
                 {
                     return value.into_data();
                 }
@@ -3049,7 +3059,9 @@ impl Client {
 
         // Spawn a task to refresh the cache if it has expired and we have a
         // valid access token.
-        if value.has_expired() && self.auth_ctx().has_valid_access_token() {
+        if value.has_expired_after(self.inner.discovery_cache_timeout)
+            && self.auth_ctx().has_valid_access_token()
+        {
             debug!("spawning task to refresh RTC transports cache");
 
             let client = self.clone();
@@ -3081,7 +3093,7 @@ impl Client {
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = cache.value()
-                    && !value.has_expired()
+                    && !value.has_expired_after(self.inner.discovery_cache_timeout)
                 {
                     return Ok(value.into_data());
                 }
@@ -3198,6 +3210,38 @@ impl Client {
 
         // Empty the store cache.
         Ok(self.state_store().remove_kv_data(StateStoreDataKey::WellKnown).await?)
+    }
+
+    /// Discover the homeserver again, discarding what was discovered before.
+    ///
+    /// The client caches what it discovers about the homeserver, in memory and
+    /// in the state store, and refreshes it once it is older than
+    /// [`ClientBuilder::discovery_cache_timeout`]. This drops that data — the
+    /// supported versions, the well-known file and the RTC transports read
+    /// from it — and fetches it again through the usual request path, which
+    /// re-populates both caches.
+    ///
+    /// Use it when the server is known to have changed, e.g. after it was
+    /// upgraded, rather than waiting for the timeout to lapse.
+    ///
+    /// [`ClientBuilder::discovery_cache_timeout`]: crate::ClientBuilder::discovery_cache_timeout
+    pub async fn rediscover(&self) -> Result<()> {
+        // Empty the in-memory caches.
+        self.inner.caches.supported_versions.reset();
+        self.inner.caches.well_known.reset();
+        self.inner.caches.rtc_transports.reset();
+
+        // Empty the store caches. The RTC transports are not persisted, so
+        // there is nothing to remove for them.
+        self.state_store().remove_kv_data(StateStoreDataKey::WellKnown).await?;
+        self.state_store().remove_kv_data(StateStoreDataKey::SupportedVersions).await?;
+
+        // And fetch it all again, so a caller that wants the fresh data has it
+        // once this returns.
+        self.supported_versions().await?;
+        self.well_known().await;
+
+        Ok(())
     }
 
     /// Check whether MSC 4028 is enabled on the homeserver.
@@ -3911,6 +3955,7 @@ impl Client {
                 self.inner.caches.well_known.value(),
                 self.inner.respect_login_well_known,
                 self.well_known_lookup_disabled(),
+                self.inner.discovery_cache_timeout,
                 self.inner.event_cache.clone(),
                 false,
                 self.inner.send_queue_data.clone(),
@@ -4326,7 +4371,7 @@ pub(crate) mod tests {
     use js_int::{UInt, uint};
     use matrix_sdk_base::{
         RoomState,
-        store::{MemoryStore, StoreConfig},
+        store::{MemoryStore, StateStore as _, StateStoreDataKey, StoreConfig},
         ttl::TtlValue,
     };
     use matrix_sdk_test::{
@@ -5010,6 +5055,119 @@ pub(crate) mod tests {
         // again.
         sleep(Duration::from_secs(1)).await;
         assert_matches!(client.inner.caches.supported_versions.value(), CachedValue::Cached(value) if !value.has_expired());
+    }
+
+    #[async_test]
+    async fn test_the_discovery_cache_timeout_is_configurable() {
+        async fn versions_requests(server: &MatrixMockServer) -> usize {
+            server
+                .server()
+                .received_requests()
+                .await
+                .expect("the mock server records its requests")
+                .iter()
+                .filter(|request| request.url.path().ends_with("/_matrix/client/versions"))
+                .count()
+        }
+
+        // A client that considers its discovery data stale immediately.
+        let server = MatrixMockServer::new().await;
+        server.mock_versions().ok().named("versions").mount().await;
+
+        let client = server
+            .client_builder()
+            .no_server_versions()
+            .on_builder(|builder| builder.discovery_cache_timeout(Duration::ZERO))
+            .build()
+            .await;
+
+        assert!(client.server_versions().await.unwrap().contains(&MatrixVersion::V1_0));
+        let after_first_fetch = versions_requests(&server).await;
+
+        // Reading the cached value finds it stale, and refreshes it in the
+        // background.
+        client.supported_versions_cached().await.unwrap().unwrap();
+        sleep(Duration::from_secs(1)).await;
+
+        assert!(
+            versions_requests(&server).await > after_first_fetch,
+            "a zero timeout must refresh the supported versions"
+        );
+
+        // The same sequence with the default timeout asks the server once only:
+        // the value is seconds old, not a day.
+        let server = MatrixMockServer::new().await;
+        server.mock_versions().ok().named("versions").mount().await;
+
+        let client = server.client_builder().no_server_versions().build().await;
+
+        assert!(client.server_versions().await.unwrap().contains(&MatrixVersion::V1_0));
+        let after_first_fetch = versions_requests(&server).await;
+
+        client.supported_versions_cached().await.unwrap().unwrap();
+        sleep(Duration::from_secs(1)).await;
+
+        assert_eq!(
+            versions_requests(&server).await,
+            after_first_fetch,
+            "the default timeout must not refresh a value that was just fetched"
+        );
+    }
+
+    #[async_test]
+    async fn test_rediscover_drops_what_was_discovered_before() {
+        let server = MatrixMockServer::new().await;
+        server.mock_versions().expect_default_access_token().ok().named("versions").mount().await;
+
+        let memory_store = Arc::new(MemoryStore::new());
+        let client = server
+            .client_builder()
+            .no_server_versions()
+            .on_builder(|builder| {
+                builder.store_config(
+                    StoreConfig::new(CrossProcessLockConfig::SingleProcess)
+                        .state_store(memory_store.clone()),
+                )
+            })
+            .build()
+            .await;
+
+        assert!(client.server_versions().await.unwrap().contains(&MatrixVersion::V1_0));
+
+        // The versions are cached, in memory and in the store.
+        assert_matches!(client.supported_versions_cached().await, Ok(Some(_)));
+        assert!(
+            memory_store.get_kv_data(StateStoreDataKey::SupportedVersions).await.unwrap().is_some()
+        );
+
+        let requests_before = server
+            .server()
+            .received_requests()
+            .await
+            .expect("the mock server records its requests")
+            .iter()
+            .filter(|request| request.url.path().ends_with("/_matrix/client/versions"))
+            .count();
+
+        // Rediscovering throws all of that away and asks the server again.
+        client.rediscover().await.unwrap();
+
+        let requests_after = server
+            .server()
+            .received_requests()
+            .await
+            .expect("the mock server records its requests")
+            .iter()
+            .filter(|request| request.url.path().ends_with("/_matrix/client/versions"))
+            .count();
+
+        assert!(requests_after > requests_before, "rediscovering must ask the server again");
+
+        // And what it discovered is cached again.
+        assert!(client.server_versions().await.unwrap().contains(&MatrixVersion::V1_0));
+        assert!(
+            memory_store.get_kv_data(StateStoreDataKey::SupportedVersions).await.unwrap().is_some()
+        );
     }
 
     #[async_test]

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Added
+
+- Add `TtlValue::has_expired_after`, which checks expiry against a
+  caller-provided time-to-live rather than the default threshold.
+  ([#36](https://github.com/harana/harana-matrix/issues/36))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 No significant changes.

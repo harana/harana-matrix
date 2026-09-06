@@ -26,6 +26,7 @@ use std::{
     collections::BTreeSet,
     fmt,
     sync::{Arc, RwLock as StdRwLock},
+    time::Duration,
 };
 
 #[cfg(feature = "sqlite")]
@@ -128,6 +129,7 @@ pub struct ClientBuilder {
     request_config: RequestConfig,
     respect_login_well_known: bool,
     well_known_lookup_disabled: bool,
+    discovery_cache_timeout: Duration,
     server_versions: Option<BTreeSet<MatrixVersion>>,
     handle_refresh_tokens: bool,
     base_client: Option<BaseClient>,
@@ -168,6 +170,7 @@ impl ClientBuilder {
             request_config: Default::default(),
             respect_login_well_known: true,
             well_known_lookup_disabled: false,
+            discovery_cache_timeout: Duration::from_millis(TtlValue::<()>::STALE_THRESHOLD as u64),
             server_versions: None,
             handle_refresh_tokens: false,
             base_client: None,
@@ -463,6 +466,26 @@ impl ClientBuilder {
     /// [`Client::well_known_rtc_transports`]: crate::Client::well_known_rtc_transports
     pub fn disable_well_known_lookup(mut self, disable: bool) -> Self {
         self.well_known_lookup_disabled = disable;
+        self
+    }
+
+    /// Set how long the discovery data of the homeserver stays usable before
+    /// the client refreshes it.
+    ///
+    /// This covers the data the client discovers about the server rather than
+    /// asks it for: the supported versions, the well-known file, and the RTC
+    /// transports advertised in it. All of it is persisted in the state store,
+    /// so it survives a restart, and it is refreshed through the usual request
+    /// path once it is older than this timeout.
+    ///
+    /// Defaults to
+    /// [`TtlValue::STALE_THRESHOLD`](matrix_sdk_common::ttl::TtlValue::STALE_THRESHOLD),
+    /// i.e. one day. A timeout of [`Duration::ZERO`] refreshes it on every
+    /// access, which is rarely what a client wants: use
+    /// [`Client::rediscover`](crate::Client::rediscover) for a one-off
+    /// refresh.
+    pub fn discovery_cache_timeout(mut self, timeout: Duration) -> Self {
+        self.discovery_cache_timeout = timeout;
         self
     }
 
@@ -885,6 +908,7 @@ impl ClientBuilder {
             well_known,
             self.respect_login_well_known,
             self.well_known_lookup_disabled,
+            self.discovery_cache_timeout,
             event_cache,
             self.enable_automatic_back_pagination,
             send_queue,

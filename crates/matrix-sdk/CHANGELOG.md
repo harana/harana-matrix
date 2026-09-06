@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Add `ClientBuilder::discovery_cache_timeout`, which sets how long the
+  homeserver discovery data (the supported versions, the well-known file and
+  the RTC transports read from it) stays usable before the client refreshes
+  it, and `Client::rediscover`, which discards it and fetches it again.
+  ([#36](https://github.com/harana/harana-matrix/issues/36))
+
 ### Fixed
 
 - Persist the sliding sync `pos` in the event cache store rather than the
