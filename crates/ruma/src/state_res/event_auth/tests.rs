@@ -141,7 +141,7 @@ fn redact_higher_power_level() {
 
     let room_power_levels_event = Pdu::with_minimal_state_fields(
         owned_event_id!("$powerlevels:matrix.local"),
-        alice_id.clone(),
+        alice_id,
         TimelineEventType::RoomPowerLevels,
         String::new(),
         // All users have the default power level.
@@ -212,7 +212,7 @@ fn redact_same_server() {
 
     let room_power_levels_event = Pdu::with_minimal_state_fields(
         owned_event_id!("$powerlevels:matrix.local"),
-        alice_id.clone(),
+        alice_id,
         TimelineEventType::RoomPowerLevels,
         String::new(),
         // All users have the default power level of `0`.
@@ -432,7 +432,7 @@ fn event_type_not_enough_power() {
     let alice_id = UserFactory::Alice.user_id();
     factory.add_room_power_levels(
         owned_event_id!("$room-power-levels-invite"),
-        alice_id.clone(),
+        alice_id,
         RoomPowerLevelsPduContent::Events {
             event_types: vec![TimelineEventType::RoomMessage],
             value: 10,

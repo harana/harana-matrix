@@ -66,7 +66,7 @@ mod error;
 mod event_auth;
 mod event_format;
 pub mod events;
-mod state_res;
+mod resolve;
 // The upstream crate also exposed this behind its benchmark feature; the
 // benchmarks are not vendored, so the tests are the only consumer left.
 #[cfg(test)]
@@ -80,5 +80,5 @@ pub use self::{
     },
     event_format::check_pdu_format,
     events::Event,
-    state_res::{StateMap, resolve, reverse_topological_power_sort},
+    resolve::{StateMap, resolve, reverse_topological_power_sort},
 };
