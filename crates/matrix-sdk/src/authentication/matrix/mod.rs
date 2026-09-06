@@ -700,6 +700,9 @@ impl MatrixAuth {
     ///         access_token: "My-Token".to_owned(),
     ///         refresh_token: None,
     ///     },
+    ///     // Restoring points the client at the session's homeserver when it
+    ///     // has one; `None` keeps the one the client was built with.
+    ///     homeserver: None,
     /// };
     ///
     /// client.restore_session(session).await?;
@@ -927,6 +930,7 @@ impl MatrixAuth {
 ///         access_token: "My-Token".to_owned(),
 ///         refresh_token: None,
 ///     },
+///     homeserver: None,
 /// };
 ///
 /// assert_eq!(session.meta.device_id, "MYDEVICEID");

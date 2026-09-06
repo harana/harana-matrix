@@ -55,7 +55,7 @@ async fn send_unexpected_message_error(
         .await
 }
 
-async fn finish_login<Q>(
+async fn finish_login<Q: Send + Sync>(
     client: &Client,
     mut channel: EstablishedSecureChannel,
     registration_data: Option<&ClientRegistrationData>,

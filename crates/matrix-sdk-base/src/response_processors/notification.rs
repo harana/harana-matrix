@@ -64,7 +64,11 @@ impl<'a> Notification<'a> {
     ) -> &[Action]
     where
         Raw<E>: Into<RawAnySyncOrStrippedTimelineEvent>,
-        P: Fn(&Action) -> bool,
+        // `Raw<E>` is only `Sync` when `E` is, and the predicate is held
+        // across the await below: without these the returned future is not
+        // `Send`, and sync response processing runs on a spawned task.
+        E: Sync,
+        P: Fn(&Action) -> bool + Send,
     {
         let actions = self.push_rules.get_actions(event, push_condition_room_ctx).await;
 

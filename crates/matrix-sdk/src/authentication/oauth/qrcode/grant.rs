@@ -54,7 +54,7 @@ async fn export_secrets_bundle(client: &Client) -> Result<SecretsBundle, QRCodeG
     Ok(secrets_bundle)
 }
 
-async fn finish_login_grant<Q>(
+async fn finish_login_grant<Q: Send + Sync>(
     client: &Client,
     channel: &mut EstablishedSecureChannel,
     device_creation_timeout: Duration,

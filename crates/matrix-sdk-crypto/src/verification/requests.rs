@@ -1213,7 +1213,7 @@ struct Ready {
 }
 
 #[cfg(feature = "qrcode")]
-async fn scan_qr_code<T: Clone>(
+async fn scan_qr_code<T: Clone + Sync>(
     data: QrVerificationData,
     request_state: &RequestState<T>,
     state: &Ready,
@@ -1247,7 +1247,7 @@ async fn scan_qr_code<T: Clone>(
 }
 
 #[cfg(feature = "qrcode")]
-async fn generate_qr_code<T: Clone>(
+async fn generate_qr_code<T: Clone + Sync>(
     request_state: &RequestState<T>,
     state: &Ready,
     we_started: bool,
@@ -1379,7 +1379,7 @@ async fn generate_qr_code<T: Clone>(
     }
 }
 
-async fn receive_start<T: Clone>(
+async fn receive_start<T: Clone + Sync>(
     sender: &UserId,
     content: &StartContent<'_>,
     we_started: bool,
@@ -1509,7 +1509,7 @@ async fn receive_start<T: Clone>(
     }
 }
 
-async fn start_sas<T: Clone>(
+async fn start_sas<T: Clone + Sync>(
     request_state: &RequestState<T>,
     state: &Ready,
     we_started: bool,

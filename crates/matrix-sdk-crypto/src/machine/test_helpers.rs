@@ -252,7 +252,7 @@ pub async fn build_encrypted_to_device_content_without_sender_data(
     sender: &OlmMachine,
     recipient_device: &DeviceKeys,
     event_type: &str,
-    content: &impl Serialize,
+    content: &(impl Serialize + Sync),
 ) -> ToDeviceEncryptedEventContent {
     let sender_store = &sender.inner.store;
 

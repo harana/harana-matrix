@@ -427,7 +427,7 @@ pub async fn receive_to_device_event<C>(
     decryption_settings: &DecryptionSettings,
 ) -> (Vec<ProcessedToDeviceEvent>, Vec<RoomKeyInfo>)
 where
-    C: EventType + Serialize + Debug,
+    C: EventType + Serialize + Debug + Sync,
 {
     let event_json = serde_json::to_string(event).expect("Unable to serialize to-device message");
 

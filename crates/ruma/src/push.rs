@@ -325,7 +325,13 @@ impl Ruleset {
         &self,
         event: &Raw<T>,
         context: &PushConditionRoomCtx,
-    ) -> Option<AnyPushRuleRef<'_>> {
+    ) -> Option<AnyPushRuleRef<'_>>
+    where
+        // `Raw<T>` is only `Sync` when `T` is, and without that this future
+        // cannot be sent to another thread, which the callers spawning push
+        // rule evaluation need it to be.
+        T: Sync,
+    {
         let event = FlattenedJson::from_raw(event);
 
         if event.get_str("sender").is_some_and(|sender| sender == context.user_id) {
@@ -355,7 +361,10 @@ impl Ruleset {
         &self,
         event: &Raw<T>,
         context: &PushConditionRoomCtx,
-    ) -> &[Action] {
+    ) -> &[Action]
+    where
+        T: Sync,
+    {
         self.get_match(event, context).await.map(|rule| rule.actions()).unwrap_or(&[])
     }
 

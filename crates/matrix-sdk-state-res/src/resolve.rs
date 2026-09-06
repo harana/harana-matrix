@@ -57,11 +57,11 @@ pub async fn resolve<E, FetchEvent, EventFut, FetchSubgraph>(
     fetch_conflicted_state_subgraph: FetchSubgraph,
 ) -> Result<StateMap<E::Id>, Error>
 where
-    E: Event + Clone,
-    E::Id: Clone,
-    FetchEvent: Fn(OwnedEventId) -> EventFut,
-    EventFut: Future<Output = Option<E>>,
-    FetchSubgraph: Fn(&StateMap<Vec<E::Id>>) -> Option<EventIdSet<E::Id>>,
+    E: Event + Clone + Send + Sync,
+    E::Id: Clone + Send + Sync,
+    FetchEvent: Fn(OwnedEventId) -> EventFut + Send,
+    EventFut: Future<Output = Option<E>> + Send,
+    FetchSubgraph: Fn(&StateMap<Vec<E::Id>>) -> Option<EventIdSet<E::Id>> + Send,
 {
     // Ruma implements the second version of the algorithm, which every room
     // version but the first uses.

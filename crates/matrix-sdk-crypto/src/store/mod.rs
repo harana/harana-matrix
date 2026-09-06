@@ -1279,7 +1279,7 @@ impl Store {
     }
 
     /// Store custom value associated with a key
-    pub async fn set_value(&self, key: &str, value: &impl Serialize) -> Result<()> {
+    pub async fn set_value(&self, key: &str, value: &(impl Serialize + Sync)) -> Result<()> {
         let serialized = self.serialize_value(value)?;
         self.set_custom_value(key, serialized).await?;
         Ok(())

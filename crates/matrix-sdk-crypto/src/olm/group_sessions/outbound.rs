@@ -523,7 +523,7 @@ impl OutboundGroupSession {
     /// # Panics
     ///
     /// Panics if the content can't be serialized.
-    async fn encrypt_inner<T: Serialize>(
+    async fn encrypt_inner<T: Serialize + Sync>(
         &self,
         payload: &T,
         relates_to: Option<serde_json::Value>,

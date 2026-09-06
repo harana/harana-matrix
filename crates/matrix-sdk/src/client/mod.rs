@@ -2113,7 +2113,6 @@ impl Client {
     /// client.public_rooms(limit, since, server).await;
     /// # };
     /// ```
-    #[cfg_attr(not(target_family = "wasm"), deny(clippy::future_not_send))]
     pub async fn public_rooms(
         &self,
         limit: Option<u32>,
@@ -2899,7 +2898,7 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// # use matrix_sdk::{Client, ruma::api::client::media::get_media_preview};
+    /// # use matrix_sdk::{Client, ruma::api::client::authenticated_media::get_media_preview};
     /// # async fn example(client: Client) -> anyhow::Result<()> {
     /// if client.supports_endpoint::<get_media_preview::v1::Request>().await? {
     ///     // Ask the homeserver for a URL preview.
@@ -3812,10 +3811,10 @@ impl Client {
     pub async fn sync_with_callback<C>(
         &self,
         sync_settings: crate::config::SyncSettings,
-        callback: impl Fn(SyncResponse) -> C,
+        callback: impl Fn(SyncResponse) -> C + Send + Sync,
     ) -> Result<(), Error>
     where
-        C: Future<Output = LoopCtrl>,
+        C: Future<Output = LoopCtrl> + Send,
     {
         self.sync_with_result_callback(sync_settings, |result| async {
             Ok(callback(result?).await)
