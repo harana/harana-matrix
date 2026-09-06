@@ -2,17 +2,15 @@ use std::sync::Arc;
 
 use matrix_sdk_base::{StateStoreDataKey, StateStoreDataValue, StoreError, ttl::TtlValue};
 use ruma::{
-    api::{
-        client::{
-            discovery::get_capabilities::{
-                self,
-                v3::{
-                    AccountModerationCapability, Capabilities, ProfileFieldsCapability,
-                    RoomVersionsCapability,
-                },
+    api::client::{
+        discovery::get_capabilities::{
+            self,
+            v3::{
+                AccountModerationCapability, Capabilities, ProfileFieldsCapability,
+                RoomVersionsCapability,
             },
-            profile::delete_profile_field,
         },
+        profile::delete_profile_field,
     },
     profile::ProfileFieldName,
 };

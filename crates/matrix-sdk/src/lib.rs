@@ -51,8 +51,8 @@
 //!   Nothing has to be configured for this.
 //! * **Picking between two ways of doing one thing.** Where an older and a
 //!   newer endpoint both exist and the choice changes behaviour rather than
-//!   just the URL (authenticated media, deleting a profile field), the SDK
-//!   asks whether the newer one is supported and falls back if it isn't.
+//!   just the URL (authenticated media, deleting a profile field), the SDK asks
+//!   whether the newer one is supported and falls back if it isn't.
 //!   [`Client::supports_endpoint`] is that question, and is available to
 //!   callers making the same kind of choice in their own code.
 //! * **Room versions.** Rules that differ per room version, such as where a

@@ -681,7 +681,10 @@ impl StateChanges {
             return;
         };
 
-        self.redactions.entry(room_id.to_owned()).or_default().insert(redacts.to_owned(), redaction);
+        self.redactions
+            .entry(room_id.to_owned())
+            .or_default()
+            .insert(redacts.to_owned(), redaction);
     }
 
     /// Update the `StateChanges` struct with the given room with a new

@@ -643,8 +643,9 @@ where
 // Fallible methods.
 impl<Selector> CacheStateLock<Selector>
 where
-    // `Sync`, because the guards below are awaited from spawned tasks and a
-    // `&CacheStateLock<Selector>` is only `Send` when the selector is `Sync`.
+    // `Sync`, because the guards below are awaited from spawned
+    // tasks and a `&CacheStateLock<Selector>` is only `Send`
+    // when the selector is `Sync`.
     Selector: selectors::CacheState + Sync,
     EventCacheError: for<'a> From<&'a Selector>,
 {

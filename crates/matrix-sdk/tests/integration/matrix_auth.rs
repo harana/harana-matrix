@@ -80,10 +80,7 @@ async fn test_restoring_a_session_follows_its_homeserver() {
                     user_id: owned_user_id!("@example:localhost"),
                     device_id: owned_device_id!("DEVICEID"),
                 },
-                tokens: SessionTokens {
-                    access_token: "1234".to_owned(),
-                    refresh_token: None,
-                },
+                tokens: SessionTokens { access_token: "1234".to_owned(), refresh_token: None },
                 homeserver: Some(session_homeserver.clone()),
             },
             Default::default(),
@@ -110,10 +107,7 @@ async fn test_restoring_a_session_without_a_homeserver_changes_nothing() {
                     user_id: owned_user_id!("@example:localhost"),
                     device_id: owned_device_id!("DEVICEID"),
                 },
-                tokens: SessionTokens {
-                    access_token: "1234".to_owned(),
-                    refresh_token: None,
-                },
+                tokens: SessionTokens { access_token: "1234".to_owned(), refresh_token: None },
                 homeserver: None,
             },
             Default::default(),

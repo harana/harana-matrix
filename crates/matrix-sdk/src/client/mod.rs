@@ -53,7 +53,6 @@ use ruma::{
     RoomAliasId, RoomId, RoomOrAliasId, ServerName, UInt, UserId,
     api::{
         FeatureFlag, MatrixVersion, Metadata, OutgoingRequest, SupportedVersions,
-        path_builder::VersionHistory,
         client::{
             account::whoami,
             alias::{create_alias, delete_alias, get_alias},
@@ -76,7 +75,7 @@ use ruma::{
             user_directory::search_users,
         },
         error::{ErrorKind, FromHttpResponseError, UnknownTokenErrorData},
-        path_builder::PathBuilder,
+        path_builder::{PathBuilder, VersionHistory},
     },
     assign,
     events::{

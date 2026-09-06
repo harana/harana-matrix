@@ -3847,10 +3847,7 @@ impl Room {
     ///
     /// Note that it is possible that no push action is returned because the
     /// current room state does not have all the required state events.
-    pub async fn event_push_actions<T: Sync>(
-        &self,
-        event: &Raw<T>,
-    ) -> Result<Option<Vec<Action>>> {
+    pub async fn event_push_actions<T: Sync>(&self, event: &Raw<T>) -> Result<Option<Vec<Action>>> {
         if let Some(ctx) = self.push_context().await? {
             Ok(Some(ctx.for_event(event).await))
         } else {

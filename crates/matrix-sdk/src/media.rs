@@ -817,9 +817,8 @@ impl MediaFetcher for DefaultMediaFetcher {
                 .timeout(Some(Duration::MAX));
 
             // Use the authenticated endpoints when the server supports it.
-            let use_auth = client
-                .supports_endpoint::<authenticated_media::get_content::v1::Request>()
-                .await?;
+            let use_auth =
+                client.supports_endpoint::<authenticated_media::get_content::v1::Request>().await?;
 
             match &request.source {
                 MediaSource::Encrypted(file) => {
