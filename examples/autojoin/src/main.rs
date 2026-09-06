@@ -1,6 +1,6 @@
 use std::{env, process::exit};
 
-use matrix_sdk::{
+use matrix::{
     Client, Room, config::SyncSettings, ruma::events::room::member::StrippedRoomMemberEvent,
 };
 use tokio::time::{Duration, sleep};

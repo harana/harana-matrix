@@ -5,7 +5,7 @@ use futures_util::StreamExt;
 use imbl::Vector;
 use input::MessageOrCommand;
 use invited_room::InvitedRoomView;
-use matrix_sdk::{
+use matrix::{
     Client, Room, RoomState,
     locks::Mutex,
     ruma::{
@@ -14,13 +14,13 @@ use matrix_sdk::{
         events::room::message::RoomMessageEventContent,
     },
 };
-use matrix_sdk_ui::{
-    Timeline,
-    timeline::{TimelineBuilder, TimelineFocus, TimelineItem, TimelineReadReceiptTracking},
-};
 use ratatui::{prelude::*, widgets::*};
 use tokio::{spawn, sync::OnceCell, task::JoinHandle};
 use tracing::info;
+use ui::{
+    Timeline,
+    timeline::{TimelineBuilder, TimelineFocus, TimelineItem, TimelineReadReceiptTracking},
+};
 
 use self::{details::RoomDetails, input::Input, timeline::TimelineView};
 use super::status::StatusHandle;

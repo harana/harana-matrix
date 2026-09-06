@@ -12,10 +12,10 @@ pub mod v3 {
     use crate::{
         OwnedRoomId,
         api::{auth_scheme::AccessToken, request, response},
+        events::AnyTimelineEvent,
         metadata,
         serde::Raw,
     };
-    use crate::events::AnyTimelineEvent;
 
     metadata! {
         method: GET,
@@ -32,7 +32,8 @@ pub mod v3 {
     pub struct Request {
         /// The token to stream from.
         ///
-        /// This token is either from a previous request to this API or from the initial sync API.
+        /// This token is either from a previous request to this API or from the
+        /// initial sync API.
         #[ruma_api(query)]
         #[serde(skip_serializing_if = "Option::is_none")]
         pub from: Option<String>,

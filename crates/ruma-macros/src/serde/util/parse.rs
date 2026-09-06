@@ -6,7 +6,8 @@ use super::{RenameAll, RenameRule, RumaEnumAttrs, UnitVariant, VariantWithSingle
 impl RumaEnumAttrs {
     /// Try to parse the given meta item and merge it into this `RumaEnumAttrs`.
     ///
-    /// Returns an error if parsing the meta item fails, or if it sets a field that was already set.
+    /// Returns an error if parsing the meta item fails, or if it sets a field
+    /// that was already set.
     fn try_merge(&mut self, meta: ParseNestedMeta<'_>) -> syn::Result<()> {
         if meta.path.is_ident("rename_all") {
             return self.rename_all.try_merge(meta);

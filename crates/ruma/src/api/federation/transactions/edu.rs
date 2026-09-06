@@ -5,23 +5,25 @@ use std::collections::BTreeMap;
 #[cfg(feature = "unstable-msc4495")]
 use js_int::Int;
 use js_int::UInt;
+use serde::{Deserialize, Serialize, de};
+use serde_json::value::RawValue as RawJsonValue;
+
 use crate::{
     OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedTransactionId, OwnedUserId,
     encryption::{CrossSigningKey, DeviceKeys},
+    events::{AnyToDeviceEventContent, ToDeviceEventType, receipt::Receipt},
     presence::PresenceState,
     serde::{Raw, from_raw_json_value},
     to_device::DeviceIdOrAllDevices,
 };
-use crate::events::{AnyToDeviceEventContent, ToDeviceEventType, receipt::Receipt};
-use serde::{Deserialize, Serialize, de};
-use serde_json::value::RawValue as RawJsonValue;
 
 /// Type for passing ephemeral data to homeservers.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "edu_type", content = "content")]
 pub enum Edu {
-    /// An EDU representing presence updates for users of the sending homeserver.
+    /// An EDU representing presence updates for users of the sending
+    /// homeserver.
     #[serde(rename = "m.presence")]
     Presence(PresenceContent),
 
@@ -33,20 +35,21 @@ pub enum Edu {
     #[serde(rename = "m.typing")]
     Typing(TypingContent),
 
-    /// An EDU that lets servers push details to each other when one of their users adds
-    /// a new device to their account, required for E2E encryption to correctly target the
-    /// current set of devices for a given user.
+    /// An EDU that lets servers push details to each other when one of their
+    /// users adds a new device to their account, required for E2E
+    /// encryption to correctly target the current set of devices for a
+    /// given user.
     #[serde(rename = "m.device_list_update")]
     DeviceListUpdate(DeviceListUpdateContent),
 
-    /// An EDU that lets servers push send events directly to a specific device on a
-    /// remote server - for instance, to maintain an Olm E2E encrypted message channel
-    /// between a local and remote device.
+    /// An EDU that lets servers push send events directly to a specific device
+    /// on a remote server - for instance, to maintain an Olm E2E encrypted
+    /// message channel between a local and remote device.
     #[serde(rename = "m.direct_to_device")]
     DirectToDevice(DirectDeviceContent),
 
-    /// An EDU that lets servers push details to each other when one of their users updates their
-    /// cross-signing keys.
+    /// An EDU that lets servers push details to each other when one of their
+    /// users updates their cross-signing keys.
     #[serde(rename = "m.signing_key_update")]
     SigningKeyUpdate(SigningKeyUpdateContent),
 
@@ -85,7 +88,8 @@ impl<'de> Deserialize<'de> for Edu {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct PresenceContent {
-    /// A list of presence updates that the receiving server is likely to be interested in.
+    /// A list of presence updates that the receiving server is likely to be
+    /// interested in.
     pub push: Vec<PresenceUpdate>,
 }
 
@@ -110,7 +114,8 @@ pub struct PresenceRecipientListUpdates {
 
 #[cfg(feature = "unstable-msc4495")]
 impl PresenceRecipientListUpdates {
-    /// Creates a new `PresenceRecipientListUpdates` with the given added and removed users.
+    /// Creates a new `PresenceRecipientListUpdates` with the given added and
+    /// removed users.
     pub fn new(add: Vec<OwnedUserId>, delete: Vec<OwnedUserId>) -> Self {
         Self { add, delete }
     }
@@ -135,7 +140,8 @@ pub struct PresenceUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status_msg: Option<String>,
 
-    /// The number of milliseconds that have elapsed since the user last did something.
+    /// The number of milliseconds that have elapsed since the user last did
+    /// something.
     pub last_active_ago: UInt,
 
     /// Whether or not the user is currently active.
@@ -144,7 +150,8 @@ pub struct PresenceUpdate {
     #[serde(default)]
     pub currently_active: bool,
 
-    /// Changes to the user's presence recipient list since the last EDU was sent, if any.
+    /// Changes to the user's presence recipient list since the last EDU was
+    /// sent, if any.
     ///
     /// This field will only be present if `prev_id` is also present.
     ///
@@ -166,8 +173,8 @@ pub struct PresenceUpdate {
 
     /// The prior stream ID in the user's presence delta stream, if any.
     ///
-    /// If this field does not match the most recently seen `stream_id`, the presence list should
-    /// be re-fetched.
+    /// If this field does not match the most recently seen `stream_id`, the
+    /// presence list should be re-fetched.
     ///
     /// This field uses the unstable prefix defined in [MSC4495].
     ///
@@ -178,7 +185,8 @@ pub struct PresenceUpdate {
 }
 
 impl PresenceUpdate {
-    /// Creates a new `PresenceUpdate` with the given `user_id`, `presence` and `last_activity`.
+    /// Creates a new `PresenceUpdate` with the given `user_id`, `presence` and
+    /// `last_activity`.
     pub fn new(user_id: OwnedUserId, presence: PresenceState, last_activity: UInt) -> Self {
         Self {
             user_id,
@@ -286,8 +294,8 @@ pub struct DeviceListUpdateContent {
     /// An ID sent by the server for this update, unique for a given user_id.
     pub stream_id: UInt,
 
-    /// The stream_ids of any prior m.device_list_update EDUs sent for this user which have not
-    /// been referred to already in an EDU's prev_id field.
+    /// The stream_ids of any prior m.device_list_update EDUs sent for this user
+    /// which have not been referred to already in an EDU's prev_id field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prev_id: Vec<UInt>,
 
@@ -301,8 +309,8 @@ pub struct DeviceListUpdateContent {
 }
 
 impl DeviceListUpdateContent {
-    /// Create a new `DeviceListUpdateContent` with the given `user_id`, `device_id` and
-    /// `stream_id`.
+    /// Create a new `DeviceListUpdateContent` with the given `user_id`,
+    /// `device_id` and `stream_id`.
     pub fn new(user_id: OwnedUserId, device_id: OwnedDeviceId, stream_id: UInt) -> Self {
         Self {
             user_id,
@@ -332,13 +340,15 @@ pub struct DirectDeviceContent {
 
     /// The contents of the messages to be sent.
     ///
-    /// These are arranged in a map of user IDs to a map of device IDs to message bodies. The
-    /// device ID may also be *, meaning all known devices for the user.
+    /// These are arranged in a map of user IDs to a map of device IDs to
+    /// message bodies. The device ID may also be *, meaning all known
+    /// devices for the user.
     pub messages: DirectDeviceMessages,
 }
 
 impl DirectDeviceContent {
-    /// Creates a new `DirectDeviceContent` with the given `sender, `ev_type` and `message_id`.
+    /// Creates a new `DirectDeviceContent` with the given `sender, `ev_type`
+    /// and `message_id`.
     pub fn new(
         sender: OwnedUserId,
         ev_type: ToDeviceEventType,
@@ -392,13 +402,13 @@ pub struct CustomEdu {
 mod tests {
     use assert_matches2::assert_matches;
     use js_int::uint;
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq, presence::PresenceState, room_id, user_id,
-    };
-    use crate::events::ToDeviceEventType;
     use serde_json::json;
 
     use super::{DeviceListUpdateContent, Edu, ReceiptContent};
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq, events::ToDeviceEventType,
+        presence::PresenceState, room_id, user_id,
+    };
 
     #[test]
     fn device_list_update_edu() {

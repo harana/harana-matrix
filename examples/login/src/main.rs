@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use matrix_sdk::{
+use matrix::{
     Client, Room, RoomState,
     config::SyncSettings,
     ruma::{

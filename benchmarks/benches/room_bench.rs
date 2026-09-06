@@ -2,18 +2,15 @@
 
 use std::time::Duration;
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use matrix_sdk::{
-    cross_process_lock::CrossProcessLockConfig, store::RoomLoadSettings,
-    test_utils::mocks::MatrixMockServer,
-};
-use matrix_sdk_base::{
+use base::{
     BaseClient, DmRoomDefinition, RoomInfo, RoomState, SessionMeta, StateChanges, StateStore,
     ThreadingSupport, store::StoreConfig,
 };
-use matrix_sdk_sqlite::SqliteStateStore;
-use matrix_sdk_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
-use matrix_sdk_ui::timeline::{TimelineBuilder, TimelineFocus};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use matrix::{
+    cross_process_lock::CrossProcessLockConfig, store::RoomLoadSettings,
+    test_utils::mocks::MatrixMockServer,
+};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId,
     api::client::membership::get_member_events,
@@ -21,7 +18,10 @@ use ruma::{
     mxc_uri, owned_device_id, owned_room_id, owned_user_id,
     serde::Raw,
 };
+use sdk_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
+use sqlite::SqliteStateStore;
 use tokio::runtime::Builder;
+use ui::timeline::{TimelineBuilder, TimelineFocus};
 use wiremock::{Request, ResponseTemplate};
 
 pub fn receive_all_members_benchmark(c: &mut Criterion) {

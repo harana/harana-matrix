@@ -1,10 +1,10 @@
-use matrix_sdk::Room;
-use matrix_sdk_base::read_receipts::ReadReceipts as RoomReadReceipts;
-use matrix_sdk_ui::timeline::TimelineItem;
+use base::read_receipts::ReadReceipts as RoomReadReceipts;
+use matrix::Room;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph, Wrap},
 };
+use ui::timeline::TimelineItem;
 
 use crate::{TEXT_COLOR, widgets::room_view::DetailsState};
 

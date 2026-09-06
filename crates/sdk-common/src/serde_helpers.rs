@@ -1,0 +1,546 @@
+// Copyright 2025 The Matrix.org Foundation C.I.C.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! A collection of serde helpers to avoid having to deserialize an entire event
+//! to access some fields.
+
+use ruma::{
+    MilliSecondsSinceUnixEpoch, OwnedEventId,
+    events::{
+        AnyMessageLikeEventContent, AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent,
+        AnySyncTimelineEvent, MessageLikeEventType,
+        receipt::{ReceiptEventContent, SyncReceiptEvent},
+        relation::{BundledThread, RelationType},
+    },
+    room_version_rules::RedactionRules,
+    serde::Raw,
+};
+use serde::Deserialize;
+use tracing::error;
+
+use crate::deserialized_responses::{ThreadSummary, ThreadSummaryStatus};
+
+#[derive(Deserialize)]
+struct RelatesTo {
+    #[serde(rename = "rel_type")]
+    rel_type: RelationType,
+    #[serde(rename = "event_id")]
+    event_id: Option<OwnedEventId>,
+}
+
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
+struct SimplifiedContent {
+    #[serde(rename = "m.relates_to")]
+    relates_to: Option<RelatesTo>,
+}
+
+/// Try to extract the thread root from an event's content, if provided.
+///
+/// The thread root is the field located at `m.relates_to`.`event_id`,
+/// if the field at `m.relates_to`.`rel_type` is `m.thread`.
+///
+/// Returns `None` if we couldn't find a thread root, or if there was an issue
+/// during deserialization.
+pub fn extract_thread_root_from_content(
+    content: Raw<AnyMessageLikeEventContent>,
+) -> Option<OwnedEventId> {
+    let relates_to = content.deserialize_as_unchecked::<SimplifiedContent>().ok()?.relates_to?;
+    match relates_to.rel_type {
+        RelationType::Thread => relates_to.event_id,
+        _ => None,
+    }
+}
+
+/// Try to extract the thread root from a timeline event, if provided.
+///
+/// The thread root is the field located at `content`.`m.relates_to`.`event_id`,
+/// if the field at `content`.`m.relates_to`.`rel_type` is `m.thread`.
+///
+/// Returns `None` if we couldn't find a thread root, or if there was an issue
+/// during deserialization.
+pub fn extract_thread_root(event: &Raw<AnySyncTimelineEvent>) -> Option<OwnedEventId> {
+    extract_thread_root_from_content(event.get_field("content").ok().flatten()?)
+}
+
+/// Try to extract the type and target of a relation, from a raw timeline event,
+/// if provided.
+pub fn extract_relation(event: &Raw<AnySyncTimelineEvent>) -> Option<(RelationType, OwnedEventId)> {
+    let relates_to = event.get_field::<SimplifiedContent>("content").ok().flatten()?.relates_to?;
+    Some((relates_to.rel_type, relates_to.event_id?))
+}
+
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
+struct Relations {
+    #[serde(rename = "m.thread")]
+    thread: Option<Box<BundledThread>>,
+}
+
+/// Try to extract the event ID of the event targeted by `event` if it is of
+/// type `m.room.redaction`.
+pub fn extract_redaction_target(
+    event: &Raw<AnySyncTimelineEvent>,
+    redaction_rules: &RedactionRules,
+) -> Option<OwnedEventId> {
+    // Check if it's a `m.room.redaction`.
+    let Ok(Some(MessageLikeEventType::RoomRedaction)) =
+        event.get_field::<MessageLikeEventType>("type")
+    else {
+        // Not the expected event. Early return.
+        return None;
+    };
+
+    // It is a `m.room.redaction`! We can deserialize it entirely.
+
+    let Ok(AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomRedaction(redaction))) =
+        event.deserialize()
+    else {
+        // Failed to deserialized. Early return.
+        return None;
+    };
+
+    redaction.redacts(redaction_rules).map(ToOwned::to_owned)
+}
+
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
+struct Unsigned {
+    #[serde(rename = "m.relations")]
+    relations: Option<Relations>,
+}
+
+/// Try to extract a bundled thread summary of a timeline event, if available.
+pub fn extract_bundled_thread_summary(
+    event: &Raw<AnySyncTimelineEvent>,
+) -> (ThreadSummaryStatus, Option<Raw<AnySyncMessageLikeEvent>>) {
+    match event.get_field::<Unsigned>("unsigned") {
+        Ok(Some(Unsigned { relations: Some(Relations { thread: Some(bundled_thread) }) })) => {
+            // Take the count from the bundled thread summary, if available. If it can't be
+            // converted to a `u32`, we use `u32::MAX` as a fallback, as this is unlikely
+            // to happen to have that many events in real-world threads.
+            let count = bundled_thread.count.try_into().unwrap_or(u32::MAX);
+
+            let latest_reply =
+                bundled_thread.latest_event.get_field::<OwnedEventId>("event_id").ok().flatten();
+
+            (
+                ThreadSummaryStatus::Some(ThreadSummary { num_replies: count, latest_reply }),
+                Some(bundled_thread.latest_event),
+            )
+        }
+        Ok(_) => (ThreadSummaryStatus::None, None),
+        Err(_) => (ThreadSummaryStatus::Unknown, None),
+    }
+}
+
+/// Try to extract the `origin_server_ts`, if available.
+///
+/// If the value is larger than `max_value`, it becomes `max_value`. This is
+/// necessary to prevent against user-forged value pretending an event is coming
+/// from the future.
+pub fn extract_timestamp(
+    event: &Raw<AnySyncTimelineEvent>,
+    max_value: MilliSecondsSinceUnixEpoch,
+) -> Option<MilliSecondsSinceUnixEpoch> {
+    let mut origin_server_ts = event.get_field("origin_server_ts").ok().flatten()?;
+
+    if origin_server_ts > max_value {
+        origin_server_ts = max_value;
+    }
+
+    Some(origin_server_ts)
+}
+
+/// Extract every valid read receipt event from a list of ephemeral events.
+///
+/// A single sync response can carry more than one `m.receipt` ephemeral event:
+/// typically one holding the unthreaded and main-timeline receipts for the
+/// room, plus one per thread. Stopping at the first one would silently drop
+/// the thread receipts, so all of them are returned, in the order they appear.
+pub fn extract_read_receipts(
+    ephemeral_events: &[Raw<AnySyncEphemeralRoomEvent>],
+) -> Vec<ReceiptEventContent> {
+    let mut receipts = Vec::new();
+
+    for raw_ephemeral in ephemeral_events {
+        match raw_ephemeral.deserialize() {
+            Ok(AnySyncEphemeralRoomEvent::Receipt(SyncReceiptEvent { content, .. })) => {
+                receipts.push(content);
+            }
+
+            Ok(_) => {}
+
+            Err(err) => {
+                error!(%err, "error when deserializing an ephemeral event");
+            }
+        }
+    }
+
+    receipts
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_matches::assert_matches;
+    use ruma::{
+        UInt, event_id,
+        events::receipt::{ReceiptThread, ReceiptType},
+        owned_event_id, user_id,
+    };
+    use serde_json::json;
+
+    use super::{
+        MilliSecondsSinceUnixEpoch, Raw, extract_bundled_thread_summary, extract_read_receipts,
+        extract_thread_root, extract_timestamp,
+    };
+    use crate::{
+        deserialized_responses::{ThreadSummary, ThreadSummaryStatus},
+        serde_helpers::{RelationType, extract_relation},
+    };
+
+    #[test]
+    fn test_extract_thread_root() {
+        // No event factory in this crate :( There would be a dependency cycle with the
+        // `sdk-test` crate if we tried to use it here.
+
+        // We can extract the thread root from a regular message that contains one.
+        let thread_root = event_id!("$thread_root_event_id:example.com");
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+            "content": {
+                "body": "Hello, world!",
+                "m.relates_to": {
+                    "rel_type": "m.thread",
+                    "event_id": thread_root,
+                }
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let observed_thread_root = extract_thread_root(&event);
+        assert_eq!(observed_thread_root.as_deref(), Some(thread_root));
+        let observed_relation = extract_relation(&event).unwrap();
+        assert_eq!(observed_relation, (RelationType::Thread, thread_root.to_owned()));
+
+        // If the event doesn't have a content for some reason (redacted), it returns
+        // None.
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let observed_thread_root = extract_thread_root(&event);
+        assert_matches!(observed_thread_root, None);
+        assert_matches!(extract_relation(&event), None);
+
+        // If the event has a content but with no `m.relates_to` field, it returns None.
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+            "content": {
+                "body": "Hello, world!",
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let observed_thread_root = extract_thread_root(&event);
+        assert_matches!(observed_thread_root, None);
+        assert_matches!(extract_relation(&event), None);
+
+        // If the event has a relation, but it's not a thread reply, it returns None.
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+            "content": {
+                "body": "Hello, world!",
+                "m.relates_to": {
+                    "rel_type": "m.reference",
+                    "event_id": "$referenced_event_id:example.com",
+                }
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let observed_thread_root = extract_thread_root(&event);
+        assert_matches!(observed_thread_root, None);
+        let observed_relation = extract_relation(&event).unwrap();
+        assert_eq!(
+            observed_relation,
+            (RelationType::Reference, owned_event_id!("$referenced_event_id:example.com"))
+        );
+    }
+
+    #[test]
+    fn test_extract_bundled_thread_summary() {
+        // When there's a bundled thread summary, we can extract it.
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+            "content": {
+                "body": "Hello, world!",
+            },
+            "unsigned": {
+                "m.relations": {
+                    "m.thread": {
+                        "latest_event": {
+                            "event_id": "$latest_event:example.com",
+                            "type": "m.room.message",
+                            "sender": "@bob:example.com",
+                            "origin_server_ts": 42,
+                            "content": {
+                                "body": "Hello to you too!",
+                            }
+                        },
+                        "count": 2,
+                        "current_user_participated": true,
+                    }
+                }
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert_matches!(
+            extract_bundled_thread_summary(&event),
+            (ThreadSummaryStatus::Some(ThreadSummary { .. }), Some(..))
+        );
+
+        // When there's a bundled thread summary, we can assert it with certainty.
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert_matches!(extract_bundled_thread_summary(&event), (ThreadSummaryStatus::None, None));
+
+        // When there's a bundled replace, we can assert there's no thread summary.
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+            "content": {
+                "body": "Bonjour, monde!",
+            },
+            "unsigned": {
+                "m.relations": {
+                    "m.replace":
+                    {
+                        "event_id": "$update:example.com",
+                        "type": "m.room.message",
+                        "sender": "@alice:example.com",
+                        "origin_server_ts": 43,
+                        "content": {
+                            "body": "* Hello, world!",
+                        }
+                    },
+                }
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert_matches!(extract_bundled_thread_summary(&event), (ThreadSummaryStatus::None, None));
+
+        // When the bundled thread summary is malformed, we return
+        // `ThreadSummaryStatus::Unknown`.
+        let event = Raw::new(&json!({
+            "event_id": "$eid:example.com",
+            "type": "m.room.message",
+            "sender": "@alice:example.com",
+            "origin_server_ts": 42,
+            "unsigned": {
+                "m.relations": {
+                    "m.thread": {
+                        // Missing `latest_event` field.
+                    }
+                }
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert_matches!(
+            extract_bundled_thread_summary(&event),
+            (ThreadSummaryStatus::Unknown, None)
+        );
+    }
+
+    #[test]
+    fn test_extract_timestamp() {
+        let event = Raw::new(&json!({
+            "event_id": "$ev0",
+            "type": "m.room.message",
+            "sender": "@mnt_io:matrix.org",
+            "origin_server_ts": 42,
+            "content": {
+                "body": "Le gras, c'est la vie",
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let timestamp = extract_timestamp(&event, MilliSecondsSinceUnixEpoch(UInt::from(100u32)));
+
+        assert_eq!(timestamp, Some(MilliSecondsSinceUnixEpoch(UInt::from(42u32))));
+    }
+
+    #[test]
+    fn test_extract_timestamp_no_origin_server_ts() {
+        let event = Raw::new(&json!({
+            "event_id": "$ev0",
+            "type": "m.room.message",
+            "sender": "@mnt_io:matrix.org",
+            "content": {
+                "body": "Le gras, c'est la vie",
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let timestamp = extract_timestamp(&event, MilliSecondsSinceUnixEpoch(UInt::from(100u32)));
+
+        assert!(timestamp.is_none());
+    }
+
+    #[test]
+    fn test_extract_timestamp_invalid_origin_server_ts() {
+        let event = Raw::new(&json!({
+            "event_id": "$ev0",
+            "type": "m.room.message",
+            "sender": "@mnt_io:matrix.org",
+            "origin_server_ts": "saucisse",
+            "content": {
+                "body": "Le gras, c'est la vie",
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let timestamp = extract_timestamp(&event, MilliSecondsSinceUnixEpoch(UInt::from(100u32)));
+
+        assert!(timestamp.is_none());
+    }
+
+    #[test]
+    fn test_extract_timestamp_malicious_origin_server_ts() {
+        let event = Raw::new(&json!({
+            "event_id": "$ev0",
+            "type": "m.room.message",
+            "sender": "@mnt_io:matrix.org",
+            "origin_server_ts": 101,
+            "content": {
+                "body": "Le gras, c'est la vie",
+            }
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let timestamp = extract_timestamp(&event, MilliSecondsSinceUnixEpoch(UInt::from(100u32)));
+
+        assert_eq!(timestamp, Some(MilliSecondsSinceUnixEpoch(UInt::from(100u32))));
+    }
+    #[test]
+    fn test_extract_read_receipts_keeps_every_receipt_event() {
+        // A sync can carry one receipt event for the room, and one per thread. All of
+        // them must be returned, not just the first one.
+        let room_receipt = Raw::new(&json!({
+            "type": "m.receipt",
+            "content": {
+                "$room_event:example.com": {
+                    "m.read": {
+                        "@alice:example.com": { "ts": 1 },
+                    },
+                },
+            },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        // A non-receipt ephemeral event in the middle must be skipped, not stop the
+        // iteration.
+        let typing = Raw::new(&json!({
+            "type": "m.typing",
+            "content": { "user_ids": ["@bob:example.com"] },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let thread_receipt = Raw::new(&json!({
+            "type": "m.receipt",
+            "content": {
+                "$thread_event:example.com": {
+                    "m.read": {
+                        "@alice:example.com": {
+                            "ts": 2,
+                            "thread_id": "$thread_root:example.com",
+                        },
+                    },
+                },
+            },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        let receipts = extract_read_receipts(&[room_receipt, typing, thread_receipt]);
+
+        assert_eq!(receipts.len(), 2);
+        assert!(receipts[0].get(event_id!("$room_event:example.com")).is_some());
+
+        let thread_receipt =
+            receipts[1].get(event_id!("$thread_event:example.com")).expect("thread receipt");
+        let receipt = thread_receipt
+            .get(&ReceiptType::Read)
+            .and_then(|receipts| receipts.get(user_id!("@alice:example.com")))
+            .expect("read receipt for alice");
+        assert_eq!(
+            receipt.thread,
+            ReceiptThread::Thread(owned_event_id!("$thread_root:example.com"))
+        );
+    }
+
+    #[test]
+    fn test_extract_read_receipts_without_any_receipt() {
+        let typing = Raw::new(&json!({
+            "type": "m.typing",
+            "content": { "user_ids": ["@bob:example.com"] },
+        }))
+        .unwrap()
+        .cast_unchecked();
+
+        assert!(extract_read_receipts(&[typing]).is_empty());
+        assert!(extract_read_receipts(&[]).is_empty());
+    }
+}

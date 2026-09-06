@@ -8,6 +8,7 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#delete_matrixclientv3room_keyskeysroomidsessionid
 
     use js_int::UInt;
+
     use crate::{
         OwnedRoomId,
         api::{auth_scheme::AccessToken, request, response},
@@ -46,8 +47,8 @@ pub mod v3 {
     pub struct Response {
         /// An opaque string representing stored keys in the backup.
         ///
-        /// Clients can compare it with  the etag value they received in the request of their last
-        /// key storage request.
+        /// Clients can compare it with  the etag value they received in the
+        /// request of their last key storage request.
         pub etag: String,
 
         /// The number of keys stored in the backup.
@@ -55,7 +56,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given version, room_id and session_id.
+        /// Creates a new `Request` with the given version, room_id and
+        /// session_id.
         pub fn new(version: String, room_id: OwnedRoomId, session_id: String) -> Self {
             Self { version, room_id, session_id }
         }

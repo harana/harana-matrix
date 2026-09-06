@@ -38,13 +38,14 @@ impl Error {
         Self { status_code, body }
     }
 
-    /// If this is an error with a [`StandardErrorBody`], returns the [`ErrorKind`].
+    /// If this is an error with a [`StandardErrorBody`], returns the
+    /// [`ErrorKind`].
     pub fn error_kind(&self) -> Option<&ErrorKind> {
         as_variant!(&self.body, ErrorBody::Standard(StandardErrorBody { kind, .. }) => kind)
     }
 
-    /// Whether this error matches the expected format for an endpoint that is not implemented by
-    /// the homeserver.
+    /// Whether this error matches the expected format for an endpoint that is
+    /// not implemented by the homeserver.
     ///
     /// Return `true` if this contains an [`ErrorKind::Unrecognized`] with a
     /// [`http::StatusCode::NOT_FOUND`].
@@ -168,7 +169,8 @@ pub struct StandardErrorBody {
     #[serde(flatten)]
     pub kind: ErrorKind,
 
-    /// A human-readable error message, usually a sentence explaining what went wrong.
+    /// A human-readable error message, usually a sentence explaining what went
+    /// wrong.
     #[serde(rename = "error")]
     pub message: String,
 }
@@ -180,10 +182,12 @@ impl StandardErrorBody {
     }
 }
 
-/// Helper type for the serialization of an [`ErrorBody`] as an HTTP response body.
+/// Helper type for the serialization of an [`ErrorBody`] as an HTTP response
+/// body.
 ///
-/// This is a wrapper around `ErrorBody` that cannot implement `Serialize` and `Deserialize` because
-/// part of its serialization might occur in the HTTP headers.
+/// This is a wrapper around `ErrorBody` that cannot implement `Serialize` and
+/// `Deserialize` because part of its serialization might occur in the HTTP
+/// headers.
 #[doc(hidden)]
 #[derive(OutgoingBodyJson)]
 pub struct ErrorResponseBody(ErrorBody);
@@ -212,18 +216,19 @@ pub enum IntoHttpError {
     #[error("failed to add authentication scheme: {0}")]
     Authentication(Box<dyn std::error::Error + Send + Sync + 'static>),
 
-    /// Tried to create a request with an old enough version, for which no unstable endpoint
-    /// exists.
+    /// Tried to create a request with an old enough version, for which no
+    /// unstable endpoint exists.
     ///
-    /// This is also a fallback error for if the version is too new for this endpoint.
+    /// This is also a fallback error for if the version is too new for this
+    /// endpoint.
     #[error(
         "endpoint was not supported by server-reported versions, \
          but no unstable path to fall back to was defined"
     )]
     NoUnstablePath,
 
-    /// Tried to create a request with [`MatrixVersion`]s for all of which this endpoint was
-    /// removed.
+    /// Tried to create a request with [`MatrixVersion`]s for all of which this
+    /// endpoint was removed.
     #[error(
         "could not create any path variant for endpoint, as it was removed in version {}",
         .0.as_str().expect("no endpoint was removed in Matrix 1.0")
@@ -248,7 +253,8 @@ pub enum IntoHttpError {
 }
 
 impl IntoHttpError {
-    /// Construct an [`Authentication`](Self::Authentication) error from the given underlying error.
+    /// Construct an [`Authentication`](Self::Authentication) error from the
+    /// given underlying error.
     pub fn authentication(
         error: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
     ) -> Self {
@@ -268,7 +274,8 @@ impl From<http::header::InvalidHeaderValue> for IntoHttpError {
     }
 }
 
-/// An error when converting a http request to one of ruma's endpoint-specific request types.
+/// An error when converting a http request to one of ruma's endpoint-specific
+/// request types.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum FromHttpRequestError {
@@ -295,7 +302,8 @@ where
     }
 }
 
-/// An error when converting a http response to one of Ruma's endpoint-specific response types.
+/// An error when converting a http response to one of Ruma's endpoint-specific
+/// response types.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum FromHttpResponseError<E> {
@@ -307,8 +315,9 @@ pub enum FromHttpResponseError<E> {
 }
 
 impl<E> FromHttpResponseError<E> {
-    /// Map `FromHttpResponseError<E>` to `FromHttpResponseError<F>` by applying a function to a
-    /// contained `Server` value, leaving a `Deserialization` value untouched.
+    /// Map `FromHttpResponseError<E>` to `FromHttpResponseError<F>` by applying
+    /// a function to a contained `Server` value, leaving a
+    /// `Deserialization` value untouched.
     pub fn map<F>(self, f: impl FnOnce(E) -> F) -> FromHttpResponseError<F> {
         match self {
             Self::Deserialization(d) => FromHttpResponseError::Deserialization(d),
@@ -318,7 +327,8 @@ impl<E> FromHttpResponseError<E> {
 }
 
 impl<E, F> FromHttpResponseError<Result<E, F>> {
-    /// Transpose `FromHttpResponseError<Result<E, F>>` to `Result<FromHttpResponseError<E>, F>`.
+    /// Transpose `FromHttpResponseError<Result<E, F>>` to
+    /// `Result<FromHttpResponseError<E>, F>`.
     pub fn transpose(self) -> Result<FromHttpResponseError<E>, F> {
         match self {
             Self::Deserialization(d) => Ok(FromHttpResponseError::Deserialization(d)),
@@ -360,8 +370,8 @@ impl FromHttpResponseErrorExt for FromHttpResponseError<Error> {
     }
 }
 
-/// An error when converting a http request / response to one of ruma's endpoint-specific request /
-/// response types.
+/// An error when converting a http request / response to one of ruma's
+/// endpoint-specific request / response types.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum DeserializationError {
@@ -440,8 +450,8 @@ pub enum HeaderDeserializationError {
         unexpected: String,
     },
 
-    /// The `Content-Type` header for a `multipart/mixed` response is missing the `boundary`
-    /// attribute.
+    /// The `Content-Type` header for a `multipart/mixed` response is missing
+    /// the `boundary` attribute.
     #[error(
         "The `Content-Type` header for a `multipart/mixed` response is missing the `boundary` attribute"
     )]
@@ -464,7 +474,8 @@ pub enum MultipartMixedDeserializationError {
         found: usize,
     },
 
-    /// The separator between the headers and the content of a body part is missing.
+    /// The separator between the headers and the content of a body part is
+    /// missing.
     #[error("multipart/mixed body part is missing separator between headers and content")]
     MissingBodyPartInnerSeparator,
 
@@ -490,8 +501,8 @@ impl fmt::Display for UnknownVersionError {
 
 impl StdError for UnknownVersionError {}
 
-/// An error that happens when an incorrect amount of arguments have been passed to [`PathBuilder`]
-/// parts formatting.
+/// An error that happens when an incorrect amount of arguments have been passed
+/// to [`PathBuilder`] parts formatting.
 ///
 /// [`PathBuilder`]: super::path_builder::PathBuilder
 #[derive(Debug)]
@@ -522,8 +533,8 @@ pub enum HeaderSerializationError {
 
     /// The `SystemTime` could not be converted to a HTTP date.
     ///
-    /// This only happens if the `SystemTime` provided is too far in the past (before the Unix
-    /// epoch) or the future (after the year 9999).
+    /// This only happens if the `SystemTime` provided is too far in the past
+    /// (before the Unix epoch) or the future (after the year 9999).
     #[error("invalid HTTP date")]
     InvalidHttpDate,
 }

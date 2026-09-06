@@ -9,12 +9,13 @@ pub mod v3 {
 
     use std::collections::BTreeMap;
 
+    use serde::{Deserialize, Serialize};
+
     use crate::{
         MilliSecondsSinceUnixEpoch, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
-    use serde::{Deserialize, Serialize};
 
     metadata! {
         method: GET,
@@ -42,7 +43,8 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub user_id: Option<OwnedUserId>,
 
-        /// A map of the user's device identifiers to information about that device.
+        /// A map of the user's device identifiers to information about that
+        /// device.
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub devices: BTreeMap<String, DeviceInfo>,
     }

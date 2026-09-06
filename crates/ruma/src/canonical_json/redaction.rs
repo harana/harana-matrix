@@ -8,21 +8,25 @@ use super::{
 };
 use crate::{room_version_rules::RedactionRules, serde::Raw};
 
-/// Redacts an event using the rules specified in the Matrix client-server specification.
+/// Redacts an event using the rules specified in the Matrix client-server
+/// specification.
 ///
 /// This is part of the process of signing an event.
 ///
-/// Redaction is also suggested when verifying an event with `verify_event` returns
-/// `Verified::Signatures`. See the documentation for `Verified` for details.
+/// Redaction is also suggested when verifying an event with `verify_event`
+/// returns `Verified::Signatures`. See the documentation for `Verified` for
+/// details.
 ///
 /// Returns a new JSON object with all applicable fields redacted.
 ///
 /// # Parameters
 ///
 /// * `object`: A JSON object to redact.
-/// * `version`: The room version, determines which keys to keep for a few event types.
-/// * `redacted_because`: If this is set, an `unsigned` object with a `redacted_because` field set
-///   to the given value is added to the event after redaction.
+/// * `version`: The room version, determines which keys to keep for a few event
+///   types.
+/// * `redacted_because`: If this is set, an `unsigned` object with a
+///   `redacted_because` field set to the given value is added to the event
+///   after redaction.
 ///
 /// # Errors
 ///
@@ -41,7 +45,8 @@ pub fn redact(
     Ok(object)
 }
 
-/// Redacts an event using the rules specified in the Matrix client-server specification.
+/// Redacts an event using the rules specified in the Matrix client-server
+/// specification.
 ///
 /// Functionally equivalent to `redact`, only this'll redact the event in-place.
 pub fn redact_in_place(
@@ -62,8 +67,8 @@ pub fn redact_in_place(
     Ok(())
 }
 
-/// Redacts the given event content using the given redaction rules for the version of the current
-/// room.
+/// Redacts the given event content using the given redaction rules for the
+/// version of the current room.
 ///
 /// Edits the `content` in-place.
 pub fn redact_content_in_place(
@@ -95,17 +100,19 @@ impl RedactedBecause {
 /// Marker trait for redaction events.
 pub trait RedactionEvent {}
 
-/// A function that takes redaction rules and a key and returns whether the field should be
-/// retained.
+/// A function that takes redaction rules and a key and returns whether the
+/// field should be retained.
 type RetainKeyFn = dyn Fn(&RedactionRules, &str) -> RetainKey;
 
 /// Whether a key should be retained.
 enum RetainKey {
     /// The key should be retained.
     Yes {
-        /// The rules to apply to the child keys if the value of this key is an object.
+        /// The rules to apply to the child keys if the value of this key is an
+        /// object.
         ///
-        /// If the value is an object and this is `None`, the default is [`RetainedKeys::All`].
+        /// If the value is an object and this is `None`, the default is
+        /// [`RetainedKeys::All`].
         child_retained_keys: Option<RetainedKeys>,
     },
 
@@ -190,7 +197,8 @@ fn retained_event_keys(
     }))
 }
 
-/// Get the keys that should be retained in the `content` of an event with the given type.
+/// Get the keys that should be retained in the `content` of an event with the
+/// given type.
 fn retained_event_content_keys(event_type: &str, rules: &RedactionRules) -> RetainedKeys {
     match event_type {
         "m.room.member" => RetainedKeys::some(is_room_member_content_key_retained),
@@ -208,7 +216,8 @@ fn retained_event_content_keys(event_type: &str, rules: &RedactionRules) -> Reta
     }
 }
 
-/// Whether the given key in the `content` of an `m.room.member` event is retained after redaction.
+/// Whether the given key in the `content` of an `m.room.member` event is
+/// retained after redaction.
 fn is_room_member_content_key_retained(rules: &RedactionRules, key: &str) -> RetainKey {
     match key {
         "membership" => true.into(),
@@ -235,8 +244,8 @@ fn room_create_content_retained_keys(rules: &RedactionRules) -> RetainedKeys {
     }
 }
 
-/// Whether the given key in the `content` of an `m.room.join_rules` event is retained after
-/// redaction.
+/// Whether the given key in the `content` of an `m.room.join_rules` event is
+/// retained after redaction.
 fn is_room_join_rules_content_key_retained(rules: &RedactionRules, key: &str) -> RetainKey {
     match key {
         "join_rule" => true,
@@ -246,8 +255,8 @@ fn is_room_join_rules_content_key_retained(rules: &RedactionRules, key: &str) ->
     .into()
 }
 
-/// Whether the given key in the `content` of an `m.room.power_levels` event is retained after
-/// redaction.
+/// Whether the given key in the `content` of an `m.room.power_levels` event is
+/// retained after redaction.
 fn is_room_power_levels_content_key_retained(rules: &RedactionRules, key: &str) -> RetainKey {
     match key {
         "ban" | "events" | "events_default" | "kick" | "redact" | "state_default" | "users"
@@ -258,8 +267,8 @@ fn is_room_power_levels_content_key_retained(rules: &RedactionRules, key: &str) 
     .into()
 }
 
-/// Whether the given key in the `content` of an `m.room.history_visibility` event is retained after
-/// redaction.
+/// Whether the given key in the `content` of an `m.room.history_visibility`
+/// event is retained after redaction.
 fn is_room_history_visibility_content_key_retained(key: &str) -> RetainKey {
     (key == "history_visibility").into()
 }
@@ -282,8 +291,8 @@ fn room_aliases_content_retained_keys(rules: &RedactionRules) -> RetainedKeys {
     }
 }
 
-/// Whether the given key in the `content` of an `m.room.server_acl` event is retained after
-/// redaction.
+/// Whether the given key in the `content` of an `m.room.server_acl` event is
+/// retained after redaction.
 #[cfg(feature = "unstable-msc2870")]
 fn is_room_server_acl_content_key_retained(rules: &RedactionRules, key: &str) -> RetainKey {
     match key {

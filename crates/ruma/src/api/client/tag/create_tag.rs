@@ -10,9 +10,9 @@ pub mod v3 {
     use crate::{
         OwnedRoomId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
+        events::tag::TagInfo,
         metadata,
     };
-    use crate::events::tag::TagInfo;
 
     metadata! {
         method: PUT,
@@ -50,7 +50,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given user ID, room ID, tag and tag info.
+        /// Creates a new `Request` with the given user ID, room ID, tag and tag
+        /// info.
         pub fn new(
             user_id: OwnedUserId,
             room_id: OwnedRoomId,

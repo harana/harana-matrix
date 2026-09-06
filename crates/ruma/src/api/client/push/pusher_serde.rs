@@ -1,8 +1,8 @@
-use crate::serde::from_raw_json_value;
 use serde::{Deserialize, Serialize, de, ser::SerializeStruct};
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::{CustomPusherData, Pusher, PusherIds, PusherKind};
+use crate::serde::from_raw_json_value;
 
 #[derive(Debug, Deserialize)]
 struct PusherDeHelper {
@@ -80,12 +80,14 @@ impl<'de> Deserialize<'de> for PusherKind {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq, push::HttpPusherData, serde::JsonObject,
-    };
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
-    use crate::api::client::push::{CustomPusherData, EmailPusherData, PusherKind};
+    use crate::{
+        api::client::push::{CustomPusherData, EmailPusherData, PusherKind},
+        canonical_json::assert_to_canonical_json_eq,
+        push::HttpPusherData,
+        serde::JsonObject,
+    };
 
     #[test]
     fn serialize_email() {

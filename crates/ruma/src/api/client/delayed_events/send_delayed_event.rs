@@ -9,15 +9,15 @@ pub mod unstable {
 
     use std::time::Duration;
 
+    #[cfg(feature = "unstable-msc4354")]
+    use crate::events::sticky::StickyDurationMs;
     use crate::{
         OwnedRoomId, OwnedTransactionId,
         api::{auth_scheme::AccessToken, request, response},
+        events::{AnyTimelineEventContent, TimelineEventType},
         metadata,
         serde::Raw,
     };
-    #[cfg(feature = "unstable-msc4354")]
-    use crate::events::sticky::StickyDurationMs;
-    use crate::events::{AnyTimelineEventContent, TimelineEventType};
 
     metadata! {
         method: PUT,
@@ -27,7 +27,8 @@ pub mod unstable {
             unstable("org.matrix.msc4140") => "/_matrix/client/unstable/org.matrix.msc4140/rooms/{room_id}/delayed_event/{event_type}/{txn_id}",
         }
     }
-    /// Request type for the [`send_delayed_event`](crate::api::client::delayed_events::send_delayed_event)
+    /// Request type for the
+    /// [`send_delayed_event`](crate::api::client::delayed_events::send_delayed_event)
     /// endpoint.
     #[request]
     pub struct Request {
@@ -57,8 +58,8 @@ pub mod unstable {
 
         /// The duration to stick the delayed event.
         ///
-        /// Caller must first check that the server supports sticky events (via `/versions`),
-        /// or it will be no-op.
+        /// Caller must first check that the server supports sticky events (via
+        /// `/versions`), or it will be no-op.
         ///
         /// See [MSC4354 sticky events](https://github.com/matrix-org/matrix-spec-proposals/pull/4354).
         #[cfg(feature = "unstable-msc4354")]
@@ -81,18 +82,20 @@ pub mod unstable {
     /// [`send_delayed_event`](crate::api::client::delayed_events::send_delayed_event) endpoint.
     #[response]
     pub struct Response {
-        /// The `delay_id` generated for this delayed event. Used to interact with delayed events.
+        /// The `delay_id` generated for this delayed event. Used to interact
+        /// with delayed events.
         pub delay_id: String,
     }
 
     impl Request {
-        /// Creates a new `Request` with the given room id, transaction id, `delay_parameters` and
-        /// event content.
+        /// Creates a new `Request` with the given room id, transaction id,
+        /// `delay_parameters` and event content.
         ///
         /// # Errors
         ///
-        /// Since `Request` stores the request body in serialized form, this function can fail if
-        /// `T`s [`::serde::Serialize`] implementation can fail.
+        /// Since `Request` stores the request body in serialized form, this
+        /// function can fail if `T`s [`::serde::Serialize`]
+        /// implementation can fail.
         pub fn new(
             room_id: OwnedRoomId,
             txn_id: OwnedTransactionId,
@@ -112,8 +115,8 @@ pub mod unstable {
             })
         }
 
-        /// Creates a new `Request` with the given room id, transaction id, event type,
-        /// `delay_parameters` and raw event content.
+        /// Creates a new `Request` with the given room id, transaction id,
+        /// event type, `delay_parameters` and raw event content.
         pub fn new_raw(
             event_type: TimelineEventType,
             room_id: OwnedRoomId,
@@ -136,7 +139,8 @@ pub mod unstable {
     }
 
     impl Response {
-        /// Creates a new `Response` with the tokens required to control the delayed event using the
+        /// Creates a new `Response` with the tokens required to control the
+        /// delayed event using the
         /// [`crate::api::client::delayed_events::update_delayed_event::unstable_v2::Request`] request.
         pub fn new(delay_id: String) -> Self {
             Self { delay_id }
@@ -147,18 +151,18 @@ pub mod unstable {
     mod client_tests {
         use std::borrow::Cow;
 
+        use serde_json::{Value as JsonValue, json};
+        use web_time::Duration;
+
+        use super::Request;
         use crate::{
             api::{
                 MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
                 auth_scheme::SendAccessToken,
             },
+            events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
             owned_room_id,
         };
-        use crate::events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent};
-        use serde_json::{Value as JsonValue, json};
-        use web_time::Duration;
-
-        use super::Request;
 
         #[test]
         fn serialize_send_delayed_event_request() {
@@ -241,10 +245,10 @@ pub mod unstable {
 
         use std::time::Duration;
 
-        use crate::{OwnedTransactionId, api::IncomingRequest, owned_room_id};
         use serde_json::json;
 
         use super::Request;
+        use crate::{OwnedTransactionId, api::IncomingRequest, owned_room_id};
 
         #[test]
         fn deserialize_send_delayed_events_request() {
@@ -276,8 +280,8 @@ pub mod unstable {
             );
         }
 
-        /// Without the query parameter the delayed event is scheduled as a regular, non-sticky
-        /// event.
+        /// Without the query parameter the delayed event is scheduled as a
+        /// regular, non-sticky event.
         #[cfg(feature = "unstable-msc4354")]
         #[test]
         fn deserialize_send_delayed_event_request_without_sticky() {

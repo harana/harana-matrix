@@ -1,14 +1,13 @@
 use std::collections::BTreeSet;
 
 use js_int::uint;
-use crate::{
-    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
-};
-use crate::events::TimelineEventType;
 use serde::{Deserialize, Serialize};
 use serde_json::value::{RawValue as RawJsonValue, to_raw_value as to_raw_json_value};
 
-use crate::state_res::Event;
+use crate::{
+    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
+    events::TimelineEventType, state_res::Event,
+};
 
 /// A Persistent Data Unit (PDU) with the minimal fields to implement [`Event`].
 #[derive(Clone, Debug, Deserialize)]
@@ -29,24 +28,27 @@ pub struct Pdu {
     #[serde(rename = "type")]
     pub event_type: TimelineEventType,
 
-    /// If this field is set, the event is a state event, and it will replace previous events
-    /// with the same `type` and `state_key` in the room state.
+    /// If this field is set, the event is a state event, and it will replace
+    /// previous events with the same `type` and `state_key` in the room
+    /// state.
     pub state_key: Option<String>,
 
     /// The content of the event.
     pub content: Box<RawJsonValue>,
 
-    /// Event IDs for the most recent events in the room that the homeserver was aware of when it
-    /// made this event.
+    /// Event IDs for the most recent events in the room that the homeserver was
+    /// aware of when it made this event.
     pub prev_events: BTreeSet<OwnedEventId>,
 
-    /// Event IDs for the authorization events that would allow this event to be in the room.
+    /// Event IDs for the authorization events that would allow this event to be
+    /// in the room.
     pub auth_events: BTreeSet<OwnedEventId>,
 
     /// For redaction events, the ID of the event being redacted.
     pub redacts: Option<OwnedEventId>,
 
-    /// Whether this event was rejected for not passing the checks on reception of a PDU.
+    /// Whether this event was rejected for not passing the checks on reception
+    /// of a PDU.
     pub rejected: bool,
 }
 

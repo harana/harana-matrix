@@ -4,6 +4,8 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
+use serde_json::Value as JsonValue;
+
 use crate::{
     OneTimeKeyAlgorithm, OwnedDeviceId, OwnedOneTimeKeyId, OwnedUserId,
     api::{auth_scheme::AccessToken, request, response},
@@ -11,7 +13,6 @@ use crate::{
     metadata,
     serde::Raw,
 };
-use serde_json::Value as JsonValue;
 
 metadata! {
     method: POST,
@@ -26,8 +27,8 @@ metadata! {
 /// Request type for the `claim_keys` endpoint.
 #[request]
 pub struct Request {
-    /// The time (in milliseconds) to wait when downloading keys from remote servers.
-    /// 10 seconds is the recommended default.
+    /// The time (in milliseconds) to wait when downloading keys from remote
+    /// servers. 10 seconds is the recommended default.
     #[serde(
         with = "crate::serde::duration::opt_ms",
         default,
@@ -53,7 +54,8 @@ pub struct Response {
 }
 
 impl Request {
-    /// Creates a new `Request` with the given key claims and the recommended 10 second timeout.
+    /// Creates a new `Request` with the given key claims and the recommended 10
+    /// second timeout.
     pub fn new(
         one_time_keys: BTreeMap<OwnedUserId, BTreeMap<OwnedDeviceId, OneTimeKeyAlgorithm>>,
     ) -> Self {

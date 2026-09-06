@@ -1,0 +1,179 @@
+// Copyright 2023 The Matrix.org Foundation C.I.C.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for that specific language governing permissions and
+// limitations under the License.
+
+use std::{fmt::Debug, sync::Arc};
+
+use matrix::Client;
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
+use ui::{
+    sync_service::{
+        State as MatrixSyncServiceState, SyncService as MatrixSyncService,
+        SyncServiceBuilder as MatrixSyncServiceBuilder,
+    },
+    unable_to_decrypt_hook::UtdHookManager,
+};
+
+use crate::{
+    TaskHandle, error::ClientError, helpers::unwrap_or_clone_arc, platform::tracing::Span,
+    room_list::RoomListService, runtime::get_runtime_handle,
+};
+
+#[derive(uniffi::Enum)]
+pub enum SyncServiceState {
+    Idle,
+    Running,
+    Terminated,
+    Error,
+    Offline,
+    /// The syncs failed and the service is waiting before restarting them.
+    Backoff,
+}
+
+impl From<MatrixSyncServiceState> for SyncServiceState {
+    fn from(value: MatrixSyncServiceState) -> Self {
+        match value {
+            MatrixSyncServiceState::Idle => Self::Idle,
+            MatrixSyncServiceState::Running => Self::Running,
+            MatrixSyncServiceState::Terminated => Self::Terminated,
+            MatrixSyncServiceState::Error(_error) => Self::Error,
+            MatrixSyncServiceState::Offline => Self::Offline,
+            MatrixSyncServiceState::Backoff => Self::Backoff,
+        }
+    }
+}
+
+#[matrix_ffi_macros::export(callback_interface)]
+pub trait SyncServiceStateObserver: SendOutsideWasm + SyncOutsideWasm + Debug {
+    fn on_update(&self, state: SyncServiceState);
+}
+
+#[derive(uniffi::Object)]
+pub struct SyncService {
+    pub(crate) inner: Arc<MatrixSyncService>,
+    utd_hook: Option<Arc<UtdHookManager>>,
+}
+
+#[matrix_ffi_macros::export]
+impl SyncService {
+    pub fn room_list_service(&self) -> Arc<RoomListService> {
+        Arc::new(RoomListService {
+            inner: self.inner.room_list_service(),
+            utd_hook: self.utd_hook.clone(),
+        })
+    }
+
+    pub async fn start(&self) {
+        self.inner.start().await
+    }
+
+    pub async fn stop(&self) {
+        self.inner.stop().await
+    }
+
+    pub fn state(&self, listener: Box<dyn SyncServiceStateObserver>) -> Arc<TaskHandle> {
+        let mut state_stream = self.inner.state();
+
+        listener.on_update(state_stream.next_now().into());
+
+        Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
+            while let Some(state) = state_stream.next().await {
+                listener.on_update(state.into());
+            }
+        })))
+    }
+
+    /// Force expiring both sliding sync sessions.
+    ///
+    /// This ensures that the sync service is stopped before expiring both
+    /// sessions. It should be used sparingly, as it will cause a restart of
+    /// the sessions on the server as well.
+    pub async fn expire_sessions(&self) {
+        self.inner.expire_sessions().await;
+    }
+}
+
+#[derive(Clone, uniffi::Object)]
+pub struct SyncServiceBuilder {
+    builder: MatrixSyncServiceBuilder,
+    utd_hook: Option<Arc<UtdHookManager>>,
+}
+
+impl SyncServiceBuilder {
+    pub(crate) fn new(client: Client, utd_hook: Option<Arc<UtdHookManager>>) -> Arc<Self> {
+        Arc::new(Self { builder: MatrixSyncService::builder(client), utd_hook })
+    }
+}
+
+#[matrix_ffi_macros::export]
+impl SyncServiceBuilder {
+    /// Enable the "offline" mode for the [`SyncService`].
+    pub fn with_offline_mode(self: Arc<Self>) -> Arc<Self> {
+        let this = unwrap_or_clone_arc(self);
+        let builder = this.builder.with_offline_mode();
+        Arc::new(Self { builder, ..this })
+    }
+
+    pub fn with_share_pos(self: Arc<Self>, enable: bool) -> Arc<Self> {
+        let this = unwrap_or_clone_arc(self);
+        let builder = this.builder.with_share_pos(enable);
+        Arc::new(Self { builder, ..this })
+    }
+
+    /// Enable the Profiles sliding sync extension for the room list service.
+    ///
+    /// Required to merge the global `m.status` and `m.call` fields into the
+    /// room members and profiles read from the SDK.
+    pub fn with_profiles_extension(self: Arc<Self>) -> Arc<Self> {
+        let this = unwrap_or_clone_arc(self);
+        let builder = this.builder.with_profiles_extension();
+        Arc::new(Self { builder, ..this })
+    }
+
+    /// Set a custom Sliding Sync connection ID for the room list service.
+    ///
+    /// By default [`ui::room_list_service::DEFAULT_CONNECTION_ID`]
+    /// is used. Set a different value for secondary processes such as iOS
+    /// Share Extensions that are not meant to reuse the main app's
+    /// connection.
+    pub fn with_room_list_connection_id(self: Arc<Self>, connection_id: String) -> Arc<Self> {
+        let this = unwrap_or_clone_arc(self);
+        let builder = this.builder.with_room_list_conn_id(connection_id);
+        Arc::new(Self { builder, ..this })
+    }
+
+    /// Set a custom timeline limit for the room list service.
+    ///
+    /// When set, overrides the default timeline limit of
+    /// [`ui::room_list_service::DEFAULT_LIST_TIMELINE_LIMIT`].
+    pub fn with_room_list_timeline_limit(self: Arc<Self>, limit: u32) -> Arc<Self> {
+        let this = unwrap_or_clone_arc(self);
+        let builder = this.builder.with_room_list_timeline_limit(limit);
+        Arc::new(Self { builder, ..this })
+    }
+
+    /// Set a parent tracing Span for the tasks within this sync service.
+    pub fn with_parent_span(self: Arc<Self>, span: Arc<Span>) -> Arc<Self> {
+        let this = unwrap_or_clone_arc(self);
+        let builder = this.builder.with_parent_span(span.inner().clone());
+        Arc::new(Self { builder, ..this })
+    }
+
+    pub async fn finish(self: Arc<Self>) -> Result<Arc<SyncService>, ClientError> {
+        let this = unwrap_or_clone_arc(self);
+        Ok(Arc::new(SyncService {
+            inner: Arc::new(this.builder.build().await?),
+            utd_hook: this.utd_hook,
+        }))
+    }
+}

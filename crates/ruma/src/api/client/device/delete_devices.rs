@@ -9,11 +9,13 @@ pub mod v3 {
 
     use crate::{
         OwnedDeviceId,
-        api::{auth_scheme::AccessToken, request, response},
+        api::{
+            auth_scheme::AccessToken,
+            client::uiaa::{AuthData, UiaaResponse},
+            request, response,
+        },
         metadata,
     };
-
-    use crate::api::client::uiaa::{AuthData, UiaaResponse};
 
     metadata! {
         method: POST,
@@ -31,7 +33,8 @@ pub mod v3 {
         /// List of devices to delete.
         pub devices: Vec<OwnedDeviceId>,
 
-        /// Additional authentication information for the user-interactive authentication API.
+        /// Additional authentication information for the user-interactive
+        /// authentication API.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub auth: Option<AuthData>,
     }

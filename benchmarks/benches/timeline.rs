@@ -1,14 +1,14 @@
 #![recursion_limit = "256"]
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use matrix_sdk::test_utils::mocks::MatrixMockServer;
-use matrix_sdk_test::{JoinedRoomBuilder, event_factory::EventFactory};
-use matrix_sdk_ui::timeline::{TimelineBuilder, TimelineReadReceiptTracking};
+use matrix::test_utils::mocks::MatrixMockServer;
 use ruma::{
     OwnedEventId, events::room::message::RoomMessageEventContentWithoutRelation, owned_room_id,
     owned_user_id,
 };
+use sdk_test::{JoinedRoomBuilder, event_factory::EventFactory};
 use tokio::runtime::Builder;
+use ui::timeline::{TimelineBuilder, TimelineReadReceiptTracking};
 
 /// Benchmark the time it takes to create a timeline (with read receipt
 /// support), when there are many initial events at rest in the event cache.

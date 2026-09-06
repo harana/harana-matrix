@@ -2,14 +2,16 @@ use assert_matches2::assert_matches;
 use assign::assign;
 use js_int::{UInt, uint};
 use ruma::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
-    owned_mxc_uri, serde::CanBeEmpty,
-};
-use ruma::events::{
-    AnyMessageLikeEvent, MessageLikeEvent,
-    relation::Replacement,
-    room::{ImageInfo, MediaSource, ThumbnailInfo, message::Relation},
-    sticker::{StickerEventContent, StickerEventContentWithoutRelation, StickerMediaSource},
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, MessageLikeEvent,
+        relation::Replacement,
+        room::{ImageInfo, MediaSource, ThumbnailInfo, message::Relation},
+        sticker::{StickerEventContent, StickerEventContentWithoutRelation, StickerMediaSource},
+    },
+    owned_event_id, owned_mxc_uri,
+    serde::CanBeEmpty,
 };
 use serde_json::{from_value as from_json_value, json};
 

@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "benchmarks",
-    "bindings/matrix-sdk-crypto-ffi",
-    "bindings/matrix-sdk-ffi",
+    "bindings/crypto-ffi",
+    "bindings/matrix-ffi",
     "crates/*",
     "examples/*",
     "labs/*",
@@ -137,20 +137,20 @@ wiremock = { version = "0.6.5", default-features = false }
 zeroize = "1.9.0"
 zxcvbn = { git = "https://github.com/shssoichiro/zxcvbn-rs", rev = "4e8e784b23541d118800df84feedf8160879d1af", default-features = false }
 
-matrix-sdk = { path = "crates/matrix-sdk", version = "0.18.0", default-features = false }
-matrix-sdk-base = { path = "crates/matrix-sdk-base", version = "0.18.0", default-features = false }
-matrix-sdk-common = { path = "crates/matrix-sdk-common", version = "0.18.0", default-features = false }
-matrix-sdk-contentscanner = { path = "crates/matrix-sdk-contentscanner", version = "0.18.0", default-features = false }
-matrix-sdk-crypto = { path = "crates/matrix-sdk-crypto", version = "0.18.0", default-features = false }
-matrix-sdk-ffi-macros = { path = "bindings/matrix-sdk-ffi-macros", version = "0.7.0" }
-matrix-sdk-indexeddb = { path = "crates/matrix-sdk-indexeddb", version = "0.18.0", default-features = false }
-matrix-sdk-qrcode = { path = "crates/matrix-sdk-qrcode", version = "0.18.0" }
-matrix-sdk-sqlite = { path = "crates/matrix-sdk-sqlite", version = "0.18.0", default-features = false }
-matrix-sdk-store-encryption = { path = "crates/matrix-sdk-store-encryption", version = "0.18.0" }
-matrix-sdk-test = { path = "testing/matrix-sdk-test", version = "0.18.0" }
-matrix-sdk-test-utils = { path = "testing/matrix-sdk-test-utils", version = "0.18.0" }
-matrix-sdk-ui = { path = "crates/matrix-sdk-ui", version = "0.18.0", default-features = false }
-matrix-sdk-search = { path = "crates/matrix-sdk-search", version = "0.18.0", default-features = false }
+matrix = { path = "crates/matrix", version = "0.18.0", default-features = false }
+base = { path = "crates/base", version = "0.18.0", default-features = false }
+sdk-common = { path = "crates/sdk-common", version = "0.18.0", default-features = false }
+contentscanner = { path = "crates/contentscanner", version = "0.18.0", default-features = false }
+crypto = { path = "crates/crypto", version = "0.18.0", default-features = false }
+matrix-ffi-macros = { path = "bindings/matrix-ffi-macros", version = "0.7.0" }
+indexeddb = { path = "crates/indexeddb", version = "0.18.0", default-features = false }
+qrcode = { path = "crates/qrcode", version = "0.18.0" }
+sqlite = { path = "crates/sqlite", version = "0.18.0", default-features = false }
+store-encryption = { path = "crates/store-encryption", version = "0.18.0" }
+sdk-test = { path = "testing/sdk-test", version = "0.18.0" }
+sdk-test-utils = { path = "testing/sdk-test-utils", version = "0.18.0" }
+ui = { path = "crates/ui", version = "0.18.0", default-features = false }
+search = { path = "crates/search", version = "0.18.0", default-features = false }
 
 [workspace.lints.rust]
 rust_2018_idioms = "warn"
@@ -205,7 +205,7 @@ strip = "debuginfo"
 
 [profile.dev.package]
 # Optimize quote even in debug mode. Speeds up proc-macros enough to account
-# for the extra time of optimizing it for a clean build of matrix-sdk-ffi.
+# for the extra time of optimizing it for a clean build of matrix-ffi.
 quote = { opt-level = 2 }
 sha2 = { opt-level = 2 }
 # faster runs for insta.rs snapshot testing

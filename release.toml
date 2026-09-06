@@ -1,6 +1,6 @@
 owners = ["poljar", "github:matrix-org:rust"]
 
-pre-release-commit-message = "chore: Release matrix-sdk version {{version}}"
+pre-release-commit-message = "chore: Release matrix version {{version}}"
 pre-release-hook = ["towncrier", "build", "--config=../../towncrier.toml", "--dir=./", "--version={{version}}", "--yes"]
 
 sign-tag = true

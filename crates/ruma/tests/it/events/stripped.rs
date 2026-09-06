@@ -1,9 +1,12 @@
 use assert_matches2::assert_matches;
 use js_int::uint;
-use ruma::{canonical_json::assert_to_canonical_json_eq, mxc_uri};
-use ruma::events::{
-    AnyStrippedStateEvent,
-    room::{join_rules::JoinRule, topic::RoomTopicEventContent},
+use ruma::{
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyStrippedStateEvent,
+        room::{join_rules::JoinRule, topic::RoomTopicEventContent},
+    },
+    mxc_uri,
 };
 use serde_json::{from_value as from_json_value, json};
 
@@ -94,8 +97,7 @@ fn deserialize_stripped_state_events() {
 #[cfg(feature = "unstable-msc4319")]
 fn deserialize_stripped_state_msc4319_format() {
     use js_int::uint;
-    use ruma::{MilliSecondsSinceUnixEpoch, user_id};
-    use ruma::events::room::member::MembershipState;
+    use ruma::{MilliSecondsSinceUnixEpoch, events::room::member::MembershipState, user_id};
 
     let user_id = user_id!("@patrick:localhost");
     let origin_server_ts = MilliSecondsSinceUnixEpoch(uint!(1_000_000));

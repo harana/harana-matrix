@@ -1,6 +1,7 @@
 //! `GET /_matrix/client/*/keys/changes`
 //!
-//! Gets a list of users who have updated their device identity keys since a previous sync token.
+//! Gets a list of users who have updated their device identity keys since a
+//! previous sync token.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -28,14 +29,15 @@ pub mod v3 {
     pub struct Request {
         /// The desired start point of the list.
         ///
-        /// Should be the next_batch field from a response to an earlier call to /sync.
+        /// Should be the next_batch field from a response to an earlier call to
+        /// /sync.
         #[ruma_api(query)]
         pub from: String,
 
         /// The desired end point of the list.
         ///
-        /// Should be the next_batch field from a recent call to /sync - typically the most recent
-        /// such call.
+        /// Should be the next_batch field from a recent call to /sync -
+        /// typically the most recent such call.
         #[ruma_api(query)]
         pub to: String,
     }
@@ -43,11 +45,13 @@ pub mod v3 {
     /// Response type for the `get_key_changes` endpoint.
     #[response]
     pub struct Response {
-        /// The Matrix User IDs of all users who updated their device identity keys.
+        /// The Matrix User IDs of all users who updated their device identity
+        /// keys.
         pub changed: Vec<OwnedUserId>,
 
-        /// The Matrix User IDs of all users who may have left all the end-to-end
-        /// encrypted rooms they previously shared with the user.
+        /// The Matrix User IDs of all users who may have left all the
+        /// end-to-end encrypted rooms they previously shared with the
+        /// user.
         pub left: Vec<OwnedUserId>,
     }
 
@@ -59,7 +63,8 @@ pub mod v3 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given changed and left user ID lists.
+        /// Creates a new `Response` with the given changed and left user ID
+        /// lists.
         pub fn new(changed: Vec<OwnedUserId>, left: Vec<OwnedUserId>) -> Self {
             Self { changed, left }
         }

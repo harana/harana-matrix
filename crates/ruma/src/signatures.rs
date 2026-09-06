@@ -1,65 +1,71 @@
 //! Digital signatures according to the [Matrix](https://matrix.org/) specification.
 //!
-//! Digital signatures are used in several places in the Matrix specification, here are a few
-//! examples:
+//! Digital signatures are used in several places in the Matrix specification,
+//! here are a few examples:
 //!
 //! * Homeservers sign events to ensure their authenticity
 //! * Homeservers sign requests to other homeservers to prove their identity
 //! * Identity servers sign third-party invites to ensure their authenticity
 //! * Clients sign user keys to mark other users as verified
 //!
-//! Each signing key pair has an identifier, which consists of the name of the digital signature
-//! algorithm it uses and an opaque string called the "key name", separated by a colon. The key name
-//! is used to distinguish key pairs using the same algorithm from the same entity. How it is
-//! generated depends on the entity that uses it. For example, homeservers use an arbitrary
-//! string called a "version" for their public keys, while cross-signing keys use the public key
-//! encoded as unpadded base64.
+//! Each signing key pair has an identifier, which consists of the name of the
+//! digital signature algorithm it uses and an opaque string called the "key
+//! name", separated by a colon. The key name is used to distinguish key pairs
+//! using the same algorithm from the same entity. How it is generated depends
+//! on the entity that uses it. For example, homeservers use an arbitrary string
+//! called a "version" for their public keys, while cross-signing keys use the
+//! public key encoded as unpadded base64.
 //!
-//! This library focuses on JSON objects signing. The signatures are stored within the JSON object
-//! itself under a `signatures` key. Events are also required to contain hashes of their content,
-//! which are similarly stored within the hashed JSON object under a `hashes` key.
+//! This library focuses on JSON objects signing. The signatures are stored
+//! within the JSON object itself under a `signatures` key. Events are also
+//! required to contain hashes of their content, which are similarly stored
+//! within the hashed JSON object under a `hashes` key.
 //!
-//! In JSON representations, both signatures and hashes appear as base64-encoded strings, usually
-//! using the standard character set, without padding.
+//! In JSON representations, both signatures and hashes appear as base64-encoded
+//! strings, usually using the standard character set, without padding.
 //!
 //! # Supported room versions
 //!
-//! Only room versions enforcing [canonical JSON] (introduced with [room version 6]) are supported.
+//! Only room versions enforcing [canonical JSON] (introduced with [room version
+//! 6]) are supported.
 //!
-//! Room versions 1 through 5 are unsupported because the rules for the JSON encoding of events
-//! before signing or hashing them is unspecified. Homeservers using this crate **should not**
-//! advertise support for those room versions.
+//! Room versions 1 through 5 are unsupported because the rules for the JSON
+//! encoding of events before signing or hashing them is unspecified.
+//! Homeservers using this crate **should not** advertise support for those room
+//! versions.
 //!
 //! # Signing and hashing
 //!
-//! To sign an arbitrary JSON object, use the [`sign_json()`] function. See the documentation of
-//! this function for more details and a full example of use.
+//! To sign an arbitrary JSON object, use the [`sign_json()`] function. See the
+//! documentation of this function for more details and a full example of use.
 //!
-//! Signing an event uses a more complicated process than signing arbitrary JSON, because events can
-//! be redacted, and signatures need to remain valid even if data is removed from an event later.
-//! Homeservers are required to generate hashes of event contents as well as signing events before
-//! exchanging them with other homeservers. Although the algorithm for hashing and signing an event
-//! is more complicated than for signing arbitrary JSON, the interface to a user of ruma-signatures
-//! is the same. To add the content hash to an event use [`add_content_hash_to_event()`], and to
-//! sign an event use [`sign_event()`]. Both steps can be done at once by calling
-//! [`hash_and_sign_event()`] instead. See the documentation of theses functions for more details
-//! and examples of use.
+//! Signing an event uses a more complicated process than signing arbitrary
+//! JSON, because events can be redacted, and signatures need to remain valid
+//! even if data is removed from an event later. Homeservers are required to
+//! generate hashes of event contents as well as signing events before
+//! exchanging them with other homeservers. Although the algorithm for hashing
+//! and signing an event is more complicated than for signing arbitrary JSON,
+//! the interface to a user of ruma-signatures is the same. To add the content
+//! hash to an event use [`add_content_hash_to_event()`], and to sign an event
+//! use [`sign_event()`]. Both steps can be done at once by calling
+//! [`hash_and_sign_event()`] instead. See the documentation of theses functions
+//! for more details and examples of use.
 //!
 //! # Verifying signatures and hashes
 //!
-//! When a homeserver receives data from another homeserver via the federation, it's necessary to
-//! verify the authenticity and integrity of the data by verifying their signatures.
+//! When a homeserver receives data from another homeserver via the federation,
+//! it's necessary to verify the authenticity and integrity of the data by
+//! verifying their signatures.
 //!
-//! To verify a signature on arbitrary JSON, use the [`verify_json()`] function. To verify the
-//! signatures and hashes on an event, use the [`verify_event()`] function. See the documentation
-//! for these respective functions for more details and full examples of use.
+//! To verify a signature on arbitrary JSON, use the [`verify_json()`] function.
+//! To verify the signatures and hashes on an event, use the [`verify_event()`]
+//! function. See the documentation for these respective functions for more
+//! details and full examples of use.
 //!
 //! [canonical JSON]: https://spec.matrix.org/v1.19/appendices/#canonical-json
 //! [room version 6]: https://spec.matrix.org/v1.19/rooms/v6/
 
 #![warn(missing_docs)]
-
-pub use crate::{IdParseError, SigningKeyAlgorithm};
 
 pub use self::{
     ed25519::{Ed25519KeyPair, Ed25519KeyPairParseError, Ed25519VerificationError},
@@ -72,6 +78,7 @@ pub use self::{
         verify_json, verify_policy_server_signature,
     },
 };
+pub use crate::{IdParseError, SigningKeyAlgorithm};
 
 mod ed25519;
 mod error;
@@ -84,15 +91,15 @@ mod tests {
     use std::collections::BTreeMap;
 
     use pkcs8::{PrivateKeyInfoRef, der::Decode};
-    use crate::{
-        room_version_rules::{RedactionRules, RoomVersionRules},
-        serde::{Base64, base64::Standard},
-    };
     use serde_json::{from_str as from_json_str, to_string as to_json_string};
 
     use super::{
         Ed25519KeyPair, hash_and_sign_event, sign_json, to_canonical_json_string_for_signing,
         verify_event, verify_json,
+    };
+    use crate::{
+        room_version_rules::{RedactionRules, RoomVersionRules},
+        serde::{Base64, base64::Standard},
     };
 
     fn pkcs8() -> Vec<u8> {

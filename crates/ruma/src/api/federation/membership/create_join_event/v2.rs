@@ -2,15 +2,14 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#put_matrixfederationv2send_joinroomideventid
 
-use crate::{
-    OwnedEventId, OwnedRoomId,
-    api::{request, response},
-    metadata,
-};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue as RawJsonValue;
 
-use crate::api::federation::authentication::ServerSignatures;
+use crate::{
+    OwnedEventId, OwnedRoomId,
+    api::{federation::authentication::ServerSignatures, request, response},
+    metadata,
+};
 
 metadata! {
     method: PUT,
@@ -38,15 +37,17 @@ pub struct Request {
 
     /// Indicates whether the calling server can accept a reduced response.
     ///
-    /// If `true`, membership events are omitted from `state` and redundant events are omitted from
-    /// `auth_chain` in the response.
+    /// If `true`, membership events are omitted from `state` and redundant
+    /// events are omitted from `auth_chain` in the response.
     ///
-    /// If the room to be joined has no `m.room.name` nor `m.room.canonical_alias` events in its
-    /// current state, the resident server should determine the room members who would be
-    /// included in the `m.heroes` property of the room summary as defined in the [Client-Server
-    /// `/sync` response]. The resident server should include these members' membership events in
-    /// the response `state` field, and include the auth chains for these membership events in
-    /// the response `auth_chain` field.
+    /// If the room to be joined has no `m.room.name` nor
+    /// `m.room.canonical_alias` events in its current state, the resident
+    /// server should determine the room members who would be included in
+    /// the `m.heroes` property of the room summary as defined in the
+    /// [Client-Server `/sync` response]. The resident server should include
+    /// these members' membership events in the response `state` field, and
+    /// include the auth chains for these membership events in the response
+    /// `auth_chain` field.
     ///
     /// [Client-Server `/sync` response]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3sync
     #[ruma_api(query)]
@@ -89,16 +90,17 @@ pub struct RoomState {
     /// The full set of authorization events that make up the state of the room,
     /// and their authorization events, recursively.
     ///
-    /// If the request had `omit_members` set to `true`, then any events that are returned in
-    /// `state` may be omitted from `auth_chain`, whether or not membership events are omitted
-    /// from `state`.
+    /// If the request had `omit_members` set to `true`, then any events that
+    /// are returned in `state` may be omitted from `auth_chain`, whether or
+    /// not membership events are omitted from `state`.
     pub auth_chain: Vec<Box<RawJsonValue>>,
 
     /// The room state.
     ///
-    /// If the request had `omit_members` set to `true`, events of type `m.room.member` may be
-    /// omitted from the response to reduce the size of the response. If this is done,
-    /// `members_omitted` must be set to `true`.
+    /// If the request had `omit_members` set to `true`, events of type
+    /// `m.room.member` may be omitted from the response to reduce the size
+    /// of the response. If this is done, `members_omitted` must be set to
+    /// `true`.
     pub state: Vec<Box<RawJsonValue>>,
 
     /// The signed copy of the membership event sent to other servers by the
@@ -108,7 +110,8 @@ pub struct RoomState {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub event: Option<Box<RawJsonValue>>,
 
-    /// A list of the servers active in the room (ie, those with joined members) before the join.
+    /// A list of the servers active in the room (ie, those with joined members)
+    /// before the join.
     ///
     /// Required if `members_omitted` is set to `true`.
     #[serde(skip_serializing_if = "Option::is_none")]

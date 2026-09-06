@@ -1,0 +1,140 @@
+use std::{fmt, sync::LazyLock};
+
+use http::Response;
+use ruma::{
+    RoomId, UserId,
+    api::{IncomingResponse, IncomingResponseExt as _, OutgoingResponse, OutgoingResponseExt as _},
+    room_id,
+    serde::{Base64, base64::UrlSafe},
+    user_id,
+};
+pub use sdk_test_macros::async_test;
+use sha2::{Digest, Sha256};
+
+/// Create a `Raw<AnyMessageLikeEventContent>` from arbitrary JSON.
+///
+/// Forwards all arguments to [`serde_json::json`].
+#[macro_export]
+macro_rules! message_like_event_content {
+    ($( $tt:tt )*) => {
+        ::ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+            .unwrap()
+            .cast_unchecked::<::ruma::events::AnyMessageLikeEventContent>()
+    }
+}
+
+/// Create a `Raw<AnyTimelineEvent>` from arbitrary JSON.
+///
+/// Forwards all arguments to [`serde_json::json`].
+#[macro_export]
+macro_rules! timeline_event {
+    ($( $tt:tt )*) => {
+        ::ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+            .unwrap()
+            .cast_unchecked::<::ruma::events::AnyTimelineEvent>()
+    }
+}
+
+/// Create a `Raw<AnySyncTimelineEvent>` from arbitrary JSON.
+///
+/// Forwards all arguments to [`serde_json::json`].
+#[macro_export]
+macro_rules! sync_timeline_event {
+    ($( $tt:tt )*) => {
+        ::ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+            .unwrap()
+            .cast_unchecked::<::ruma::events::AnySyncTimelineEvent>()
+    }
+}
+
+/// Create a `Raw<AnySyncStateEvent>` from arbitrary JSON.
+///
+/// Forwards all arguments to [`serde_json::json`].
+#[macro_export]
+macro_rules! sync_state_event {
+    ($( $tt:tt )*) => {
+        ::ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+            .unwrap()
+            .cast_unchecked::<::ruma::events::AnySyncStateEvent>()
+    }
+}
+
+/// Create a `Raw<AnyStrippedStateEvent>` from arbitrary JSON.
+///
+/// Forwards all arguments to [`serde_json::json`].
+#[macro_export]
+macro_rules! stripped_state_event {
+    ($( $tt:tt )*) => {
+        ::ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+            .unwrap()
+            .cast_unchecked::<::ruma::events::AnyStrippedStateEvent>()
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub mod mocks;
+
+pub mod event_factory;
+pub mod notification_settings;
+mod sync_builder;
+pub mod test_json;
+
+pub use self::sync_builder::{
+    InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, LeftRoomBuilder,
+    SyncResponseBuilder, bulk_room_members,
+};
+
+pub static ALICE: LazyLock<&UserId> = LazyLock::new(|| user_id!("@alice:server.name"));
+pub static BOB: LazyLock<&UserId> = LazyLock::new(|| user_id!("@bob:other.server"));
+pub static CAROL: LazyLock<&UserId> = LazyLock::new(|| user_id!("@carol:other.server"));
+
+/// The default room ID for tests.
+pub static DEFAULT_TEST_ROOM_ID: LazyLock<&RoomId> =
+    LazyLock::new(|| room_id!("!SVkFJHzfwvuaIEawgC:localhost"));
+
+/// Build a typed Ruma [`IncomingResponse`] object from a json body.
+pub fn ruma_response_from_json<ResponseType: IncomingResponse>(
+    json: &serde_json::Value,
+) -> ResponseType {
+    let json_bytes = serde_json::to_vec(json).expect("JSON-serialization of response value failed");
+    let http_response = Response::builder()
+        .status(200)
+        .body(json_bytes.as_slice())
+        .expect("Failed to build HTTP response");
+    ResponseType::try_from_http_response(http_response).expect("Can't parse the response json")
+}
+
+/// Serialise a typed Ruma [`OutgoingResponse`] object to JSON.
+pub fn ruma_response_to_json<ResponseType: OutgoingResponse>(
+    response: ResponseType,
+) -> serde_json::Value {
+    let http_response: Response<Vec<u8>> =
+        response.try_into_http_response().expect("Failed to build HTTP response");
+    let json_bytes = http_response.into_body();
+    serde_json::from_slice(&json_bytes).expect("Can't parse the response JSON")
+}
+
+#[derive(Debug)] // required to be able to return TestResult from #[test] fns
+pub enum TestError {}
+
+// If this was just `T: Debug`, it would conflict with
+// the `impl From<T> for T` in `std`.
+//
+// Adding a dummy `Display` bound works around this.
+impl<T: fmt::Display + fmt::Debug> From<T> for TestError {
+    #[track_caller]
+    fn from(value: T) -> Self {
+        panic!("error: {value:?}")
+    }
+}
+
+pub type TestResult = Result<(), TestError>;
+
+/// Compute the sha256 hash of the given bytes and convert it to unpadded
+/// URL-safe base64.
+///
+/// This matches the format of event IDs since room version 4, and of room IDs
+/// since room version 12.
+pub fn base64_sha256_hash(bytes: &[u8]) -> String {
+    Base64::<UrlSafe, _>::new(Sha256::digest(bytes)).encode()
+}

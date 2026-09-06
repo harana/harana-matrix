@@ -1,28 +1,28 @@
 use std::borrow::Cow;
 
 use assert_matches2::{assert_let, assert_matches};
+#[cfg(feature = "unstable-msc4274")]
+use ruma::events::room::message::{GalleryItemType, GalleryMessageEventContent};
 use ruma::{
     OwnedDeviceId,
     canonical_json::assert_to_canonical_json_eq,
+    events::{
+        Mentions,
+        key::verification::VerificationMethod,
+        room::{
+            EncryptedFile, EncryptedFileHash, EncryptedFileInfo, MediaSource, V2EncryptedFileInfo,
+            message::{
+                AddMentions, AudioMessageEventContent, EmoteMessageEventContent,
+                FileMessageEventContent, FormattedBody, ForwardThread, ImageMessageEventContent,
+                KeyVerificationRequestEventContent, MessageType, OriginalRoomMessageEvent,
+                OriginalSyncRoomMessageEvent, Relation, RoomMessageEventContent,
+                TextMessageEventContent, VideoMessageEventContent,
+            },
+        },
+    },
     owned_device_id, owned_mxc_uri, owned_user_id,
     serde::{Base64, Raw},
     user_id,
-};
-#[cfg(feature = "unstable-msc4274")]
-use ruma::events::room::message::{GalleryItemType, GalleryMessageEventContent};
-use ruma::events::{
-    Mentions,
-    key::verification::VerificationMethod,
-    room::{
-        EncryptedFile, EncryptedFileHash, EncryptedFileInfo, MediaSource, V2EncryptedFileInfo,
-        message::{
-            AddMentions, AudioMessageEventContent, EmoteMessageEventContent,
-            FileMessageEventContent, FormattedBody, ForwardThread, ImageMessageEventContent,
-            KeyVerificationRequestEventContent, MessageType, OriginalRoomMessageEvent,
-            OriginalSyncRoomMessageEvent, Relation, RoomMessageEventContent,
-            TextMessageEventContent, VideoMessageEventContent,
-        },
-    },
 };
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 

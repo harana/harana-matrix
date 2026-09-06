@@ -4,7 +4,7 @@ A fork of [ruma-client](https://github.com/ruma/ruma-client), inlined into this
 workspace. Upstream revision `873fefc`, MIT licensed (see `LICENSE`).
 
 A minimal Matrix client on top of `ruma`. Nothing else in this workspace depends
-on it; `matrix-sdk` has its own HTTP client.
+on it; `matrix` has its own HTTP client.
 
 ## Differences from upstream
 

@@ -2,11 +2,10 @@
 //!
 //! [MSC4471]: https://github.com/matrix-org/matrix-spec-proposals/pull/4471
 
-use crate::{OwnedDeviceId, OwnedEventId, OwnedRoomId, serde::StringEnum};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::PrivOwnedStr;
+use crate::{OwnedDeviceId, OwnedEventId, OwnedRoomId, events::PrivOwnedStr, serde::StringEnum};
 
 /// The content of a to-device `m.stream.cancel` event.
 ///
@@ -59,11 +58,12 @@ impl ToDeviceStreamCancelEventContent {
 #[ruma_enum(rename_all(prefix = "m.", rule = "snake_case"))]
 #[non_exhaustive]
 pub enum StreamCancelCode {
-    /// The publisher has no active stream for the requested descriptor, or the descriptor
-    /// has expired.
+    /// The publisher has no active stream for the requested descriptor, or the
+    /// descriptor has expired.
     UnknownStream,
 
-    /// The subscription request is malformed or names an invalid subscriber device.
+    /// The subscription request is malformed or names an invalid subscriber
+    /// device.
     InvalidSubscription,
 
     /// The subscriber is not allowed to receive updates.
@@ -82,13 +82,14 @@ pub enum StreamCancelCode {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq, owned_device_id, owned_event_id, owned_room_id,
-    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::{StreamCancelCode, ToDeviceStreamCancelEventContent};
-    use crate::events::{AnyToDeviceEvent, ToDeviceEvent};
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        events::{AnyToDeviceEvent, ToDeviceEvent},
+        owned_device_id, owned_event_id, owned_room_id,
+    };
 
     #[test]
     fn cancel_round_trip() {

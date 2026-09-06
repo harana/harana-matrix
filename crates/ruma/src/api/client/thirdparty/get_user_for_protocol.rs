@@ -32,7 +32,8 @@ pub mod v3 {
         #[ruma_api(path)]
         pub protocol: String,
 
-        /// One or more custom fields that are passed to the AS to help identify the user.
+        /// One or more custom fields that are passed to the AS to help identify
+        /// the user.
         #[ruma_api(query_all)]
         pub fields: BTreeMap<String, String>,
     }

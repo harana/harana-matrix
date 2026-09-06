@@ -26,11 +26,10 @@ impl KeyBackupEventContent {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::KeyBackupEventContent;
-    use crate::events::AnyGlobalAccountDataEvent;
+    use crate::{canonical_json::assert_to_canonical_json_eq, events::AnyGlobalAccountDataEvent};
 
     #[test]
     fn key_backup_serialization() {

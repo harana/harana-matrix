@@ -2,24 +2,26 @@ use assert_matches2::assert_matches;
 #[cfg(feature = "unstable-msc2747")]
 use assign::assign;
 use js_int::uint;
-use ruma::{
-    MilliSecondsSinceUnixEpoch, VoipVersionId, canonical_json::assert_to_canonical_json_eq,
-    owned_room_id, serde::CanBeEmpty,
-};
 #[cfg(feature = "unstable-msc2747")]
 use ruma::events::call::CallCapabilities;
-use ruma::events::{
-    AnyMessageLikeEvent, AnySyncMessageLikeEvent, MessageLikeEvent,
-    call::{
-        SessionDescription,
-        answer::CallAnswerEventContent,
-        candidates::{CallCandidatesEventContent, Candidate},
-        hangup::{CallHangupEventContent, Reason},
-        invite::CallInviteEventContent,
-        negotiate::CallNegotiateEventContent,
-        reject::CallRejectEventContent,
-        select_answer::CallSelectAnswerEventContent,
+use ruma::{
+    MilliSecondsSinceUnixEpoch, VoipVersionId,
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, AnySyncMessageLikeEvent, MessageLikeEvent,
+        call::{
+            SessionDescription,
+            answer::CallAnswerEventContent,
+            candidates::{CallCandidatesEventContent, Candidate},
+            hangup::{CallHangupEventContent, Reason},
+            invite::CallInviteEventContent,
+            negotiate::CallNegotiateEventContent,
+            reject::CallRejectEventContent,
+            select_answer::CallSelectAnswerEventContent,
+        },
     },
+    owned_room_id,
+    serde::CanBeEmpty,
 };
 use serde_json::{from_value as from_json_value, json};
 

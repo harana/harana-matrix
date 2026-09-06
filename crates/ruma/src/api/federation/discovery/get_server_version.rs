@@ -7,11 +7,12 @@ pub mod v1 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1version
 
+    use serde::{Deserialize, Serialize};
+
     use crate::{
         api::{auth_scheme::NoAuthentication, request, response},
         metadata,
     };
-    use serde::{Deserialize, Serialize};
 
     metadata! {
         method: GET,

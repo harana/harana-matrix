@@ -11,13 +11,14 @@ pub mod unstable {
 
     use crate::{
         OwnedDeviceId, OwnedOneTimeKeyId,
-        api::{auth_scheme::AccessToken, request, response},
+        api::{
+            auth_scheme::AccessToken, client::dehydrated_device::DehydratedDeviceData, request,
+            response,
+        },
         encryption::{DeviceKeys, OneTimeKey},
         metadata,
         serde::Raw,
     };
-
-    use crate::api::client::dehydrated_device::DehydratedDeviceData;
 
     metadata! {
         method: PUT,
@@ -37,8 +38,8 @@ pub mod unstable {
         /// The display name of the device.
         pub initial_device_display_name: Option<String>,
 
-        /// The data of the dehydrated device, containing the serialized and encrypted private
-        /// parts of the [`DeviceKeys`].
+        /// The data of the dehydrated device, containing the serialized and
+        /// encrypted private parts of the [`DeviceKeys`].
         pub device_data: Raw<DehydratedDeviceData>,
 
         /// Identity keys for the dehydrated device.

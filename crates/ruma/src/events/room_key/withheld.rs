@@ -5,19 +5,20 @@
 use std::borrow::Cow;
 
 use as_variant::as_variant;
-use crate::{
-    EventEncryptionAlgorithm, OwnedRoomId,
-    serde::{Base64, JsonObject, from_raw_json_value},
-};
 use ruma_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize, de};
 use serde_json::{Value as JsonValue, value::RawValue as RawJsonValue};
 
-use crate::events::PrivOwnedStr;
+use crate::{
+    EventEncryptionAlgorithm, OwnedRoomId,
+    events::PrivOwnedStr,
+    serde::{Base64, JsonObject, from_raw_json_value},
+};
 
 /// The content of an [`m.room_key.withheld`] event.
 ///
-/// Typically encrypted as an `m.room.encrypted` event, then sent as a to-device event.
+/// Typically encrypted as an `m.room.encrypted` event, then sent as a to-device
+/// event.
 ///
 /// [`m.room_key.withheld`]: https://spec.matrix.org/v1.19/client-server-api/#mroom_keywithheld
 #[derive(Clone, Debug, Serialize, EventContent)]
@@ -35,7 +36,8 @@ pub struct ToDeviceRoomKeyWithheldEventContent {
 
     /// A human-readable reason for why the key was not sent.
     ///
-    /// The receiving client should only use this string if it does not understand the code.
+    /// The receiving client should only use this string if it does not
+    /// understand the code.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 
@@ -44,8 +46,8 @@ pub struct ToDeviceRoomKeyWithheldEventContent {
 }
 
 impl ToDeviceRoomKeyWithheldEventContent {
-    /// Creates a new `ToDeviceRoomKeyWithheldEventContent` with the given algorithm, code and
-    /// sender key.
+    /// Creates a new `ToDeviceRoomKeyWithheldEventContent` with the given
+    /// algorithm, code and sender key.
     pub fn new(
         algorithm: EventEncryptionAlgorithm,
         code: RoomKeyWithheldCodeInfo,
@@ -77,7 +79,8 @@ impl<'de> Deserialize<'de> for ToDeviceRoomKeyWithheldEventContent {
     }
 }
 
-/// The possible codes for why a megolm key was not sent, and the associated session data.
+/// The possible codes for why a megolm key was not sent, and the associated
+/// session data.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "code")]
@@ -90,23 +93,23 @@ pub enum RoomKeyWithheldCodeInfo {
 
     /// `m.unverified`
     ///
-    /// The user or device was not verified, and the sender is only sharing keys with verified
-    /// users or devices.
+    /// The user or device was not verified, and the sender is only sharing keys
+    /// with verified users or devices.
     #[serde(rename = "m.unverified")]
     Unverified(Box<RoomKeyWithheldSessionData>),
 
     /// `m.unauthorised`
     ///
-    /// The user or device is not allowed to have the key. For example, this could be sent in
-    /// response to a key request if the user or device was not in the room when the original
-    /// message was sent.
+    /// The user or device is not allowed to have the key. For example, this
+    /// could be sent in response to a key request if the user or device was
+    /// not in the room when the original message was sent.
     #[serde(rename = "m.unauthorised")]
     Unauthorized(Box<RoomKeyWithheldSessionData>),
 
     /// `m.unavailable`
     ///
-    /// Sent in reply to a key request if the device that the key is requested from does not have
-    /// the requested key.
+    /// Sent in reply to a key request if the device that the key is requested
+    /// from does not have the requested key.
     #[serde(rename = "m.unavailable")]
     Unavailable(Box<RoomKeyWithheldSessionData>),
 
@@ -166,8 +169,8 @@ impl<'de> Deserialize<'de> for RoomKeyWithheldCodeInfo {
                 let mut data = from_raw_json_value::<JsonObject, _>(&json)?;
 
                 // Probably due to the `#[serde(flatten)]` attribute, we deserialize fields that
-                // should be caught by `ToDeviceRoomKeyWithheldEventContent`. Let's remove them to
-                // fix re-serialization.
+                // should be caught by `ToDeviceRoomKeyWithheldEventContent`. Let's remove them
+                // to fix re-serialization.
                 data.remove("algorithm");
                 data.remove("sender_key");
                 data.remove("reason");
@@ -196,7 +199,8 @@ pub struct RoomKeyWithheldSessionData {
 }
 
 impl RoomKeyWithheldSessionData {
-    /// Construct a new `RoomKeyWithheldSessionData` with the given room ID and session ID.
+    /// Construct a new `RoomKeyWithheldSessionData` with the given room ID and
+    /// session ID.
     pub fn new(room_id: OwnedRoomId, session_id: String) -> Self {
         Self { room_id, session_id }
     }
@@ -227,21 +231,21 @@ pub enum RoomKeyWithheldCode {
 
     /// `m.unverified`
     ///
-    /// The user or device was not verified, and the sender is only sharing keys with verified
-    /// users or devices.
+    /// The user or device was not verified, and the sender is only sharing keys
+    /// with verified users or devices.
     Unverified,
 
     /// `m.unauthorised`
     ///
-    /// The user or device is not allowed to have the key. For example, this could be sent in
-    /// response to a key request if the user or device was not in the room when the original
-    /// message was sent.
+    /// The user or device is not allowed to have the key. For example, this
+    /// could be sent in response to a key request if the user or device was
+    /// not in the room when the original message was sent.
     Unauthorized,
 
     /// `m.unavailable`
     ///
-    /// Sent in reply to a key request if the device that the key is requested from does not have
-    /// the requested key.
+    /// Sent in reply to a key request if the device that the key is requested
+    /// from does not have the requested key.
     Unavailable,
 
     /// `m.no_olm`
@@ -261,14 +265,14 @@ pub enum RoomKeyWithheldCode {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::{
-        EventEncryptionAlgorithm, canonical_json::assert_to_canonical_json_eq, owned_room_id,
-        serde::Base64,
-    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::{
         RoomKeyWithheldCodeInfo, RoomKeyWithheldSessionData, ToDeviceRoomKeyWithheldEventContent,
+    };
+    use crate::{
+        EventEncryptionAlgorithm, canonical_json::assert_to_canonical_json_eq, owned_room_id,
+        serde::Base64,
     };
 
     const PUBLIC_KEY: &[u8] = b"key";

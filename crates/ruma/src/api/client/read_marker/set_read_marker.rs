@@ -1,13 +1,14 @@
 //! `POST /_matrix/client/*/rooms/{roomId}/read_markers`
 //!
-//! Sets the position of the read marker for a given room, and optionally the read receipt's
-//! location.
+//! Sets the position of the read marker for a given room, and optionally the
+//! read receipt's location.
 
 pub mod v3 {
     //! `/v3/` ([spec])
     //!
     //! This endpoint is equivalent to calling the [`create_receipt`] endpoint,
-    //! but is provided as a way to update several read markers with a single call.
+    //! but is provided as a way to update several read markers with a single
+    //! call.
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3roomsroomidread_markers
     //! [`create_receipt`]: crate::api::client::receipt::create_receipt

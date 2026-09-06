@@ -11,7 +11,7 @@ pub struct ReleaseArgs {
 
 #[derive(PartialEq, Subcommand)]
 enum ReleaseCommand {
-    /// Prepare the release of the matrix-sdk workspace.
+    /// Prepare the release of the matrix workspace.
     ///
     /// This command will update the `README.md`, update the `CHANGELOG.md` file
     /// using, and bump the versions in the `Cargo.toml` files.

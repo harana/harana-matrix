@@ -5,7 +5,7 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use clap::Parser;
 use futures_util::stream::StreamExt;
-use matrix_sdk::{
+use matrix::{
     Client,
     config::SyncSettings,
     encryption::verification::{

@@ -23,7 +23,7 @@ jobs:
   xtask:
     uses: ./.github/workflows/xtask.yml
 
-  test-matrix-sdk-features:
+  test-matrix-features:
     name: 🐧 [m], ${{ matrix.name }}
     needs: xtask
 
@@ -83,7 +83,7 @@ jobs:
         run: |
           target/debug/xtask ci test-features ${{ matrix.name }}
 
-  test-matrix-sdk-examples:
+  test-matrix-examples:
     name: 🐧 [m]-examples
     needs: xtask
     runs-on: ubuntu-latest
@@ -120,7 +120,7 @@ jobs:
         run: |
           target/debug/xtask ci examples
 
-  test-matrix-sdk-crypto:
+  test-crypto:
     name: 🐧 [m]-crypto
     needs: xtask
     runs-on: ubuntu-latest
@@ -218,8 +218,8 @@ jobs:
       - name: Test
         run: |
           cargo nextest run --workspace \
-            --exclude matrix-sdk-integration-testing \
-            --features testing,matrix-sdk/sqlite
+            --exclude integration-testing \
+            --features testing,matrix/sqlite
 
       - name: Test documentation
         run: |
@@ -236,29 +236,29 @@ jobs:
       matrix:
         include:
           - name: '[m]-qrcode'
-            cmd: matrix-sdk-qrcode
+            cmd: qrcode
 
           - name: '[m]-base'
-            cmd: matrix-sdk-base
+            cmd: base
 
           - name: '[m]-common'
-            cmd: matrix-sdk-common
+            cmd: sdk-common
 
           - name: '[m], no-default'
-            cmd: matrix-sdk-no-default
+            cmd: matrix-no-default
 
           - name: '[m]-ui'
-            cmd: matrix-sdk-ui
+            cmd: ui
             check_only: true
 
           - name: '[m]-indexeddb'
             cmd: indexeddb
 
           - name: '[m], indexeddb stores'
-            cmd: matrix-sdk-indexeddb-stores
+            cmd: indexeddb-stores
 
           - name: '[m], indexeddb stores, no crypto'
-            cmd: matrix-sdk-indexeddb-stores-no-crypto
+            cmd: indexeddb-stores-no-crypto
 
     steps:
       - name: Checkout the repo
@@ -418,11 +418,11 @@ jobs:
 
       - name: Test
         env:
-          RUST_LOG: "info,matrix_sdk=trace"
+          RUST_LOG: "info,matrix=trace"
           HOMESERVER_URL: "http://localhost:8008"
           HOMESERVER_DOMAIN: "synapse"
         run: |
-          cargo nextest run --profile ci -p matrix-sdk-integration-testing --features "${{ matrix.feature }}"
+          cargo nextest run --profile ci -p integration-testing --features "${{ matrix.feature }}"
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

@@ -3,19 +3,20 @@
 //! [`m.secret.request`]: https://spec.matrix.org/v1.19/client-server-api/#msecretrequest
 
 use as_variant::as_variant;
-use crate::{
-    OwnedDeviceId, OwnedTransactionId,
-    serde::{JsonObject, StringEnum},
-};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize, de};
 use serde_json::{Value as JsonValue, from_value as from_json_value};
 
-use crate::events::{GlobalAccountDataEventType, PrivOwnedStr};
+use crate::{
+    OwnedDeviceId, OwnedTransactionId,
+    events::{GlobalAccountDataEventType, PrivOwnedStr},
+    serde::{JsonObject, StringEnum},
+};
 
 /// The content of an `m.secret.request` event.
 ///
-/// Event sent by a client to request a secret from another device or to cancel a previous request.
+/// Event sent by a client to request a secret from another device or to cancel
+/// a previous request.
 ///
 /// It is sent as an unencrypted to-device event.
 #[derive(Clone, Debug, Serialize, Deserialize, EventContent)]
@@ -29,17 +30,18 @@ pub struct ToDeviceSecretRequestEventContent {
     /// The ID of the device requesting the event.
     pub requesting_device_id: OwnedDeviceId,
 
-    /// A random string uniquely identifying (with respect to the requester and the target) the
-    /// target for a secret.
+    /// A random string uniquely identifying (with respect to the requester and
+    /// the target) the target for a secret.
     ///
-    /// If the secret is requested from multiple devices at the same time, the same ID may be used
-    /// for every target. The same ID is also used in order to cancel a previous request.
+    /// If the secret is requested from multiple devices at the same time, the
+    /// same ID may be used for every target. The same ID is also used in
+    /// order to cancel a previous request.
     pub request_id: OwnedTransactionId,
 }
 
 impl ToDeviceSecretRequestEventContent {
-    /// Creates a new `ToDeviceRequestEventContent` with the given action, requesting device ID and
-    /// request ID.
+    /// Creates a new `ToDeviceRequestEventContent` with the given action,
+    /// requesting device ID and request ID.
     pub fn new(
         action: RequestAction,
         requesting_device_id: OwnedDeviceId,
@@ -160,12 +162,12 @@ pub struct CustomRequestAction {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{
         RequestAction, SecretName, SecretRequestAction, ToDeviceSecretRequestEventContent,
     };
+    use crate::canonical_json::assert_to_canonical_json_eq;
 
     #[test]
     fn secret_request_serialization() {

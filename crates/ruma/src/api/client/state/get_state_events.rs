@@ -10,10 +10,10 @@ pub mod v3 {
     use crate::{
         OwnedRoomId,
         api::{auth_scheme::AccessToken, request, response},
+        events::AnyStateEvent,
         metadata,
         serde::Raw,
     };
-    use crate::events::AnyStateEvent;
 
     metadata! {
         method: GET,
@@ -36,11 +36,11 @@ pub mod v3 {
     /// Response type for the `get_state_events` endpoint.
     #[response]
     pub struct Response {
-        /// If the user is a member of the room this will be the current state of the room as a
-        /// list of events.
+        /// If the user is a member of the room this will be the current state
+        /// of the room as a list of events.
         ///
-        /// If the user has left the room then this will be the state of the room when they left as
-        /// a list of events.
+        /// If the user has left the room then this will be the state of the
+        /// room when they left as a list of events.
         #[ruma_api(body)]
         pub room_state: Vec<Raw<AnyStateEvent>>,
     }

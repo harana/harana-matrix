@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// Whether the room has been explicitly marked as unread.
 ///
-/// This event appears in the user's room account data for the room the marker is applicable for.
+/// This event appears in the user's room account data for the room the marker
+/// is applicable for.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.marked_unread", kind = RoomAccountData)]
@@ -25,12 +26,13 @@ impl MarkedUnreadEventContent {
     }
 }
 
-/// The content of a [`com.famedly.marked_unread`] event, the unstable version of
-/// [MarkedUnreadEventContent].
+/// The content of a [`com.famedly.marked_unread`] event, the unstable version
+/// of [MarkedUnreadEventContent].
 ///
 /// Whether the room has been explicitly marked as unread.
 ///
-/// This event appears in the user's room account data for the room the marker is applicable for.
+/// This event appears in the user's room account data for the room the marker
+/// is applicable for.
 ///
 /// [`com.famedly.marked_unread`]: https://github.com/matrix-org/matrix-spec-proposals/pull/2867
 #[cfg(feature = "unstable-msc2867")]
@@ -66,11 +68,13 @@ impl From<UnstableMarkedUnreadEventContent> for MarkedUnreadEventContent {
 #[cfg(all(test, feature = "unstable-msc2867"))]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{MarkedUnreadEventContent, UnstableMarkedUnreadEventContent};
-    use crate::events::{AnyRoomAccountDataEvent, RoomAccountDataEvent};
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        events::{AnyRoomAccountDataEvent, RoomAccountDataEvent},
+    };
 
     #[test]
     fn deserialize() {

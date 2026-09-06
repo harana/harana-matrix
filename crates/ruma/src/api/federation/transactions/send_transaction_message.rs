@@ -9,15 +9,17 @@ pub mod v1 {
 
     use std::collections::BTreeMap;
 
+    use serde_json::value::RawValue as RawJsonValue;
+
     use crate::{
         MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedServerName, OwnedTransactionId,
-        api::{request, response},
+        api::{
+            federation::{authentication::ServerSignatures, transactions::edu::Edu},
+            request, response,
+        },
         metadata,
         serde::Raw,
     };
-    use serde_json::value::RawValue as RawJsonValue;
-
-    use crate::api::federation::{authentication::ServerSignatures, transactions::edu::Edu};
 
     metadata! {
         method: PUT,
@@ -36,16 +38,16 @@ pub mod v1 {
         /// The server_name of the homeserver sending this transaction.
         pub origin: OwnedServerName,
 
-        /// POSIX timestamp in milliseconds on the originating homeserver when this transaction
-        /// started.
+        /// POSIX timestamp in milliseconds on the originating homeserver when
+        /// this transaction started.
         pub origin_server_ts: MilliSecondsSinceUnixEpoch,
 
         /// List of persistent updates to rooms.
         ///
         /// Must not be more than 50 items.
         ///
-        /// With the `compat-optional-pdus` feature, this field is optional in deserialization,
-        /// defaulting to an empty `Vec`.
+        /// With the `compat-optional-pdus` feature, this field is optional in
+        /// deserialization, defaulting to an empty `Vec`.
         #[cfg_attr(feature = "compat-optional-txn-pdus", serde(default))]
         pub pdus: Vec<Box<RawJsonValue>>,
 
@@ -70,7 +72,8 @@ pub mod v1 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given transaction ID, origin, timestamp.
+        /// Creates a new `Request` with the given transaction ID, origin,
+        /// timestamp.
         ///
         /// The PDU and EDU lists will start off empty.
         pub fn new(

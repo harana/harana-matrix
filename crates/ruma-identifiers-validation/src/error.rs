@@ -46,8 +46,8 @@ pub enum Error {
     #[error("ID exceeds 255 bytes")]
     MaximumLengthExceeded,
 
-    /// The ID is missing the colon delimiter between localpart and server name, or between key
-    /// algorithm and key name / version.
+    /// The ID is missing the colon delimiter between localpart and server name,
+    /// or between key algorithm and key name / version.
     #[error("required colon is missing")]
     MissingColon,
 

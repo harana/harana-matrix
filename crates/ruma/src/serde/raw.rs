@@ -13,14 +13,16 @@ use serde_json::value::{
     RawValue as RawJsonValue, Value as JsonValue, to_raw_value as to_raw_json_value,
 };
 
-/// A wrapper around `Box<RawValue>` with a generic parameter for the expected Rust type.
+/// A wrapper around `Box<RawValue>` with a generic parameter for the expected
+/// Rust type.
 ///
-/// Ruma offers the `Raw` wrapper to enable passing around JSON text that is only partially
-/// validated. This is useful when a client receives events that do not follow the spec perfectly
-/// or a server needs to generate reference hashes with the original canonical JSON string.
-/// All structs and enums representing event types implement `Deserialize`, therefore they can be
-/// used with `Raw`. Since `Raw` does not change the JSON string, it should be used to pass around
-/// events in a lossless way.
+/// Ruma offers the `Raw` wrapper to enable passing around JSON text that is
+/// only partially validated. This is useful when a client receives events that
+/// do not follow the spec perfectly or a server needs to generate reference
+/// hashes with the original canonical JSON string. All structs and enums
+/// representing event types implement `Deserialize`, therefore they can be used
+/// with `Raw`. Since `Raw` does not change the JSON string, it should be used
+/// to pass around events in a lossless way.
 ///
 /// ```no_run
 /// # use serde::Deserialize;
@@ -44,8 +46,9 @@ pub struct Raw<T> {
 impl<T> Raw<T> {
     /// Create a `Raw` by serializing the given `T`.
     ///
-    /// Shorthand for `serde_json::value::to_raw_value(val).map(Raw::from_json)`, but specialized to
-    /// `T`.
+    /// Shorthand for
+    /// `serde_json::value::to_raw_value(val).map(Raw::from_json)`, but
+    /// specialized to `T`.
     ///
     /// # Errors
     ///
@@ -64,8 +67,9 @@ impl<T> Raw<T> {
 
     /// Convert an owned `String` of JSON data to `Raw<T>`.
     ///
-    /// This function is equivalent to `serde_json::from_str::<Raw<T>>` except that an allocation
-    /// and copy is avoided if both of the following are true:
+    /// This function is equivalent to `serde_json::from_str::<Raw<T>>` except
+    /// that an allocation and copy is avoided if both of the following are
+    /// true:
     ///
     /// * the input has no leading or trailing whitespace, and
     /// * the input has capacity equal to its length.
@@ -83,10 +87,11 @@ impl<T> Raw<T> {
         self.json
     }
 
-    /// Try to access a given field inside this `Raw`, assuming it contains an object.
+    /// Try to access a given field inside this `Raw`, assuming it contains an
+    /// object.
     ///
-    /// Returns `Err(_)` when the contained value is not an object, or the field exists but is fails
-    /// to deserialize to the expected type.
+    /// Returns `Err(_)` when the contained value is not an object, or the field
+    /// exists but is fails to deserialize to the expected type.
     ///
     /// Returns `Ok(None)` when the field doesn't exist or is `null`.
     ///
@@ -96,8 +101,11 @@ impl<T> Raw<T> {
     /// # type CustomMatrixEvent = ();
     /// # fn foo() -> serde_json::Result<()> {
     /// # let raw_event: ruma::serde::Raw<()> = todo!();
-    /// if raw_event.get_field::<String>("type")?.as_deref() == Some("org.custom.matrix.event") {
-    ///     let event = raw_event.deserialize_as_unchecked::<CustomMatrixEvent>()?;
+    /// if raw_event.get_field::<String>("type")?.as_deref()
+    ///     == Some("org.custom.matrix.event")
+    /// {
+    ///     let event =
+    ///         raw_event.deserialize_as_unchecked::<CustomMatrixEvent>()?;
     ///     // ...
     /// }
     /// # Ok(())
@@ -196,7 +204,8 @@ impl<T> Raw<T> {
         self.deserialize_as_unchecked()
     }
 
-    /// Same as [`deserialize_as`][Self::deserialize_as], but without the trait restriction.
+    /// Same as [`deserialize_as`][Self::deserialize_as], but without the trait
+    /// restriction.
     pub fn deserialize_as_unchecked<'a, U>(&'a self) -> serde_json::Result<U>
     where
         U: Deserialize<'a>,
@@ -206,7 +215,8 @@ impl<T> Raw<T> {
 
     /// Turns `Raw<T>` into `Raw<U>` without changing the underlying JSON.
     ///
-    /// This is useful for turning raw specific event types into raw event enum types.
+    /// This is useful for turning raw specific event types into raw event enum
+    /// types.
     pub fn cast<U>(self) -> Raw<U>
     where
         T: JsonCastable<U>,
@@ -216,7 +226,8 @@ impl<T> Raw<T> {
 
     /// Turns `&Raw<T>` into `&Raw<U>` without changing the underlying JSON.
     ///
-    /// This is useful for turning raw specific event types into raw event enum types.
+    /// This is useful for turning raw specific event types into raw event enum
+    /// types.
     pub fn cast_ref<U>(&self) -> &Raw<U>
     where
         T: JsonCastable<U>,
@@ -266,11 +277,11 @@ impl<T> Serialize for Raw<T> {
     }
 }
 
-/// Marker trait for restricting the types [`Raw::deserialize_as`], [`Raw::cast`] and
-/// [`Raw::cast_ref`] can be called with.
+/// Marker trait for restricting the types [`Raw::deserialize_as`],
+/// [`Raw::cast`] and [`Raw::cast_ref`] can be called with.
 ///
-/// Implementing this trait for a type `U` means that it is safe to cast from `U` to `T` because `T`
-/// can be deserialized from the same JSON as `U`.
+/// Implementing this trait for a type `U` means that it is safe to cast from
+/// `U` to `T` because `T` can be deserialized from the same JSON as `U`.
 pub trait JsonCastable<T> {}
 
 impl<T> JsonCastable<JsonValue> for T {}

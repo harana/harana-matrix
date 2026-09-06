@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use imbl::Vector;
-use matrix_sdk::{Client, Room, locks::Mutex, ruma::OwnedRoomId};
-use matrix_sdk_ui::sync_service::SyncService;
+use matrix::{Client, Room, locks::Mutex, ruma::OwnedRoomId};
 use ratatui::{prelude::*, widgets::*};
+use ui::sync_service::SyncService;
 
 use crate::{
     ALT_ROW_COLOR, HEADER_BG, NORMAL_ROW_COLOR, SELECTED_STYLE_FG, TEXT_COLOR,
@@ -23,7 +23,7 @@ pub struct ExtraRoomInfo {
     pub is_dm: Option<bool>,
 }
 
-pub type Rooms = Arc<Mutex<Vector<matrix_sdk_ui::room_list_service::RoomListItem>>>;
+pub type Rooms = Arc<Mutex<Vector<ui::room_list_service::RoomListItem>>>;
 pub type RoomInfos = Arc<Mutex<HashMap<OwnedRoomId, ExtraRoomInfo>>>;
 
 pub struct RoomList {

@@ -4,31 +4,31 @@ In this directory, one can find bindings to the Rust SDK that are
 maintained by the owners of the Matrix Rust SDK project.
 
 - [`apple`] or `matrix-rust-components-swift`, Swift bindings of the
-  [`matrix-sdk`] crate via [`matrix-sdk-ffi`],
-- [`matrix-sdk-crypto-ffi`], UniFFI (Kotlin, Swift, Python, Ruby) bindings of
-  the [`matrix-sdk-crypto`] crate,
-- [`matrix-sdk-ffi`], UniFFI bindings of the [`matrix-sdk`] crate.
+  [`matrix`] crate via [`matrix-ffi`],
+- [`crypto-ffi`], UniFFI (Kotlin, Swift, Python, Ruby) bindings of
+  the [`crypto`] crate,
+- [`matrix-ffi`], UniFFI bindings of the [`matrix`] crate.
 
-Worked examples of driving [`matrix-sdk-ffi`] from Swift and Kotlin, covering
+Worked examples of driving [`matrix-ffi`] from Swift and Kotlin, covering
 client initialisation, authentication, sending a message and basic room
 operations, live in [`examples`].
 
 There are also external bindings in other repositories:
 
-- [`matrix-sdk-crypto-wasm`], JavaScript / WebAssembly bindings of the
-  [`matrix-sdk-crypto`] crate,
-- [`matrix-sdk-crypto-nodejs`], Node.js bindings of the
-  [`matrix-sdk-crypto`] crate
+- [`crypto-wasm`], JavaScript / WebAssembly bindings of the
+  [`crypto`] crate,
+- [`crypto-nodejs`], Node.js bindings of the
+  [`crypto`] crate
 
 [`apple`]: ./apple
 [`examples`]: ./examples
-[`matrix-sdk-crypto-ffi`]: ./matrix-sdk-crypto-ffi
-[`matrix-sdk-crypto`]: ../crates/matrix-sdk-crypto
-[`matrix-sdk-ffi`]: ./matrix-sdk-ffi
-[`matrix-sdk`]: ../crates/matrix-sdk
+[`crypto-ffi`]: ./crypto-ffi
+[`crypto`]: ../crates/crypto
+[`matrix-ffi`]: ./matrix-ffi
+[`matrix`]: ../crates/matrix
 
-[`matrix-sdk-crypto-wasm`]: https://github.com/matrix-org/matrix-rust-sdk-crypto-wasm
-[`matrix-sdk-crypto-nodejs`]: https://github.com/matrix-org/matrix-rust-sdk-crypto-nodejs
+[`crypto-wasm`]: https://github.com/matrix-org/matrix-rust-sdk-crypto-wasm
+[`crypto-nodejs`]: https://github.com/matrix-org/matrix-rust-sdk-crypto-nodejs
 
 ## Contributing
 

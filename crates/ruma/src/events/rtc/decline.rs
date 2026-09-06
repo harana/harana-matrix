@@ -6,9 +6,10 @@
 //!
 //! [MSC4310]: https://github.com/matrix-org/matrix-spec-proposals/pull/4310
 
-use crate::events::relation::Reference;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
+
+use crate::events::relation::Reference;
 
 /// The content of an `m.rtc.decline` event.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
@@ -17,13 +18,15 @@ use serde::{Deserialize, Serialize};
 pub struct RtcDeclineEventContent {
     /// The reference to the original call notification message event.
     ///
-    /// This must be an `m.reference` to the `m.rtc.notification` / `m.call.notify` event.
+    /// This must be an `m.reference` to the `m.rtc.notification` /
+    /// `m.call.notify` event.
     #[serde(rename = "m.relates_to")]
     pub relates_to: Reference,
 }
 
 impl RtcDeclineEventContent {
-    /// Creates a new `RtcDeclineEventContent` targeting the given notification event id.
+    /// Creates a new `RtcDeclineEventContent` targeting the given notification
+    /// event id.
     pub fn new<E: Into<crate::OwnedEventId>>(notification_event_id: E) -> Self {
         Self { relates_to: Reference::new(notification_event_id.into()) }
     }
@@ -33,11 +36,14 @@ impl RtcDeclineEventContent {
 mod tests {
     use assert_matches2::assert_matches;
     use js_int::uint;
-    use crate::{canonical_json::assert_to_canonical_json_eq, owned_event_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::RtcDeclineEventContent;
-    use crate::events::{AnyMessageLikeEvent, MessageLikeEvent};
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        events::{AnyMessageLikeEvent, MessageLikeEvent},
+        owned_event_id,
+    };
 
     #[test]
     fn decline_event_serialization() {

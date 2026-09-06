@@ -2,11 +2,12 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     MilliSecondsSinceUnixEpoch, OwnedServerName, OwnedServerSigningKeyId, ServerSignatures,
     serde::Base64,
 };
-use serde::{Deserialize, Serialize};
 
 pub mod discover_homeserver;
 pub mod get_remote_server_keys;
@@ -59,7 +60,8 @@ pub struct ServerSigningKeys {
     /// Public keys of the homeserver for verifying digital signatures.
     pub verify_keys: BTreeMap<OwnedServerSigningKeyId, VerifyKey>,
 
-    /// Public keys that the homeserver used to use and when it stopped using them.
+    /// Public keys that the homeserver used to use and when it stopped using
+    /// them.
     // This field is optional, but all fields were assumed to be required before clarification
     // in https://github.com/matrix-org/matrix-spec/pull/1930, so we still send it.
     #[serde(default)]
@@ -77,7 +79,8 @@ pub struct ServerSigningKeys {
 }
 
 impl ServerSigningKeys {
-    /// Creates a new `ServerSigningKeys` with the given server name and validity timestamp.
+    /// Creates a new `ServerSigningKeys` with the given server name and
+    /// validity timestamp.
     ///
     /// All other fields will be empty.
     pub fn new(server_name: OwnedServerName, valid_until_ts: MilliSecondsSinceUnixEpoch) -> Self {

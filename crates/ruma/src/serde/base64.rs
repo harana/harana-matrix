@@ -9,10 +9,11 @@ use base64::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use zeroize::Zeroize;
 
-/// A wrapper around `B` (usually `Vec<u8>`) that (de)serializes from / to a base64 string.
+/// A wrapper around `B` (usually `Vec<u8>`) that (de)serializes from / to a
+/// base64 string.
 ///
-/// The base64 character set (and miscellaneous other encoding / decoding options) can be customized
-/// through the generic parameter `C`.
+/// The base64 character set (and miscellaneous other encoding / decoding
+/// options) can be customized through the generic parameter `C`.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Base64<C = Standard, B = Vec<u8>> {
     bytes: B,
@@ -74,7 +75,8 @@ impl<C: Base64Config, B> Base64<C, B> {
 }
 
 impl<C: Base64Config, B: AsRef<[u8]>> Base64<C, B> {
-    /// Create a `Base64` instance from raw bytes, to be base64-encoded in serialization.
+    /// Create a `Base64` instance from raw bytes, to be base64-encoded in
+    /// serialization.
     pub fn new(bytes: B) -> Self {
         Self { bytes, _phantom_conf: PhantomData }
     }
@@ -148,11 +150,11 @@ impl<C: Base64Config, B: AsRef<[u8]>> Serialize for Base64<C, B> {
     }
 }
 
-/// Marker trait for indicating which inner `B` "bytes" type can be converted from decoded base64
-/// bytes.
+/// Marker trait for indicating which inner `B` "bytes" type can be converted
+/// from decoded base64 bytes.
 ///
-/// This is used as a bound in [`Base64::parse()`] to provide a more helpful error message than
-/// using a `TryFrom<Vec<u8>>` implementation.
+/// This is used as a bound in [`Base64::parse()`] to provide a more helpful
+/// error message than using a `TryFrom<Vec<u8>>` implementation.
 pub trait TryFromBase64DecodedBytes: Sized + AsRef<[u8]> {
     /// Convert the given bytes to this type.
     #[doc(hidden)]
@@ -182,7 +184,8 @@ impl Base64DecodeError {
         Self(Base64DecodeErrorInner::Base64(error))
     }
 
-    /// Construct a `Base64DecodeError` from an invalid decoded bytes length error.
+    /// Construct a `Base64DecodeError` from an invalid decoded bytes length
+    /// error.
     fn invalid_decoded_length(len: usize, expected: usize) -> Self {
         Self(Base64DecodeErrorInner::InvalidDecodedLength { len, expected })
     }
@@ -213,7 +216,8 @@ enum Base64DecodeErrorInner {
     /// The base64 encoding is invalid.
     Base64(base64::DecodeError),
 
-    /// The decoded bytes have the wrong length to fit into an array of fixed length.
+    /// The decoded bytes have the wrong length to fit into an array of fixed
+    /// length.
     InvalidDecodedLength {
         /// The length of the input.
         len: usize,

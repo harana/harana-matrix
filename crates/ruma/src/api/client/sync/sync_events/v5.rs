@@ -1,8 +1,10 @@
-//! `POST /_matrix/client/unstable/org.matrix.simplified_msc3575/sync` ([MSC4186])
+//! `POST /_matrix/client/unstable/org.matrix.simplified_msc3575/sync`
+//! ([MSC4186])
 //!
 //! A simplified version of sliding sync ([MSC3575]).
 //!
-//! Get all new events in a sliding window of rooms since the last sync or a given point in time.
+//! Get all new events in a sliding window of rooms since the last sync or a
+//! given point in time.
 //!
 //! [MSC3575]: https://github.com/matrix-org/matrix-spec-proposals/pull/3575
 //! [MSC4186]: https://github.com/matrix-org/matrix-spec-proposals/pull/4186
@@ -11,17 +13,17 @@ use std::{collections::BTreeMap, time::Duration};
 
 use js_int::UInt;
 use js_option::JsOption;
+use serde::{Deserialize, Serialize};
+
+use super::UnreadNotificationsCount;
 use crate::{
     OwnedMxcUri, OwnedRoomId, OwnedUserId,
     api::{auth_scheme::AccessToken, request, response},
+    events::{AnySyncStateEvent, AnySyncTimelineEvent, StateEventType},
     metadata,
     presence::PresenceState,
     serde::{Raw, duration::opt_ms},
 };
-use crate::events::{AnySyncStateEvent, AnySyncTimelineEvent, StateEventType};
-use serde::{Deserialize, Serialize};
-
-use super::UnreadNotificationsCount;
 
 metadata! {
     method: POST,
@@ -71,7 +73,8 @@ pub struct Request {
     #[ruma_api(query)]
     pub timeout: Option<Duration>,
 
-    /// Controls whether the client is automatically marked as online by polling this API.
+    /// Controls whether the client is automatically marked as online by polling
+    /// this API.
     ///
     /// Defaults to `PresenceState::Online`.
     #[serde(default, skip_serializing_if = "crate::serde::is_default")]
@@ -103,10 +106,10 @@ impl Request {
 
 /// HTTP types related to a [`Request`].
 pub mod request {
-    use crate::{RoomId, directory::RoomTypeFilter, serde::deserialize_cow_str};
     use serde::de::Error as _;
 
     use super::{BTreeMap, Deserialize, OwnedRoomId, Serialize, StateEventType, UInt};
+    use crate::{RoomId, directory::RoomTypeFilter, serde::deserialize_cow_str};
 
     /// A sliding sync list request (see [`super::Request::lists`]).
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -131,13 +134,14 @@ pub mod request {
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ListFilters {
-        /// Whether to return only DM rooms (as determined by the `m.direct` account data event),
-        /// only non-DM rooms, or both.
+        /// Whether to return only DM rooms (as determined by the `m.direct`
+        /// account data event), only non-DM rooms, or both.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub is_dm: Option<bool>,
 
-        /// Whether to return only encrypted rooms (as determined by the existence of an
-        /// `m.room.encryption` state event), only unencrypted rooms, or both.
+        /// Whether to return only encrypted rooms (as determined by the
+        /// existence of an `m.room.encryption` state event), only
+        /// unencrypted rooms, or both.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub is_encrypted: Option<bool>,
 
@@ -147,20 +151,23 @@ pub mod request {
 
         /// Only list rooms with these create-types, or all.
         ///
-        /// If a room type is specified in both `room_types` and `not_room_types`,
-        /// `not_room_types` wins and the corresponding rooms are not included.
+        /// If a room type is specified in both `room_types` and
+        /// `not_room_types`, `not_room_types` wins and the
+        /// corresponding rooms are not included.
         #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
         pub room_types: Vec<RoomTypeFilter>,
 
         /// Only list rooms that are not of these create-types, or all.
         ///
-        /// If a room type is specified in both `room_types` and `not_room_types`,
-        /// `not_room_types` wins and the corresponding rooms are not included.
+        /// If a room type is specified in both `room_types` and
+        /// `not_room_types`, `not_room_types` wins and the
+        /// corresponding rooms are not included.
         #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
         pub not_room_types: Vec<RoomTypeFilter>,
     }
 
-    /// Sliding sync request room subscription (see [`super::Request::room_subscriptions`]).
+    /// Sliding sync request room subscription (see
+    /// [`super::Request::room_subscriptions`]).
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct RoomSubscription {
@@ -177,7 +184,8 @@ pub mod request {
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct RoomDetails {
-        /// Required state for each returned room. An array of event type and state key tuples.
+        /// Required state for each returned room. An array of event type and
+        /// state key tuples.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         pub required_state: Vec<(StateEventType, String)>,
 
@@ -270,7 +278,8 @@ pub mod request {
         }
     }
 
-    /// Single entry for a room subscription configuration in an extension request.
+    /// Single entry for a room subscription configuration in an extension
+    /// request.
     #[derive(Clone, Debug, PartialEq)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub enum ExtensionRoomConfig {
@@ -344,7 +353,8 @@ pub mod request {
 
         /// Maximum number of sticky events to return per response.
         ///
-        /// Defaults to 100 (server-side) and the server may override it to a lower value.
+        /// Defaults to 100 (server-side) and the server may override it to a
+        /// lower value.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub limit: Option<UInt>,
 
@@ -381,8 +391,8 @@ pub mod request {
 
     /// Account-data extension.
     ///
-    /// Not yet part of the spec proposal. Taken from the reference implementation
-    /// <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/account_data.go>
+    /// Not yet part of the spec proposal. Taken from the reference
+    /// implementation <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/account_data.go>
     #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct AccountData {
@@ -452,8 +462,8 @@ pub mod request {
 
     /// Typing extension configuration.
     ///
-    /// Not yet part of the spec proposal. Taken from the reference implementation
-    /// <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/typing.go>
+    /// Not yet part of the spec proposal. Taken from the reference
+    /// implementation <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/typing.go>
     #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct Typing {
@@ -495,7 +505,8 @@ pub mod request {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub enabled: Option<bool>,
 
-        /// Maximum number of thread subscription changes to receive in the response.
+        /// Maximum number of thread subscription changes to receive in the
+        /// response.
         ///
         /// Defaults to 100.
         /// Servers may impose a smaller limit than what is requested here.
@@ -537,8 +548,8 @@ pub mod request {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub rooms: Option<Vec<ExtensionRoomConfig>>,
 
-        /// Optional filter to control which profile fields to receive updates for. If omitted, all
-        /// profile field updates are included.
+        /// Optional filter to control which profile fields to receive updates
+        /// for. If omitted, all profile field updates are included.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub fields: Option<Vec<crate::profile::ProfileFieldName>>,
     }
@@ -591,24 +602,25 @@ impl Response {
 
 /// HTTP types related to a [`Response`].
 pub mod response {
-    use crate::OneTimeKeyAlgorithm;
-    #[cfg(feature = "unstable-msc4308")]
-    use crate::OwnedEventId;
-    #[cfg(feature = "unstable-msc4262")]
-    use crate::profile::UserProfileUpdate;
-    use crate::events::{
-        AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnyStrippedStateEvent,
-        AnyToDeviceEvent, receipt::SyncReceiptEvent, typing::SyncTypingEvent,
-    };
-
     use super::{
         super::DeviceLists, AnySyncStateEvent, AnySyncTimelineEvent, BTreeMap, Deserialize,
         JsOption, OwnedMxcUri, OwnedRoomId, OwnedUserId, Raw, Serialize, UInt,
         UnreadNotificationsCount,
     };
     #[cfg(feature = "unstable-msc4308")]
+    use crate::OwnedEventId;
+    #[cfg(feature = "unstable-msc4308")]
     use crate::api::client::threads::get_thread_subscriptions_changes::unstable::{
         ThreadSubscription, ThreadUnsubscription,
+    };
+    #[cfg(feature = "unstable-msc4262")]
+    use crate::profile::UserProfileUpdate;
+    use crate::{
+        OneTimeKeyAlgorithm,
+        events::{
+            AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnyStrippedStateEvent,
+            AnyToDeviceEvent, receipt::SyncReceiptEvent, typing::SyncTypingEvent,
+        },
     };
 
     /// A sliding sync response updates to joiend rooms (see
@@ -919,8 +931,8 @@ pub mod response {
 
     /// Account-data extension response .
     ///
-    /// Not yet part of the spec proposal. Taken from the reference implementation
-    /// <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/account_data.go>
+    /// Not yet part of the spec proposal. Taken from the reference
+    /// implementation <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/account_data.go>
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct AccountData {
@@ -960,8 +972,8 @@ pub mod response {
 
     /// Typing extension response.
     ///
-    /// Not yet part of the spec proposal. Taken from the reference implementation
-    /// <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/typing.go>
+    /// Not yet part of the spec proposal. Taken from the reference
+    /// implementation <https://github.com/matrix-org/sliding-sync/blob/main/sync3/extensions/typing.go>
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct Typing {
@@ -992,8 +1004,9 @@ pub mod response {
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub unsubscribed: BTreeMap<OwnedRoomId, BTreeMap<OwnedEventId, ThreadUnsubscription>>,
 
-        /// A token that can be used to backpaginate (via the companion endpoint) other thread
-        /// subscription changes that occurred since the last sync, but that were not included in
+        /// A token that can be used to backpaginate (via the companion
+        /// endpoint) other thread subscription changes that occurred
+        /// since the last sync, but that were not included in
         /// this response.
         ///
         /// Only set when there are more changes to fetch.
@@ -1032,9 +1045,8 @@ pub mod response {
 
 #[cfg(test)]
 mod tests {
-    use crate::owned_room_id;
-
     use super::request::ExtensionRoomConfig;
+    use crate::owned_room_id;
 
     #[test]
     fn serialize_request_extension_room_config() {
@@ -1061,9 +1073,8 @@ mod tests {
     #[cfg(feature = "unstable-msc4480")]
     #[test]
     fn sticky_events_extension_serde() {
-        use crate::assert_to_canonical_json_eq;
-
         use super::{request, response};
+        use crate::assert_to_canonical_json_eq;
 
         // The request extension serializes under the unstable extension key.
         let mut extensions = request::Extensions::default();

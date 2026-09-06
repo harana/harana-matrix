@@ -30,10 +30,12 @@ impl<'a> EventContentEnums<'a> {
         Self { inner, enums: BTreeMap::new(), change: None }
     }
 
-    /// Get the `EventContentEnumVariation` matching the given event variation, if possible.
+    /// Get the `EventContentEnumVariation` matching the given event variation,
+    /// if possible.
     ///
-    /// If the event variation is supported but the corresponding `EventContentEnumVariation`
-    /// doesn't exist in this list, it is created.
+    /// If the event variation is supported but the corresponding
+    /// `EventContentEnumVariation` doesn't exist in this list, it is
+    /// created.
     pub(super) fn get_or_create(
         &mut self,
         event_variation: EventVariation,
@@ -197,8 +199,8 @@ impl EventContentEnumVariation<'_> {
         }
     }
 
-    /// Generate the `ruma_events::{kind}EventContent` trait implementation for the
-    /// `Any*EventContent` enum.
+    /// Generate the `ruma_events::{kind}EventContent` trait implementation for
+    /// the `Any*EventContent` enum.
     fn expand_content_enum_event_content_kind_trait_impl(&self) -> TokenStream {
         let ruma_events = self.ruma_events;
 
@@ -233,8 +235,8 @@ impl EventContentEnumVariation<'_> {
         }
     }
 
-    /// Implement `JsonCastable<{enum}>` for all the variants and `JsonCastable<JsonObject>` for the
-    /// given event content enum.
+    /// Implement `JsonCastable<{enum}>` for all the variants and
+    /// `JsonCastable<JsonObject>` for the given event content enum.
     fn expand_content_enum_json_castable_impl(&self) -> TokenStream {
         let ruma_common = self.ruma_events.ruma_common();
         let ident = &self.ident;
@@ -445,8 +447,9 @@ impl EventContentChangeEnum<'_> {
 
     /// Generate the accessors on an event enum to get the event content.
     ///
-    /// `event_enum` is the name of the `*StateEvent` enum containing the `Original` and `Redacted`
-    /// variants, used by each variant of the `Any*StateEvent` enum.
+    /// `event_enum` is the name of the `*StateEvent` enum containing the
+    /// `Original` and `Redacted` variants, used by each variant of the
+    /// `Any*StateEvent` enum.
     pub(super) fn expand_content_accessors(&self, event_enum: &syn::Ident) -> TokenStream {
         let ruma_events = self.ruma_events;
 

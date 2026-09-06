@@ -1,7 +1,7 @@
-use crate::serde::Raw;
 use serde::{Deserialize, Deserializer, de::DeserializeOwned};
 
 use super::{BundledMessageLikeRelations, BundledThread, ReferenceChunk};
+use crate::serde::Raw;
 
 #[derive(Deserialize)]
 struct BundledMessageLikeRelationsJsonRepr<E> {

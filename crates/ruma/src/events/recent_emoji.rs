@@ -29,17 +29,18 @@ impl RecentEmojiEventContent {
 
     /// Increment the total for the given emoji.
     ///
-    /// If the emoji is in the list, its total is incremented and it is moved to the start of the
-    /// list.
+    /// If the emoji is in the list, its total is incremented and it is moved to
+    /// the start of the list.
     ///
-    /// If the emoji is not in the list, it is added at the start of the list with a total set to
-    /// `1`.
+    /// If the emoji is not in the list, it is added at the start of the list
+    /// with a total set to `1`.
     ///
-    /// If the length of the list is bigger than [`RECOMMENDED_MAX_LEN`](Self::RECOMMENDED_MAX_LEN),
-    /// the list is truncated.
+    /// If the length of the list is bigger than
+    /// [`RECOMMENDED_MAX_LEN`](Self::RECOMMENDED_MAX_LEN), the list is
+    /// truncated.
     pub fn increment_emoji_total(&mut self, emoji: &str) {
-        // Start by truncating the list if necessary to make sure that shifting items doesn't take
-        // too much time.
+        // Start by truncating the list if necessary to make sure that shifting items
+        // doesn't take too much time.
         self.recent_emoji.truncate(Self::RECOMMENDED_MAX_LEN);
 
         if let Some(position) = self.recent_emoji.iter().position(|e| e.emoji == emoji) {
@@ -61,9 +62,11 @@ impl RecentEmojiEventContent {
 
     /// Get the list of recent emoji sorted by the number of uses.
     ///
-    /// When several emoji have the same number of uses they are sorted by last usage time.
+    /// When several emoji have the same number of uses they are sorted by last
+    /// usage time.
     ///
-    /// The returned list is truncated to [`RECOMMENDED_MAX_LEN`](Self::RECOMMENDED_MAX_LEN).
+    /// The returned list is truncated to
+    /// [`RECOMMENDED_MAX_LEN`](Self::RECOMMENDED_MAX_LEN).
     pub fn recent_emoji_sorted_by_total(&self) -> Vec<RecentEmoji> {
         let mut recent_emoji =
             self.recent_emoji.iter().take(Self::RECOMMENDED_MAX_LEN).cloned().collect::<Vec<_>>();
@@ -97,11 +100,10 @@ impl RecentEmoji {
 mod tests {
     use assert_matches2::assert_matches;
     use js_int::uint;
-    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{RecentEmoji, RecentEmojiEventContent};
-    use crate::events::AnyGlobalAccountDataEvent;
+    use crate::{canonical_json::assert_to_canonical_json_eq, events::AnyGlobalAccountDataEvent};
 
     #[test]
     fn recent_emoji_serialization() {

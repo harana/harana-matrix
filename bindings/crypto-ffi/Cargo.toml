@@ -1,0 +1,79 @@
+[package]
+name = "crypto-ffi"
+version = "0.1.0"
+authors = ["Damir Jelić <poljar@termina.org.uk>"]
+edition = "2024"
+rust-version.workspace = true
+description = "Uniffi based bindings for the Rust SDK crypto crate"
+repository = "https://github.com/matrix-org/matrix-rust-sdk"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata.release]
+release = false
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[[bin]]
+name = "crypto_ffi"
+path = "uniffi-bindgen.rs"
+
+[features]
+default = ["bundled-sqlite"]
+bundled-sqlite = ["sqlite/bundled"]
+
+# Enable experimental support for encrypting state events; see
+# https://github.com/matrix-org/matrix-rust-sdk/issues/5397.
+experimental-encrypted-state-events = [
+    "crypto/experimental-encrypted-state-events",
+]
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+hmac.workspace = true
+http.workspace = true
+sdk-common = { workspace = true, features = ["tokio-runtime", "uniffi"] }
+matrix-ffi-macros.workspace = true
+pbkdf2.workspace = true
+rand.workspace = true
+ruma.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter", "registry"] }
+# keep in sync with uniffi dependency in matrix-ffi, and uniffi_bindgen in ffi CI job
+uniffi = { workspace = true, features = ["cli"] }
+vodozemac.workspace = true
+zeroize = { workspace = true, features = ["zeroize_derive"] }
+
+[dependencies.js_int]
+version = "0.2.2"
+default-features = false
+features = ["lax_deserialize"]
+
+[dependencies.crypto]
+workspace = true
+features = ["qrcode", "automatic-room-key-forwarding", "uniffi"]
+
+[dependencies.sqlite]
+workspace = true
+features = ["crypto-store"]
+
+[dependencies.tokio]
+workspace = true
+features = ["rt-multi-thread"]
+
+[build-dependencies]
+uniffi = { workspace = true, default-features = false, features = ["build"] }
+vergen-gitcl = { workspace = true, default-features = false, features = ["build"] }
+
+[dev-dependencies]
+assert_matches2.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

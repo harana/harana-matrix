@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
 
     s.swift_versions = ['5.1', '5.2']
 
-    s.source                = { :http => "https://github.com/matrix-org/matrix-rust-sdk/releases/download/matrix-sdk-crypto-ffi-#{s.version}/MatrixSDKCryptoFFI.zip" }
+    s.source                = { :http => "https://github.com/matrix-org/matrix-rust-sdk/releases/download/crypto-ffi-#{s.version}/MatrixSDKCryptoFFI.zip" }
     s.vendored_frameworks   = "MatrixSDKCryptoFFI.xcframework"
     s.source_files          = "Sources/**/*.{swift}"
   

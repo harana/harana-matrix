@@ -39,7 +39,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given version, room_id and sessions.
+        /// Creates a new `Request` with the given version, room_id and
+        /// sessions.
         pub fn new(version: String) -> Self {
             Self { version }
         }

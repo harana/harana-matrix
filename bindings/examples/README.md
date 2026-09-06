@@ -1,6 +1,6 @@
 # FFI examples
 
-Reference walk-throughs of [`matrix-sdk-ffi`] from the languages it is bound
+Reference walk-throughs of [`matrix-ffi`] from the languages it is bound
 to. Each one covers the same ground, in the order a client would:
 
 1. setting the platform up (logging, the async runtime, the log and panic
@@ -46,7 +46,7 @@ cargo xtask kotlin build-android-library --package full-sdk --src-dir <output-di
 ```
 
 This needs the Android NDK and `cargo ndk`; see
-`bindings/matrix-sdk-crypto-ffi/README.md` for the toolchain setup. The task
+`bindings/crypto-ffi/README.md` for the toolchain setup. The task
 writes the native libraries to `<output-dir>/jniLibs` and the Kotlin sources to
 `<output-dir>/kotlin`, both of which go into an Android project.
 
@@ -61,4 +61,4 @@ The examples are compiled by hand, not by CI, so they are kept in sync with the
 FFI surface as it changes. If one drifts from the API, that is a bug worth
 reporting.
 
-[`matrix-sdk-ffi`]: ../matrix-sdk-ffi
+[`matrix-ffi`]: ../matrix-ffi

@@ -1,7 +1,7 @@
 use ruma::{
-    EventEncryptionAlgorithm, canonical_json::assert_to_canonical_json_eq, owned_room_id,
+    EventEncryptionAlgorithm, canonical_json::assert_to_canonical_json_eq,
+    events::room_key::ToDeviceRoomKeyEventContent, owned_room_id,
 };
-use ruma::events::room_key::ToDeviceRoomKeyEventContent;
 use serde_json::json;
 
 #[test]

@@ -2,12 +2,14 @@ use assert_matches2::assert_matches;
 use js_int::uint;
 use ruma::{
     MilliSecondsSinceUnixEpoch, VoipVersionId,
+    events::{
+        AnyGlobalAccountDataEventContent, AnyMessageLikeEvent, AnyMessageLikeEventContent,
+        MessageLikeEvent, RawExt as _,
+        secret_storage::key::{
+            SecretStorageEncryptionAlgorithm, SecretStorageV1AesHmacSha2Properties,
+        },
+    },
     serde::{CanBeEmpty, Raw},
-};
-use ruma::events::{
-    AnyGlobalAccountDataEventContent, AnyMessageLikeEvent, AnyMessageLikeEventContent,
-    MessageLikeEvent, RawExt as _,
-    secret_storage::key::{SecretStorageEncryptionAlgorithm, SecretStorageV1AesHmacSha2Properties},
 };
 use serde_json::{from_value as from_json_value, json, value::to_raw_value as to_raw_json_value};
 

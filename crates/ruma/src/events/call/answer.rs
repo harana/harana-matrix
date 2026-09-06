@@ -4,13 +4,13 @@
 
 use std::collections::BTreeMap;
 
-use crate::{OwnedVoipId, VoipVersionId};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "unstable-msc2747")]
 use super::CallCapabilities;
 use super::{SessionDescription, StreamMetadata};
+use crate::{OwnedVoipId, VoipVersionId};
 
 /// The content of an `m.call.answer` event.
 ///
@@ -25,7 +25,8 @@ pub struct CallAnswerEventContent {
     /// A unique identifier for the call.
     pub call_id: OwnedVoipId,
 
-    /// **Required in VoIP version 1.** A unique ID for this session for the duration of the call.
+    /// **Required in VoIP version 1.** A unique ID for this session for the
+    /// duration of the call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub party_id: Option<OwnedVoipId>,
 
@@ -37,7 +38,8 @@ pub struct CallAnswerEventContent {
     #[serde(default, skip_serializing_if = "CallCapabilities::is_default")]
     pub capabilities: CallCapabilities,
 
-    /// **Added in VoIP version 1.** Metadata describing the streams that will be sent.
+    /// **Added in VoIP version 1.** Metadata describing the streams that will
+    /// be sent.
     ///
     /// This is a map of stream ID to metadata about the stream.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -45,7 +47,8 @@ pub struct CallAnswerEventContent {
 }
 
 impl CallAnswerEventContent {
-    /// Creates an `CallAnswerEventContent` with the given answer, call ID and VoIP version.
+    /// Creates an `CallAnswerEventContent` with the given answer, call ID and
+    /// VoIP version.
     pub fn new(answer: SessionDescription, call_id: OwnedVoipId, version: VoipVersionId) -> Self {
         Self {
             answer,
@@ -58,14 +61,14 @@ impl CallAnswerEventContent {
         }
     }
 
-    /// Convenience method to create a VoIP version 0 `CallAnswerEventContent` with all the required
-    /// fields.
+    /// Convenience method to create a VoIP version 0 `CallAnswerEventContent`
+    /// with all the required fields.
     pub fn version_0(answer: SessionDescription, call_id: OwnedVoipId) -> Self {
         Self::new(answer, call_id, VoipVersionId::V0)
     }
 
-    /// Convenience method to create a VoIP version 1 `CallAnswerEventContent` with all the required
-    /// fields.
+    /// Convenience method to create a VoIP version 1 `CallAnswerEventContent`
+    /// with all the required fields.
     pub fn version_1(
         answer: SessionDescription,
         call_id: OwnedVoipId,

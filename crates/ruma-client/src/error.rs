@@ -9,7 +9,8 @@ use ruma::api::error::{FromHttpResponseError, FromHttpResponseErrorExt as _, Int
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error<E, F> {
-    /// Queried endpoint requires authentication but was called on an anonymous client.
+    /// Queried endpoint requires authentication but was called on an anonymous
+    /// client.
     AuthenticationRequired,
 
     /// Construction of the HTTP request failed (this should never happen).

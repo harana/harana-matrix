@@ -2,16 +2,14 @@
 //!
 //! This module also contains types shared by events in its child namespaces.
 //!
-//! The MSC for the in-room variants of the `m.key.verification.*` events can be found on
-//! [MSC2241].
+//! The MSC for the in-room variants of the `m.key.verification.*` events can be
+//! found on [MSC2241].
 //!
 //! [MSC2241]: https://github.com/matrix-org/matrix-spec-proposals/pull/2241
 
 use std::time::Duration;
 
-use crate::serde::StringEnum;
-
-use crate::events::PrivOwnedStr;
+use crate::{events::PrivOwnedStr, serde::StringEnum};
 
 pub mod accept;
 pub mod cancel;
@@ -23,14 +21,15 @@ pub mod request;
 pub mod start;
 
 // For these two constants, see <https://spec.matrix.org/v1.19/client-server-api/#key-verification-framework>
-/// The amount of time after which a verification request should be ignored, relative to its
-/// `origin_server_ts` (for in-room events) or its `timestamp` (for to-device events).
+/// The amount of time after which a verification request should be ignored,
+/// relative to its `origin_server_ts` (for in-room events) or its `timestamp`
+/// (for to-device events).
 ///
 /// This is defined as 10 minutes.
 pub const REQUEST_TIMESTAMP_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 
-/// The amount of time after which a verification request should be ignored, relative to the
-/// time it was received by the client.
+/// The amount of time after which a verification request should be ignored,
+/// relative to the time it was received by the client.
 ///
 /// This is defined as 2 minutes.
 pub const REQUEST_RECEIVED_TIMEOUT: Duration = Duration::from_secs(2 * 60);

@@ -2,14 +2,15 @@
 //!
 //! [`m.room.create`]: https://spec.matrix.org/v1.19/client-server-api/#mroomcreate
 
-use crate::{
-    OwnedEventId, OwnedRoomId, OwnedUserId, RoomVersionId, room::RoomType,
-    room_version_rules::RedactionRules,
-};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::{EmptyStateKey, RedactContent, RedactedStateEventContent, StateEventType};
+use crate::{
+    OwnedEventId, OwnedRoomId, OwnedUserId, RoomVersionId,
+    events::{EmptyStateKey, RedactContent, RedactedStateEventContent, StateEventType},
+    room::RoomType,
+    room_version_rules::RedactionRules,
+};
 
 /// The content of an `m.room.create` event.
 ///
@@ -24,13 +25,14 @@ pub struct RoomCreateEventContent {
     ///
     /// This is set by the homeserver.
     ///
-    /// This is required in room versions 1 trough 10, but is removed starting from room version
-    /// 11.
+    /// This is required in room versions 1 trough 10, but is removed starting
+    /// from room version 11.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[deprecated = "Since Matrix 1.8. This field was removed in Room version 11, clients should use the event's sender instead"]
     pub creator: Option<OwnedUserId>,
 
-    /// Whether or not this room's data should be transferred to other homeservers.
+    /// Whether or not this room's data should be transferred to other
+    /// homeservers.
     #[serde(
         rename = "m.federate",
         default = "crate::serde::default_true",
@@ -44,10 +46,11 @@ pub struct RoomCreateEventContent {
     #[serde(default = "default_room_version_id")]
     pub room_version: RoomVersionId,
 
-    /// A reference to the room this room replaces, if the previous room was upgraded.
+    /// A reference to the room this room replaces, if the previous room was
+    /// upgraded.
     ///
-    /// With the `compat-lax-room-create-deser` cargo feature, this field is ignored if its
-    /// deserialization fails.
+    /// With the `compat-lax-room-create-deser` cargo feature, this field is
+    /// ignored if its deserialization fails.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "compat-lax-room-create-deser",
@@ -59,15 +62,15 @@ pub struct RoomCreateEventContent {
     #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
     pub room_type: Option<RoomType>,
 
-    /// Additional room creators, considered to have "infinite" power level, in room version 12
-    /// onwards.
+    /// Additional room creators, considered to have "infinite" power level, in
+    /// room version 12 onwards.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub additional_creators: Vec<OwnedUserId>,
 }
 
 impl RoomCreateEventContent {
-    /// Creates a new `RoomCreateEventContent` with the given creator, as required for room versions
-    /// 1 through 10.
+    /// Creates a new `RoomCreateEventContent` with the given creator, as
+    /// required for room versions 1 through 10.
     pub fn new_v1(creator: OwnedUserId) -> Self {
         #[allow(deprecated)]
         Self {
@@ -80,8 +83,8 @@ impl RoomCreateEventContent {
         }
     }
 
-    /// Creates a new `RoomCreateEventContent` with the default values and no creator, as introduced
-    /// in room version 11.
+    /// Creates a new `RoomCreateEventContent` with the default values and no
+    /// creator, as introduced in room version 11.
     ///
     /// The room version is set to [`RoomVersionId::V11`].
     pub fn new_v11() -> Self {
@@ -146,10 +149,10 @@ fn default_room_version_id() -> RoomVersionId {
 ///
 /// The redaction rules of this event changed with room version 11:
 ///
-/// - In room versions 1 through 10, the `creator` field was preserved during redaction, starting
-///   from room version 11 the field is removed.
-/// - In room versions 1 through 10, all the other fields were redacted, starting from room version
-///   11 all the fields are preserved.
+/// - In room versions 1 through 10, the `creator` field was preserved during
+///   redaction, starting from room version 11 the field is removed.
+/// - In room versions 1 through 10, all the other fields were redacted,
+///   starting from room version 11 all the fields are preserved.
 pub type RedactedRoomCreateEventContent = RoomCreateEventContent;
 
 impl RedactedStateEventContent for RedactedRoomCreateEventContent {
@@ -163,10 +166,10 @@ impl RedactedStateEventContent for RedactedRoomCreateEventContent {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::{RoomVersionId, canonical_json::assert_to_canonical_json_eq, owned_user_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::{RoomCreateEventContent, RoomType};
+    use crate::{RoomVersionId, canonical_json::assert_to_canonical_json_eq, owned_user_id};
 
     #[test]
     fn serialization() {

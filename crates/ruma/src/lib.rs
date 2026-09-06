@@ -1,8 +1,9 @@
 //! Types and traits for working with the [Matrix](https://matrix.org) protocol.
 //!
 //! This crate is a vendored and trimmed-down fork of [ruma](https://github.com/ruma/ruma),
-//! merged into a single crate. The upstream `ruma-common`, `ruma-events`, `ruma-client-api`,
-//! `ruma-federation-api`, `ruma-html` and `ruma-signatures` crates are modules here:
+//! merged into a single crate. The upstream `ruma-common`, `ruma-events`,
+//! `ruma-client-api`, `ruma-federation-api`, `ruma-html` and `ruma-signatures`
+//! crates are modules here:
 //!
 //! | upstream crate         | module here          |
 //! | ---------------------- | -------------------- |
@@ -14,42 +15,49 @@
 //! | `ruma-signatures`      | `signatures`         |
 //! | `ruma-state-res`       | [`state_res`]        |
 //!
-//! Only the parts used by this workspace are kept: of the appservice API only the registration
-//! file format ([`api::appservice`]) is vendored, and the identity-service and push-gateway APIs
-//! are not vendored at all.
+//! Only the parts used by this workspace are kept: of the appservice API only
+//! the registration file format ([`api::appservice`]) is vendored, and the
+//! identity-service and push-gateway APIs are not vendored at all.
 //!
-//! > For internal consistency, Ruma uses American spelling for variable names. Names may differ
-//! > in the serialized representation, as the Matrix specification has a mix of British and
+//! > For internal consistency, Ruma uses American spelling for variable names.
+//! > Names may differ
+//! > in the serialized representation, as the Matrix specification has a mix of
+//! > British and
 //! > American English.
 //!
 //! # Cargo features
 //!
-//! * `client` -- `OutgoingRequest` / `IncomingResponse` impls, for code talking *to* a server.
-//! * `server` -- `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
-//! * `appservice-api` -- the application service registration types ([`api::appservice`]). Also
-//!   available as `appservice-api-c` and `appservice-api-s`, for parity with upstream `ruma`.
-//! * `federation-api` -- the server-server API ([`api::federation`]). Implies `signatures`.
-//! * `signatures` -- digital signatures (`signatures`).
-//! * `state-res` -- state resolution and the PDU authorization rules ([`state_res`]). Implies
+//! * `client` -- `OutgoingRequest` / `IncomingResponse` impls, for code talking
+//!   *to* a server.
+//! * `server` -- `IncomingRequest` / `OutgoingResponse` impls, for code
+//!   answering requests.
+//! * `appservice-api` -- the application service registration types
+//!   ([`api::appservice`]). Also available as `appservice-api-c` and
+//!   `appservice-api-s`, for parity with upstream `ruma`.
+//! * `federation-api` -- the server-server API ([`api::federation`]). Implies
 //!   `signatures`.
+//! * `signatures` -- digital signatures (`signatures`).
+//! * `state-res` -- state resolution and the PDU authorization rules
+//!   ([`state_res`]). Implies `signatures`.
 //! * `html` -- HTML parsing and sanitizing (`html`).
 //! * `markdown` -- parse markdown to construct messages.
 //! * `rand` -- generate random identifiers.
 //! * `js` -- randomness and current system time in browser environments.
 //! * `unstable-uniffi` -- UniFFI bindings for _some_ types. Work in progress.
-//! * `compat-*` -- tolerate known, reasonable deviations from the spec in external data. They
-//!   never make this crate *produce* non-spec-compliant data.
-//! * `unstable-mscXXXX` -- upcoming Matrix features that may change or be removed. Using any of
-//!   them opts you out of all semver guarantees.
+//! * `compat-*` -- tolerate known, reasonable deviations from the spec in
+//!   external data. They never make this crate *produce* non-spec-compliant
+//!   data.
+//! * `unstable-mscXXXX` -- upcoming Matrix features that may change or be
+//!   removed. Using any of them opts you out of all semver guarantees.
 //!
 //! # Compile-time `cfg` settings
 //!
 //! These are read from environment variables by `build.rs`:
 //!
-//! * `RUMA_IDENTIFIERS_STORAGE=Arc` -- back owned identifier types with `Arc<str>` instead of
-//!   `Box<str>`.
-//! * `RUMA_UNSTABLE_EXHAUSTIVE_TYPES` -- compile all types as exhaustive. Opts you out of all
-//!   semver guarantees.
+//! * `RUMA_IDENTIFIERS_STORAGE=Arc` -- back owned identifier types with
+//!   `Arc<str>` instead of `Box<str>`.
+//! * `RUMA_UNSTABLE_EXHAUSTIVE_TYPES` -- compile all types as exhaustive. Opts
+//!   you out of all semver guarantees.
 
 #![recursion_limit = "1024"]
 #![warn(missing_docs)]
@@ -61,7 +69,8 @@
 #![allow(clippy::new_without_default)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-// Lets this crate's own procedural macros resolve the `::ruma` paths they generate.
+// Lets this crate's own procedural macros resolve the `::ruma` paths they
+// generate.
 extern crate self as ruma;
 
 #[cfg(feature = "unstable-uniffi")]
@@ -73,9 +82,9 @@ pub mod canonical_json;
 pub mod directory;
 pub mod encryption;
 pub mod events;
-pub mod http_headers;
 #[cfg(feature = "html")]
 pub mod html;
+pub mod http_headers;
 mod identifiers;
 pub mod media;
 mod percent_encode;
@@ -113,7 +122,7 @@ pub use web_time as time;
 /// the SDK built on this crate spawns them, so they have to be `Send`, which in
 /// turn makes the borrowed type `Sync`. WASM has no threads and its host types
 /// are not `Sync`, so requiring it there would rule out valid callers and
-/// nothing else. `matrix_sdk_common` has the same pair of markers; this crate
+/// nothing else. `sdk_common` has the same pair of markers; this crate
 /// cannot use them, since that crate depends on this one.
 #[cfg(not(target_family = "wasm"))]
 pub trait SyncOutsideWasm: Sync {}

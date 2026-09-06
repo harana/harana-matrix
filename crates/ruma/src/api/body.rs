@@ -9,7 +9,8 @@ pub trait OutgoingBody {
     /// The type of error that can happen in `try_info_buf`.
     type Error: Into<IntoHttpError>;
 
-    /// Turn `self` into a byte buffer (copying a raw body or serializing a JSON one).
+    /// Turn `self` into a byte buffer (copying a raw body or serializing a JSON
+    /// one).
     fn try_into_buf<T: Default + BufMut + AsRef<[u8]>>(self) -> Result<T, Self::Error>;
 }
 

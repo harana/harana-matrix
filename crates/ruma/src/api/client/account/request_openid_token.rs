@@ -59,8 +59,8 @@ pub mod v3 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given access token, token type, server name and
-        /// expiration duration.
+        /// Creates a new `Response` with the given access token, token type,
+        /// server name and expiration duration.
         pub fn new(
             access_token: String,
             token_type: TokenType,

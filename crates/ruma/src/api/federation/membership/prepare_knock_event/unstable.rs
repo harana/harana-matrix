@@ -2,11 +2,12 @@
 //!
 //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/2403
 
+use serde_json::value::RawValue as RawJsonValue;
+
 use crate::{
     OwnedRoomId, OwnedUserId, RoomVersionId,
     api::{Metadata, path_builder::SinglePath, request, response},
 };
-use serde_json::value::RawValue as RawJsonValue;
 
 /// Request type for the `create_knock_event_template` endpoint.
 #[request]

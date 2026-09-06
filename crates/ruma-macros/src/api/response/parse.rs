@@ -78,8 +78,8 @@ impl TryFrom<syn::ItemStruct> for Response {
 /// Attributes on the response struct.
 #[derive(Default)]
 pub(crate) struct ResponseAttrs {
-    /// The type used for the `EndpointError` associated type on `OutgoingResponse` and
-    /// `IncomingResponse` implementations.
+    /// The type used for the `EndpointError` associated type on
+    /// `OutgoingResponse` and `IncomingResponse` implementations.
     error_ty: Option<syn::Type>,
 
     /// The HTTP status code to use for the response.
@@ -137,7 +137,8 @@ impl ResponseAttrs {
 
     /// Try to parse the given meta item and merge it into this `RequestAttrs`.
     ///
-    /// Returns an error if parsing the meta item fails, or if it sets a field that was already set.
+    /// Returns an error if parsing the meta item fails, or if it sets a field
+    /// that was already set.
     pub(crate) fn try_merge(&mut self, meta: ParseNestedMeta<'_>) -> syn::Result<()> {
         if meta.path.is_ident("error") {
             return self.set_error_ty(meta.value()?.parse()?);
@@ -154,12 +155,14 @@ impl ResponseAttrs {
         Err(meta.error("unsupported `response` attribute"))
     }
 
-    /// The error type that was set on the response, or the default value which is `Error`.
+    /// The error type that was set on the response, or the default value which
+    /// is `Error`.
     pub(super) fn error_ty_or_default(&self, ruma_common: &RumaCommon) -> syn::Type {
         self.error_ty.clone().unwrap_or_else(|| parse_quote! { #ruma_common::api::error::Error })
     }
 
-    /// The HTTP status code that was set on the response, or the default value which is `OK`.
+    /// The HTTP status code that was set on the response, or the default value
+    /// which is `OK`.
     pub(super) fn status_or_default(&self) -> syn::Ident {
         self.status.clone().unwrap_or_else(|| parse_quote! { OK })
     }
@@ -190,7 +193,8 @@ impl ResponseField {
         Ok(())
     }
 
-    /// Try to merge the values of the attributes in the given meta in this `ResponseField`.
+    /// Try to merge the values of the attributes in the given meta in this
+    /// `ResponseField`.
     ///
     /// Returns an error if parsing the meta fails or a value is set twice.
     fn try_merge(&mut self, meta: ParseNestedMeta<'_>) -> syn::Result<()> {
@@ -252,9 +256,10 @@ enum ResponseFieldKind {
 impl ResponseFieldKind {
     /// Try to convert the given meta into a `ResponseFieldKind`.
     ///
-    /// Returns `Ok(Some(kind))` if the meta matches one of the variants and parsing it succeeds,
-    /// `Ok(None)` if the meta doesn't match one of the variants, and `Err(_)` if the meta matches
-    /// one of the variants but parsing it fails.
+    /// Returns `Ok(Some(kind))` if the meta matches one of the variants and
+    /// parsing it succeeds, `Ok(None)` if the meta doesn't match one of the
+    /// variants, and `Err(_)` if the meta matches one of the variants but
+    /// parsing it fails.
     fn try_from_meta(meta: &ParseNestedMeta<'_>) -> syn::Result<Option<Self>> {
         let Some(ident) = meta.path.get_ident() else {
             return Ok(None);

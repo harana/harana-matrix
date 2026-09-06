@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use crossterm::event::KeyEvent;
-use matrix_sdk::Room;
+use matrix::Room;
 use ratatui::{prelude::*, widgets::*};
 use ratatui_textarea::TextArea;
 use style::palette::tailwind;

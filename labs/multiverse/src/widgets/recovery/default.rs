@@ -9,7 +9,7 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use futures_util::FutureExt as _;
 use layout::Flex;
-use matrix_sdk::{
+use matrix::{
     Client,
     encryption::{
         backups::BackupState,
@@ -17,11 +17,11 @@ use matrix_sdk::{
     },
     executor::JoinHandle,
 };
-use matrix_sdk_common::executor::spawn;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
+use sdk_common::executor::spawn;
 use throbber_widgets_tui::{Throbber, ThrobberState};
 
 use super::{ShouldExit, create_centered_throbber_area};

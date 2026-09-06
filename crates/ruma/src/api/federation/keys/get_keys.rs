@@ -11,13 +11,11 @@ pub mod v1 {
 
     use crate::{
         OwnedDeviceId, OwnedUserId,
-        api::{request, response},
+        api::{federation::authentication::ServerSignatures, request, response},
         encryption::{CrossSigningKey, DeviceKeys},
         metadata,
         serde::Raw,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: POST,

@@ -10,10 +10,10 @@ pub mod v3 {
     use crate::{
         OwnedRoomId,
         api::{auth_scheme::AccessToken, request, response},
+        events::room::member::{MembershipState, RoomMemberEvent},
         metadata,
         serde::Raw,
     };
-    use crate::events::room::member::{MembershipState, RoomMemberEvent};
 
     metadata! {
         method: GET,
@@ -32,19 +32,21 @@ pub mod v3 {
         #[ruma_api(path)]
         pub room_id: OwnedRoomId,
 
-        /// The point in time (pagination token) to return members for in the room.
+        /// The point in time (pagination token) to return members for in the
+        /// room.
         ///
-        /// This token can be obtained from a prev_batch token returned for each room by the sync
-        /// API.
+        /// This token can be obtained from a prev_batch token returned for each
+        /// room by the sync API.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub at: Option<String>,
 
         /// The kind of memberships to filter for.
         ///
-        /// Defaults to no filtering if unspecified. When specified alongside not_membership, the
-        /// two parameters create an 'or' condition: either the membership is the same as
-        /// membership or is not the same as not_membership.
+        /// Defaults to no filtering if unspecified. When specified alongside
+        /// not_membership, the two parameters create an 'or' condition:
+        /// either the membership is the same as membership or is not
+        /// the same as not_membership.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub membership: Option<MembershipState>,
@@ -80,9 +82,8 @@ pub mod v3 {
 
     #[cfg(all(test, feature = "server"))]
     mod tests {
-        use crate::api::IncomingRequest as _;
-
         use super::{MembershipState, Request};
+        use crate::api::IncomingRequest as _;
 
         #[test]
         fn deserialization() {

@@ -1,7 +1,8 @@
 //! Endpoints for managing devices.
 
-use crate::{MilliSecondsSinceUnixEpoch, OwnedDeviceId};
 use serde::{Deserialize, Serialize};
+
+use crate::{MilliSecondsSinceUnixEpoch, OwnedDeviceId};
 
 pub mod delete_device;
 pub mod delete_devices;

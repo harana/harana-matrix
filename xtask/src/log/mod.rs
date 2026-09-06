@@ -14,7 +14,7 @@ pub struct LogArgs {
     cmd: LogCommand,
 }
 
-/// Analysis around logs (formatted by `matrix-sdk-ffi`).
+/// Analysis around logs (formatted by `matrix-ffi`).
 #[derive(Subcommand)]
 enum LogCommand {
     /// Overview the logs as a tree where each node is a target and each leaf is

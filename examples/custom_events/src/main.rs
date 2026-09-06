@@ -1,6 +1,6 @@
 ///
 ///  This is an example showcasing how to build a very simple bot with custom
-/// events  using the matrix-sdk. To try it, you need a rust build setup, then
+/// events  using the matrix. To try it, you need a rust build setup, then
 /// you can run: `cargo run -p example-custom-events -- <homeserver_url> <user>
 /// <password>`
 ///
@@ -18,7 +18,7 @@ use std::{
     },
 };
 
-use matrix_sdk::{
+use matrix::{
     Client, Room, RoomState,
     config::SyncSettings,
     event_handler::Ctx,

@@ -7,14 +7,13 @@ pub mod v1 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1stateroomid
 
-    use crate::{
-        OwnedEventId, OwnedRoomId,
-        api::{request, response},
-        metadata,
-    };
     use serde_json::value::RawValue as RawJsonValue;
 
-    use crate::api::federation::authentication::ServerSignatures;
+    use crate::{
+        OwnedEventId, OwnedRoomId,
+        api::{federation::authentication::ServerSignatures, request, response},
+        metadata,
+    };
 
     metadata! {
         method: GET,

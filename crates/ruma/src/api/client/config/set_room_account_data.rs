@@ -7,16 +7,17 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#put_matrixclientv3useruseridroomsroomidaccount_datatype
 
+    use serde_json::value::to_raw_value as to_raw_json_value;
+
     use crate::{
         OwnedRoomId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
+        events::{
+            AnyRoomAccountDataEventContent, RoomAccountDataEventContent, RoomAccountDataEventType,
+        },
         metadata,
         serde::Raw,
     };
-    use crate::events::{
-        AnyRoomAccountDataEventContent, RoomAccountDataEventContent, RoomAccountDataEventType,
-    };
-    use serde_json::value::to_raw_value as to_raw_json_value;
 
     metadata! {
         method: PUT,
@@ -33,7 +34,8 @@ pub mod v3 {
     pub struct Request {
         /// The ID of the user to set account_data for.
         ///
-        /// The access token must be authorized to make requests for this user ID.
+        /// The access token must be authorized to make requests for this user
+        /// ID.
         #[ruma_api(path)]
         pub user_id: OwnedUserId,
 
@@ -60,12 +62,14 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given data, event type, room ID and user ID.
+        /// Creates a new `Request` with the given data, event type, room ID and
+        /// user ID.
         ///
         /// # Errors
         ///
-        /// Since `Request` stores the request body in serialized form, this function can fail if
-        /// `T`s [`Serialize`][serde::Serialize] implementation can fail.
+        /// Since `Request` stores the request body in serialized form, this
+        /// function can fail if `T`s [`Serialize`][serde::Serialize]
+        /// implementation can fail.
         pub fn new<T>(
             user_id: OwnedUserId,
             room_id: OwnedRoomId,
@@ -82,7 +86,8 @@ pub mod v3 {
             })
         }
 
-        /// Creates a new `Request` with the given raw data, event type, room ID and user ID.
+        /// Creates a new `Request` with the given raw data, event type, room ID
+        /// and user ID.
         pub fn new_raw(
             user_id: OwnedUserId,
             room_id: OwnedRoomId,

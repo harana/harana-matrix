@@ -9,11 +9,9 @@ pub mod v3 {
 
     use crate::{
         OwnedClientSecret, OwnedSessionId,
-        api::{auth_scheme::AccessToken, request, response},
+        api::{auth_scheme::AccessToken, client::account::IdentityServerInfo, request, response},
         metadata,
     };
-
-    use crate::api::client::account::IdentityServerInfo;
 
     metadata! {
         method: POST,
@@ -46,8 +44,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given client secret, identity server information and
-        /// session identifier.
+        /// Creates a new `Request` with the given client secret, identity
+        /// server information and session identifier.
         pub fn new(
             client_secret: OwnedClientSecret,
             identity_server_info: IdentityServerInfo,

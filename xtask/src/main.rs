@@ -41,7 +41,7 @@ enum Command {
         #[clap(long)]
         open: bool,
     },
-    /// Prepare and publish a release of the matrix-sdk crates
+    /// Prepare and publish a release of the matrix crates
     Release(ReleaseArgs),
     Swift(SwiftArgs),
     Kotlin(KotlinArgs),

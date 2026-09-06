@@ -9,11 +9,9 @@ pub mod msc3843 {
 
     use crate::{
         OwnedEventId, OwnedRoomId,
-        api::{request, response},
+        api::{federation::authentication::ServerSignatures, request, response},
         metadata,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: POST,

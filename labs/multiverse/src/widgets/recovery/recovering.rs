@@ -1,18 +1,18 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures_util::FutureExt as _;
-use matrix_sdk::{
+use matrix::{
     Client,
     encryption::{CrossSigningResetAuthType, recovery::RecoveryError},
     executor::JoinHandle,
     reqwest::Url,
     ruma::api::client::uiaa::{AuthData, Password},
 };
-use matrix_sdk_common::executor::spawn;
 use ratatui::{
     prelude::*,
     widgets::{Block, Paragraph, WidgetRef as _},
 };
 use ratatui_textarea::TextArea;
+use sdk_common::executor::spawn;
 use throbber_widgets_tui::{Throbber, ThrobberState};
 use tokio::sync::{
     mpsc::{UnboundedSender, unbounded_channel},

@@ -5,11 +5,17 @@
 use std::time::Duration;
 
 use js_int::UInt;
-use crate::{api::request, media::Method, metadata};
 
-use crate::api::federation::{
-    authenticated_media::{ContentMetadata, FileOrLocation, ResponseBody},
-    authentication::ServerSignatures,
+use crate::{
+    api::{
+        federation::{
+            authenticated_media::{ContentMetadata, FileOrLocation, ResponseBody},
+            authentication::ServerSignatures,
+        },
+        request,
+    },
+    media::Method,
+    metadata,
 };
 
 metadata! {
@@ -43,8 +49,9 @@ pub struct Request {
     #[ruma_api(query)]
     pub height: UInt,
 
-    /// The maximum duration that the client is willing to wait to start receiving data, in the
-    /// case that the content has not yet been uploaded.
+    /// The maximum duration that the client is willing to wait to start
+    /// receiving data, in the case that the content has not yet been
+    /// uploaded.
     ///
     /// The default value is 20 seconds.
     #[ruma_api(query)]
@@ -57,9 +64,10 @@ pub struct Request {
 
     /// Whether the server should return an animated thumbnail.
     ///
-    /// When `Some(true)`, the server should return an animated thumbnail if possible and
-    /// supported. When `Some(false)`, the server must not return an animated
-    /// thumbnail. When `None`, the server should not return an animated thumbnail.
+    /// When `Some(true)`, the server should return an animated thumbnail if
+    /// possible and supported. When `Some(false)`, the server must not
+    /// return an animated thumbnail. When `None`, the server should not
+    /// return an animated thumbnail.
     #[ruma_api(query)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub animated: Option<bool>,

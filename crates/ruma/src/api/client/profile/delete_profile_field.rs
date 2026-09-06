@@ -7,15 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#delete_matrixclientv3profileuseridkeyname
 
+    #[cfg(feature = "unstable-msc4466")]
+    use crate::api::client::profile::PropagateTo;
     use crate::{
         OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
         metadata,
         profile::ProfileFieldName,
     };
-
-    #[cfg(feature = "unstable-msc4466")]
-    use crate::api::client::profile::PropagateTo;
 
     metadata! {
         method: DELETE,

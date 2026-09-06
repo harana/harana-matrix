@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use matrix_sdk::{
+use matrix::{
     AuthSession, Client, SessionMeta, SessionTokens,
     authentication::matrix::MatrixSession,
     encryption::secret_storage::SecretStore,

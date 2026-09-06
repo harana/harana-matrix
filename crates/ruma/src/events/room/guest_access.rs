@@ -2,18 +2,21 @@
 //!
 //! [`m.room.guest_access`]: https://spec.matrix.org/v1.19/client-server-api/#mroomguest_access
 
-use crate::serde::StringEnum;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::{EmptyStateKey, PrivOwnedStr};
+use crate::{
+    events::{EmptyStateKey, PrivOwnedStr},
+    serde::StringEnum,
+};
 
 /// The content of an `m.room.guest_access` event.
 ///
 /// Controls whether guest users are allowed to join rooms.
 ///
-/// This event controls whether guest users are allowed to join rooms. If this event is absent,
-/// servers should act as if it is present and has the value `GuestAccess::Forbidden`.
+/// This event controls whether guest users are allowed to join rooms. If this
+/// event is absent, servers should act as if it is present and has the value
+/// `GuestAccess::Forbidden`.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room.guest_access", kind = State, state_key_type = EmptyStateKey)]
@@ -30,7 +33,8 @@ impl RoomGuestAccessEventContent {
 }
 
 impl RoomGuestAccessEvent {
-    /// Obtain the guest access policy, regardless of whether this event is redacted.
+    /// Obtain the guest access policy, regardless of whether this event is
+    /// redacted.
     pub fn guest_access(&self) -> &GuestAccess {
         match self {
             Self::Original(ev) => &ev.content.guest_access,
@@ -40,7 +44,8 @@ impl RoomGuestAccessEvent {
 }
 
 impl SyncRoomGuestAccessEvent {
-    /// Obtain the guest access policy, regardless of whether this event is redacted.
+    /// Obtain the guest access policy, regardless of whether this event is
+    /// redacted.
     pub fn guest_access(&self) -> &GuestAccess {
         match self {
             Self::Original(ev) => &ev.content.guest_access,

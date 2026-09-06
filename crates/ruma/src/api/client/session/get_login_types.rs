@@ -1,7 +1,7 @@
 //! `GET /_matrix/client/*/login`
 //!
-//! Gets the homeserver's supported login types to authenticate users. Clients should pick one of
-//! these and supply it as the type when logging in.
+//! Gets the homeserver's supported login types to authenticate users. Clients
+//! should pick one of these and supply it as the type when logging in.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -10,16 +10,15 @@ pub mod v3 {
 
     use std::borrow::Cow;
 
-    use crate::{
-        OwnedMxcUri,
-        api::{auth_scheme::NoAccessToken, request, response},
-        metadata,
-        serde::{JsonObject, StringEnum},
-    };
     use serde::{Deserialize, Serialize, de::DeserializeOwned};
     use serde_json::Value as JsonValue;
 
-    use crate::api::client::PrivOwnedStr;
+    use crate::{
+        OwnedMxcUri,
+        api::{auth_scheme::NoAccessToken, client::PrivOwnedStr, request, response},
+        metadata,
+        serde::{JsonObject, StringEnum},
+    };
 
     metadata! {
         method: GET,
@@ -80,11 +79,13 @@ pub mod v3 {
     }
 
     impl LoginType {
-        /// Creates a new `LoginType` with the given `login_type` string and data.
+        /// Creates a new `LoginType` with the given `login_type` string and
+        /// data.
         ///
-        /// Prefer to use the public variants of `LoginType` where possible; this constructor is
-        /// meant be used for unsupported login types only and does not allow setting
-        /// arbitrary data for supported ones.
+        /// Prefer to use the public variants of `LoginType` where possible;
+        /// this constructor is meant be used for unsupported login
+        /// types only and does not allow setting arbitrary data for
+        /// supported ones.
         pub fn new(login_type: &str, data: JsonObject) -> serde_json::Result<Self> {
             fn from_json_object<T: DeserializeOwned>(obj: JsonObject) -> serde_json::Result<T> {
                 serde_json::from_value(JsonValue::Object(obj))
@@ -115,8 +116,9 @@ pub mod v3 {
 
         /// Returns the associated data.
         ///
-        /// Prefer to use the public variants of `LoginType` where possible; this method is meant to
-        /// be used for unsupported login types only.
+        /// Prefer to use the public variants of `LoginType` where possible;
+        /// this method is meant to be used for unsupported login types
+        /// only.
         pub fn data(&self) -> Cow<'_, JsonObject> {
             fn serialize<T: Serialize>(obj: &T) -> JsonObject {
                 match serde_json::to_value(obj).expect("login type serialization to succeed") {
@@ -153,7 +155,8 @@ pub mod v3 {
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     #[serde(tag = "type", rename = "m.login.token")]
     pub struct TokenLoginType {
-        /// Whether the homeserver supports the `POST /login/get_token` endpoint.
+        /// Whether the homeserver supports the `POST /login/get_token`
+        /// endpoint.
         #[serde(default, skip_serializing_if = "crate::serde::is_default")]
         pub get_login_token: bool,
     }
@@ -176,7 +179,8 @@ pub mod v3 {
 
         /// Whether this flow is preferred over other flows.
         ///
-        /// If this is `true`, [OAuth 2.0 aware clients] must only offer this flow to the user.
+        /// If this is `true`, [OAuth 2.0 aware clients] must only offer this
+        /// flow to the user.
         ///
         /// [OAuth 2.0 aware clients]: https://spec.matrix.org/v1.19/client-server-api/#oauth-20-aware-clients
         #[serde(default, skip_serializing_if = "crate::serde::is_default")]
@@ -216,8 +220,8 @@ pub mod v3 {
 
     /// An SSO login identity provider brand identifier.
     ///
-    /// The predefined ones can be found in the matrix-spec-proposals repo in a [separate
-    /// document][matrix-spec-proposals].
+    /// The predefined ones can be found in the matrix-spec-proposals repo in a
+    /// [separate document][matrix-spec-proposals].
     ///
     /// [matrix-spec-proposals]: https://github.com/matrix-org/matrix-spec-proposals/blob/v1.1/informal/idp-brands.md
     #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc/string_enum.md"))]
@@ -280,13 +284,14 @@ pub mod v3 {
     }
 
     mod login_type_serde {
-        use crate::serde::{JsonObject, from_raw_json_value};
         use serde::{Deserialize, de};
         use serde_json::value::RawValue as RawJsonValue;
 
         use super::{CustomLoginType, LoginType};
+        use crate::serde::{JsonObject, from_raw_json_value};
 
-        /// Helper struct to determine the type from a `serde_json::value::RawValue`
+        /// Helper struct to determine the type from a
+        /// `serde_json::value::RawValue`
         #[derive(Debug, Deserialize)]
         struct LoginTypeDeHelper {
             /// The login type field
@@ -323,13 +328,13 @@ pub mod v3 {
     #[cfg(test)]
     mod tests {
         use assert_matches2::{assert_let, assert_matches};
-        use crate::{canonical_json::assert_to_canonical_json_eq, mxc_uri};
         use serde::{Deserialize, Serialize};
         use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
         use super::{
             IdentityProvider, IdentityProviderBrand, LoginType, SsoLoginType, TokenLoginType,
         };
+        use crate::{canonical_json::assert_to_canonical_json_eq, mxc_uri};
 
         #[derive(Debug, Deserialize, Serialize)]
         struct Wrapper {

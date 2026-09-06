@@ -1,0 +1,38 @@
+[package]
+authors = ["Jorge Martín Espinosa <jorgem@element.io>"]
+description = "Optional crate used to allow scanning the contents of media to prevent malware infections"
+name = "contentscanner"
+version = "0.18.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[features]
+default = ["rustls-aws-lc-rs"]
+e2e-encryption = []
+uniffi = ["dep:uniffi", "matrix/uniffi"]
+
+rustls-aws-lc-rs = ["matrix/rustls-aws-lc-rs"]
+
+# Use ring rather than aws-lc-rs as the rustls crypto provider; see
+# `matrix`'s feature of the same name.
+rustls-ring = ["matrix/rustls-ring"]
+
+[dependencies]
+assert_matches2.workspace = true
+matrix = { workspace = true, features = ["e2e-encryption", "testing"] }
+crypto.workspace = true
+ruma.workspace = true
+serde.workspace = true
+tracing.workspace = true
+uniffi = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+sdk-test.workspace = true
+wiremock.workspace = true
+
+[lints]
+workspace = true

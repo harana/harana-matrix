@@ -1,18 +1,21 @@
 use assert_matches2::{assert_let, assert_matches};
 use js_int::int;
-use ruma::serde::test::serde_json_eq;
-use ruma::events::{
-    AnyMessageLikeEvent, AnyPossiblyRedactedStateEventContent, AnyStateEvent,
-    AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent, AnySyncStateEvent, AnySyncTimelineEvent,
-    AnyTimelineEvent, EmptyStateKey, EphemeralRoomEventType, GlobalAccountDataEventType,
-    MessageLikeEvent, MessageLikeEventType, OriginalMessageLikeEvent, OriginalStateEvent,
-    OriginalSyncMessageLikeEvent, OriginalSyncStateEvent, RoomAccountDataEventType, StateEvent,
-    StateEventType, SyncMessageLikeEvent, SyncStateEvent, ToDeviceEventType,
-    room::{
-        message::{MessageType, RoomMessageEventContent},
-        name::RoomNameEventContent,
-        power_levels::RoomPowerLevelsEventContent,
+use ruma::{
+    events::{
+        AnyMessageLikeEvent, AnyPossiblyRedactedStateEventContent, AnyStateEvent,
+        AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent, AnySyncStateEvent,
+        AnySyncTimelineEvent, AnyTimelineEvent, EmptyStateKey, EphemeralRoomEventType,
+        GlobalAccountDataEventType, MessageLikeEvent, MessageLikeEventType,
+        OriginalMessageLikeEvent, OriginalStateEvent, OriginalSyncMessageLikeEvent,
+        OriginalSyncStateEvent, RoomAccountDataEventType, StateEvent, StateEventType,
+        SyncMessageLikeEvent, SyncStateEvent, ToDeviceEventType,
+        room::{
+            message::{MessageType, RoomMessageEventContent},
+            name::RoomNameEventContent,
+            power_levels::RoomPowerLevelsEventContent,
+        },
     },
+    serde::test::serde_json_eq,
 };
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 

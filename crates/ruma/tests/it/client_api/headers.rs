@@ -1,8 +1,9 @@
 #![cfg(feature = "client")]
 
 use http::HeaderMap;
-use ruma::api::client::discovery::discover_homeserver;
-use ruma::api::{OutgoingRequestExt as _, auth_scheme::SendAccessToken};
+use ruma::api::{
+    OutgoingRequestExt as _, auth_scheme::SendAccessToken, client::discovery::discover_homeserver,
+};
 
 #[test]
 fn get_request_headers() {

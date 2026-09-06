@@ -2,13 +2,15 @@
 //!
 //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/2403
 
-use crate::{
-    OwnedEventId, OwnedRoomId,
-    api::{Metadata, path_builder::SinglePath, request, response},
-};
 use serde_json::value::RawValue as RawJsonValue;
 
-use crate::api::federation::membership::RawStrippedState;
+use crate::{
+    OwnedEventId, OwnedRoomId,
+    api::{
+        Metadata, federation::membership::RawStrippedState, path_builder::SinglePath, request,
+        response,
+    },
+};
 
 /// Request type for the `send_knock` endpoint.
 #[request]
@@ -27,7 +29,8 @@ pub struct Request {
 }
 
 impl Request {
-    /// Creates a new `Request` with the given room ID, event ID and knock event.
+    /// Creates a new `Request` with the given room ID, event ID and knock
+    /// event.
     pub fn new(room_id: OwnedRoomId, event_id: OwnedEventId, pdu: Box<RawJsonValue>) -> Self {
         Self { room_id, event_id, pdu }
     }
@@ -65,7 +68,8 @@ pub struct Response {
 }
 
 impl Response {
-    /// Creates a new `Response` with the given public room metadata state events.
+    /// Creates a new `Response` with the given public room metadata state
+    /// events.
     pub fn new(knock_room_state: Vec<RawStrippedState>) -> Self {
         Self { knock_room_state }
     }

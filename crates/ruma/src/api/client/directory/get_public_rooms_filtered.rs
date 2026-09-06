@@ -8,6 +8,7 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3publicrooms
 
     use js_int::UInt;
+
     use crate::{
         OwnedServerName,
         api::{auth_scheme::AccessToken, request, response},
@@ -68,7 +69,8 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub prev_batch: Option<String>,
 
-        /// An estimate on the total number of public rooms, if the server has an estimate.
+        /// An estimate on the total number of public rooms, if the server has
+        /// an estimate.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub total_room_count_estimate: Option<UInt>,
     }

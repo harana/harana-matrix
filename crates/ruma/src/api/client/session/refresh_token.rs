@@ -55,7 +55,8 @@ pub mod v3 {
         /// The new access token to use.
         pub access_token: String,
 
-        /// The new refresh token to use when the access token needs to be refreshed again.
+        /// The new refresh token to use when the access token needs to be
+        /// refreshed again.
         ///
         /// If this is `None`, the old refresh token can be re-used.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -63,7 +64,8 @@ pub mod v3 {
 
         /// The lifetime of the access token, in milliseconds.
         ///
-        /// If this is `None`, the client can assume that the access token will not expire.
+        /// If this is `None`, the client can assume that the access token will
+        /// not expire.
         #[serde(
             with = "crate::serde::duration::opt_ms",
             default,

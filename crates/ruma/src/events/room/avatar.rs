@@ -3,14 +3,13 @@
 //! [`m.room.avatar`]: https://spec.matrix.org/v1.19/client-server-api/#mroomavatar
 
 use js_int::UInt;
-use crate::OwnedMxcUri;
-#[cfg(feature = "unstable-msc2448")]
-use crate::serde::Base64;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::ThumbnailInfo;
-use crate::events::EmptyStateKey;
+#[cfg(feature = "unstable-msc2448")]
+use crate::serde::Base64;
+use crate::{OwnedMxcUri, events::EmptyStateKey};
 
 /// The content of an `m.room.avatar` event.
 ///

@@ -16,75 +16,91 @@ use crate::{PrivOwnedStr, RoomVersionId, api::error::IntoHttpError, serde::slice
 ///
 /// ## Definition
 ///
-/// By default, `Metadata` is implemented on a type named `Request` that is in scope. This can be
-/// overridden by adding `@for MyType` at the beginning of the declaration.
+/// By default, `Metadata` is implemented on a type named `Request` that is in
+/// scope. This can be overridden by adding `@for MyType` at the beginning of
+/// the declaration.
 ///
-/// The rest of the definition of the macro is made to look like a struct, with the following
-/// fields:
+/// The rest of the definition of the macro is made to look like a struct, with
+/// the following fields:
 ///
-/// * `method` - The HTTP method to use for the endpoint. Its value must be one of the associated
-///   constants of [`http::Method`]. In most cases it should be one of `GET`, `POST`, `PUT` or
-///   `DELETE`.
-/// * `rate_limited` - Whether the endpoint should be rate-limited, according to the specification.
-///   Its value must be a `bool`.
-/// * `authentication` - The type of authentication that is required for the endpoint, according to
-///   the specification. The type must be in scope and implement [`AuthScheme`].
+/// * `method` - The HTTP method to use for the endpoint. Its value must be one
+///   of the associated constants of [`http::Method`]. In most cases it should
+///   be one of `GET`, `POST`, `PUT` or `DELETE`.
+/// * `rate_limited` - Whether the endpoint should be rate-limited, according to
+///   the specification. Its value must be a `bool`.
+/// * `authentication` - The type of authentication that is required for the
+///   endpoint, according to the specification. The type must be in scope and
+///   implement [`AuthScheme`].
 ///
 /// And either of the following fields to define the path(s) of the endpoint.
 ///
-/// * `history` - The history of the paths of the endpoint. This should be used for endpoints from
-///   Matrix APIs that have a `/versions` endpoint that returns a list a [`MatrixVersion`]s and
-///   possibly features, like the Client-Server API or the Identity Service API. However, a few
-///   endpoints from those APIs shouldn't use this field because they cannot be versioned, like the
-///   `/versions` or the `/.well-known` endpoints.
+/// * `history` - The history of the paths of the endpoint. This should be used
+///   for endpoints from Matrix APIs that have a `/versions` endpoint that
+///   returns a list a [`MatrixVersion`]s and possibly features, like the
+///   Client-Server API or the Identity Service API. However, a few endpoints
+///   from those APIs shouldn't use this field because they cannot be versioned,
+///   like the `/versions` or the `/.well-known` endpoints.
 ///
-///   Its definition is made to look like match arms and must include at least one arm. The match
-///   arms accept the following syntax:
+///   Its definition is made to look like match arms and must include at least
+/// one arm. The match   arms accept the following syntax:
 ///
-///   * `unstable => "unstable/endpoint/path/{variable}"` - An unstable version of the endpoint as
-///     defined in the MSC that adds it, if the MSC does **NOT** define an unstable feature in the
-///     `unstable_features` field of the client-server API's `/versions` endpoint.
-///   * `unstable("org.bar.unstable_feature") => "unstable/endpoint/path/{variable}"` - An unstable
-///     version of the endpoint as defined in the MSC that adds it, if the MSC defines an unstable
-///     feature in the `unstable_features` field of the client-server API's `/versions` endpoint.
-///   * `1.0 | stable("org.bar.feature.stable") => "stable/endpoint/path/{variable}"` - A stable
-///     version of the endpoint as defined in an MSC or the Matrix specification. The match arm can
-///     be a Matrix version, a stable feature, or both separated by `|`.
+///   * `unstable => "unstable/endpoint/path/{variable}"` - An unstable version
+///     of the endpoint as defined in the MSC that adds it, if the MSC does
+///     **NOT** define an unstable feature in the `unstable_features` field of
+///     the client-server API's `/versions` endpoint.
+///   * `unstable("org.bar.unstable_feature") =>
+///     "unstable/endpoint/path/{variable}"` - An unstable version of the
+///     endpoint as defined in the MSC that adds it, if the MSC defines an
+///     unstable feature in the `unstable_features` field of the client-server
+///     API's `/versions` endpoint.
+///   * `1.0 | stable("org.bar.feature.stable") =>
+///     "stable/endpoint/path/{variable}"` - A stable version of the endpoint as
+///     defined in an MSC or the Matrix specification. The match arm can be a
+///     Matrix version, a stable feature, or both separated by `|`.
 ///
-///     A stable feature can be defined in an MSC alongside an unstable feature, and can be found in
-///     the `unstable_features` field of the client-server API's `/versions` endpoint. It is meant
-///     to be used by homeservers if they want to declare stable support for a feature before they
+///     A stable feature can be defined in an MSC alongside an unstable feature,
+/// and can be found in     the `unstable_features` field of the client-server
+/// API's `/versions` endpoint. It is meant     to be used by homeservers if
+/// they want to declare stable support for a feature before they
 ///     can declare support for a whole Matrix version that supports it.
 ///
-///   * `1.2 => deprecated` - The Matrix version that deprecated the endpoint, if any. It must be
-///     preceded by a match arm with a stable path and a different Matrix version.
-///   * `1.3 => removed` - The Matrix version that removed the endpoint, if any. It must be preceded
-///     by a match arm with a deprecation and a different Matrix version.
+///   * `1.2 => deprecated` - The Matrix version that deprecated the endpoint,
+///     if any. It must be preceded by a match arm with a stable path and a
+///     different Matrix version.
+///   * `1.3 => removed` - The Matrix version that removed the endpoint, if any.
+///     It must be preceded by a match arm with a deprecation and a different
+///     Matrix version.
 ///
-///   A Matrix version is a `float` representation of the version that looks like `major.minor`.
-///   It must match one of the variants of [`MatrixVersion`]. For example `1.0` matches
-///   [`MatrixVersion::V1_0`], `1.1` matches [`MatrixVersion::V1_1`], etc.
+///   A Matrix version is a `float` representation of the version that looks
+/// like `major.minor`.   It must match one of the variants of
+/// [`MatrixVersion`]. For example `1.0` matches   [`MatrixVersion::V1_0`],
+/// `1.1` matches [`MatrixVersion::V1_1`], etc.
 ///
-///   It is expected that the match arms are ordered by descending age. Usually the older unstable
-///   paths would be before the newer unstable paths, then we would find the stable paths, and
-///   finally the deprecation and removal.
+///   It is expected that the match arms are ordered by descending age. Usually
+/// the older unstable   paths would be before the newer unstable paths, then we
+/// would find the stable paths, and   finally the deprecation and removal.
 ///
 ///   The following checks occur at compile time:
 ///
-///   * All unstable and stable paths contain the same variables (or lack thereof).
+///   * All unstable and stable paths contain the same variables (or lack
+///     thereof).
 ///   * Matrix versions in match arms are all different and in ascending order.
 ///
-///   This field is represented as the [`VersionHistory`](super::path_builder::VersionHistory) type
+///   This field is represented as the
+/// [`VersionHistory`](super::path_builder::VersionHistory) type
 ///   in the generated implementation.
-/// * `path` - The only path of the endpoint. This should be used for endpoints from Matrix APIs
-///   that do NOT have a `/versions` endpoint that returns a list a [`MatrixVersion`]s, like the
-///   Server-Server API or the Appservice API. It should also be used for endpoints that cannot be
-///   versioned, like the `/versions` or the `/.well-known` endpoints.
+/// * `path` - The only path of the endpoint. This should be used for endpoints
+///   from Matrix APIs that do NOT have a `/versions` endpoint that returns a
+///   list a [`MatrixVersion`]s, like the Server-Server API or the Appservice
+///   API. It should also be used for endpoints that cannot be versioned, like
+///   the `/versions` or the `/.well-known` endpoints.
 ///
-///   Its value must be a static string representing the path, like `"endpoint/path/{variable}"`.
+///   Its value must be a static string representing the path, like
+/// `"endpoint/path/{variable}"`.
 ///
-///   This field is represented as the [`SinglePath`](super::path_builder::SinglePath) type in the
-///   generated implementation.
+///   This field is represented as the
+/// [`SinglePath`](super::path_builder::SinglePath) type in the   generated
+/// implementation.
 ///
 /// ## Example
 ///
@@ -235,8 +251,8 @@ pub trait Metadata: Sized {
 
     /// Returns an empty request body for this Matrix request.
     ///
-    /// For `GET` requests, it returns an entirely empty buffer, for others it returns an empty JSON
-    /// object (`{}`).
+    /// For `GET` requests, it returns an entirely empty buffer, for others it
+    /// returns an empty JSON object (`{}`).
     fn empty_request_body<B>() -> B
     where
         B: Default + BufMut,
@@ -265,36 +281,40 @@ pub trait Metadata: Sized {
 
 /// The Matrix versions Ruma currently understands to exist.
 ///
-/// Matrix, since fall 2021, has a quarterly release schedule, using a global `vX.Y` versioning
-/// scheme. Usually `Y` is bumped for new backwards compatible changes, but `X` can be bumped
-/// instead when a large number of `Y` changes feel deserving of a major version increase.
+/// Matrix, since fall 2021, has a quarterly release schedule, using a global
+/// `vX.Y` versioning scheme. Usually `Y` is bumped for new backwards compatible
+/// changes, but `X` can be bumped instead when a large number of `Y` changes
+/// feel deserving of a major version increase.
 ///
-/// Every new version denotes stable support for endpoints in a *relatively* backwards-compatible
-/// manner.
+/// Every new version denotes stable support for endpoints in a *relatively*
+/// backwards-compatible manner.
 ///
 /// Matrix has a deprecation policy, read more about it here: <https://spec.matrix.org/v1.19/#deprecation-policy>.
 ///
-/// Ruma keeps track of when endpoints are added, deprecated, and removed. It'll automatically
-/// select the right endpoint stability variation to use depending on which Matrix versions you
+/// Ruma keeps track of when endpoints are added, deprecated, and removed. It'll
+/// automatically select the right endpoint stability variation to use depending
+/// on which Matrix versions you
 /// pass to [`try_into_http_request`](super::OutgoingRequestExt::try_into_http_request), see its
 /// respective documentation for more information.
 ///
-/// The `PartialOrd` and `Ord` implementations of this type sort the variants by release date. A
-/// newer release is greater than an older release.
+/// The `PartialOrd` and `Ord` implementations of this type sort the variants by
+/// release date. A newer release is greater than an older release.
 ///
-/// `MatrixVersion::is_superset_of()` is used to keep track of compatibility between versions.
+/// `MatrixVersion::is_superset_of()` is used to keep track of compatibility
+/// between versions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum MatrixVersion {
-    /// Matrix 1.0 was a release prior to the global versioning system and does not correspond to a
-    /// version of the Matrix specification.
+    /// Matrix 1.0 was a release prior to the global versioning system and does
+    /// not correspond to a version of the Matrix specification.
     ///
     /// It matches the following per-API versions:
     ///
     /// * Client-Server API: r0.5.0 to r0.6.1
     /// * Identity Service API: r0.2.0 to r0.3.0
     ///
-    /// The other APIs are not supported because they do not have a `GET /versions` endpoint.
+    /// The other APIs are not supported because they do not have a `GET
+    /// /versions` endpoint.
     ///
     /// See <https://spec.matrix.org/v1.19/#legacy-versioning>.
     V1_0,
@@ -442,12 +462,15 @@ impl FromStr for MatrixVersion {
 impl MatrixVersion {
     /// Checks whether a version is compatible with another.
     ///
-    /// Currently, all versions of Matrix are considered backwards compatible with all the previous
-    /// versions, so this is equivalent to `self >= other`. This behaviour may change in the future,
-    /// if a new release is considered to be breaking compatibility with the previous ones.
+    /// Currently, all versions of Matrix are considered backwards compatible
+    /// with all the previous versions, so this is equivalent to `self >=
+    /// other`. This behaviour may change in the future, if a new release is
+    /// considered to be breaking compatibility with the previous ones.
     ///
-    /// > ⚠ Matrix has a deprecation policy, and Matrix versioning is not as straightforward as this
-    /// > function makes it out to be. This function only exists to prune breaking changes between
+    /// > ⚠ Matrix has a deprecation policy, and Matrix versioning is not as
+    /// > straightforward as this
+    /// > function makes it out to be. This function only exists to prune
+    /// > breaking changes between
     /// > versions, and versions too new for `self`.
     pub fn is_superset_of(self, other: Self) -> bool {
         self >= other
@@ -455,10 +478,12 @@ impl MatrixVersion {
 
     /// Get a string representation of this Matrix version.
     ///
-    /// This is the string that can be found in the response to one of the `GET /versions`
-    /// endpoints. Parsing this string will give the same variant.
+    /// This is the string that can be found in the response to one of the `GET
+    /// /versions` endpoints. Parsing this string will give the same
+    /// variant.
     ///
-    /// Returns `None` for [`MatrixVersion::V1_0`] because it can match several per-API versions.
+    /// Returns `None` for [`MatrixVersion::V1_0`] because it can match several
+    /// per-API versions.
     pub const fn as_str(self) -> Option<&'static str> {
         let string = match self {
             MatrixVersion::V1_0 => return None,
@@ -512,7 +537,8 @@ impl MatrixVersion {
         }
     }
 
-    /// Try to turn a pair of (major, minor) version components back into a `MatrixVersion`.
+    /// Try to turn a pair of (major, minor) version components back into a
+    /// `MatrixVersion`.
     const fn from_parts(major: u8, minor: u8) -> Result<Self, UnknownVersionError> {
         match (major, minor) {
             (1, 0) => Ok(MatrixVersion::V1_0),
@@ -580,7 +606,8 @@ impl MatrixVersion {
         if major_ord.is_ne() { major_ord } else { cmp_u8(self_parts.1, other_parts.1) }
     }
 
-    // Internal function to check if this version is the legacy (v1.0) version in const-fn contexts
+    // Internal function to check if this version is the legacy (v1.0) version in
+    // const-fn contexts
     pub(super) const fn is_legacy(&self) -> bool {
         let self_parts = self.into_parts();
 
@@ -647,16 +674,17 @@ pub struct SupportedVersions {
 
     /// The features that are supported by the homeserver.
     ///
-    /// This matches the `unstable_features` field of the `/versions` endpoint, without the boolean
-    /// value.
+    /// This matches the `unstable_features` field of the `/versions` endpoint,
+    /// without the boolean value.
     pub features: BTreeSet<FeatureFlag>,
 }
 
 impl SupportedVersions {
-    /// Construct a `SupportedVersions` from the parts of a `/versions` response.
+    /// Construct a `SupportedVersions` from the parts of a `/versions`
+    /// response.
     ///
-    /// Matrix versions that can't be parsed to a `MatrixVersion`, and features with the boolean
-    /// value set to `false` are discarded.
+    /// Matrix versions that can't be parsed to a `MatrixVersion`, and features
+    /// with the boolean value set to `false` are discarded.
     pub fn from_parts(versions: &[String], unstable_features: &BTreeMap<String, bool>) -> Self {
         Self {
             versions: versions.iter().flat_map(|s| s.parse::<MatrixVersion>()).collect(),
@@ -671,9 +699,10 @@ impl SupportedVersions {
 
 /// The Matrix features supported by Ruma.
 ///
-/// Features that are not behind a cargo feature are features that are part of the Matrix
-/// specification and that Ruma still supports, like the unstable version of an endpoint or a stable
-/// feature. Features behind a cargo feature are only supported when this feature is enabled.
+/// Features that are not behind a cargo feature are features that are part of
+/// the Matrix specification and that Ruma still supports, like the unstable
+/// version of an endpoint or a stable feature. Features behind a cargo feature
+/// are only supported when this feature is enabled.
 #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc/string_enum.md"))]
 #[derive(Clone, StringEnum, Hash)]
 #[non_exhaustive]

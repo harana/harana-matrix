@@ -5,7 +5,8 @@ use super::{KIND, Response};
 use crate::util::{RumaCommon, RumaCommonReexport};
 
 impl Response {
-    /// Generate the `ruma_common::api::OutgoingResponse` implementation for this response struct.
+    /// Generate the `ruma_common::api::OutgoingResponse` implementation for
+    /// this response struct.
     pub fn expand_outgoing(&self, ruma_common: &RumaCommon) -> TokenStream {
         let http = ruma_common.reexported(RumaCommonReexport::Http);
 

@@ -11,9 +11,9 @@ use std::{
 
 use indexmap::IndexMap;
 use js_int::{UInt, uint};
-use crate::{MilliSecondsSinceUnixEpoch, UserId};
 
 use self::{start::PollContentBlock, unstable_start::UnstablePollStartContentBlock};
+use crate::{MilliSecondsSinceUnixEpoch, UserId};
 
 pub mod end;
 pub mod response;
@@ -38,15 +38,16 @@ pub struct PollResponseData<'a> {
 
 /// Generate the current results with the given poll and responses.
 ///
-/// If the `end_timestamp` is provided, any response with an `origin_server_ts` after that timestamp
-/// is ignored. If it is not provided, `MilliSecondsSinceUnixEpoch::now()` will be used instead.
+/// If the `end_timestamp` is provided, any response with an `origin_server_ts`
+/// after that timestamp is ignored. If it is not provided,
+/// `MilliSecondsSinceUnixEpoch::now()` will be used instead.
 ///
-/// This method will handle invalid responses, or several response from the same user so all
-/// responses to the poll should be provided.
+/// This method will handle invalid responses, or several response from the same
+/// user so all responses to the poll should be provided.
 ///
-/// Returns a map of answer ID to a set of user IDs that voted for them. When using `.iter()` or
-/// `.into_iter()` on the map, the results are sorted from the highest number of votes to the
-/// lowest.
+/// Returns a map of answer ID to a set of user IDs that voted for them. When
+/// using `.iter()` or `.into_iter()` on the map, the results are sorted from
+/// the highest number of votes to the lowest.
 pub fn compile_poll_results<'a>(
     poll: &'a PollContentBlock,
     responses: impl IntoIterator<Item = PollResponseData<'a>>,
@@ -61,15 +62,16 @@ pub fn compile_poll_results<'a>(
 
 /// Generate the current results with the given unstable poll and responses.
 ///
-/// If the `end_timestamp` is provided, any response with an `origin_server_ts` after that timestamp
-/// is ignored. If it is not provided, `MilliSecondsSinceUnixEpoch::now()` will be used instead.
+/// If the `end_timestamp` is provided, any response with an `origin_server_ts`
+/// after that timestamp is ignored. If it is not provided,
+/// `MilliSecondsSinceUnixEpoch::now()` will be used instead.
 ///
-/// This method will handle invalid responses, or several response from the same user so all
-/// responses to the poll should be provided.
+/// This method will handle invalid responses, or several response from the same
+/// user so all responses to the poll should be provided.
 ///
-/// Returns a map of answer ID to a set of user IDs that voted for them. When using `.iter()` or
-/// `.into_iter()` on the map, the results are sorted from the highest number of votes to the
-/// lowest.
+/// Returns a map of answer ID to a set of user IDs that voted for them. When
+/// using `.iter()` or `.into_iter()` on the map, the results are sorted from
+/// the highest number of votes to the lowest.
 pub fn compile_unstable_poll_results<'a>(
     poll: &'a UnstablePollStartContentBlock,
     responses: impl IntoIterator<Item = PollResponseData<'a>>,
@@ -93,8 +95,8 @@ fn validate_selections<'a>(
         return None;
     }
 
-    // Fallback to the maximum value for usize because we can't have more selections than that
-    // in memory.
+    // Fallback to the maximum value for usize because we can't have more selections
+    // than that in memory.
     let max_selections: usize = max_selections.try_into().unwrap_or(usize::MAX);
 
     Some(selections.iter().take(max_selections).map(Deref::deref))
@@ -162,12 +164,13 @@ fn aggregate_results<'a>(
 
 /// Generate the fallback text representation of a poll end event.
 ///
-/// This is a sentence that lists the top answers for the given results, in english. It is used to
-/// generate a valid poll end event when using
+/// This is a sentence that lists the top answers for the given results, in
+/// english. It is used to generate a valid poll end event when using
 /// `OriginalSync(Unstable)PollStartEvent::compile_results()`.
 ///
-/// `answers` is an iterator of `(answer ID, answer plain text representation)` and `results` is an
-/// iterator of `(answer ID, count)` ordered in descending order.
+/// `answers` is an iterator of `(answer ID, answer plain text representation)`
+/// and `results` is an iterator of `(answer ID, count)` ordered in descending
+/// order.
 fn generate_poll_end_fallback_text<'a>(
     answers: &[(&'a str, &'a str)],
     results: impl Iterator<Item = (&'a str, usize)>,

@@ -1,12 +1,9 @@
-//! Custom Serialize / Deserialize implementations for the authentication data types.
+//! Custom Serialize / Deserialize implementations for the authentication data
+//! types.
 
 use std::borrow::Cow;
 
 use as_variant::as_variant;
-use crate::{
-    serde::{JsonObject, from_raw_json_value},
-    thirdparty::Medium,
-};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::{Value as JsonValue, value::RawValue as RawJsonValue};
 
@@ -14,7 +11,11 @@ use super::{
     AuthData, CustomThirdPartyUserIdentifier, EmailUserIdentifier, MsisdnUserIdentifier,
     UserIdentifier,
 };
-use crate::api::client::uiaa::{CustomAuthData, CustomUserIdentifier};
+use crate::{
+    api::client::uiaa::{CustomAuthData, CustomUserIdentifier},
+    serde::{JsonObject, from_raw_json_value},
+    thirdparty::Medium,
+};
 
 impl<'de> Deserialize<'de> for AuthData {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -167,12 +168,14 @@ impl<'de> Deserialize<'de> for MsisdnUserIdentifier {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
-    use crate::api::client::uiaa::{
-        AuthData, EmailUserIdentifier, MatrixUserIdentifier, MsisdnUserIdentifier,
-        PhoneNumberUserIdentifier, UserIdentifier,
+    use crate::{
+        api::client::uiaa::{
+            AuthData, EmailUserIdentifier, MatrixUserIdentifier, MsisdnUserIdentifier,
+            PhoneNumberUserIdentifier, UserIdentifier,
+        },
+        canonical_json::assert_to_canonical_json_eq,
     };
 
     #[test]

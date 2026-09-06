@@ -9,12 +9,13 @@ pub mod v3 {
 
     use http::header::ACCEPT_LANGUAGE;
     use js_int::{UInt, uint};
+    use serde::{Deserialize, Serialize};
+
     use crate::{
         OwnedMxcUri, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
-    use serde::{Deserialize, Serialize};
 
     metadata! {
         method: POST,
@@ -38,7 +39,8 @@ pub mod v3 {
         #[serde(default = "default_limit", skip_serializing_if = "is_default_limit")]
         pub limit: UInt,
 
-        /// Language tag to determine the collation to use for the (case-insensitive) search.
+        /// Language tag to determine the collation to use for the
+        /// (case-insensitive) search.
         ///
         /// See [MDN] for the syntax.
         ///
@@ -93,8 +95,9 @@ pub mod v3 {
 
         /// The avatar url, as an MXC, if one exists.
         ///
-        /// If you activate the `compat-empty-string-null` feature, this field being an empty
-        /// string in JSON will result in `None` here during deserialization.
+        /// If you activate the `compat-empty-string-null` feature, this field
+        /// being an empty string in JSON will result in `None` here
+        /// during deserialization.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(
             feature = "compat-empty-string-null",

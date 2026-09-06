@@ -2,13 +2,15 @@ use assert_matches2::assert_matches;
 use js_int::uint;
 use maplit::btreemap;
 use ruma::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, event_id,
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    event_id,
+    events::{
+        AnySyncEphemeralRoomEvent,
+        receipt::{Receipt, ReceiptEventContent, ReceiptType},
+        typing::TypingEventContent,
+    },
     owned_event_id, owned_user_id, user_id,
-};
-use ruma::events::{
-    AnySyncEphemeralRoomEvent,
-    receipt::{Receipt, ReceiptEventContent, ReceiptType},
-    typing::TypingEventContent,
 };
 use serde_json::{from_value as from_json_value, json};
 

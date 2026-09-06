@@ -4,9 +4,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::OwnedRoomId;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
+
+use crate::OwnedRoomId;
 
 /// The content of a `dm.filament.do_not_disturb` event.
 ///
@@ -17,13 +18,14 @@ use serde::{Deserialize, Serialize};
 pub struct DoNotDisturbEventContent {
     /// A map of rooms in which to inhibit notifications.
     ///
-    /// As [`DoNotDisturbRoom`] is currently empty, only the room IDs are useful and
-    /// can be accessed with the `.keys()` and `into_keys()` iterators.
+    /// As [`DoNotDisturbRoom`] is currently empty, only the room IDs are useful
+    /// and can be accessed with the `.keys()` and `into_keys()` iterators.
     pub rooms: BTreeMap<DoNotDisturbRoomKey, DoNotDisturbRoom>,
 }
 
 impl DoNotDisturbEventContent {
-    /// Creates a new `DoNotDisturbEventContent` from the given map of [`DoNotDisturbRoom`]s.
+    /// Creates a new `DoNotDisturbEventContent` from the given map of
+    /// [`DoNotDisturbRoom`]s.
     pub fn new(rooms: BTreeMap<DoNotDisturbRoomKey, DoNotDisturbRoom>) -> Self {
         Self { rooms }
     }
@@ -87,11 +89,14 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches2::assert_matches;
-    use crate::{canonical_json::assert_to_canonical_json_eq, owned_room_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::DoNotDisturbEventContent;
-    use crate::events::{AnyGlobalAccountDataEvent, do_not_disturb::DoNotDisturbRoomKey};
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        events::{AnyGlobalAccountDataEvent, do_not_disturb::DoNotDisturbRoomKey},
+        owned_room_id,
+    };
 
     #[test]
     fn serialization_with_single_room() {

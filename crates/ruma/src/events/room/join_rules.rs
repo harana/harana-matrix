@@ -2,17 +2,17 @@
 //!
 //! [`m.room.join_rules`]: https://spec.matrix.org/v1.19/client-server-api/#mroomjoin_rules
 
-pub use crate::room::{AllowRule, JoinRule, Restricted};
-use crate::{
-    room_version_rules::RedactionRules,
-    serde::{JsonCastable, JsonObject},
-};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize, de};
 
-use crate::events::{
-    EmptyStateKey, RedactContent, RedactedStateEventContent, StateEventContent, StateEventType,
-    StaticEventContent,
+pub use crate::room::{AllowRule, JoinRule, Restricted};
+use crate::{
+    events::{
+        EmptyStateKey, RedactContent, RedactedStateEventContent, StateEventContent, StateEventType,
+        StaticEventContent,
+    },
+    room_version_rules::RedactionRules,
+    serde::{JsonCastable, JsonObject},
 };
 
 /// The content of an `m.room.join_rules` event.
@@ -34,14 +34,14 @@ impl RoomJoinRulesEventContent {
         Self { join_rule }
     }
 
-    /// Creates a new `RoomJoinRulesEventContent` with the restricted rule and the given set of
-    /// allow rules.
+    /// Creates a new `RoomJoinRulesEventContent` with the restricted rule and
+    /// the given set of allow rules.
     pub fn restricted(allow: Vec<AllowRule>) -> Self {
         Self { join_rule: JoinRule::Restricted(Restricted::new(allow)) }
     }
 
-    /// Creates a new `RoomJoinRulesEventContent` with the knock restricted rule and the given set
-    /// of allow rules.
+    /// Creates a new `RoomJoinRulesEventContent` with the knock restricted rule
+    /// and the given set of allow rules.
     pub fn knock_restricted(allow: Vec<AllowRule>) -> Self {
         Self { join_rule: JoinRule::KnockRestricted(Restricted::new(allow)) }
     }
@@ -131,14 +131,13 @@ impl SyncRoomJoinRulesEvent {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::owned_room_id;
     use serde_json::json;
 
     use super::{
         AllowRule, JoinRule, OriginalSyncRoomJoinRulesEvent, RedactedRoomJoinRulesEventContent,
         RoomJoinRulesEventContent,
     };
-    use crate::events::room::join_rules::RedactedSyncRoomJoinRulesEvent;
+    use crate::{events::room::join_rules::RedactedSyncRoomJoinRulesEvent, owned_room_id};
 
     #[test]
     fn deserialize_content() {

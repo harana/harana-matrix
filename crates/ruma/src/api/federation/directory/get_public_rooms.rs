@@ -8,13 +8,12 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#post_matrixfederationv1publicrooms
 
     use js_int::UInt;
+
     use crate::{
-        api::{request, response},
+        api::{federation::authentication::ServerSignatures, request, response},
         directory::{PublicRoomsChunk, RoomNetwork},
         metadata,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,
@@ -58,7 +57,8 @@ pub mod v1 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub prev_batch: Option<String>,
 
-        /// An estimate on the total number of public rooms, if the server has an estimate.
+        /// An estimate on the total number of public rooms, if the server has
+        /// an estimate.
         pub total_room_count_estimate: Option<UInt>,
     }
 

@@ -136,26 +136,26 @@ enum FeatureSet {
 #[derive(Subcommand, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(clippy::enum_variant_names)]
 enum WasmFeatureSet {
-    /// Check `matrix-sdk-qrcode` crate
-    MatrixSdkQrcode,
-    /// Check `matrix-sdk-base` crate
-    MatrixSdkBase,
-    /// Check `matrix-sdk-common` crate
-    MatrixSdkCommon,
-    /// Check `matrix-sdk` crate with no default features
-    MatrixSdkNoDefault,
-    /// Check `matrix-sdk-ui` crate
-    MatrixSdkUi,
-    /// Check `matrix-sdk` crate with `indexeddb` feature (but not
+    /// Check `qrcode` crate
+    Qrcode,
+    /// Check `base` crate
+    Base,
+    /// Check `sdk-common` crate
+    SdkCommon,
+    /// Check `matrix` crate with no default features
+    MatrixNoDefault,
+    /// Check `ui` crate
+    Ui,
+    /// Check `matrix` crate with `indexeddb` feature (but not
     /// `e2e-encryption`)
-    MatrixSdkIndexeddbStoresNoCrypto,
-    /// Check `matrix-sdk` crate with `indexeddb` and `e2e-encryption` features
-    MatrixSdkIndexeddbStores,
-    /// Check `matrix-sdk-indexeddb` crate with all features
+    IndexeddbStoresNoCrypto,
+    /// Check `matrix` crate with `indexeddb` and `e2e-encryption` features
+    IndexeddbStores,
+    /// Check `indexeddb` crate with all features
     IndexeddbAllFeatures,
-    /// Check `matrix-sdk-indexeddb` crate with `e2e-encryption` feature
+    /// Check `indexeddb` crate with `e2e-encryption` feature
     IndexeddbCrypto,
-    /// Check `matrix-sdk-indexeddb` crate with `state-store` feature
+    /// Check `indexeddb` crate with `state-store` feature
     IndexeddbState,
     /// Equivalent to `indexeddb-all-features`, `indexeddb-crypto` and
     /// `indexeddb-state`
@@ -199,7 +199,7 @@ impl CiArgs {
 
 fn check_bindings() -> Result<()> {
     let sh = sh();
-    cmd!(sh, "rustup run stable cargo build -p matrix-sdk-crypto-ffi -p matrix-sdk-ffi --features sentry,experimental-element-recent-emojis").run()?;
+    cmd!(sh, "rustup run stable cargo build -p crypto-ffi -p matrix-ffi --features sentry,experimental-element-recent-emojis").run()?;
     cmd!(
         sh,
         "
@@ -208,7 +208,7 @@ fn check_bindings() -> Result<()> {
             --language kotlin
             --language swift
             --out-dir target/generated-bindings
-            target/debug/{DLL_PREFIX}matrix_sdk_ffi{DLL_SUFFIX}
+            target/debug/{DLL_PREFIX}matrix_ffi{DLL_SUFFIX}
         "
     )
     .run()?;
@@ -220,7 +220,7 @@ fn check_bindings() -> Result<()> {
             --language kotlin
             --language swift
             --out-dir target/generated-bindings
-            target/debug/{DLL_PREFIX}matrix_sdk_crypto_ffi{DLL_SUFFIX}
+            target/debug/{DLL_PREFIX}crypto_ffi{DLL_SUFFIX}
         "
     )
     .run()?;
@@ -253,14 +253,14 @@ fn check_clippy() -> Result<()> {
     cmd!(
         sh,
         "rustup run {NIGHTLY} cargo clippy --all-targets
-            --features testing,matrix-sdk/sqlite -- -D warnings"
+            --features testing,matrix/sqlite -- -D warnings"
     )
     .run()?;
 
     cmd!(
         sh,
         "rustup run {NIGHTLY} cargo clippy --workspace --all-targets
-            --exclude matrix-sdk-crypto --exclude xtask
+            --exclude crypto --exclude xtask
             --no-default-features
             --features sso-login,sqlite,testing,experimental-element-recent-emojis
             -- -D warnings"
@@ -269,7 +269,7 @@ fn check_clippy() -> Result<()> {
 
     cmd!(
         sh,
-        "rustup run {NIGHTLY} cargo clippy --all-targets -p matrix-sdk-crypto
+        "rustup run {NIGHTLY} cargo clippy --all-targets -p crypto
             --no-default-features -- -D warnings"
     )
     .run()?;
@@ -305,10 +305,10 @@ fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
 
     let sh = sh();
     let run = |arg_set: &str| {
-        cmd!(sh, "rustup run stable cargo nextest run -p matrix-sdk")
+        cmd!(sh, "rustup run stable cargo nextest run -p matrix")
             .args(arg_set.split_whitespace())
             .run()?;
-        cmd!(sh, "rustup run stable cargo test --doc -p matrix-sdk")
+        cmd!(sh, "rustup run stable cargo test --doc -p matrix")
             .args(arg_set.split_whitespace())
             .run()
     };
@@ -329,34 +329,35 @@ fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
 
 fn run_crypto_tests() -> Result<()> {
     let sh = sh();
-    cmd!(sh, "rustup run stable cargo clippy -p matrix-sdk-crypto -- -D warnings").run()?;
-    cmd!(sh, "rustup run stable cargo nextest run -p matrix-sdk-crypto --no-default-features --features testing").run()?;
-    cmd!(sh, "rustup run stable cargo nextest run -p matrix-sdk-crypto --features=testing")
+    cmd!(sh, "rustup run stable cargo clippy -p crypto -- -D warnings").run()?;
+    cmd!(
+        sh,
+        "rustup run stable cargo nextest run -p crypto --no-default-features --features testing"
+    )
+    .run()?;
+    cmd!(sh, "rustup run stable cargo nextest run -p crypto --features=testing").run()?;
+    cmd!(sh, "rustup run stable cargo test --doc -p crypto --features=testing").run()?;
+    cmd!(
+        sh,
+        "rustup run stable cargo clippy -p crypto --features=experimental-algorithms -- -D warnings"
+    )
+    .run()?;
+    cmd!(
+        sh,
+        "rustup run stable cargo nextest run -p crypto --features=experimental-algorithms,testing"
+    )
+    .run()?;
+    cmd!(
+        sh,
+        "rustup run stable cargo test --doc -p crypto --features=experimental-algorithms,testing"
+    )
+    .run()?;
+    cmd!(sh, "rustup run stable cargo nextest run -p crypto --features=experimental-encrypted-state-events").run()?;
+
+    cmd!(sh, "rustup run stable cargo nextest run -p crypto-ffi").run()?;
+
+    cmd!(sh, "rustup run stable cargo nextest run -p sqlite --features crypto-store,testing")
         .run()?;
-    cmd!(sh, "rustup run stable cargo test --doc -p matrix-sdk-crypto --features=testing").run()?;
-    cmd!(
-        sh,
-        "rustup run stable cargo clippy -p matrix-sdk-crypto --features=experimental-algorithms -- -D warnings"
-    )
-    .run()?;
-    cmd!(
-        sh,
-        "rustup run stable cargo nextest run -p matrix-sdk-crypto --features=experimental-algorithms,testing"
-    ).run()?;
-    cmd!(
-        sh,
-        "rustup run stable cargo test --doc -p matrix-sdk-crypto --features=experimental-algorithms,testing"
-    )
-    .run()?;
-    cmd!(sh, "rustup run stable cargo nextest run -p matrix-sdk-crypto --features=experimental-encrypted-state-events").run()?;
-
-    cmd!(sh, "rustup run stable cargo nextest run -p matrix-sdk-crypto-ffi").run()?;
-
-    cmd!(
-        sh,
-        "rustup run stable cargo nextest run -p matrix-sdk-sqlite --features crypto-store,testing"
-    )
-    .run()?;
 
     Ok(())
 }
@@ -370,31 +371,31 @@ fn run_wasm_checks(cmd: Option<WasmFeatureSet>) -> Result<()> {
     }
 
     let args = BTreeMap::from([
-        (WasmFeatureSet::MatrixSdkQrcode, "-p matrix-sdk-qrcode --features js"),
+        (WasmFeatureSet::Qrcode, "-p qrcode --features js"),
         (
-            WasmFeatureSet::MatrixSdkNoDefault,
-            "-p matrix-sdk --no-default-features --features js,reqwest-transport",
+            WasmFeatureSet::MatrixNoDefault,
+            "-p matrix --no-default-features --features js,reqwest-transport",
         ),
-        (WasmFeatureSet::MatrixSdkBase, "-p matrix-sdk-base --features js,test-send-sync"),
-        (WasmFeatureSet::MatrixSdkCommon, "-p matrix-sdk-common --features js"),
-        (WasmFeatureSet::MatrixSdkUi, "-p matrix-sdk-ui --features js"),
+        (WasmFeatureSet::Base, "-p base --features js,test-send-sync"),
+        (WasmFeatureSet::SdkCommon, "-p sdk-common --features js"),
+        (WasmFeatureSet::Ui, "-p ui --features js"),
         (
-            WasmFeatureSet::MatrixSdkIndexeddbStoresNoCrypto,
-            "-p matrix-sdk --no-default-features --features js,indexeddb,reqwest-transport",
+            WasmFeatureSet::IndexeddbStoresNoCrypto,
+            "-p matrix --no-default-features --features js,indexeddb,reqwest-transport",
         ),
         (
-            WasmFeatureSet::MatrixSdkIndexeddbStores,
-            "-p matrix-sdk --no-default-features --features \
+            WasmFeatureSet::IndexeddbStores,
+            "-p matrix --no-default-features --features \
              js,indexeddb,e2e-encryption,reqwest-transport",
         ),
-        (WasmFeatureSet::IndexeddbAllFeatures, "-p matrix-sdk-indexeddb"),
+        (WasmFeatureSet::IndexeddbAllFeatures, "-p indexeddb"),
         (
             WasmFeatureSet::IndexeddbCrypto,
-            "-p matrix-sdk-indexeddb --no-default-features --features e2e-encryption",
+            "-p indexeddb --no-default-features --features e2e-encryption",
         ),
         (
             WasmFeatureSet::IndexeddbState,
-            "-p matrix-sdk-indexeddb --no-default-features --features state-store",
+            "-p indexeddb --no-default-features --features state-store",
         ),
     ]);
 
@@ -430,32 +431,32 @@ fn run_wasm_pack_tests(cmd: Option<WasmFeatureSet>, runner: WasmTestRunner) -> R
     }
 
     let args = BTreeMap::from([
-        (WasmFeatureSet::MatrixSdkQrcode, ("crates/matrix-sdk-qrcode", "--features js")),
+        (WasmFeatureSet::Qrcode, ("crates/qrcode", "--features js")),
         (
-            WasmFeatureSet::MatrixSdkNoDefault,
-            ("crates/matrix-sdk", "--no-default-features --features js --lib"),
+            WasmFeatureSet::MatrixNoDefault,
+            ("crates/matrix", "--no-default-features --features js --lib"),
         ),
-        (WasmFeatureSet::MatrixSdkBase, ("crates/matrix-sdk-base", "--features js")),
-        (WasmFeatureSet::MatrixSdkCommon, ("crates/matrix-sdk-common", "--features js")),
+        (WasmFeatureSet::Base, ("crates/base", "--features js")),
+        (WasmFeatureSet::SdkCommon, ("crates/sdk-common", "--features js")),
         (
-            WasmFeatureSet::MatrixSdkIndexeddbStoresNoCrypto,
-            ("crates/matrix-sdk", "--no-default-features --features js,indexeddb --lib"),
+            WasmFeatureSet::IndexeddbStoresNoCrypto,
+            ("crates/matrix", "--no-default-features --features js,indexeddb --lib"),
         ),
         (
-            WasmFeatureSet::MatrixSdkIndexeddbStores,
+            WasmFeatureSet::IndexeddbStores,
             (
-                "crates/matrix-sdk",
+                "crates/matrix",
                 "--no-default-features --features js,indexeddb,e2e-encryption,testing --lib",
             ),
         ),
-        (WasmFeatureSet::IndexeddbAllFeatures, ("crates/matrix-sdk-indexeddb", "")),
+        (WasmFeatureSet::IndexeddbAllFeatures, ("crates/indexeddb", "")),
         (
             WasmFeatureSet::IndexeddbCrypto,
-            ("crates/matrix-sdk-indexeddb", "--no-default-features --features e2e-encryption"),
+            ("crates/indexeddb", "--no-default-features --features e2e-encryption"),
         ),
         (
             WasmFeatureSet::IndexeddbState,
-            ("crates/matrix-sdk-indexeddb", "--no-default-features --features state-store"),
+            ("crates/indexeddb", "--no-default-features --features state-store"),
         ),
     ]);
 
@@ -509,7 +510,7 @@ fn run_coverage(output_format: CoverageOutputFormat) -> Result<()> {
     let cmd = cmd.args([
         "--workspace",
         "--exclude",
-        "matrix-sdk-indexeddb",
+        "indexeddb",
         "--ignore-filename-regex",
         "testing/*|bindings/*|uniffi-bindgen|labs/*",
     ]);

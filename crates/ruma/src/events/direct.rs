@@ -7,9 +7,10 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::{IdParseError, OwnedRoomId, OwnedUserId, UserId};
 use ruma_macros::{EventContent, IdDst};
 use serde::{Deserialize, Serialize};
+
+use crate::{IdParseError, OwnedRoomId, OwnedUserId, UserId};
 
 /// An user identifier, it can be a [`UserId`] or a third-party identifier
 /// like an email or a phone number.
@@ -145,8 +146,8 @@ impl PartialEq<OwnedDirectUserIdentifier> for OwnedUserId {
 
 /// The content of an `m.direct` event.
 ///
-/// A mapping of `DirectUserIdentifier`s to a list of `RoomId`s which are considered *direct*
-/// for that particular user.
+/// A mapping of `DirectUserIdentifier`s to a list of `RoomId`s which are
+/// considered *direct* for that particular user.
 ///
 /// Informs the client about the rooms that are considered direct by a user.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, EventContent)]
@@ -190,13 +191,15 @@ impl FromIterator<(OwnedDirectUserIdentifier, Vec<OwnedRoomId>)> for DirectEvent
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::{
-        OwnedUserId, canonical_json::assert_to_canonical_json_eq, owned_room_id, user_id,
-    };
     use serde_json::{from_value as from_json_value, json, to_value as to_json_value};
 
     use super::{DirectEvent, DirectEventContent};
-    use crate::events::direct::{DirectUserIdentifier, OwnedDirectUserIdentifier};
+    use crate::{
+        OwnedUserId,
+        canonical_json::assert_to_canonical_json_eq,
+        events::direct::{DirectUserIdentifier, OwnedDirectUserIdentifier},
+        owned_room_id, user_id,
+    };
 
     #[test]
     fn serialization() {

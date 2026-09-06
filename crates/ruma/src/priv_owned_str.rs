@@ -1,23 +1,27 @@
 /// Convenience macro to declare a struct named `PrivOwnedStr`.
 ///
-/// The generated struct is a wrapper around `Box<str>` that cannot be used in a meaningful way
-/// outside of the crate where it is defined. It is usually used for string enums because their
-/// `_Custom` variant can't be truly private (only `#[doc(hidden)]`).
+/// The generated struct is a wrapper around `Box<str>` that cannot be used in a
+/// meaningful way outside of the crate where it is defined. It is usually used
+/// for string enums because their `_Custom` variant can't be truly private
+/// (only `#[doc(hidden)]`).
 ///
-/// The struct implements `Clone`, `Debug`, `PartialEq`, `Eq`, `PartialOrd`, `Ord` and `Hash`.
+/// The struct implements `Clone`, `Debug`, `PartialEq`, `Eq`, `PartialOrd`,
+/// `Ord` and `Hash`.
 ///
 /// ## Arguments
 ///
-/// This macro can be called without any arguments, it will only generate the struct and its basic
-/// implementations.
+/// This macro can be called without any arguments, it will only generate the
+/// struct and its basic implementations.
 ///
-/// The following keywords can also be used as a comma-separated list to add more implementations to
-/// the struct:
+/// The following keywords can also be used as a comma-separated list to add
+/// more implementations to the struct:
 ///
-/// - `uniffi` - Expose the struct as an object named `PrivateString` to foreign languages via
-///   [`uniffi`], behind an `unstable-uniffi` cargo feature. This is necessary to expose an enum or
-///   record using `PrivOwnedStr` to foreign languages. Requires the crate calling the macro to have
-///   an `unstable-uniffi` cargo feature and [`uniffi` must be set up][uniffi-setup].
+/// - `uniffi` - Expose the struct as an object named `PrivateString` to foreign
+///   languages via [`uniffi`], behind an `unstable-uniffi` cargo feature. This
+///   is necessary to expose an enum or record using `PrivOwnedStr` to foreign
+///   languages. Requires the crate calling the macro to have an
+///   `unstable-uniffi` cargo feature and [`uniffi` must be set
+///   up][uniffi-setup].
 ///
 /// ## Example
 ///

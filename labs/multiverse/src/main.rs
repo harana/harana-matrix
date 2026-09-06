@@ -9,6 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard};
 use clap::Parser;
 use color_eyre::Result;
 use crossterm::{
@@ -20,7 +21,7 @@ use crossterm::{
 use futures_util::{StreamExt as _, pin_mut};
 use imbl::Vector;
 use layout::Flex;
-use matrix_sdk::{
+use matrix::{
     AuthSession, Client, SqliteCryptoStore, SqliteEventCacheStore, SqliteStateStore,
     ThreadingSupport,
     authentication::matrix::MatrixSession,
@@ -30,15 +31,8 @@ use matrix_sdk::{
     ruma::{OwnedRoomId, api::client::room::create_room::v3::Request as CreateRoomRequest},
     search_index::{SearchIndexGuard, SearchIndexStoreKind},
 };
-use matrix_sdk_base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard};
-use matrix_sdk_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex};
-use matrix_sdk_ui::{
-    Timeline as SdkTimeline,
-    room_list_service::{self, State, filters::new_filter_non_left},
-    sync_service::SyncService,
-    timeline::{RoomExt as _, TimelineFocus, TimelineItem},
-};
 use ratatui::{DefaultTerminal, prelude::*, style::palette::tailwind, widgets::*};
+use sdk_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex};
 use throbber_widgets_tui::{Throbber, ThrobberState};
 use tokio::{
     spawn,
@@ -48,6 +42,12 @@ use tokio::{
 };
 use tracing::{debug, error, warn};
 use tracing_subscriber::EnvFilter;
+use ui::{
+    Timeline as SdkTimeline,
+    room_list_service::{self, State, filters::new_filter_non_left},
+    sync_service::SyncService,
+    timeline::{RoomExt as _, TimelineFocus, TimelineItem},
+};
 use widgets::{
     recovery::create_centered_throbber_area, room_view::RoomView, settings::SettingsView,
 };

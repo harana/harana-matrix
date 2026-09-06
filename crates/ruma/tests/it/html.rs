@@ -1,2 +1,2 @@
-mod helpers;
 mod dom;
+mod helpers;

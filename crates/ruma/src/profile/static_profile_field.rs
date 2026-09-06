@@ -2,13 +2,14 @@
 
 #![allow(clippy::exhaustive_structs)]
 
+use serde::{Serialize, de::DeserializeOwned};
+
 use crate::OwnedMxcUri;
 #[cfg(feature = "unstable-msc4426")]
 use crate::profile::{CallProfileField, StatusProfileField};
-use serde::{Serialize, de::DeserializeOwned};
 
-/// Trait implemented by types representing a field in a user's [profile] having a statically-known
-/// name.
+/// Trait implemented by types representing a field in a user's [profile] having
+/// a statically-known name.
 ///
 /// [profile]: https://spec.matrix.org/v1.19/client-server-api/#profiles
 pub trait StaticProfileField {

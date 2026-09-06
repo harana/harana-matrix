@@ -1,20 +1,19 @@
 //! Opinionated HTML parsing and manipulating library.
 //!
-//! Like the rest of the Ruma crates, this crate is primarily meant to be used for
-//! the Matrix protocol. It should be able to be used to interact with any HTML
-//! document but will offer APIs focused on specificities of HTML in the Matrix
-//! specification..
-//!
+//! Like the rest of the Ruma crates, this crate is primarily meant to be used
+//! for the Matrix protocol. It should be able to be used to interact with any
+//! HTML document but will offer APIs focused on specificities of HTML in the
+//! Matrix specification..
 
 #![warn(missing_docs)]
 
 pub use html5ever::{Attribute, LocalName, Namespace, Prefix, QualName, tendril::StrTendril};
 
-mod helpers;
 mod dom;
+mod helpers;
 mod sanitizer_config;
 
-pub use self::{helpers::*, dom::*, sanitizer_config::*};
+pub use self::{dom::*, helpers::*, sanitizer_config::*};
 
 /// What [HTML elements and attributes] should be kept by the sanitizer.
 ///
@@ -22,16 +21,18 @@ pub use self::{helpers::*, dom::*, sanitizer_config::*};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(clippy::exhaustive_enums)]
 pub enum HtmlSanitizerMode {
-    /// Keep only the elements and attributes suggested in the Matrix specification.
+    /// Keep only the elements and attributes suggested in the Matrix
+    /// specification.
     ///
-    /// In addition to filtering elements and attributes listed in the Matrix specification, it
-    /// also removes elements that are nested more than 100 levels deep.
+    /// In addition to filtering elements and attributes listed in the Matrix
+    /// specification, it also removes elements that are nested more than
+    /// 100 levels deep.
     ///
     /// Deprecated elements and attributes are also replaced when applicable.
     Strict,
 
-    /// Like `Strict` mode, with additional elements and attributes that are not yet included in
-    /// the spec, but are reasonable to keep.
+    /// Like `Strict` mode, with additional elements and attributes that are not
+    /// yet included in the spec, but are reasonable to keep.
     ///
     /// Differences with `Strict` mode:
     ///

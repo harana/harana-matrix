@@ -1,6 +1,7 @@
 //! `POST /_matrix/client/*/appservice/{appserviceId}/ping}`
 //!
-//! Ask the homeserver to ping the application service to ensure the connection works.
+//! Ask the homeserver to ping the application service to ensure the connection
+//! works.
 
 pub mod v1 {
     //! `/v1/` ([spec])
@@ -30,12 +31,13 @@ pub mod v1 {
     pub struct Request {
         /// The appservice ID of the appservice to ping.
         ///
-        /// This must be the same as the appservice whose `as_token` is being used to authenticate
-        /// the request.
+        /// This must be the same as the appservice whose `as_token` is being
+        /// used to authenticate the request.
         #[ruma_api(path)]
         pub appservice_id: String,
 
-        /// Transaction ID that is passed through to the `POST /_matrix/app/v1/ping` call.
+        /// Transaction ID that is passed through to the `POST
+        /// /_matrix/app/v1/ping` call.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub transaction_id: Option<OwnedTransactionId>,
     }
@@ -43,8 +45,8 @@ pub mod v1 {
     /// Response type for the `request_ping` endpoint.
     #[response]
     pub struct Response {
-        /// The duration in milliseconds that the `POST /_matrix/app/v1/ping` request took from the
-        /// homeserver's point of view.
+        /// The duration in milliseconds that the `POST /_matrix/app/v1/ping`
+        /// request took from the homeserver's point of view.
         #[serde(with = "crate::serde::duration::ms", rename = "duration_ms")]
         pub duration: Duration,
     }

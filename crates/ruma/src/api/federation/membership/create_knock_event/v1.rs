@@ -2,14 +2,16 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#put_matrixfederationv1send_knockroomideventid
 
-use crate::{
-    OwnedEventId, OwnedRoomId,
-    api::{request, response},
-    metadata,
-};
 use serde_json::value::RawValue as RawJsonValue;
 
-use crate::api::federation::{authentication::ServerSignatures, membership::RawStrippedState};
+use crate::{
+    OwnedEventId, OwnedRoomId,
+    api::{
+        federation::{authentication::ServerSignatures, membership::RawStrippedState},
+        request, response,
+    },
+    metadata,
+};
 
 metadata! {
     method: PUT,
@@ -42,14 +44,16 @@ pub struct Response {
 }
 
 impl Request {
-    /// Creates a new `Request` with the given room ID, event ID and knock event.
+    /// Creates a new `Request` with the given room ID, event ID and knock
+    /// event.
     pub fn new(room_id: OwnedRoomId, event_id: OwnedEventId, pdu: Box<RawJsonValue>) -> Self {
         Self { room_id, event_id, pdu }
     }
 }
 
 impl Response {
-    /// Creates a new `Response` with the given public room metadata state events.
+    /// Creates a new `Response` with the given public room metadata state
+    /// events.
     pub fn new(knock_room_state: Vec<RawStrippedState>) -> Self {
         Self { knock_room_state }
     }

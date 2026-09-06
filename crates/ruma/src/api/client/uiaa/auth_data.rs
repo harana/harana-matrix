@@ -2,11 +2,12 @@
 
 use std::{borrow::Cow, fmt};
 
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde_json::Value as JsonValue;
+
 use crate::{
     OwnedClientSecret, OwnedSessionId, OwnedUserId, serde::JsonObject, thirdparty::Medium,
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json::Value as JsonValue;
 
 mod data_serde;
 
@@ -46,8 +47,8 @@ pub enum AuthData {
 
     /// OAuth 2.0 (`m.oauth`).
     ///
-    /// This type is only valid with the cross-signing keys upload endpoint, after logging in with
-    /// the OAuth 2.0 API.
+    /// This type is only valid with the cross-signing keys upload endpoint,
+    /// after logging in with the OAuth 2.0 API.
     OAuth(OAuth),
 
     /// Unsupported authentication type.
@@ -56,16 +57,17 @@ pub enum AuthData {
 }
 
 impl AuthData {
-    /// Creates a new `AuthData` with the given `auth_type` string, session and data.
+    /// Creates a new `AuthData` with the given `auth_type` string, session and
+    /// data.
     ///
-    /// Prefer to use the public variants of `AuthData` where possible; this constructor is meant to
-    /// be used for unsupported authentication types only and does not allow setting arbitrary
-    /// data for supported ones.
+    /// Prefer to use the public variants of `AuthData` where possible; this
+    /// constructor is meant to be used for unsupported authentication types
+    /// only and does not allow setting arbitrary data for supported ones.
     ///
     /// # Errors
     ///
-    /// Returns an error if the `auth_type` is known and serialization of `data` to the
-    /// corresponding `AuthData` variant fails.
+    /// Returns an error if the `auth_type` is known and serialization of `data`
+    /// to the corresponding `AuthData` variant fails.
     pub fn new(
         auth_type: &str,
         session: Option<String>,
@@ -96,7 +98,8 @@ impl AuthData {
         })
     }
 
-    /// Creates a new `AuthData::FallbackAcknowledgement` with the given session key.
+    /// Creates a new `AuthData::FallbackAcknowledgement` with the given session
+    /// key.
     pub fn fallback_acknowledgement(session: String) -> Self {
         Self::FallbackAcknowledgement(FallbackAcknowledgement::new(session))
     }
@@ -135,11 +138,12 @@ impl AuthData {
 
     /// Returns the associated data.
     ///
-    /// The returned JSON object won't contain the `type` and `session` fields, use
-    /// [`.auth_type()`][Self::auth_type] / [`.session()`](Self::session) to access those.
+    /// The returned JSON object won't contain the `type` and `session` fields,
+    /// use [`.auth_type()`][Self::auth_type] /
+    /// [`.session()`](Self::session) to access those.
     ///
-    /// Prefer to use the public variants of `AuthData` where possible; this method is meant to be
-    /// used for custom auth types only.
+    /// Prefer to use the public variants of `AuthData` where possible; this
+    /// method is meant to be used for custom auth types only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: T) -> JsonObject {
             match serde_json::to_value(obj).expect("auth data serialization to succeed") {
@@ -496,8 +500,8 @@ impl UserIdentifier {
     /// The returned JSON object won't contain the `type` field, use
     /// [`.identifier_type()`][Self::identifier_type] to access it.
     ///
-    /// Prefer to use the public variants of `UserIdentifier` where possible; this method is meant
-    /// to be used for custom identifier types only.
+    /// Prefer to use the public variants of `UserIdentifier` where possible;
+    /// this method is meant to be used for custom identifier types only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("user identifier serialization to succeed") {
@@ -566,7 +570,8 @@ pub struct MatrixUserIdentifier {
 }
 
 impl MatrixUserIdentifier {
-    /// Construct a new `MatrixUserIdentifier` with the given user ID or localpart.
+    /// Construct a new `MatrixUserIdentifier` with the given user ID or
+    /// localpart.
     pub fn new(user: String) -> Self {
         Self { user }
     }
@@ -616,7 +621,8 @@ impl MsisdnUserIdentifier {
     }
 }
 
-/// Data for a phone number identifier as a separate country code and phone number.
+/// Data for a phone number identifier as a separate country code and phone
+/// number.
 ///
 /// The homeserver is responsible for canonicalizing this to the MSISDN format.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -635,7 +641,8 @@ pub struct PhoneNumberUserIdentifier {
 }
 
 impl PhoneNumberUserIdentifier {
-    /// Construct a new `PhoneNumberUserIdentifier` with the given country code and phone number.
+    /// Construct a new `PhoneNumberUserIdentifier` with the given country code
+    /// and phone number.
     pub fn new(country: String, phone: String) -> Self {
         Self { country, phone }
     }
@@ -686,7 +693,8 @@ pub struct ThirdpartyIdCredentials {
 }
 
 impl ThirdpartyIdCredentials {
-    /// Creates a new `ThirdpartyIdCredentials` with the given session ID and client secret.
+    /// Creates a new `ThirdpartyIdCredentials` with the given session ID and
+    /// client secret.
     pub fn new(sid: OwnedSessionId, client_secret: OwnedClientSecret) -> Self {
         Self { sid, client_secret, id_server: None, id_access_token: None }
     }

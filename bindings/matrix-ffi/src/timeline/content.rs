@@ -1,0 +1,514 @@
+// Copyright 2023 The Matrix.org Foundation C.I.C.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::collections::HashMap;
+
+use base::CallIntentConsensus;
+use matrix::room::power_levels::power_level_user_changes;
+use ruma::events::{
+    StateEventContentChange, room::history_visibility::HistoryVisibility as RumaHistoryVisibility,
+};
+use ui::timeline::RoomPinnedEventsChange;
+
+use crate::{
+    client::JoinRule, event::FfiTimelineEventType, ruma::AssetType,
+    timeline::msg_like::MsgLikeContent, utils::Timestamp,
+};
+
+impl From<ui::timeline::TimelineItemContent> for TimelineItemContent {
+    fn from(value: ui::timeline::TimelineItemContent) -> Self {
+        use ui::timeline::TimelineItemContent as Content;
+
+        match value {
+            Content::MsgLike(msg_like) => match msg_like.try_into() {
+                Ok(content) => TimelineItemContent::MsgLike { content },
+                Err((error, event_type)) => TimelineItemContent::FailedToParseMessageLike {
+                    event_type,
+                    error: error.to_string(),
+                },
+            },
+
+            Content::CallInvite => TimelineItemContent::CallInvite,
+
+            Content::RtcNotification {
+                call_intent,
+                declined_by: declinations,
+                active_call_info,
+            } => TimelineItemContent::RtcNotification {
+                // if the call is active use the live intent
+                call_intent: active_call_info
+                    .as_ref()
+                    .and_then(|a| match &a.call_intent {
+                        CallIntentConsensus::Full(intent) => Some(intent),
+                        CallIntentConsensus::Partial { intent, .. } => Some(intent),
+                        CallIntentConsensus::None => None,
+                    })
+                    .or(call_intent.as_ref())
+                    .map(|c| c.to_string()),
+                declined_by: declinations.iter().map(|u| u.to_string()).collect(),
+                active_members: active_call_info
+                    .as_ref()
+                    .map(|a| a.active_members.iter().map(|u| u.to_string()).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+                is_joined: active_call_info.as_ref().map(|a| a.is_joined).unwrap_or(false),
+                call_start_ts_millis: active_call_info
+                    .and_then(|a| a.call_started_ts_millis)
+                    .map(|it| it.0.into()),
+            },
+            Content::MembershipChange(membership) => {
+                let reason = match membership.content() {
+                    StateEventContentChange::Original { content, .. } => content.reason.clone(),
+                    _ => None,
+                };
+                TimelineItemContent::RoomMembership {
+                    user_id: membership.user_id().to_string(),
+                    user_display_name: membership.display_name(),
+                    change: membership.change().map(Into::into),
+                    reason,
+                }
+            }
+
+            Content::ProfileChange(profile) => {
+                let (display_name, prev_display_name) = profile
+                    .displayname_change()
+                    .map(|change| (change.new.clone(), change.old.clone()))
+                    .unzip();
+                let (avatar_url, prev_avatar_url) = profile
+                    .avatar_url_change()
+                    .map(|change| {
+                        (
+                            change.new.as_ref().map(ToString::to_string),
+                            change.old.as_ref().map(ToString::to_string),
+                        )
+                    })
+                    .unzip();
+                TimelineItemContent::ProfileChange {
+                    display_name: display_name.flatten(),
+                    prev_display_name: prev_display_name.flatten(),
+                    avatar_url: avatar_url.flatten(),
+                    prev_avatar_url: prev_avatar_url.flatten(),
+                }
+            }
+
+            Content::OtherState(state) => TimelineItemContent::State {
+                state_key: state.state_key().to_owned(),
+                content: state.content().into(),
+            },
+
+            Content::FailedToParseMessageLike { event_type, error } => {
+                TimelineItemContent::FailedToParseMessageLike {
+                    event_type: event_type.to_string(),
+                    error: error.to_string(),
+                }
+            }
+
+            Content::FailedToParseState { event_type, state_key, error } => {
+                TimelineItemContent::FailedToParseState {
+                    event_type: event_type.to_string(),
+                    state_key,
+                    error: error.to_string(),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, uniffi::Enum)]
+pub enum HistoryVisibility {
+    /// Previous events are accessible to newly joined members from the point
+    /// they were invited onwards.
+    ///
+    /// Events stop being accessible when the member' state changes to
+    /// something other than *invite* or *join*.
+    Invited,
+
+    /// Previous events are accessible to newly joined members from the point
+    /// they joined the room onwards.
+    /// Events stop being accessible when the member' state changes to
+    /// something other than *join*.
+    Joined,
+
+    /// Previous events are always accessible to newly joined members.
+    ///
+    /// All events in the room are accessible, even those sent when the member
+    /// was not a part of the room.
+    Shared,
+
+    /// All events while this is the `HistoryVisibility` value may be shared by
+    /// any participating homeserver with anyone, regardless of whether they
+    /// have ever joined the room.
+    WorldReadable,
+
+    /// A custom history visibility, up for interpretation by the consumer.
+    Custom {
+        /// The string representation for this custom history visibility.
+        repr: String,
+    },
+}
+
+impl From<&RumaHistoryVisibility> for HistoryVisibility {
+    fn from(value: &RumaHistoryVisibility) -> Self {
+        match value {
+            RumaHistoryVisibility::Invited => Self::Invited,
+            RumaHistoryVisibility::Joined => Self::Joined,
+            RumaHistoryVisibility::Shared => Self::Shared,
+            RumaHistoryVisibility::WorldReadable => Self::WorldReadable,
+            _ => Self::Custom { repr: value.to_string() },
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Enum)]
+// A note about this `allow(clippy::large_enum_variant)`.
+// In order to reduce the size of `TimelineItemContent`, we would need to
+// put some parts in a `Box`, or an `Arc`. Sadly, it doesn't play well with
+// UniFFI. We would need to change the `uniffi::Record` of the subtypes into
+// `uniffi::Object`, which is a radical change. It would simplify the memory
+// usage, but it would slow down the performance around the FFI border. Thus,
+// let's consider this is a false-positive lint in this particular case.
+#[allow(clippy::large_enum_variant)]
+pub enum TimelineItemContent {
+    MsgLike {
+        content: MsgLikeContent,
+    },
+    CallInvite,
+    RtcNotification {
+        call_intent: Option<String>,
+        declined_by: Vec<String>,
+        active_members: Vec<String>,
+        call_start_ts_millis: Option<u64>,
+        is_joined: bool,
+    },
+    RoomMembership {
+        user_id: String,
+        user_display_name: Option<String>,
+        change: Option<MembershipChange>,
+        reason: Option<String>,
+    },
+    ProfileChange {
+        display_name: Option<String>,
+        prev_display_name: Option<String>,
+        avatar_url: Option<String>,
+        prev_avatar_url: Option<String>,
+    },
+    State {
+        state_key: String,
+        content: OtherState,
+    },
+    FailedToParseMessageLike {
+        event_type: String,
+        error: String,
+    },
+    FailedToParseState {
+        event_type: String,
+        state_key: String,
+        error: String,
+    },
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct Reaction {
+    pub key: String,
+    pub senders: Vec<ReactionSenderData>,
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct ReactionSenderData {
+    pub sender_id: String,
+    pub timestamp: Timestamp,
+}
+
+#[derive(Clone, uniffi::Enum)]
+pub enum MembershipChange {
+    None,
+    Error,
+    Joined,
+    Left,
+    Banned,
+    Unbanned,
+    Kicked,
+    Invited,
+    KickedAndBanned,
+    InvitationAccepted,
+    InvitationRejected,
+    InvitationRevoked,
+    Knocked,
+    KnockAccepted,
+    KnockRetracted,
+    KnockDenied,
+    NotImplemented,
+}
+
+impl From<ui::timeline::MembershipChange> for MembershipChange {
+    fn from(membership_change: ui::timeline::MembershipChange) -> Self {
+        use ui::timeline::MembershipChange as Change;
+        match membership_change {
+            Change::None => Self::None,
+            Change::Error => Self::Error,
+            Change::Joined => Self::Joined,
+            Change::Left => Self::Left,
+            Change::Banned => Self::Banned,
+            Change::Unbanned => Self::Unbanned,
+            Change::Kicked => Self::Kicked,
+            Change::Invited => Self::Invited,
+            Change::KickedAndBanned => Self::KickedAndBanned,
+            Change::InvitationAccepted => Self::InvitationAccepted,
+            Change::InvitationRejected => Self::InvitationRejected,
+            Change::InvitationRevoked => Self::InvitationRevoked,
+            Change::Knocked => Self::Knocked,
+            Change::KnockAccepted => Self::KnockAccepted,
+            Change::KnockRetracted => Self::KnockRetracted,
+            Change::KnockDenied => Self::KnockDenied,
+            Change::NotImplemented => Self::NotImplemented,
+        }
+    }
+}
+
+#[derive(Clone, uniffi::Record)]
+pub struct PowerLevelChanges {
+    ban: i64,
+    kick: i64,
+    events_default: i64,
+    invite: i64,
+    redact: i64,
+    state_default: i64,
+    users_default: i64,
+    notifications: i64,
+}
+
+#[derive(Clone, uniffi::Enum)]
+#[allow(clippy::large_enum_variant)]
+// Added because the RoomPowerLevels variant is quite large.
+// This is the same issue than for TimelineItemContent.
+pub enum OtherState {
+    PolicyRuleRoom,
+    PolicyRuleServer,
+    PolicyRuleUser,
+    RoomAvatar {
+        url: Option<String>,
+    },
+    RoomCanonicalAlias,
+    RoomCreate {
+        federate: bool,
+    },
+    RoomEncryption,
+    RoomGuestAccess,
+    RoomHistoryVisibility {
+        history_visibility: HistoryVisibility,
+    },
+    RoomJoinRules {
+        join_rule: Option<JoinRule>,
+    },
+    RoomName {
+        name: Option<String>,
+    },
+    RoomPinnedEvents {
+        change: RoomPinnedEventsChange,
+    },
+    RoomPowerLevels {
+        events: HashMap<FfiTimelineEventType, i64>,
+        previous_events: Option<HashMap<FfiTimelineEventType, i64>>,
+        users: HashMap<String, i64>,
+        previous_users: Option<HashMap<String, i64>>,
+        thresholds: PowerLevelChanges,
+        previous_thresholds: Option<PowerLevelChanges>,
+    },
+    RoomServerAcl,
+    RoomThirdPartyInvite {
+        display_name: Option<String>,
+    },
+    RoomTombstone,
+    RoomTopic {
+        topic: Option<String>,
+    },
+    SpaceChild,
+    SpaceParent,
+    Custom {
+        event_type: String,
+    },
+}
+
+/// FFI representation of a single location update from a beacon event.
+#[derive(Clone, uniffi::Record)]
+pub struct BeaconInfo {
+    /// The geo URI carrying the user's coordinates
+    /// (e.g. `"geo:51.5008,0.1247;u=35"`).
+    pub geo_uri: String,
+
+    /// Timestamp (ms since Unix Epoch) of this location update.
+    pub ts: Timestamp,
+
+    /// An optional human-readable description of the location.
+    pub description: Option<String>,
+}
+
+/// FFI representation of a live location sharing session (MSC3489).
+///
+/// Corresponds to a `org.matrix.msc3672.beacon_info` state event in the
+/// timeline. Location updates are aggregated here as they arrive.
+#[derive(Clone, uniffi::Record)]
+pub struct LiveLocationContent {
+    /// Whether this sharing session is currently active.
+    pub is_live: bool,
+
+    /// The timestamp when this live location sharing session started
+    /// (from the `org.matrix.msc3488.ts` field of the originating
+    /// `beacon_info` state event).
+    ///
+    /// This marks the *beginning* of the session. The session expires at
+    /// `ts + timeout_ms`.
+    pub ts: Timestamp,
+
+    /// An optional human-readable label for this sharing session.
+    pub description: Option<String>,
+
+    /// Duration of the session in milliseconds.
+    pub timeout_ms: u64,
+
+    /// The asset type of the beacon (e.g. `Sender` for the user's own
+    /// location, `Pin` for a fixed point of interest).
+    pub asset_type: AssetType,
+
+    /// All location updates received so far, sorted oldest-first.
+    pub locations: Vec<BeaconInfo>,
+}
+
+impl From<&ui::timeline::AnyOtherStateEventContentChange> for OtherState {
+    fn from(content: &ui::timeline::AnyOtherStateEventContentChange) -> Self {
+        use matrix::ruma::events::StateEventContentChange as FullContent;
+        use ui::timeline::AnyOtherStateEventContentChange as Content;
+        match content {
+            Content::PolicyRuleRoom(_) => Self::PolicyRuleRoom,
+            Content::PolicyRuleServer(_) => Self::PolicyRuleServer,
+            Content::PolicyRuleUser(_) => Self::PolicyRuleUser,
+            Content::RoomAvatar(c) => {
+                let url = match c {
+                    FullContent::Original { content, .. } => {
+                        content.url.as_ref().map(ToString::to_string)
+                    }
+                    FullContent::Redacted(_) => None,
+                };
+                Self::RoomAvatar { url }
+            }
+            Content::RoomCanonicalAlias(_) => Self::RoomCanonicalAlias,
+            Content::RoomCreate(c) => {
+                let federate = match c {
+                    FullContent::Original { content, .. } => content.federate,
+                    FullContent::Redacted(content) => content.federate,
+                };
+                Self::RoomCreate { federate }
+            }
+            Content::RoomEncryption(_) => Self::RoomEncryption,
+            Content::RoomGuestAccess(_) => Self::RoomGuestAccess,
+            Content::RoomHistoryVisibility(c) => {
+                let history_visibility = match c {
+                    FullContent::Original { content, .. } => &content.history_visibility,
+                    FullContent::Redacted(content) => &content.history_visibility,
+                };
+                Self::RoomHistoryVisibility { history_visibility: history_visibility.into() }
+            }
+            Content::RoomJoinRules(c) => {
+                let ruma_join_rule = match c {
+                    FullContent::Original { content, .. } => &content.join_rule,
+                    FullContent::Redacted(content) => &content.join_rule,
+                };
+                let join_rule = match ruma_join_rule.clone().try_into() {
+                    Ok(jr) => Some(jr),
+                    Err(err) => {
+                        tracing::error!("Failed to convert join rule: {}", err);
+                        None
+                    }
+                };
+                Self::RoomJoinRules { join_rule }
+            }
+            Content::RoomName(c) => {
+                let name = match c {
+                    FullContent::Original { content, .. } => Some(content.name.clone()),
+                    FullContent::Redacted(_) => None,
+                };
+                Self::RoomName { name }
+            }
+            Content::RoomPinnedEvents(c) => Self::RoomPinnedEvents { change: c.into() },
+            Content::RoomPowerLevels(c) => {
+                let (content, prev_content) = match c.clone() {
+                    FullContent::Original { content, prev_content } => (content, prev_content),
+                    FullContent::Redacted(content) => (content.into(), None),
+                };
+
+                Self::RoomPowerLevels {
+                    events: content
+                        .events
+                        .iter()
+                        .map(|(k, &v)| (k.clone().into(), v.into()))
+                        .collect(),
+                    previous_events: prev_content.as_ref().map(|prev_content| {
+                        prev_content
+                            .events
+                            .iter()
+                            .map(|(k, &v)| (k.clone().into(), v.into()))
+                            .collect()
+                    }),
+                    thresholds: PowerLevelChanges {
+                        ban: content.ban.into(),
+                        kick: content.kick.into(),
+                        events_default: content.events_default.into(),
+                        invite: content.invite.into(),
+                        redact: content.redact.into(),
+                        state_default: content.state_default.into(),
+                        users_default: content.users_default.into(),
+                        notifications: content.notifications.room.into(),
+                    },
+                    previous_thresholds: prev_content.as_ref().map(|prev_content| {
+                        PowerLevelChanges {
+                            ban: prev_content.ban.into(),
+                            kick: prev_content.kick.into(),
+                            events_default: prev_content.events_default.into(),
+                            invite: prev_content.invite.into(),
+                            redact: prev_content.redact.into(),
+                            state_default: prev_content.state_default.into(),
+                            users_default: prev_content.users_default.into(),
+                            notifications: prev_content.notifications.room.into(),
+                        }
+                    }),
+                    users: power_level_user_changes(&content, &prev_content)
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), *v))
+                        .collect(),
+                    previous_users: prev_content.as_ref().map(|prev_content| {
+                        prev_content.users.iter().map(|(k, &v)| (k.to_string(), v.into())).collect()
+                    }),
+                }
+            }
+            Content::RoomServerAcl(_) => Self::RoomServerAcl,
+            Content::RoomThirdPartyInvite(c) => {
+                let display_name = match c {
+                    FullContent::Original { content, .. } => Some(content.display_name.clone()),
+                    FullContent::Redacted(_) => None,
+                };
+                Self::RoomThirdPartyInvite { display_name }
+            }
+            Content::RoomTombstone(_) => Self::RoomTombstone,
+            Content::RoomTopic(c) => {
+                let topic = match c {
+                    FullContent::Original { content, .. } => Some(content.topic.clone()),
+                    FullContent::Redacted(_) => None,
+                };
+                Self::RoomTopic { topic }
+            }
+            Content::SpaceChild(_) => Self::SpaceChild,
+            Content::SpaceParent(_) => Self::SpaceParent,
+            Content::_Custom { event_type, .. } => Self::Custom { event_type: event_type.clone() },
+        }
+    }
+}

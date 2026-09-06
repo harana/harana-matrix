@@ -7,16 +7,16 @@ coverage:
         target: auto
         threshold: 1%
         paths:
-          - "crates/matrix-sdk/"
-          - "crates/matrix-sdk-base/"
-          - "crates/matrix-sdk-common/"
-          - "crates/matrix-sdk-crypto/"
-          - "crates/matrix-sdk-qrcode/"
-          - "crates/matrix-sdk-sqlite/"
-          - "crates/matrix-sdk-store-encryption/"
+          - "crates/matrix/"
+          - "crates/base/"
+          - "crates/sdk-common/"
+          - "crates/crypto/"
+          - "crates/qrcode/"
+          - "crates/sqlite/"
+          - "crates/store-encryption/"
           # Coverage of wasm tests isn't supported at the moment,
           # see rustwasm/wasm-bindgen#2276
-          # - "crates/matrix-sdk-indexeddb"
+          # - "crates/indexeddb"
       bindings:
         # Coverage of binding tests is recorded but for informational
         # purposes only
@@ -25,8 +25,8 @@ coverage:
           - "bindings/"
     patch: off
 ignore:
-  - "bindings/matrix-sdk-crypto-ffi"
-  - "bindings/matrix-sdk-ffi"
-  - "crates/matrix-sdk-indexeddb"
+  - "bindings/crypto-ffi"
+  - "bindings/matrix-ffi"
+  - "crates/indexeddb"
   - "testing"
   - "xtask"

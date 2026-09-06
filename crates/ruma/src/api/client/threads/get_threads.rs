@@ -8,15 +8,14 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv1roomsroomidthreads
 
     use js_int::UInt;
+
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AccessToken, request, response},
+        api::{auth_scheme::AccessToken, client::PrivOwnedStr, request, response},
+        events::AnyTimelineEvent,
         metadata,
         serde::{Raw, StringEnum},
     };
-    use crate::events::AnyTimelineEvent;
-
-    use crate::api::client::PrivOwnedStr;
 
     metadata! {
         method: GET,
@@ -37,7 +36,8 @@ pub mod v1 {
 
         /// The pagination token to start returning results from.
         ///
-        /// If `None`, results start at the most recent topological event visible to the user.
+        /// If `None`, results start at the most recent topological event
+        /// visible to the user.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub from: Option<String>,
@@ -49,8 +49,8 @@ pub mod v1 {
 
         /// The maximum number of results to return in a single `chunk`.
         ///
-        /// Servers should apply a default value, and impose a maximum value to avoid resource
-        /// exhaustion.
+        /// Servers should apply a default value, and impose a maximum value to
+        /// avoid resource exhaustion.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub limit: Option<UInt>,
@@ -59,15 +59,17 @@ pub mod v1 {
     /// Response type for the `get_thread_roots` endpoint.
     #[response]
     pub struct Response {
-        /// The thread roots, ordered by the `latest_event` in each event's aggregation bundle.
+        /// The thread roots, ordered by the `latest_event` in each event's
+        /// aggregation bundle.
         ///
         /// All events returned include bundled aggregations.
         pub chunk: Vec<Raw<AnyTimelineEvent>>,
 
-        /// An opaque string to provide to `from` to keep paginating the responses.
+        /// An opaque string to provide to `from` to keep paginating the
+        /// responses.
         ///
-        /// If this is `None`, there are no more results to fetch and the client should stop
-        /// paginating.
+        /// If this is `None`, there are no more results to fetch and the client
+        /// should stop paginating.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub next_batch: Option<String>,
     }
@@ -102,7 +104,8 @@ pub mod v1 {
 
         /// `participated`
         ///
-        /// Only include thread roots for threads where [`current_user_participated`] is `true`.
+        /// Only include thread roots for threads where
+        /// [`current_user_participated`] is `true`.
         ///
         /// [`current_user_participated`]: https://spec.matrix.org/v1.19/client-server-api/#server-side-aggregation-of-mthread-relationships
         Participated,
@@ -114,9 +117,8 @@ pub mod v1 {
 
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use crate::{api::IncomingRequest, room_id};
-
     use super::v1::{IncludeThreads, Request};
+    use crate::{api::IncomingRequest, room_id};
 
     #[test]
     // Testing when the include parameter is omitted from uri

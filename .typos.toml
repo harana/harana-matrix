@@ -34,8 +34,8 @@ Nd = "Nd"
 Abl = "Abl"
 Som = "Som"
 Ba = "Ba"
-Yur = "Yur" # as found in crates/matrix-sdk-indexeddb/src/crypto_store/migrations/mod.rs
-TYE = "TYE" # as found in testing/matrix-sdk-test/src/test_json/keys_query_sets.rs
+Yur = "Yur" # as found in crates/indexeddb/src/crypto_store/migrations/mod.rs
+TYE = "TYE" # as found in testing/sdk-test/src/test_json/keys_query_sets.rs
 NAX = "NAX" # as found in crates/ruma/src/events/room/thumbnail_source_serde.rs
 Pn = "Pn" # as found in crates/harana-olm
 
@@ -44,7 +44,7 @@ extend-exclude = [
     # Our json files contain a bunch of base64 encoded ed25519 keys.
     "*.json",
     # Fuzzy match patterns that can be understood as typos confusingly.
-    "crates/matrix-sdk-ui/tests/integration/room_list_service.rs",
+    "crates/ui/tests/integration/room_list_service.rs",
     # Binary fuzzing corpora vendored alongside crates/harana-olm.
     "crates/harana-olm/afl/*/in/*",
 ]

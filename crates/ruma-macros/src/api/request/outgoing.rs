@@ -8,7 +8,8 @@ use crate::{
 };
 
 impl Request {
-    /// Generate the `ruma_common::api::OutgoingRequest` implementation for this request struct.
+    /// Generate the `ruma_common::api::OutgoingRequest` implementation for this
+    /// request struct.
     pub fn expand_outgoing(&self, ruma_common: &RumaCommon) -> TokenStream {
         let http = ruma_common.reexported(RumaCommonReexport::Http);
 

@@ -10,7 +10,7 @@ folder.
 Developers can expose Rust code to UniFFI using two different approaches:
 
 - Using an `.udl` file. When a crate has one, you find it under the `src` folder
-  ([an example is here](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-sdk-ffi/src/api.udl)).
+  ([an example is here](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-ffi/src/api.udl)).
 - Add UniFFI directivies as Rust attributes. In this case Rust source files
   (`.rs`) contain attributes related to UniFFI (e.g. `#[uniffi::export]`).
   Attributes are preferred, where applicable.
@@ -21,15 +21,15 @@ Developers can expose Rust code to UniFFI using two different approaches:
 
 First of all check if the Rust definition you are looking for exists on UniFFI
 already. Most of exposed matrix definitions are collected in the crate
-[matrix-sdk-ffi](https://github.com/matrix-org/matrix-rust-sdk/tree/main/bindings/matrix-sdk-ffi).
+[matrix-ffi](https://github.com/matrix-org/matrix-rust-sdk/tree/main/bindings/matrix-ffi).
 This crate contains mainly small Rust wrappers around the actual Rust SDK (e.g.
 the crate
-[matrix-sdk](https://github.com/matrix-org/matrix-rust-sdk/tree/main/crates/matrix-sdk))
+[matrix](https://github.com/matrix-org/matrix-rust-sdk/tree/main/crates/matrix))
 
 If the Rust definition is on UniFFI already, you either:
 
 - find it in a `.udl` file like
-  [matrix-sdk-ffi/src/api.udl](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-sdk-ffi/src/api.udl)
+  [matrix-ffi/src/api.udl](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-ffi/src/api.udl)
 - see it marked with a proper UniFFI Rust attribute like this
   `#[uniffi::export]`
 
@@ -37,14 +37,14 @@ If the Rust definition is on UniFFI already, you either:
 
 1. Unless you want to contribute on the crypto side, you probably need to add
    some code in the
-   [matrix-sdk-ffi](https://github.com/matrix-org/matrix-rust-sdk/tree/main/bindings/matrix-sdk-ffi)
+   [matrix-ffi](https://github.com/matrix-org/matrix-rust-sdk/tree/main/bindings/matrix-ffi)
    crate. After you find the crate you need to understand which file is best to
    contain the new Rust definition. When exposing new matrix API often (but not
    always) you need to touch the file
-   [client.rs](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-sdk-ffi/src/client.rs)
+   [client.rs](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-ffi/src/client.rs)
 
 2. Identify the API to expose in the target Rust crate (typically in
-   [matrix-sdk](https://github.com/matrix-org/matrix-rust-sdk/tree/main/crates/matrix-sdk).
+   [matrix](https://github.com/matrix-org/matrix-rust-sdk/tree/main/crates/matrix).
    If you can’t find it, you probably need to touch the actual Rust SDK as well.
    In this case you typically just need to write some code around
    [ruma](https://github.com/ruma/ruma) (a Rust SDK’s dependency) which already
@@ -52,20 +52,20 @@ If the Rust definition is on UniFFI already, you either:
 
 3. After you got (by finding or writing) the required Rust code, you need to
    expose to UniFFI. To do that just write a small Rust wrapper in the related
-   UniFFI crate (most of the time is **matrix-sdk-ffi**) you found on step 1.
+   UniFFI crate (most of the time is **matrix-ffi**) you found on step 1.
 
 4. When your new (wrapping) Rust definition is ready, remember to expose it to
    UniFFI.
 It’s best to do it using UniFFI Rust attributes (e.g. `#[uniffi::export]`).
 Otherwise add the new definition in the crate’s `.udl` file. For the
-**matrix-sdk-ffi** crate the definition file is
-[api.udl](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-sdk-ffi/src/api.udl).
+**matrix-ffi** crate the definition file is
+[api.udl](https://github.com/matrix-org/matrix-rust-sdk/blob/main/bindings/matrix-ffi/src/api.udl).
 **Remember**: the language inside a `.udl` file isn’t Rust. To
 [learn more about how map Rust into UDL read here](https://mozilla.github.io/uniffi-rs/udl_file_spec.html)
 
 ## Build profiles
 
-The `swift` and `kotlin` xtasks build `matrix-sdk-ffi` with a Cargo profile that
+The `swift` and `kotlin` xtasks build `matrix-ffi` with a Cargo profile that
 can be chosen with `--profile <name>`, or with `--release` as a shorthand for
 the platform's release profile. `--profile` takes precedence over `--release`.
 The profiles themselves are defined in the workspace
@@ -93,7 +93,7 @@ profile uses a directory matching its own name.
 
 **Q**: I wrote my Rust code and exposed it to UniFFI. How can I check if the
 compiler is happy?\
-**A**: Run `cargo build` in the crate you touched (e.g. matrix-sdk-ffi). The
+**A**: Run `cargo build` in the crate you touched (e.g. matrix-ffi). The
 compiler will complain if the Rust code and/or the `.udl` is wrong.
 
 **Q**: The compiler is happy with my code but the CI is failing on GitHub. How

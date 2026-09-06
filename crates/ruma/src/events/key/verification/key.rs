@@ -2,11 +2,10 @@
 //!
 //! [`m.key.verification.key`]: https://spec.matrix.org/v1.19/client-server-api/#mkeyverificationkey
 
-use crate::{OwnedTransactionId, serde::Base64};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::relation::Reference;
+use crate::{OwnedTransactionId, events::relation::Reference, serde::Base64};
 
 /// The content of a to-device `m.key.verification.key` event.
 ///
@@ -17,7 +16,8 @@ use crate::events::relation::Reference;
 pub struct ToDeviceKeyVerificationKeyEventContent {
     /// An opaque identifier for the verification process.
     ///
-    /// Must be the same as the one used for the `m.key.verification.start` message.
+    /// Must be the same as the one used for the `m.key.verification.start`
+    /// message.
     pub transaction_id: OwnedTransactionId,
 
     /// The device's ephemeral public key, encoded as unpadded base64.
@@ -25,8 +25,8 @@ pub struct ToDeviceKeyVerificationKeyEventContent {
 }
 
 impl ToDeviceKeyVerificationKeyEventContent {
-    /// Creates a new `ToDeviceKeyVerificationKeyEventContent` with the given transaction ID and
-    /// key.
+    /// Creates a new `ToDeviceKeyVerificationKeyEventContent` with the given
+    /// transaction ID and key.
     pub fn new(transaction_id: OwnedTransactionId, key: Base64) -> Self {
         Self { transaction_id, key }
     }
@@ -48,7 +48,8 @@ pub struct KeyVerificationKeyEventContent {
 }
 
 impl KeyVerificationKeyEventContent {
-    /// Creates a new `KeyVerificationKeyEventContent` with the given key and reference.
+    /// Creates a new `KeyVerificationKeyEventContent` with the given key and
+    /// reference.
     pub fn new(key: Base64, relates_to: Reference) -> Self {
         Self { key, relates_to }
     }

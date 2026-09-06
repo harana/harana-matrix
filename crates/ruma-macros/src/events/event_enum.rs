@@ -32,8 +32,9 @@ pub(crate) fn expand_event_enum(input: EventEnumInput) -> TokenStream {
                 .unwrap_or_else(syn::Error::into_compile_error),
         );
 
-        // Create the Timeline kind if there are events to put in it. The `Any*TimelineEvent` enums
-        // are implemented manually so we don't need to generate them.
+        // Create the Timeline kind if there are events to put in it. The
+        // `Any*TimelineEvent` enums are implemented manually so we don't need
+        // to generate them.
         if data.kind.is_timeline() {
             timeline_data
                 .get_or_insert_with(|| EventEnumData {
@@ -48,8 +49,9 @@ pub(crate) fn expand_event_enum(input: EventEnumInput) -> TokenStream {
 
     // Handle the Timeline kind if necessary.
     if let Some(mut data) = timeline_data {
-        // Deduplicate event variants, in case there are some with the same `type` in the timeline
-        // kinds. This is necessary for the `m.room.encrypted` state event type from MSC4362.
+        // Deduplicate event variants, in case there are some with the same `type` in
+        // the timeline kinds. This is necessary for the `m.room.encrypted`
+        // state event type from MSC4362.
         let mut deduped_events: Vec<EventEnumEntry> = Vec::new();
         for event in data.events {
             if let Some(idx) = deduped_events
@@ -120,18 +122,20 @@ enum EventEnumKind {
 
     /// Message-like event.
     ///
-    /// This is an event that can occur in the timeline and that doesn't have a state key.
+    /// This is an event that can occur in the timeline and that doesn't have a
+    /// state key.
     MessageLike,
 
     /// State event.
     ///
-    /// This is an event that can occur in the timeline and that has a state key.
+    /// This is an event that can occur in the timeline and that has a state
+    /// key.
     State,
 
     /// Timeline event.
     ///
-    /// This is any event that can occur in the timeline, so this includes message-like and state
-    /// events.
+    /// This is any event that can occur in the timeline, so this includes
+    /// message-like and state events.
     Timeline,
 
     /// A to-device event.
@@ -161,7 +165,8 @@ impl EventEnumKind {
         })
     }
 
-    /// Get the name of the event type (struct or enum) for this kind and the given variation.
+    /// Get the name of the event type (struct or enum) for this kind and the
+    /// given variation.
     fn to_event_ident(self, variation: EventVariation) -> syn::Ident {
         format_ident!("{variation}{self}")
     }
@@ -171,7 +176,8 @@ impl EventEnumKind {
         format_ident!("{self}Type")
     }
 
-    /// Get the name of the `{variation}{kind}Content` trait for this kind and the given variation.
+    /// Get the name of the `{variation}{kind}Content` trait for this kind and
+    /// the given variation.
     fn to_content_kind_trait(self, variation: EventContentTraitVariation) -> syn::Ident {
         format_ident!("{variation}{self}Content")
     }
@@ -181,7 +187,8 @@ impl EventEnumKind {
         format_ident!("Custom{self}Content")
     }
 
-    /// Get the list of variations for an event type (struct or enum) for this kind.
+    /// Get the list of variations for an event type (struct or enum) for this
+    /// kind.
     fn event_variations(self) -> &'static [EventVariation] {
         if let Some(common_kind) = self.common_kind() {
             common_kind.event_variations()
@@ -394,7 +401,8 @@ impl EventEnumEntry {
 enum EventContentVariation {
     /// The non-redacted version of the event content, `Any{kind}EventContent`.
     Original,
-    /// The possibly redacted version of the event content, `AnyPossiblyRedacted{kind}EventContent`.
+    /// The possibly redacted version of the event content,
+    /// `AnyPossiblyRedacted{kind}EventContent`.
     PossiblyRedacted,
 }
 

@@ -1,23 +1,24 @@
 //! `PUT /_matrix/federation/*/3pid/onbind`
 //!
-//! Used by identity servers to notify the homeserver that one of its users has bound a third party
-//! identifier successfully, including any pending room invites the identity server has been made
-//! aware of.
+//! Used by identity servers to notify the homeserver that one of its users has
+//! bound a third party identifier successfully, including any pending room
+//! invites the identity server has been made aware of.
 
 pub mod v1 {
     //! `/v1/` ([spec])
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#put_matrixfederationv13pidonbind
 
+    use serde::{Deserialize, Serialize};
+
     use crate::{
         OwnedRoomId, OwnedUserId,
         api::{auth_scheme::NoAuthentication, request, response},
+        events::room::member::SignedContent,
         metadata,
         serde::Raw,
         thirdparty::Medium,
     };
-    use crate::events::room::member::SignedContent;
-    use serde::{Deserialize, Serialize};
 
     metadata! {
         method: PUT,
@@ -42,7 +43,8 @@ pub mod v1 {
         /// The user that is now bound to the third party identifier.
         pub mxid: OwnedUserId,
 
-        /// A list of pending invites that the third party identifier has received.
+        /// A list of pending invites that the third party identifier has
+        /// received.
         pub invites: Vec<ThirdPartyInvite>,
     }
 
@@ -52,7 +54,8 @@ pub mod v1 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given medium, address, user ID and third party invites.
+        /// Creates a new `Request` with the given medium, address, user ID and
+        /// third party invites.
         pub fn new(
             medium: Medium,
             address: String,
@@ -62,7 +65,8 @@ pub mod v1 {
             Self { medium, address, mxid, invites }
         }
 
-        /// Creates a new `Request` with the given email address, user ID and third party invites.
+        /// Creates a new `Request` with the given email address, user ID and
+        /// third party invites.
         pub fn email(address: String, mxid: OwnedUserId, invites: Vec<ThirdPartyInvite>) -> Self {
             Self::new(Medium::Email, address, mxid, invites)
         }
@@ -89,8 +93,8 @@ pub mod v1 {
         /// The user ID that sent the invite.
         pub sender: OwnedUserId,
 
-        /// A block of content which has been signed, which servers can use to verify the
-        /// third-party invite.
+        /// A block of content which has been signed, which servers can use to
+        /// verify the third-party invite.
         pub signed: Raw<SignedContent>,
     }
 

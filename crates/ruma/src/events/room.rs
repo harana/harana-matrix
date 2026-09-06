@@ -10,19 +10,19 @@ use std::{
 };
 
 use js_int::UInt;
-use crate::{
-    OwnedMxcUri,
-    serde::{
-        Base64, JsonObject,
-        base64::{Standard, UrlSafe},
-    },
-};
 use ruma_macros::StringEnum;
 use serde::{Deserialize, Serialize, de};
 use serde_json::Value as JsonValue;
 use zeroize::Zeroize;
 
-use crate::events::PrivOwnedStr;
+use crate::{
+    OwnedMxcUri,
+    events::PrivOwnedStr,
+    serde::{
+        Base64, JsonObject,
+        base64::{Standard, UrlSafe},
+    },
+};
 
 pub mod avatar;
 pub mod canonical_alias;
@@ -66,8 +66,9 @@ pub enum MediaSource {
     Encrypted(Box<EncryptedFile>),
 }
 
-// Custom implementation of `Deserialize`, because serde doesn't guarantee what variant will be
-// deserialized for "externally tagged"¹ enums where multiple "tag" fields exist.
+// Custom implementation of `Deserialize`, because serde doesn't guarantee what
+// variant will be deserialized for "externally tagged"¹ enums where multiple
+// "tag" fields exist.
 //
 // ¹ https://serde.rs/enum-representations.html
 impl<'de> Deserialize<'de> for MediaSource {
@@ -134,14 +135,16 @@ pub struct ImageInfo {
     #[serde(rename = "xyz.amorgan.thumbhash", skip_serializing_if = "Option::is_none")]
     pub thumbhash: Option<Base64>,
 
-    /// If this flag is `true`, the original image SHOULD be assumed to be animated. If this flag
-    /// is `false`, the original image SHOULD be assumed to NOT be animated.
+    /// If this flag is `true`, the original image SHOULD be assumed to be
+    /// animated. If this flag is `false`, the original image SHOULD be
+    /// assumed to NOT be animated.
     ///
-    /// If a sending client is unable to determine whether an image is animated, it SHOULD leave
-    /// the flag unset.
+    /// If a sending client is unable to determine whether an image is animated,
+    /// it SHOULD leave the flag unset.
     ///
-    /// Receiving clients MAY use this flag to optimize whether to download the original image
-    /// rather than a thumbnail if it is animated, but they SHOULD NOT trust this flag.
+    /// Receiving clients MAY use this flag to optimize whether to download the
+    /// original image rather than a thumbnail if it is animated, but they
+    /// SHOULD NOT trust this flag.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_animated: Option<bool>,
 }
@@ -199,7 +202,8 @@ pub struct EncryptedFile {
 }
 
 impl EncryptedFile {
-    /// Construct a new `EncryptedFile` with the given URL, encryption info and hashes.
+    /// Construct a new `EncryptedFile` with the given URL, encryption info and
+    /// hashes.
     pub fn new(url: OwnedMxcUri, info: EncryptedFileInfo, hashes: EncryptedFileHashes) -> Self {
         Self { url, info, hashes }
     }
@@ -210,7 +214,8 @@ impl EncryptedFile {
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "v", rename_all = "lowercase")]
 pub enum EncryptedFileInfo {
-    /// Information about a file encrypted using version 2 of the attachment encryption protocol.
+    /// Information about a file encrypted using version 2 of the attachment
+    /// encryption protocol.
     V2(V2EncryptedFileInfo),
 
     #[doc(hidden)]
@@ -231,11 +236,11 @@ impl EncryptedFileInfo {
 
     /// Get the data of the attachment encryption protocol.
     ///
-    /// The returned JSON object won't contain the `v` field, use [`.version()`][Self::version] to
-    /// access it.
+    /// The returned JSON object won't contain the `v` field, use
+    /// [`.version()`][Self::version] to access it.
     ///
-    /// Prefer to use the public variants of `EncryptedFileInfo` where possible; this method is
-    /// meant to be used for custom versions only.
+    /// Prefer to use the public variants of `EncryptedFileInfo` where possible;
+    /// this method is meant to be used for custom versions only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("encrypted file info serialization to succeed") {
@@ -272,13 +277,14 @@ pub struct V2EncryptedFileInfo {
 }
 
 impl V2EncryptedFileInfo {
-    /// Construct a new `V2EncryptedFileInfo` with the given encoded key and initialization vector.
+    /// Construct a new `V2EncryptedFileInfo` with the given encoded key and
+    /// initialization vector.
     pub fn new(k: Base64<UrlSafe, [u8; 32]>, iv: Base64<Standard, [u8; 16]>) -> Self {
         Self { k, iv }
     }
 
-    /// Construct a new `V2EncryptedFileInfo` by base64-encoding the given key and initialization
-    /// vector bytes.
+    /// Construct a new `V2EncryptedFileInfo` by base64-encoding the given key
+    /// and initialization vector bytes.
     pub fn encode(k: [u8; 32], iv: [u8; 16]) -> Self {
         Self::new(Base64::new(k), Base64::new(iv))
     }
@@ -296,7 +302,8 @@ impl Drop for V2EncryptedFileInfo {
     }
 }
 
-/// Information about a file encrypted using a custom version of the attachment encryption protocol.
+/// Information about a file encrypted using a custom version of the attachment
+/// encryption protocol.
 #[doc(hidden)]
 #[derive(Debug, Clone, Serialize)]
 pub struct CustomEncryptedFileInfo {
@@ -308,10 +315,11 @@ pub struct CustomEncryptedFileInfo {
     data: JsonObject,
 }
 
-/// A map of [`EncryptedFileHashAlgorithm`] to the associated [`EncryptedFileHash`].
+/// A map of [`EncryptedFileHashAlgorithm`] to the associated
+/// [`EncryptedFileHash`].
 ///
-/// This type is used to ensure that a supported [`EncryptedFileHash`] always matches the
-/// appropriate [`EncryptedFileHashAlgorithm`].
+/// This type is used to ensure that a supported [`EncryptedFileHash`] always
+/// matches the appropriate [`EncryptedFileHashAlgorithm`].
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct EncryptedFileHashes(BTreeMap<EncryptedFileHashAlgorithm, EncryptedFileHash>);
@@ -329,7 +337,8 @@ impl EncryptedFileHashes {
 
     /// Insert the given [`EncryptedFileHash`].
     ///
-    /// If a map with the same [`EncryptedFileHashAlgorithm`] was already present, it is returned.
+    /// If a map with the same [`EncryptedFileHashAlgorithm`] was already
+    /// present, it is returned.
     pub fn insert(&mut self, hash: EncryptedFileHash) -> Option<EncryptedFileHash> {
         self.0.insert(hash.algorithm(), hash)
     }
@@ -428,12 +437,11 @@ pub struct CustomEncryptedFileHash {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::owned_mxc_uri;
     use serde::Deserialize;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{EncryptedFile, MediaSource, V2EncryptedFileInfo};
-    use crate::events::room::EncryptedFileHashes;
+    use crate::{events::room::EncryptedFileHashes, owned_mxc_uri};
 
     #[derive(Deserialize)]
     struct MsgWithAttachment {

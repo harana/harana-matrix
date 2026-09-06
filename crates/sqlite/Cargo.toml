@@ -1,0 +1,74 @@
+[package]
+name = "sqlite"
+version = "0.18.0"
+edition = "2024"
+repository = "https://github.com/matrix-org/matrix-rust-sdk"
+description = "Sqlite storage backend for matrix"
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--generate-link-to-definition"]
+
+[features]
+default = ["state-store", "event-cache-store", "media-store", "tokio-runtime"]
+testing = ["crypto?/testing"]
+
+bundled = ["rusqlite/bundled"]
+crypto-store = ["dep:base", "dep:crypto"]
+event-cache-store = ["dep:base"]
+media-store = ["dep:base"]
+state-store = ["dep:base"]
+
+experimental-encrypted-state-events = [
+    "crypto?/experimental-encrypted-state-events"
+]
+experimental-push-secrets = [
+    "crypto?/experimental-push-secrets"
+]
+
+# Use Tokio as the async runtime, unless another one is installed with
+# `sdk_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = [
+    "sdk-common/tokio-runtime",
+    "base?/tokio-runtime",
+    "crypto?/tokio-runtime",
+]
+
+[dependencies]
+as_variant.workspace = true
+async-trait.workspace = true
+deadpool = { version = "0.13", default-features = false, features = ["managed"] }
+itertools.workspace = true
+base = { workspace = true, optional = true }
+sdk-common.workspace = true
+crypto = { workspace = true, optional = true }
+store-encryption.workspace = true
+num_cpus = { version = "1.17.0", default-features = false }
+rmp-serde.workspace = true
+ruma.workspace = true
+rusqlite = { version = "0.40.1", default-features = false, features = ["limits", "fallible_uint", "cache"] }
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error = { version = "0.1.20", default-features = false }
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+vodozemac.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
+erased-serde.workspace = true
+glob = "0.3.4"
+base = { workspace = true, features = ["testing"] }
+crypto = { workspace = true, features = ["testing"] }
+sdk-test.workspace = true
+sdk-test-utils.workspace = true
+similar-asserts.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

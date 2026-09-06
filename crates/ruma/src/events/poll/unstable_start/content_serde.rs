@@ -1,4 +1,3 @@
-use crate::{EventId, serde::from_raw_json_value};
 use serde::{Deserialize, Deserializer, Serialize, de, ser::SerializeStruct};
 use serde_json::value::RawValue as RawJsonValue;
 
@@ -7,7 +6,11 @@ use super::{
     ReplacementUnstablePollStartEventContent, UnstablePollStartContentBlock,
     UnstablePollStartEventContent,
 };
-use crate::events::room::message::{Relation, deserialize_relation};
+use crate::{
+    EventId,
+    events::room::message::{Relation, deserialize_relation},
+    serde::from_raw_json_value,
+};
 
 impl<'de> Deserialize<'de> for UnstablePollStartEventContent {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

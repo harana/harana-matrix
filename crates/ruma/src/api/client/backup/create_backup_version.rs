@@ -8,12 +8,10 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3room_keysversion
 
     use crate::{
-        api::{auth_scheme::AccessToken, request, response},
+        api::{auth_scheme::AccessToken, client::backup::BackupAlgorithm, request, response},
         metadata,
         serde::Raw,
     };
-
-    use crate::api::client::backup::BackupAlgorithm;
 
     metadata! {
         method: POST,

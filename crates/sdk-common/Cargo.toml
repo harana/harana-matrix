@@ -1,0 +1,81 @@
+[package]
+authors = ["Damir Jelić <poljar@termina.org.uk>"]
+description = "Collection of common types and imports used in the matrix"
+edition = "2024"
+homepage = "https://github.com/matrix-org/matrix-rust-sdk"
+keywords = ["matrix", "chat", "messaging", "ruma", "nio"]
+license = "Apache-2.0"
+name = "sdk-common"
+readme = "README.md"
+repository = "https://github.com/matrix-org/matrix-rust-sdk"
+rust-version.workspace = true
+version = "0.18.0"
+
+[package.metadata.docs.rs]
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+rustdoc-args = ["--generate-link-to-definition"]
+
+[features]
+default = ["tokio-runtime"]
+
+js = ["wasm-bindgen-futures"]
+
+# Use Tokio as the SDK's async runtime, unless another one is installed with
+# `sdk_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = ["tokio/rt", "tokio/time"]
+uniffi = ["dep:uniffi"]
+# Private feature, see
+# https://github.com/matrix-org/matrix-rust-sdk/pull/3749#issuecomment-2312939823 for the gory
+# details.
+test-send-sync = []
+
+# Enable experimental support for encrypting state events; see
+# https://github.com/matrix-org/matrix-rust-sdk/issues/5397.
+experimental-encrypted-state-events = []
+
+[dependencies]
+eyeball-im.workspace = true
+futures-channel.workspace = true
+futures-core.workspace = true
+futures-util.workspace = true
+imbl.workspace = true
+ruma.workspace = true
+sanitize-filename.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+# Only for the runtime-agnostic synchronisation primitives, plus the optional
+# Tokio backend of `runtime` (see the `tokio-runtime` feature).
+tokio.workspace = true
+tracing.workspace = true
+uniffi = { workspace = true, optional = true }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+futures-executor.workspace = true
+futures-util = { workspace = true, features = ["channel"] }
+gloo-timers = { workspace = true, features = ["futures"] }
+tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures = { version = "0.4.76", optional = true }
+web-sys = { workspace = true, features = ["console"] }
+
+[dev-dependencies]
+assert_matches.workspace = true
+assert_matches2.workspace = true
+insta.workspace = true
+sdk-test-macros = { path = "../../testing/sdk-test-macros" }
+sdk-test-utils.workspace = true
+proptest.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
+wasm-bindgen-test.workspace = true
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+# Enable the JS feature for getrandom.
+getrandom = { workspace = true, default-features = false, features = ["wasm_js"] }
+getrandom3 = { version = "0.3.4", package = "getrandom", default-features = false, features = ["wasm_js"] }
+js-sys.workspace = true
+
+[lints]
+workspace = true

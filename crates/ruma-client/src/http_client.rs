@@ -1,5 +1,5 @@
-//! This module contains an abstraction for HTTP clients as well as friendly-named re-exports of
-//! client types that implement this trait.
+//! This module contains an abstraction for HTTP clients as well as
+//! friendly-named re-exports of client types that implement this trait.
 
 use std::{future::Future, pin::Pin};
 
@@ -44,10 +44,11 @@ pub trait DefaultConstructibleHttpClient: HttpClient {
 
 /// Convenience functionality on top of `HttpClient`.
 ///
-/// If you want to build your own matrix client type instead of using `ruma_client::Client`, this
-/// trait should make that relatively easy.
+/// If you want to build your own matrix client type instead of using
+/// `ruma_client::Client`, this trait should make that relatively easy.
 pub trait HttpClientExt: HttpClient {
-    /// Send a strongly-typed matrix request to get back a strongly-typed response.
+    /// Send a strongly-typed matrix request to get back a strongly-typed
+    /// response.
     // TODO: `R: 'a` bound should not be needed
     fn send_matrix_request<'a, R>(
         &'a self,
@@ -69,8 +70,8 @@ pub trait HttpClientExt: HttpClient {
         )
     }
 
-    /// Turn a strongly-typed matrix request into an `http::Request`, customize it and send it to
-    /// get back a strongly-typed response.
+    /// Turn a strongly-typed matrix request into an `http::Request`, customize
+    /// it and send it to get back a strongly-typed response.
     // TODO: `R: 'a` and `F: 'a` should not be needed
     fn send_customized_matrix_request<'a, R, F>(
         &'a self,
@@ -95,11 +96,12 @@ pub trait HttpClientExt: HttpClient {
         ))
     }
 
-    /// Turn a strongly-typed matrix request into an `http::Request`, add `user_id` and/or
-    /// `device_id` query parameters to it and send it to get back a strongly-typed response.
+    /// Turn a strongly-typed matrix request into an `http::Request`, add
+    /// `user_id` and/or `device_id` query parameters to it and send it to
+    /// get back a strongly-typed response.
     ///
-    /// This method is meant to be used by application services when interacting with the
-    /// client-server API.
+    /// This method is meant to be used by application services when interacting
+    /// with the client-server API.
     fn send_matrix_request_as<'a, R>(
         &'a self,
         homeserver_url: &str,

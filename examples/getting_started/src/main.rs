@@ -1,6 +1,6 @@
 ///
 ///  This is an example showcasing how to build a very simple bot using the
-/// matrix-sdk. To try it, you need a rust build setup, then you can run:
+/// matrix. To try it, you need a rust build setup, then you can run:
 /// `cargo run -p example-getting-started -- <homeserver_url> <user> <password>`
 ///
 /// Use a second client to open a DM to your bot or invite them into some room.
@@ -12,7 +12,7 @@
 // The imports we need
 use std::{env, process::exit};
 
-use matrix_sdk::{
+use matrix::{
     Client, Room, RoomState,
     config::SyncSettings,
     ruma::events::room::{

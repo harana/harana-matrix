@@ -7,18 +7,17 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3roomsroomidinitialsync
 
+    use serde::{Deserialize, Serialize};
+
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AccessToken, request, response},
+        api::{auth_scheme::AccessToken, client::room::Visibility, request, response},
+        events::{
+            AnyRoomAccountDataEvent, AnyStateEvent, AnyTimelineEvent, room::member::MembershipState,
+        },
         metadata,
         serde::Raw,
     };
-    use crate::events::{
-        AnyRoomAccountDataEvent, AnyStateEvent, AnyTimelineEvent, room::member::MembershipState,
-    };
-    use serde::{Deserialize, Serialize};
-
-    use crate::api::client::room::Visibility;
 
     metadata! {
         method: GET,
@@ -65,10 +64,11 @@ pub mod v3 {
 
         /// The state of the room.
         ///
-        /// If the user is a member of the room this will be the current state of the room as a
-        /// list of events.
+        /// If the user is a member of the room this will be the current state
+        /// of the room as a list of events.
         ///
-        /// If the user has left the room this will be the state of the room when they left it.
+        /// If the user has left the room this will be the state of the room
+        /// when they left it.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         pub state: Vec<Raw<AnyStateEvent>>,
 
@@ -97,25 +97,27 @@ pub mod v3 {
     pub struct PaginationChunk {
         /// An array of events.
         ///
-        /// If the user is a member of the room this will be a list of the most recent messages for
-        /// this room.
+        /// If the user is a member of the room this will be a list of the most
+        /// recent messages for this room.
         ///
-        /// If the user has left the room this will be the messages that preceded them leaving.
+        /// If the user has left the room this will be the messages that
+        /// preceded them leaving.
         pub chunk: Vec<Raw<AnyTimelineEvent>>,
 
         ///  A token which correlates to the end of chunk.
         ///
-        /// Can be passed to [`listen_to_new_events`] to listen to new events and to
-        /// [`get_message_events`] to retrieve later events.
+        /// Can be passed to [`listen_to_new_events`] to listen to new events
+        /// and to [`get_message_events`] to retrieve later events.
         ///
         /// [`listen_to_new_events`]: crate::api::client::peeking::listen_to_new_events
         /// [`get_message_events`]: crate::api::client::message::get_message_events
         pub end: String,
 
-        /// A token which correlates to the start of chunk. Can be passed to [`get_message_events`]
-        /// to retrieve earlier events.
+        /// A token which correlates to the start of chunk. Can be passed to
+        /// [`get_message_events`] to retrieve earlier events.
         ///
-        /// If no earlier events are available, this property may be omitted from the response.
+        /// If no earlier events are available, this property may be omitted
+        /// from the response.
         ///
         /// [`get_message_events`]: crate::api::client::message::get_message_events
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -123,7 +125,8 @@ pub mod v3 {
     }
 
     impl PaginationChunk {
-        /// Construct a new `PaginationChunk` with the given events and end token.
+        /// Construct a new `PaginationChunk` with the given events and end
+        /// token.
         pub fn new(chunk: Vec<Raw<AnyTimelineEvent>>, end: String) -> Self {
             Self { chunk, end, start: None }
         }

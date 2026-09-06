@@ -1,9 +1,9 @@
 #![cfg(feature = "server")]
 
 use assert_matches2::assert_matches;
-use ruma::api::client::{message::send_message_event, state::send_state_event};
 use ruma::api::{
     IncomingRequest as _,
+    client::{message::send_message_event, state::send_state_event},
     error::{DeserializationError, FromHttpRequestError},
 };
 

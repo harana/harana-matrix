@@ -2,12 +2,16 @@
 //!
 //! [`m.policy.rule.room`]: https://spec.matrix.org/v1.19/client-server-api/#mpolicyruleroom
 
-use crate::room_version_rules::RedactionRules;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{PolicyRuleEventContent, PossiblyRedactedPolicyRuleEventContent};
-use crate::events::{PossiblyRedactedStateEventContent, RedactContent, StateEventType, StaticEventContent};
+use crate::{
+    events::{
+        PossiblyRedactedStateEventContent, RedactContent, StateEventType, StaticEventContent,
+    },
+    room_version_rules::RedactionRules,
+};
 
 /// The content of an `m.policy.rule.room` event.
 ///
@@ -19,7 +23,8 @@ pub struct PolicyRuleRoomEventContent(pub PolicyRuleEventContent);
 
 /// The possibly redacted form of [`PolicyRuleRoomEventContent`].
 ///
-/// This type is used when it's not obvious whether the content is redacted or not.
+/// This type is used when it's not obvious whether the content is redacted or
+/// not.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::exhaustive_structs)]
 pub struct PossiblyRedactedPolicyRuleRoomEventContent(pub PossiblyRedactedPolicyRuleEventContent);
@@ -61,11 +66,14 @@ impl From<RedactedPolicyRuleRoomEventContent> for PossiblyRedactedPolicyRuleRoom
 
 #[cfg(test)]
 mod tests {
-    use crate::{canonical_json::assert_to_canonical_json_eq, serde::Raw};
     use serde_json::{from_value as from_json_value, json};
 
     use super::{OriginalPolicyRuleRoomEvent, PolicyRuleRoomEventContent};
-    use crate::events::policy::rule::{PolicyRuleEventContent, Recommendation};
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        events::policy::rule::{PolicyRuleEventContent, Recommendation},
+        serde::Raw,
+    };
 
     #[test]
     fn serialization() {

@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use imbl::Vector;
 use indexmap::IndexMap;
-use matrix_sdk::ruma::{
+use matrix::ruma::{
     OwnedUserId,
     events::{receipt::Receipt, room::message::MessageType},
 };
-use matrix_sdk_ui::timeline::{
+use ratatui::{prelude::*, widgets::*};
+use ui::timeline::{
     MembershipChange, Message, MsgLikeContent, MsgLikeKind, RoomMembershipChange, ThreadSummary,
     TimelineDetails, TimelineItem, TimelineItemContent, TimelineItemKind, VirtualTimelineItem,
 };
-use ratatui::{prelude::*, widgets::*};
 
 use crate::{ALT_ROW_COLOR, NORMAL_ROW_COLOR, SELECTED_STYLE_FG, TEXT_COLOR};
 

@@ -2,11 +2,10 @@
 //!
 //! [`m.room.canonical_alias`]: https://spec.matrix.org/v1.19/client-server-api/#mroomcanonical_alias
 
-use crate::OwnedRoomAliasId;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::EmptyStateKey;
+use crate::{OwnedRoomAliasId, events::EmptyStateKey};
 
 /// The content of an `m.room.canonical_alias` event.
 ///
@@ -40,11 +39,13 @@ impl RoomCanonicalAliasEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::{canonical_json::assert_to_canonical_json_eq, owned_room_alias_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::RoomCanonicalAliasEventContent;
-    use crate::events::OriginalStateEvent;
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq, events::OriginalStateEvent,
+        owned_room_alias_id,
+    };
 
     #[test]
     fn serialization_with_optional_fields_as_none() {

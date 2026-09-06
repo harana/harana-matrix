@@ -6,12 +6,13 @@
 
 use std::collections::BTreeMap;
 
+#[cfg(feature = "unstable-msc4383")]
+use serde::{Deserialize, Serialize};
+
 use crate::{
     api::{SupportedVersions, auth_scheme::AccessTokenOptional, request, response},
     metadata,
 };
-#[cfg(feature = "unstable-msc4383")]
-use serde::{Deserialize, Serialize};
 
 metadata! {
     method: GET,
@@ -28,7 +29,8 @@ pub struct Request {}
 /// Response type for the `api_versions` endpoint.
 #[response]
 pub struct Response {
-    /// A list of Matrix client API protocol versions supported by the homeserver.
+    /// A list of Matrix client API protocol versions supported by the
+    /// homeserver.
     pub versions: Vec<String>,
 
     /// Experimental features supported by the server.
@@ -93,11 +95,11 @@ impl Response {
         }
     }
 
-    /// Convert this `Response` into a [`SupportedVersions`] that can be used with
-    /// `OutgoingRequest::try_into_http_request()`.
+    /// Convert this `Response` into a [`SupportedVersions`] that can be used
+    /// with `OutgoingRequest::try_into_http_request()`.
     ///
-    /// Matrix versions that can't be parsed to a `MatrixVersion`, and features with the boolean
-    /// value set to `false` are discarded.
+    /// Matrix versions that can't be parsed to a `MatrixVersion`, and features
+    /// with the boolean value set to `false` are discarded.
     pub fn as_supported_versions(&self) -> SupportedVersions {
         SupportedVersions::from_parts(&self.versions, &self.unstable_features)
     }

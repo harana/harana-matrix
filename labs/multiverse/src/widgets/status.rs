@@ -6,11 +6,11 @@ use std::{
     time::Duration,
 };
 
-use matrix_sdk_common::locks::Mutex;
 use ratatui::{
     prelude::{Buffer, Rect, *},
     widgets::Paragraph,
 };
+use sdk_common::locks::Mutex;
 use tokio::{
     spawn,
     task::{JoinHandle, spawn_blocking},

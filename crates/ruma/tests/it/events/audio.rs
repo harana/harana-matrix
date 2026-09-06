@@ -4,21 +4,21 @@ use std::time::Duration;
 
 use assert_matches2::assert_matches;
 use js_int::uint;
+#[cfg(feature = "unstable-msc3246")]
+use ruma::events::audio::Amplitude;
 use ruma::{
     MilliSecondsSinceUnixEpoch,
     canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, MessageLikeEvent,
+        audio::{AudioDetailsContentBlock, AudioEventContent},
+        file::{EncryptedContent, FileContentBlock},
+        message::TextContentBlock,
+        relation::Reply,
+        room::{EncryptedFileHash, V2EncryptedFileInfo, message::Relation},
+    },
     owned_event_id, owned_mxc_uri,
     serde::{Base64, CanBeEmpty},
-};
-#[cfg(feature = "unstable-msc3246")]
-use ruma::events::audio::Amplitude;
-use ruma::events::{
-    AnyMessageLikeEvent, MessageLikeEvent,
-    audio::{AudioDetailsContentBlock, AudioEventContent},
-    file::{EncryptedContent, FileContentBlock},
-    message::TextContentBlock,
-    relation::Reply,
-    room::{EncryptedFileHash, V2EncryptedFileInfo, message::Relation},
 };
 use serde_json::{from_value as from_json_value, json};
 

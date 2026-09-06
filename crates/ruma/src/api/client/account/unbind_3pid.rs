@@ -8,12 +8,12 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3account3pidunbind
 
     use crate::{
-        api::{auth_scheme::AccessToken, request, response},
+        api::{
+            auth_scheme::AccessToken, client::account::ThirdPartyIdRemovalStatus, request, response,
+        },
         metadata,
         thirdparty::Medium,
     };
-
-    use crate::api::client::account::ThirdPartyIdRemovalStatus;
 
     metadata! {
         method: POST,
@@ -47,7 +47,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given medium and third-party address.
+        /// Creates a new `Request` with the given medium and third-party
+        /// address.
         pub fn new(medium: Medium, address: String) -> Self {
             Self { id_server: None, medium, address }
         }

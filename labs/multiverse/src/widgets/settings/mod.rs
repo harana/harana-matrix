@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
 use developer::DeveloperSettingsView;
-use matrix_sdk::Client;
-use matrix_sdk_ui::sync_service::SyncService;
+use matrix::Client;
 use ratatui::{prelude::*, widgets::*};
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 use style::palette::tailwind;
+use ui::sync_service::SyncService;
 
 use super::recovery::{RecoveryView, RecoveryViewState};
 use crate::popup_area;

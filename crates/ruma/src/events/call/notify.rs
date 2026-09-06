@@ -23,7 +23,8 @@ pub struct CallNotifyEventContent {
     /// How this notify event should notify the receiver.
     pub notify_type: rtc::notification::NotificationType,
 
-    /// The users that are notified by this event (See [MSC3952] (Intentional Mentions)).
+    /// The users that are notified by this event (See [MSC3952] (Intentional
+    /// Mentions)).
     ///
     /// [MSC3952]: https://github.com/matrix-org/matrix-spec-proposals/pull/3952
     #[serde(rename = "m.mentions")]
@@ -43,8 +44,8 @@ impl CallNotifyEventContent {
 
 /// The type of matrix RTC application.
 ///
-/// This is different to [`Application`] because application contains all the information from the
-/// `m.call.member` event.
+/// This is different to [`Application`] because application contains all the
+/// information from the `m.call.member` event.
 ///
 /// An `Application` can be converted into an `ApplicationType` using `.into()`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -66,13 +67,15 @@ impl From<Application> for ApplicationType {
 
 #[cfg(test)]
 mod tests {
-    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
-    use crate::events::{
-        Mentions,
-        call::notify::{ApplicationType, CallNotifyEventContent},
-        rtc,
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        events::{
+            Mentions,
+            call::notify::{ApplicationType, CallNotifyEventContent},
+            rtc,
+        },
     };
 
     #[test]
@@ -123,9 +126,11 @@ mod tests {
         use std::collections::BTreeSet;
 
         use assert_matches2::assert_matches;
-        use crate::owned_user_id;
 
-        use crate::events::{AnyMessageLikeEvent, MessageLikeEvent};
+        use crate::{
+            events::{AnyMessageLikeEvent, MessageLikeEvent},
+            owned_user_id,
+        };
 
         let json_data = json!({
             "content": {

@@ -1,11 +1,11 @@
-use crate::{
-    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, serde::from_raw_json_value,
-};
 use serde::{Deserialize, de};
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::{AnyRedactionEvent, CustomRedactionEvent};
-use crate::events::EventTypeDeHelper;
+use crate::{
+    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, events::EventTypeDeHelper,
+    serde::from_raw_json_value,
+};
 
 impl<'de> Deserialize<'de> for AnyRedactionEvent {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -45,6 +45,7 @@ struct CustomRedactionEventDeHelper {
     /// The fully-qualified ID of the user who sent this event.
     sender: OwnedUserId,
 
-    /// Timestamp in milliseconds on originating homeserver when this event was sent.
+    /// Timestamp in milliseconds on originating homeserver when this event was
+    /// sent.
     origin_server_ts: MilliSecondsSinceUnixEpoch,
 }

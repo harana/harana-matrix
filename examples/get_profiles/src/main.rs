@@ -1,6 +1,6 @@
 use std::{env, process::exit};
 
-use matrix_sdk::{
+use matrix::{
     Client, Result as MatrixResult,
     reqwest::StatusCode,
     ruma::{
@@ -29,7 +29,7 @@ async fn get_profile(client: Client, mxid: &UserId) -> MatrixResult<UserProfile>
     // See https://docs.rs/ruma-client-api/latest/ruma_client_api/index.html for all available Endpoints
     let request = profile::get_profile::v3::Request::new(mxid.to_owned());
 
-    // Start the request using matrix_sdk::Client::send
+    // Start the request using matrix::Client::send
     // To avoid having to deal with auth errors, you can also use
     // account().fetch_user_profile() which handles auth correctly.
     let resp = client.send(request).await?;
@@ -56,11 +56,7 @@ async fn get_profile_authenticated(client: Client) -> MatrixResult<UserProfile> 
     Ok(user_profile)
 }
 
-async fn login(
-    homeserver_url: String,
-    username: &str,
-    password: &str,
-) -> matrix_sdk::Result<Client> {
+async fn login(homeserver_url: String, username: &str, password: &str) -> matrix::Result<Client> {
     let homeserver_url = Url::parse(&homeserver_url).expect("Couldn't parse the homeserver URL");
     let client = Client::new(homeserver_url).await.unwrap();
 

@@ -1,14 +1,14 @@
 use assert_matches::assert_matches;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use futures_util::pin_mut;
-use matrix_sdk::{stream::StreamExt, test_utils::mocks::MatrixMockServer};
-use matrix_sdk_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
-use matrix_sdk_ui::{
-    RoomListService, eyeball_im::VectorDiff, room_list_service::filters::new_filter_non_left,
-};
+use matrix::{stream::StreamExt, test_utils::mocks::MatrixMockServer};
 use rand::{distr::Uniform, prelude::Distribution};
 use ruma::{OwnedRoomId, RoomId, owned_user_id};
+use sdk_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
 use tokio::runtime::Builder;
+use ui::{
+    RoomListService, eyeball_im::VectorDiff, room_list_service::filters::new_filter_non_left,
+};
 
 /// Benchmark the time it takes to create a room list.
 pub fn create(c: &mut Criterion) {

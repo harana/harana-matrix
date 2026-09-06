@@ -10,10 +10,10 @@ pub mod v3 {
     use crate::{
         OwnedRoomId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
+        events::{AnyRoomAccountDataEventContent, RoomAccountDataEventType},
         metadata,
         serde::Raw,
     };
-    use crate::events::{AnyRoomAccountDataEventContent, RoomAccountDataEventType};
 
     metadata! {
         method: GET,
@@ -46,15 +46,17 @@ pub mod v3 {
     pub struct Response {
         /// Account data content for the given type.
         ///
-        /// Since the inner type of the `Raw` does not implement `Deserialize`, you need to use
-        /// `.deserialize_as_unchecked::<T>()` or
-        /// `.cast_ref_unchecked::<T>().deserialize_with_type()` to deserialize it.
+        /// Since the inner type of the `Raw` does not implement `Deserialize`,
+        /// you need to use `.deserialize_as_unchecked::<T>()` or
+        /// `.cast_ref_unchecked::<T>().deserialize_with_type()` to deserialize
+        /// it.
         #[ruma_api(body)]
         pub account_data: Raw<AnyRoomAccountDataEventContent>,
     }
 
     impl Request {
-        /// Creates a new `Request` with the given user ID, room ID and event type.
+        /// Creates a new `Request` with the given user ID, room ID and event
+        /// type.
         pub fn new(
             user_id: OwnedUserId,
             room_id: OwnedRoomId,

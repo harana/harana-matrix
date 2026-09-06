@@ -1,0 +1,25 @@
+[package]
+name = "thumbnail"
+description = "Thumbnail generation for Matrix media, with a bounded decode budget"
+version = "0.18.0"
+authors = ["Harana Contributors"]
+edition = "2024"
+homepage = "https://github.com/harana/harana-matrix"
+keywords = ["matrix", "chat", "messaging", "ruma", "media"]
+license = "Apache-2.0"
+readme = "README.md"
+rust-version.workspace = true
+repository = "https://github.com/harana/harana-matrix"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+
+[dependencies]
+image.workspace = true
+ruma.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

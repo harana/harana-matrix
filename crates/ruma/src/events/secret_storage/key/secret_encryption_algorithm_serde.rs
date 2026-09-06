@@ -1,10 +1,10 @@
-use crate::serde::JsonObject;
 use serde::{Deserialize, Serialize, de};
 
 use super::{
     CustomSecretEncryptionAlgorithm, SecretStorageEncryptionAlgorithm,
     SecretStorageV1AesHmacSha2Properties,
 };
+use crate::serde::JsonObject;
 
 #[derive(Deserialize)]
 #[serde(untagged)]

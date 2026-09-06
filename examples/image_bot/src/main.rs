@@ -1,6 +1,6 @@
 use std::{env, fs, process::exit};
 
-use matrix_sdk::{
+use matrix::{
     Client, Room, RoomState,
     attachment::AttachmentConfig,
     config::SyncSettings,
@@ -36,7 +36,7 @@ async fn login_and_sync(
     username: String,
     password: String,
     image: Vec<u8>,
-) -> matrix_sdk::Result<()> {
+) -> matrix::Result<()> {
     let homeserver_url = Url::parse(&homeserver_url).expect("Couldn't parse the homeserver URL");
     let client = Client::new(homeserver_url).await.unwrap();
 

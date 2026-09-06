@@ -35,7 +35,8 @@ pub mod unstable {
     #[response]
     /// Response type for the `GET` `rendezvous` endpoint.
     pub struct Response {
-        /// True if the requester is able to use the create session endpoint, false otherwise.
+        /// True if the requester is able to use the create session endpoint,
+        /// false otherwise.
         pub create_available: bool,
     }
 

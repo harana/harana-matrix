@@ -8,11 +8,9 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3pushers
 
     use crate::{
-        api::{auth_scheme::AccessToken, request, response},
+        api::{auth_scheme::AccessToken, client::push::Pusher, request, response},
         metadata,
     };
-
-    use crate::api::client::push::Pusher;
 
     metadata! {
         method: GET,

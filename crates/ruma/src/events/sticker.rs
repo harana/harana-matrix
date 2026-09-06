@@ -2,13 +2,15 @@
 //!
 //! [`m.sticker`]: https://spec.matrix.org/v1.19/client-server-api/#msticker
 
-use crate::OwnedMxcUri;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize, de};
 
 #[cfg(feature = "compat-encrypted-stickers")]
 use crate::events::room::EncryptedFile;
-use crate::events::room::{ImageInfo, MediaSource, message::Relation};
+use crate::{
+    OwnedMxcUri,
+    events::room::{ImageInfo, MediaSource, message::Relation},
+};
 
 /// The source of a sticker media file.
 #[derive(Clone, Debug, Serialize)]
@@ -24,8 +26,9 @@ pub enum StickerMediaSource {
     Encrypted(Box<EncryptedFile>),
 }
 
-// Custom implementation of `Deserialize`, because serde doesn't guarantee what variant will be
-// deserialized for "externally tagged"¹ enums where multiple "tag" fields exist.
+// Custom implementation of `Deserialize`, because serde doesn't guarantee what
+// variant will be deserialized for "externally tagged"¹ enums where multiple
+// "tag" fields exist.
 //
 // ¹ https://serde.rs/enum-representations.html
 impl<'de> Deserialize<'de> for StickerMediaSource {
@@ -85,11 +88,12 @@ impl From<MediaSource> for StickerMediaSource {
 pub struct StickerEventContent {
     /// A textual representation or associated description of the sticker image.
     ///
-    /// This could be the alt text of the original image, or a message to accompany and further
-    /// describe the sticker.
+    /// This could be the alt text of the original image, or a message to
+    /// accompany and further describe the sticker.
     pub body: String,
 
-    /// Metadata about the image referred to in `url` including a thumbnail representation.
+    /// Metadata about the image referred to in `url` including a thumbnail
+    /// representation.
     pub info: ImageInfo,
 
     /// The media source of the sticker image.
@@ -106,12 +110,14 @@ pub struct StickerEventContent {
 }
 
 impl StickerEventContent {
-    /// Creates a new `StickerEventContent` with the given body, image info and URL.
+    /// Creates a new `StickerEventContent` with the given body, image info and
+    /// URL.
     pub fn new(body: String, info: ImageInfo, url: OwnedMxcUri) -> Self {
         Self { body, info, source: StickerMediaSource::Plain(url), relates_to: None }
     }
 
-    /// Creates a new `StickerEventContent` with the given body, image info, URL, and media source.
+    /// Creates a new `StickerEventContent` with the given body, image info,
+    /// URL, and media source.
     pub fn with_source(body: String, info: ImageInfo, source: StickerMediaSource) -> Self {
         Self { body, info, source, relates_to: None }
     }

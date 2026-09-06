@@ -29,7 +29,8 @@ pub use self::{
     room_member_count_is::{ComparisonOperator, RoomMemberCountIs},
 };
 
-/// A condition that must apply for an associated push rule's action to be taken.
+/// A condition that must apply for an associated push rule's action to be
+/// taken.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -37,16 +38,17 @@ pub enum PushCondition {
     /// A glob pattern match on a field of the event.
     EventMatch(EventMatchConditionData),
 
-    /// Matches unencrypted messages where `content.body` contains the owner's display name in that
-    /// room.
+    /// Matches unencrypted messages where `content.body` contains the owner's
+    /// display name in that room.
     #[deprecated]
     ContainsDisplayName,
 
     /// Matches the current number of members in the room.
     RoomMemberCount(RoomMemberCountConditionData),
 
-    /// Takes into account the current power levels in the room, ensuring the sender of the event
-    /// has high enough power to trigger the notification.
+    /// Takes into account the current power levels in the room, ensuring the
+    /// sender of the event has high enough power to trigger the
+    /// notification.
     SenderNotificationPermission(SenderNotificationPermissionConditionData),
 
     /// Apply the rule only to rooms that support a given feature.
@@ -60,8 +62,8 @@ pub enum PushCondition {
     /// Exact value match on a value in an array property of the event.
     EventPropertyContains(EventPropertyContainsConditionData),
 
-    /// Matches a thread event based on the user's thread subscription status, as defined by
-    /// [MSC4306].
+    /// Matches a thread event based on the user's thread subscription status,
+    /// as defined by [MSC4306].
     ///
     /// [MSC4306]: https://github.com/matrix-org/matrix-spec-proposals/pull/4306
     #[cfg(feature = "unstable-msc4306")]
@@ -94,11 +96,11 @@ impl PushCondition {
 
     /// The data of this `PushCondition`.
     ///
-    /// The returned JSON object won't contain the `kind` field, use [`.kind()`][Self::kind] to
-    /// access it.
+    /// The returned JSON object won't contain the `kind` field, use
+    /// [`.kind()`][Self::kind] to access it.
     ///
-    /// Prefer to use the public variants of `PushCondition` where possible; this method is meant to
-    /// be used for custom conditions only.
+    /// Prefer to use the public variants of `PushCondition` where possible;
+    /// this method is meant to be used for custom conditions only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: T) -> JsonObject {
             match serde_json::to_value(obj).expect("push condition serialization to succeed") {
@@ -128,8 +130,9 @@ impl PushCondition {
     /// # Arguments
     ///
     /// * `event` - The flattened JSON representation of a room message event.
-    /// * `context` - The context of the room at the time of the event. If the power levels context
-    ///   is missing from it, conditions that depend on it will never apply.
+    /// * `context` - The context of the room at the time of the event. If the
+    ///   power levels context is missing from it, conditions that depend on it
+    ///   will never apply.
     ///
     /// Returns `false` if this condition is unsupported.
     pub async fn applies(&self, event: &FlattenedJson, context: &PushConditionRoomCtx) -> bool {
@@ -212,13 +215,14 @@ pub struct EventMatchConditionData {
 
     /// The glob-style pattern to match against.
     ///
-    /// Patterns with no special glob characters should be treated as having asterisks
-    /// prepended and appended when testing the condition.
+    /// Patterns with no special glob characters should be treated as having
+    /// asterisks prepended and appended when testing the condition.
     pub pattern: String,
 }
 
 impl EventMatchConditionData {
-    /// Construct a new `EventMatchConditionData` with the given path and pattern.
+    /// Construct a new `EventMatchConditionData` with the given path and
+    /// pattern.
     pub fn new(key: String, pattern: String) -> Self {
         Self { key, pattern }
     }
@@ -262,10 +266,11 @@ impl RoomMemberCountConditionData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct SenderNotificationPermissionConditionData {
-    /// The field in the power level event the user needs a minimum power level for.
+    /// The field in the power level event the user needs a minimum power level
+    /// for.
     ///
-    /// Fields must be specified under the `notifications` property in the power level event's
-    /// `content`.
+    /// Fields must be specified under the `notifications` property in the power
+    /// level event's `content`.
     pub key: NotificationPowerLevelsKey,
 }
 
@@ -282,8 +287,8 @@ impl SenderNotificationPermissionConditionData {
     /// * `event` - The flattened JSON representation of a room message event.
     /// * `context` - The context of the room at the time of the event.
     ///
-    /// Returns `false` if the power levels are missing from the context, or if the `sender` of the
-    /// event is missing or invalid.
+    /// Returns `false` if the power levels are missing from the context, or if
+    /// the `sender` of the event is missing or invalid.
     fn applies(&self, event: &FlattenedJson, context: &PushConditionRoomCtx) -> bool {
         let Some(power_levels) = &context.power_levels else { return false };
         let Some(sender_id) = event.get_str("sender") else { return false };
@@ -304,7 +309,8 @@ pub struct RoomVersionSupportsConditionData {
 
 #[cfg(feature = "unstable-msc3931")]
 impl RoomVersionSupportsConditionData {
-    /// Construct a new `RoomVersionSupportsConditionData` with the given feature.
+    /// Construct a new `RoomVersionSupportsConditionData` with the given
+    /// feature.
     pub fn new(feature: RoomVersionFeature) -> Self {
         Self { feature }
     }
@@ -383,7 +389,8 @@ pub struct EventPropertyIsConditionData {
 }
 
 impl EventPropertyIsConditionData {
-    /// Construct a new `EventPropertyIsConditionData` with the given path and value.
+    /// Construct a new `EventPropertyIsConditionData` with the given path and
+    /// value.
     pub fn new(key: String, value: ScalarJsonValue) -> Self {
         Self { key, value }
     }
@@ -412,7 +419,8 @@ pub struct EventPropertyContainsConditionData {
 }
 
 impl EventPropertyContainsConditionData {
-    /// Construct a new `EventPropertyContainsConditionData` with the given path and value.
+    /// Construct a new `EventPropertyContainsConditionData` with the given path
+    /// and value.
     pub fn new(key: String, value: ScalarJsonValue) -> Self {
         Self { key, value }
     }
@@ -435,14 +443,15 @@ impl EventPropertyContainsConditionData {
 #[cfg(feature = "unstable-msc4306")]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct ThreadSubscriptionConditionData {
-    /// Whether the user must be subscribed (`true`) or unsubscribed (`false`) to the thread
-    /// for the condition to match.
+    /// Whether the user must be subscribed (`true`) or unsubscribed (`false`)
+    /// to the thread for the condition to match.
     pub subscribed: bool,
 }
 
 #[cfg(feature = "unstable-msc4306")]
 impl ThreadSubscriptionConditionData {
-    /// Construct a new `ThreadSubscriptionConditionData` with the given subscribed condition.
+    /// Construct a new `ThreadSubscriptionConditionData` with the given
+    /// subscribed condition.
     pub fn new(subscribed: bool) -> Self {
         Self { subscribed }
     }
@@ -454,8 +463,8 @@ impl ThreadSubscriptionConditionData {
     /// * `event` - The flattened JSON representation of a room message event.
     /// * `context` - The context of the room at the time of the event.
     ///
-    /// Returns `false` if the `has_thread_subscription_fn` in the context is missing or if the
-    /// thread root of the event is missing or invalid.
+    /// Returns `false` if the `has_thread_subscription_fn` in the context is
+    /// missing or if the thread root of the event is missing or invalid.
     async fn applies(&self, event: &FlattenedJson, context: &PushConditionRoomCtx) -> bool {
         let Some(has_thread_subscription_fn) = &context.has_thread_subscription_fn else {
             // If we don't have a function to check thread subscriptions, we can't
@@ -494,8 +503,8 @@ pub struct _CustomPushCondition {
     data: JsonObject,
 }
 
-/// Check whether the given key of the given event matches the given pattern, with the given
-/// context.
+/// Check whether the given key of the given event matches the given pattern,
+/// with the given context.
 pub(super) fn check_event_match(
     event: &FlattenedJson,
     key: &str,
@@ -513,7 +522,8 @@ pub(super) fn check_event_match(
     value.matches_pattern(pattern, key == "content.body")
 }
 
-/// The context of the room associated to an event to be able to test all push conditions.
+/// The context of the room associated to an event to be able to test all push
+/// conditions.
 #[derive(Clone)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct PushConditionRoomCtx {
@@ -538,17 +548,18 @@ pub struct PushConditionRoomCtx {
     #[cfg(feature = "unstable-msc3931")]
     pub supported_features: Vec<RoomVersionFeature>,
 
-    /// A closure that returns a future indicating if the given thread (represented by its thread
-    /// root event id) is subscribed to by the current user, where subscriptions are defined as per
-    /// [MSC4306].
+    /// A closure that returns a future indicating if the given thread
+    /// (represented by its thread root event id) is subscribed to by the
+    /// current user, where subscriptions are defined as per [MSC4306].
     ///
     /// [MSC4306]: https://github.com/matrix-org/matrix-spec-proposals/pull/4306
     #[cfg(feature = "unstable-msc4306")]
     has_thread_subscription_fn: Option<Arc<HasThreadSubscriptionFn>>,
 
-    /// When the `unstable-msc4306` feature is enabled with the field above, it changes the auto
-    /// trait implementations of the struct to `!RefUnwindSafe` and `!UnwindSafe`. So we use
-    /// `PhantomData` to keep the same bounds on the field when the feature is disabled, to always
+    /// When the `unstable-msc4306` feature is enabled with the field above, it
+    /// changes the auto trait implementations of the struct to
+    /// `!RefUnwindSafe` and `!UnwindSafe`. So we use `PhantomData` to keep
+    /// the same bounds on the field when the feature is disabled, to always
     /// have the same auto trait implementations.
     #[cfg(not(feature = "unstable-msc4306"))]
     has_thread_subscription_fn: std::marker::PhantomData<Arc<HasThreadSubscriptionFn>>,
@@ -605,8 +616,8 @@ impl PushConditionRoomCtx {
         }
     }
 
-    /// Set a function to check if the user is subscribed to a thread, so as to define the push
-    /// rules defined in [MSC4306].
+    /// Set a function to check if the user is subscribed to a thread, so as to
+    /// define the push rules defined in [MSC4306].
     ///
     /// [MSC4306]: https://github.com/matrix-org/matrix-spec-proposals/pull/4306
     #[cfg(feature = "unstable-msc4306")]
@@ -634,7 +645,8 @@ impl PushConditionRoomCtx {
     }
 }
 
-/// The room power levels context to be able to test the corresponding push conditions.
+/// The room power levels context to be able to test the corresponding push
+/// conditions.
 ///
 /// Should be constructed using `From<RoomPowerLevels>`.
 #[derive(Clone, Debug)]
@@ -712,8 +724,8 @@ trait StrExt {
     /// a char boundary.
     fn char_at(&self, index: usize) -> char;
 
-    /// Get the index of the char that is before the char at `index`. The byte index
-    /// must correspond to a char boundary.
+    /// Get the index of the char that is before the char at `index`. The byte
+    /// index must correspond to a char boundary.
     ///
     /// Returns `None` if there's no previous char. Otherwise, returns the char.
     fn find_prev_char(&self, index: usize) -> Option<char>;
@@ -724,15 +736,16 @@ trait StrExt {
     ///
     /// The match is case insensitive.
     ///
-    /// If `match_words` is `true`, checks that the pattern is separated from other words.
+    /// If `match_words` is `true`, checks that the pattern is separated from
+    /// other words.
     fn matches_pattern(&self, pattern: &str, match_words: bool) -> bool;
 
     /// Matches this string against `pattern`, with word boundaries.
     ///
     /// The pattern can be a glob with wildcards `*` and `?`.
     ///
-    /// A word boundary is defined as the start or end of the value, or any character not in the
-    /// sets `[A-Z]`, `[a-z]`, `[0-9]` or `_`.
+    /// A word boundary is defined as the start or end of the value, or any
+    /// character not in the sets `[A-Z]`, `[a-z]`, `[0-9]` or `_`.
     ///
     /// The match is case sensitive.
     fn matches_word(&self, pattern: &str) -> bool;

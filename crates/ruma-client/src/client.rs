@@ -94,7 +94,8 @@ impl<C: HttpClient> Client<C> {
         self.send_customized_request(request, |_| Ok(())).await
     }
 
-    /// Makes a request to a Matrix API endpoint including additional URL parameters.
+    /// Makes a request to a Matrix API endpoint including additional URL
+    /// parameters.
     pub async fn send_customized_request<R, F>(
         &self,
         request: R,
@@ -129,8 +130,8 @@ impl<C: HttpClient> Client<C> {
 
     /// Makes a request to a Matrix API endpoint as a virtual user.
     ///
-    /// This method is meant to be used by application services when interacting with the
-    /// client-server API.
+    /// This method is meant to be used by application services when interacting
+    /// with the client-server API.
     pub async fn send_request_as<R>(
         &self,
         identity: AppserviceUserIdentity<'_>,
@@ -149,8 +150,9 @@ impl<C: HttpClient> Client<C> {
 
     /// Log in with a username and password.
     ///
-    /// In contrast to [`send_request`][Self::send_request], this method stores the access token
-    /// returned by the endpoint in this client, in addition to returning it.
+    /// In contrast to [`send_request`][Self::send_request], this method stores
+    /// the access token returned by the endpoint in this client, in
+    /// addition to returning it.
     pub async fn log_in(
         &self,
         user: &str,
@@ -176,8 +178,9 @@ impl<C: HttpClient> Client<C> {
 
     /// Register as a guest.
     ///
-    /// In contrast to [`send_request`][Self::send_request], this method stores the access token
-    /// returned by the endpoint in this client, in addition to returning it.
+    /// In contrast to [`send_request`][Self::send_request], this method stores
+    /// the access token returned by the endpoint in this client, in
+    /// addition to returning it.
     pub async fn register_guest(
         &self,
     ) -> Result<register::v3::Response, Error<C::Error, ruma::api::client::uiaa::UiaaResponse>>
@@ -193,11 +196,12 @@ impl<C: HttpClient> Client<C> {
 
     /// Register as a new user on this server.
     ///
-    /// In contrast to [`send_request`][Self::send_request], this method stores the access token
-    /// returned by the endpoint in this client, in addition to returning it.
+    /// In contrast to [`send_request`][Self::send_request], this method stores
+    /// the access token returned by the endpoint in this client, in
+    /// addition to returning it.
     ///
-    /// The username is the local part of the returned user_id. If it is omitted from this request,
-    /// the server will generate one.
+    /// The username is the local part of the returned user_id. If it is omitted
+    /// from this request, the server will generate one.
     pub async fn register_user(
         &self,
         username: Option<&str>,
@@ -216,7 +220,8 @@ impl<C: HttpClient> Client<C> {
         Ok(response)
     }
 
-    /// Convenience method that represents repeated calls to the sync_events endpoint as a stream.
+    /// Convenience method that represents repeated calls to the sync_events
+    /// endpoint as a stream.
     ///
     /// # Example:
     ///
@@ -271,7 +276,8 @@ impl<C: HttpClient> Client<C> {
     }
 }
 
-/// Marker trait to identify [`PathBuilder`] implementors that the [`Client`] supports.
+/// Marker trait to identify [`PathBuilder`] implementors that the [`Client`]
+/// supports.
 ///
 /// This trait can be implemented for custom `PathBuilder`s if necessary.
 pub trait SupportedPathBuilder: PathBuilder {

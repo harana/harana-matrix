@@ -2,7 +2,7 @@
 
 This directory contains experiments, work-in-progress crates, or other code and
 documentation, that do not fall under the same stability guarantees as the main
-crates (`matrix-sdk`, `matrix-sdk-crypto`, etc.).
+crates (`matrix`, `crypto`, etc.).
 
 Lab projects might be abandoned and possibly removed at any time.
 

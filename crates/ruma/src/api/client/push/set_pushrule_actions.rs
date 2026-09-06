@@ -1,7 +1,7 @@
 //! `PUT /_matrix/client/*/pushrules/global/{kind}/{ruleId}/actions`
 //!
-//! This endpoint allows clients to change the actions of a push rule. This can be used to change
-//! the actions of builtin rules.
+//! This endpoint allows clients to change the actions of a push rule. This can
+//! be used to change the actions of builtin rules.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -9,12 +9,10 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#put_matrixclientv3pushrulesglobalkindruleidactions
 
     use crate::{
-        api::{auth_scheme::AccessToken, request, response},
+        api::{auth_scheme::AccessToken, client::push::RuleKind, request, response},
         metadata,
         push::Action,
     };
-
-    use crate::api::client::push::RuleKind;
 
     metadata! {
         method: PUT,
@@ -47,7 +45,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given rule kind, rule ID and actions.
+        /// Creates a new `Request` with the given rule kind, rule ID and
+        /// actions.
         pub fn new(kind: RuleKind, rule_id: String, actions: Vec<Action>) -> Self {
             Self { kind, rule_id, actions }
         }

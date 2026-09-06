@@ -8,14 +8,13 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#post_matrixfederationv1get_missing_eventsroomid
 
     use js_int::{UInt, uint};
-    use crate::{
-        OwnedEventId, OwnedRoomId,
-        api::{request, response},
-        metadata,
-    };
     use serde_json::value::RawValue as RawJsonValue;
 
-    use crate::api::federation::authentication::ServerSignatures;
+    use crate::{
+        OwnedEventId, OwnedRoomId,
+        api::{federation::authentication::ServerSignatures, request, response},
+        metadata,
+    };
 
     metadata! {
         method: POST,
@@ -45,7 +44,8 @@ pub mod v1 {
 
         /// The latest event IDs that the sender already has.
         ///
-        /// These are skipped when retrieving the previous events of `latest_events`.
+        /// These are skipped when retrieving the previous events of
+        /// `latest_events`.
         pub earliest_events: Vec<OwnedEventId>,
 
         /// The event IDs to retrieve the previous events for.
@@ -61,7 +61,8 @@ pub mod v1 {
     }
 
     impl Request {
-        /// Creates a new `Request` for events in the given room with the given constraints.
+        /// Creates a new `Request` for events in the given room with the given
+        /// constraints.
         pub fn new(
             room_id: OwnedRoomId,
             earliest_events: Vec<OwnedEventId>,

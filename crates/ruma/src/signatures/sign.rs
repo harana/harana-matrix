@@ -3,28 +3,30 @@ use crate::{
     canonical_json::{CanonicalJsonFieldError, CanonicalJsonObjectExt, RedactingSerializer},
     room_version_rules::RedactionRules,
     serde::{Base64, base64::Standard},
+    signatures::{JsonError, add_content_hash_to_event, to_canonical_json_string_for_signing},
 };
-
-use crate::signatures::{JsonError, add_content_hash_to_event, to_canonical_json_string_for_signing};
 
 /// The fields to remove from a JSON object when serializing it for signing.
 pub(crate) static FIELDS_TO_REMOVE_FOR_SIGNING: &[&str] = &["signatures", "unsigned"];
 
-/// Hashes and signs an event and adds the hash and signature to objects under the keys `hashes` and
-/// `signatures`, respectively.
+/// Hashes and signs an event and adds the hash and signature to objects under
+/// the keys `hashes` and `signatures`, respectively.
 ///
-/// If `hashes` and/or `signatures` are already present, the new data will be appended to the
-/// existing data.
+/// If `hashes` and/or `signatures` are already present, the new data will be
+/// appended to the existing data.
 ///
-/// This is a convenience function that calls [`add_content_hash_to_event()`] then [`sign_event()`].
+/// This is a convenience function that calls [`add_content_hash_to_event()`]
+/// then [`sign_event()`].
 ///
 /// # Parameters
 ///
-/// * `entity_id`: The identifier of the entity creating the signature. Generally this means a
-///   homeserver, e.g. "example.com".
+/// * `entity_id`: The identifier of the entity creating the signature.
+///   Generally this means a homeserver, e.g. "example.com".
 /// * `key_pair`: A cryptographic key pair used to sign the event.
-/// * `object`: A JSON object to be hashed and signed according to the Matrix specification.
-/// * `redaction_rules`: The redaction rules for the version of the event's room.
+/// * `object`: A JSON object to be hashed and signed according to the Matrix
+///   specification.
+/// * `redaction_rules`: The redaction rules for the version of the event's
+///   room.
 ///
 /// # Errors
 ///
@@ -77,11 +79,15 @@ pub(crate) static FIELDS_TO_REMOVE_FOR_SIGNING: &[&str] = &["signatures", "unsig
 /// .unwrap();
 ///
 /// // Get the rules for the version of the current room.
-/// let rules =
-///     RoomVersionId::V1.rules().expect("The rules should be known for a supported room version");
+/// let rules = RoomVersionId::V1
+///     .rules()
+///     .expect("The rules should be known for a supported room version");
 ///
 /// // Hash and sign the JSON with the key pair.
-/// assert!(hash_and_sign_event("domain", &key_pair, &mut object, &rules.redaction).is_ok());
+/// assert!(
+///     hash_and_sign_event("domain", &key_pair, &mut object, &rules.redaction)
+///         .is_ok()
+/// );
 /// ```
 ///
 /// This will modify the JSON from the structure shown to a structure like this:
@@ -127,19 +133,21 @@ where
 
 /// Compute and add the [signature] of the given event.
 ///
-/// This adds or overwrites the signature for the given entity and key in the `signatures` object of
-/// the event.
+/// This adds or overwrites the signature for the given entity and key in the
+/// `signatures` object of the event.
 ///
-/// When creating a new event, [`add_content_hash_to_event()`](crate::signatures::add_content_hash_to_event)
+/// When creating a new event,
+/// [`add_content_hash_to_event()`](crate::signatures::add_content_hash_to_event)
 /// should be called first.
 ///
 /// # Parameters
 ///
-/// * `entity_id`: The identifier of the entity creating the signature. Generally this means a
-///   homeserver, e.g. "example.com".
+/// * `entity_id`: The identifier of the entity creating the signature.
+///   Generally this means a homeserver, e.g. "example.com".
 /// * `key_pair`: The cryptographic key pair used to sign the event.
 /// * `object`: The event to be signed according to the Matrix specification.
-/// * `redaction_rules`: The redaction rules for the version of the event's room.
+/// * `redaction_rules`: The redaction rules for the version of the event's
+///   room.
 ///
 /// # Errors
 ///
@@ -238,14 +246,16 @@ where
     Ok(insert_signature(object, entity_id, signature)?)
 }
 
-/// Signs an arbitrary JSON object and adds the signature to an object under the key `signatures`.
+/// Signs an arbitrary JSON object and adds the signature to an object under the
+/// key `signatures`.
 ///
-/// If `signatures` is already present, the new signature will be appended to the existing ones.
+/// If `signatures` is already present, the new signature will be appended to
+/// the existing ones.
 ///
 /// # Parameters
 ///
-/// * `entity_id`: The identifier of the entity creating the signature. Generally this means a
-///   homeserver, e.g. `example.com`.
+/// * `entity_id`: The identifier of the entity creating the signature.
+///   Generally this means a homeserver, e.g. `example.com`.
 /// * `key_pair`: A cryptographic key pair used to sign the JSON.
 /// * `object`: A JSON object to sign according and append a signature to.
 ///
@@ -280,7 +290,9 @@ where
 /// let mut value = serde_json::from_str("{}").unwrap();
 ///
 /// // Sign the JSON with the key pair.
-/// assert!(ruma::signatures::sign_json("domain", &key_pair, &mut value).is_ok());
+/// assert!(
+///     ruma::signatures::sign_json("domain", &key_pair, &mut value).is_ok()
+/// );
 /// ```
 ///
 /// This will modify the JSON from an empty object to a structure like this:
@@ -348,7 +360,8 @@ pub struct Signature {
 impl Signature {
     /// Creates a signature from raw bytes.
     ///
-    /// This constructor will ensure that the key ID has the correct `algorithm:key_name` format.
+    /// This constructor will ensure that the key ID has the correct
+    /// `algorithm:key_name` format.
     ///
     /// # Parameters
     ///
@@ -375,16 +388,17 @@ impl Signature {
         Base64::<Standard, _>::new(self.signature.as_slice()).encode()
     }
 
-    /// The key identifier, a string containing the signature algorithm and the key "version"
-    /// separated by a colon, e.g. `ed25519:1`.
+    /// The key identifier, a string containing the signature algorithm and the
+    /// key "version" separated by a colon, e.g. `ed25519:1`.
     pub fn id(&self) -> String {
         self.key_id.to_string()
     }
 
     /// The "version" of the key used for this signature.
     ///
-    /// Versions are used as an identifier to distinguish signatures generated from different keys
-    /// but using the same algorithm on the same homeserver.
+    /// Versions are used as an identifier to distinguish signatures generated
+    /// from different keys but using the same algorithm on the same
+    /// homeserver.
     pub fn version(&self) -> &str {
         self.key_id.key_name().as_ref()
     }
@@ -397,9 +411,8 @@ impl Signature {
 
 #[cfg(test)]
 mod tests {
-    use crate::SigningKeyAlgorithm;
-
     use super::Signature;
+    use crate::SigningKeyAlgorithm;
 
     #[test]
     fn valid_key_id() {

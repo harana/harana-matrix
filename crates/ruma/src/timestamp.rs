@@ -13,8 +13,8 @@ use web_time::{Duration, SystemTime, UNIX_EPOCH};
 pub struct MilliSecondsSinceUnixEpoch(pub UInt);
 
 impl MilliSecondsSinceUnixEpoch {
-    /// Creates a new `MilliSecondsSinceUnixEpoch` from the given `SystemTime`, if it is not before
-    /// the unix epoch, or too large to be represented.
+    /// Creates a new `MilliSecondsSinceUnixEpoch` from the given `SystemTime`,
+    /// if it is not before the unix epoch, or too large to be represented.
     pub fn from_system_time(time: SystemTime) -> Option<Self> {
         let duration = time.duration_since(UNIX_EPOCH).ok()?;
         let millis = duration.as_millis().try_into().ok()?;
@@ -31,7 +31,8 @@ impl MilliSecondsSinceUnixEpoch {
         UNIX_EPOCH.checked_add(Duration::from_millis(self.0.into()))
     }
 
-    /// Adds the given Duration to the time, returning it if the new time can be represented.
+    /// Adds the given Duration to the time, returning it if the new time can be
+    /// represented.
     pub fn checked_add(self, rhs: Duration) -> Option<Self> {
         Some(Self(self.0.checked_add(rhs.as_millis().try_into().ok()?)?))
     }
@@ -97,8 +98,8 @@ impl TryFrom<MilliSecondsSinceUnixEpoch> for SystemTime {
 pub struct SecondsSinceUnixEpoch(pub UInt);
 
 impl SecondsSinceUnixEpoch {
-    /// Creates a new `MilliSecondsSinceUnixEpoch` from the given `SystemTime`, if it is not before
-    /// the unix epoch, or too large to be represented.
+    /// Creates a new `MilliSecondsSinceUnixEpoch` from the given `SystemTime`,
+    /// if it is not before the unix epoch, or too large to be represented.
     pub fn from_system_time(time: SystemTime) -> Option<Self> {
         let duration = time.duration_since(UNIX_EPOCH).ok()?;
         let millis = duration.as_secs().try_into().ok()?;
@@ -115,7 +116,8 @@ impl SecondsSinceUnixEpoch {
         UNIX_EPOCH.checked_add(Duration::from_secs(self.0.into()))
     }
 
-    /// Adds the given Duration to the time, returning it if the new time can be represented.
+    /// Adds the given Duration to the time, returning it if the new time can be
+    /// represented.
     pub fn checked_add(self, rhs: Duration) -> Option<Self> {
         Some(Self(self.0.checked_add(rhs.as_millis().try_into().ok()?)?))
     }

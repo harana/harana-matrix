@@ -27,7 +27,7 @@ cargo xtask swift build-framework
 The `build-framework` task will go through all the steps required to generate a
 fully usable `.xcframework`:
 
-1. compile `matrix-sdk-ffi` libraries for iOS, the iOS simulator and macOS under
+1. compile `matrix-ffi` libraries for iOS, the iOS simulator and macOS under
    `/target`. Some targets are not part of the standard library and they will be
    built using the nightly toolchain.
 2. `lipo` together the libraries for the same platform under `/generated`
@@ -59,7 +59,7 @@ cargo xtask swift build-crypto-framework
 The `build-crypto-framework` task will go through all the steps required to
 generate a fully usable `.xcframework`:
 
-1. compile `matrix-sdk-crypto-ffi` libraries for iOS, macOS and the iOS
+1. compile `crypto-ffi` libraries for iOS, macOS and the iOS
    simulator under `/target`. Pass `--only-ios` to build for iOS alone.
 2. `lipo` together the libraries for the same platform under `/generated`
 3. run `uniffi` and generate the C header, module map and swift files
@@ -103,12 +103,12 @@ the case of SDK, and as a CocoaPods podspec in the case of Crypto SDK.
 
 2. Tag the commit you just used to build the release and push the tag to GitHub
 
-   Use `matrix-sdk-crypto-ffi-<major>.<minor>.<patch>` tag name
+   Use `crypto-ffi-<major>.<minor>.<patch>` tag name
 
 3. Create a new
    [GitHub release](https://github.com/matrix-org/matrix-rust-sdk/releases)
    using this tag (see
-   [example](https://github.com/matrix-org/matrix-rust-sdk/releases/tag/matrix-sdk-crypto-ffi-0.3.4))
+   [example](https://github.com/matrix-org/matrix-rust-sdk/releases/tag/crypto-ffi-0.3.4))
 4. Upload the previously generated .zip file to this release
 5. Increment the version in
    [`MatrixSDKCrypto.podspec`](./MatrixSDKCrypto.podspec)
@@ -116,7 +116,7 @@ the case of SDK, and as a CocoaPods podspec in the case of Crypto SDK.
    Note that this is not automated and is a local-only change. To determine the
    most recent published version, run
    `pod repo update && pod search MatrixSDKCrypto` or check git tags via
-   `git tag | grep matrix-sdk-crypto-ffi`
+   `git tag | grep crypto-ffi`
 
 6. Push new Podspec version to Cocoapods via
    `pod trunk push MatrixSDKCrypto.podspec --allow-warnings`

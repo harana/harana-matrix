@@ -2,11 +2,13 @@
 //!
 //! [`m.media_preview_config`]: https://github.com/matrix-org/matrix-spec-proposals/pull/4278
 
-use crate::serde::JsonCastable;
 use ruma_macros::StringEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::events::{PrivOwnedStr, macros::EventContent};
+use crate::{
+    events::{PrivOwnedStr, macros::EventContent},
+    serde::JsonCastable,
+};
 
 /// The content of an `m.media_preview_config` event.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, EventContent)]
@@ -34,7 +36,8 @@ pub struct UnstableMediaPreviewConfigEventContent(pub MediaPreviewConfigEventCon
 
 impl JsonCastable<MediaPreviewConfigEventContent> for UnstableMediaPreviewConfigEventContent {}
 
-/// The configuration that handles if media previews should be shown in the timeline.
+/// The configuration that handles if media previews should be shown in the
+/// timeline.
 #[derive(Clone, StringEnum, Default)]
 #[ruma_enum(rename_all = "lowercase")]
 #[non_exhaustive]
@@ -87,10 +90,11 @@ impl MediaPreviewConfigEventContent {
         self
     }
 
-    /// Merge the config from the global account data with the config from the room account data.
+    /// Merge the config from the global account data with the config from the
+    /// room account data.
     ///
-    /// The values that are set in the room account data take precedence over the values in the
-    /// global account data.
+    /// The values that are set in the room account data take precedence over
+    /// the values in the global account data.
     pub fn merge_global_and_room_config(global_config: Self, room_config: Self) -> Self {
         Self {
             media_previews: room_config.media_previews.or(global_config.media_previews),
@@ -122,13 +126,15 @@ impl From<UnstableMediaPreviewConfigEventContent> for MediaPreviewConfigEventCon
 #[cfg(all(test, feature = "unstable-msc4278"))]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{MediaPreviewConfigEventContent, UnstableMediaPreviewConfigEventContent};
-    use crate::events::{
-        AnyGlobalAccountDataEvent, GlobalAccountDataEvent,
-        media_preview_config::{InviteAvatars, MediaPreviews},
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        events::{
+            AnyGlobalAccountDataEvent, GlobalAccountDataEvent,
+            media_preview_config::{InviteAvatars, MediaPreviews},
+        },
     };
 
     #[test]

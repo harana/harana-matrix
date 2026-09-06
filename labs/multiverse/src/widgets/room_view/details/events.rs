@@ -1,10 +1,10 @@
 use itertools::Itertools;
-use matrix_sdk::Room;
-use matrix_sdk_common::executor::Handle;
+use matrix::Room;
 use ratatui::{
     prelude::*,
     widgets::{Paragraph, Wrap},
 };
+use sdk_common::executor::Handle;
 
 use crate::TEXT_COLOR;
 

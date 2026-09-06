@@ -9,10 +9,10 @@ Then, together with that, create an invariant in the main executable: Always
 expect state.
 
 The latter can be done by checking if the path to a stored and serialized
-[`Session`](https://docs.rs/matrix-sdk/latest/matrix_sdk/struct.Session.html)
+[`Session`](https://docs.rs/matrix/latest/matrix/struct.Session.html)
 configuration exists (as created during the `setup` command), and/or by checking
 for files under the path provided to
-[`make_store_config`](https://docs.rs/matrix-sdk/latest/matrix_sdk/store/fn.make_store_config.html).
+[`make_store_config`](https://docs.rs/matrix/latest/matrix/store/fn.make_store_config.html).
 
 If the main executable can't find this configuration, abort running.
 
@@ -73,9 +73,9 @@ before `docker-compose up -d`, to give bot operators an easy time setting it up,
 despite matrix's unconventional stateful nature (compared to other bot
 ecosystems).
 
-## What this means for `matrix_sdk`
+## What this means for `matrix`
 
-`matrix_sdk` could help this pattern by building in either a "create" or "open"
+`matrix` could help this pattern by building in either a "create" or "open"
 intent for state, where it'll error if it can't do either.
 
 Currently I don't see this in `make_store_config`, where it seems to implicitly

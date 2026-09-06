@@ -8,12 +8,11 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3loginssoredirectidpid
 
     use http::header::{LOCATION, SET_COOKIE};
+
     use crate::{
-        api::{auth_scheme::NoAccessToken, request, response},
+        api::{auth_scheme::NoAccessToken, client::session::SsoRedirectAction, request, response},
         metadata,
     };
-
-    use crate::api::client::session::SsoRedirectAction;
 
     metadata! {
         method: GET,
@@ -57,7 +56,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given identity provider ID and redirect URL.
+        /// Creates a new `Request` with the given identity provider ID and
+        /// redirect URL.
         pub fn new(idp_id: String, redirect_url: String) -> Self {
             Self { idp_id, redirect_url, action: None }
         }
@@ -74,11 +74,10 @@ pub mod v3 {
     mod tests {
         use std::borrow::Cow;
 
+        use super::Request;
         use crate::api::{
             MatrixVersion, OutgoingRequestExt as _, SupportedVersions, auth_scheme::SendAccessToken,
         };
-
-        use super::Request;
 
         #[test]
         fn serialize_sso_login_with_provider_request_uri() {

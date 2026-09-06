@@ -6,12 +6,15 @@ use super::{MatrixToUri, MatrixUri, OwnedEventId, matrix_uri::UriAction, server_
 
 /// A Matrix [room alias ID].
 ///
-/// A `RoomAliasId` is converted from a string slice, and can be converted back into a string as
-/// needed.
+/// A `RoomAliasId` is converted from a string slice, and can be converted back
+/// into a string as needed.
 ///
 /// ```
 /// # use ruma::RoomAliasId;
-/// assert_eq!(<&RoomAliasId>::try_from("#ruma:example.com").unwrap(), "#ruma:example.com");
+/// assert_eq!(
+///     <&RoomAliasId>::try_from("#ruma:example.com").unwrap(),
+///     "#ruma:example.com"
+/// );
 /// ```
 ///
 /// [room alias ID]: https://spec.matrix.org/v1.19/appendices/#room-aliases
@@ -38,7 +41,8 @@ impl RoomAliasId {
 
     /// Create a `matrix.to` URI for an event scoped under this room alias ID.
     ///
-    /// This is deprecated because room aliases are mutable, so the URI might break after a while.
+    /// This is deprecated because room aliases are mutable, so the URI might
+    /// break after a while.
     #[deprecated = "Use `RoomId::matrix_to_event_uri` instead."]
     pub fn matrix_to_event_uri(&self, ev_id: impl Into<OwnedEventId>) -> MatrixToUri {
         MatrixToUri::new((self.to_owned(), ev_id.into()).into(), Vec::new())
@@ -53,7 +57,8 @@ impl RoomAliasId {
 
     /// Create a `matrix:` URI for an event scoped under this room alias ID.
     ///
-    /// This is deprecated because room aliases are mutable, so the URI might break after a while.
+    /// This is deprecated because room aliases are mutable, so the URI might
+    /// break after a while.
     #[deprecated = "Use `RoomId::matrix_event_uri` instead."]
     pub fn matrix_event_uri(&self, ev_id: impl Into<OwnedEventId>) -> MatrixUri {
         MatrixUri::new((self.to_owned(), ev_id.into()).into(), Vec::new(), None)
