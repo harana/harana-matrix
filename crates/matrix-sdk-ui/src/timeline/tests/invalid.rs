@@ -101,6 +101,38 @@ async fn test_invalid_event_content() {
     assert_eq!(state_key, "@alice:example.org");
 }
 
+/// A rescinded third-party invite arrives as an `m.room.third_party_invite`
+/// state event with an empty `content`, which is not valid per the spec but is
+/// what servers actually send. It must render as a state event, not as a parse
+/// failure.
+///
+/// This is what the workspace-wide `compat-optional` feature of ruma buys us;
+/// without it, this event deserializes to `FailedToParseState`.
+#[async_test]
+async fn test_rescinded_third_party_invite_is_not_a_parse_failure() {
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe_events().await;
+
+    timeline
+        .handle_live_event(TimelineEvent::from_plaintext(sync_timeline_event!({
+            "content": {},
+            "event_id": "$rescinded3pidInvite:example.org",
+            "origin_server_ts": 42,
+            "sender": "@alice:example.org",
+            "type": "m.room.third_party_invite",
+            "state_key": "some-opaque-token",
+        })))
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    assert_eq!(item.sender(), "@alice:example.org");
+    assert_eq!(item.timestamp(), MilliSecondsSinceUnixEpoch(uint!(42)));
+
+    assert_let!(TimelineItemContent::OtherState(state) = item.content());
+    assert_eq!(state.state_key(), "some-opaque-token");
+    assert_eq!(state.content().event_type(), StateEventType::RoomThirdPartyInvite);
+}
+
 #[async_test]
 async fn test_invalid_event() {
     let timeline = TestTimeline::new().await;

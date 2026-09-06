@@ -230,6 +230,8 @@ pub struct RoomPowerLevelsValues {
     pub beacon: i64,
     /// The level required to send a beacon info state event.
     pub beacon_info: i64,
+    /// The level required to trigger an `@room` notification.
+    pub notification_room: i64,
 }
 
 impl From<RumaPowerLevels> for RoomPowerLevelsValues {
@@ -262,6 +264,7 @@ impl From<RumaPowerLevels> for RoomPowerLevelsValues {
             space_child: state_event_level_for(&value, &TimelineEventType::SpaceChild),
             beacon: message_event_level_for(&value, &MessageLikeEventType::Beacon.into()),
             beacon_info: state_event_level_for(&value, &StateEventType::BeaconInfo.into()),
+            notification_room: value.notifications.room.into(),
         }
     }
 }

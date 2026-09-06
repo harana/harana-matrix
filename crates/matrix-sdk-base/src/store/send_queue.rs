@@ -20,8 +20,10 @@ use as_variant::as_variant;
 use ruma::{
     MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedEventId, OwnedTransactionId, OwnedUserId,
     TransactionId, UInt,
+    api::client::receipt::create_receipt::v3::ReceiptType,
     events::{
         AnyMessageLikeEventContent, MessageLikeEventContent as _, RawExt as _,
+        receipt::ReceiptThread,
         relation::Thread,
         room::{MediaSource, message::RoomMessageEventContent},
     },
@@ -112,11 +114,12 @@ pub enum QueuedRequestKind {
         /// To which media event transaction does this upload relate?
         related_to: OwnedTransactionId,
 
-        /// Accumulated list of infos for previously uploaded files and
-        /// thumbnails if used during a gallery transaction. Otherwise empty.
-        #[cfg(feature = "unstable-msc4274")]
-        #[serde(default)]
-        accumulated: Vec<AccumulatedSentMediaInfo>,
+        /// The media already uploaded by the earlier requests of the same
+        /// gallery transaction, in upload order.
+        ///
+        /// Empty for anything but a gallery.
+        #[serde(default, alias = "accumulated")]
+        uploaded: Vec<SentMediaItem>,
     },
 
     /// A redaction of another event to send.
@@ -125,6 +128,46 @@ pub enum QueuedRequestKind {
         redacts: OwnedEventId,
         /// The reason for the event being redacted.
         reason: Option<String>,
+    },
+
+    /// A read receipt to set.
+    ///
+    /// Reading a room is something the user does by simply looking at it, so
+    /// the receipt for it must not be lost to a flaky connection: it would
+    /// leave a room the user has read looking unread once connectivity is
+    /// back.
+    ReadReceipt {
+        /// The type of receipt to set.
+        receipt_type: ReceiptType,
+
+        /// The thread this receipt applies to.
+        thread: ReceiptThread,
+
+        /// The event this receipt points at.
+        event_id: OwnedEventId,
+    },
+
+    /// Several read markers to set at once, as one request.
+    ///
+    /// This is what
+    /// [`crate::store::send_queue::QueuedRequestKind::ReadReceipt`] is to a
+    /// single receipt, for the endpoint that sets the fully-read marker and
+    /// both read receipts in one go.
+    ReadMarkers {
+        /// The event the fully-read marker points at, if it is being set.
+        fully_read: Option<OwnedEventId>,
+
+        /// The event the public read receipt points at, if it is being set.
+        read: Option<OwnedEventId>,
+
+        /// The event the private read receipt points at, if it is being set.
+        read_private: Option<OwnedEventId>,
+    },
+
+    /// The room's "marked as unread" flag to set.
+    UnreadMarker {
+        /// Whether the user has explicitly marked the room as unread.
+        unread: bool,
     },
 }
 
@@ -157,6 +200,64 @@ pub struct QueuedRequest {
 
     /// The time that the request was originally attempted.
     pub created_at: MilliSecondsSinceUnixEpoch,
+}
+
+impl QueuedRequestKind {
+    /// Whether failing to send this request must block the requests queued
+    /// after it.
+    ///
+    /// Ordering matters for the events of a room: a message that couldn't be
+    /// sent holds back the ones the user typed after it. It doesn't matter for
+    /// what the user's client says about the room on their behalf - a read
+    /// receipt, an unread marker - and holding the whole room's queue back for
+    /// one of those would be worse than dropping it, since the next one
+    /// supersedes it anyway.
+    pub fn is_order_sensitive(&self) -> bool {
+        match self {
+            Self::Event { .. } | Self::MediaUpload { .. } | Self::Redaction { .. } => true,
+            Self::ReadReceipt { .. } | Self::ReadMarkers { .. } | Self::UnreadMarker { .. } => {
+                false
+            }
+        }
+    }
+
+    /// The key that a request of this kind supersedes another one on, if any.
+    ///
+    /// Two queued requests with the same key say the same thing about the same
+    /// subject, so only the most recent one is worth sending: reporting that
+    /// the user has read up to an older event, or that they had marked the
+    /// room unread a moment ago, is at best pointless and at worst wrong.
+    pub fn supersedes_key(&self) -> Option<SupersedesKey> {
+        match self {
+            Self::ReadReceipt { receipt_type, thread, .. } => Some(SupersedesKey::ReadReceipt {
+                receipt_type: receipt_type.clone(),
+                thread: thread.clone(),
+            }),
+            Self::ReadMarkers { .. } => Some(SupersedesKey::ReadMarkers),
+            Self::UnreadMarker { .. } => Some(SupersedesKey::UnreadMarker),
+            Self::Event { .. } | Self::MediaUpload { .. } | Self::Redaction { .. } => None,
+        }
+    }
+}
+
+/// What a queued request supersedes an earlier one on.
+///
+/// See [`QueuedRequestKind::supersedes_key`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SupersedesKey {
+    /// A read receipt of a given type, in a given thread.
+    ReadReceipt {
+        /// The type of the receipt.
+        receipt_type: ReceiptType,
+        /// The thread the receipt applies to.
+        thread: ReceiptThread,
+    },
+
+    /// A batch of read markers.
+    ReadMarkers,
+
+    /// The room's unread marker.
+    UnreadMarker,
 }
 
 impl QueuedRequest {
@@ -420,49 +521,102 @@ impl From<OwnedTransactionId> for ChildTransactionId {
     }
 }
 
-/// Information about a media (and its thumbnail) that have been sent to a
+/// A media (and its thumbnail) that has been sent to a homeserver.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SentMediaItem {
+    /// File that was uploaded.
+    ///
+    /// If the request was a thumbnail upload, this is the thumbnail's media
+    /// source.
+    pub file: MediaSource,
+
+    /// Optional thumbnail previously uploaded, when uploading a file.
+    ///
+    /// When uploading a thumbnail, this is set to `None`.
+    pub thumbnail: Option<MediaSource>,
+}
+
+/// Information about the media that a send queue request has uploaded to a
 /// homeserver.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(try_from = "SentMediaInfoDeHelper")]
 pub struct SentMediaInfo {
-    /// File that was uploaded by this request.
+    /// The media uploaded so far in this transaction, in upload order.
     ///
-    /// If the request related to a thumbnail upload, this contains the
-    /// thumbnail media source.
-    pub file: MediaSource,
-
-    /// Optional thumbnail previously uploaded, when uploading a file.
+    /// The last entry is the media the request that produced this info
+    /// uploaded; the ones before it, if any, were uploaded by the earlier
+    /// requests of the same gallery transaction.
     ///
-    /// When uploading a thumbnail, this is set to `None`.
-    pub thumbnail: Option<MediaSource>,
+    /// Never empty.
+    pub medias: Vec<SentMediaItem>,
+}
 
-    /// Accumulated list of infos for previously uploaded files and thumbnails
-    /// if used during a gallery transaction. Otherwise empty.
-    #[cfg(feature = "unstable-msc4274")]
+impl SentMediaInfo {
+    /// Build the info for a request that uploaded `file` (and `thumbnail`),
+    /// after `previous` had been uploaded in the same transaction.
+    pub fn new(
+        previous: Vec<SentMediaItem>,
+        file: MediaSource,
+        thumbnail: Option<MediaSource>,
+    ) -> Self {
+        let mut medias = previous;
+        medias.push(SentMediaItem { file, thumbnail });
+        Self { medias }
+    }
+
+    /// The media that the request which produced this info uploaded.
+    pub fn last(&self) -> &SentMediaItem {
+        self.medias.last().expect("a `SentMediaInfo` always describes at least one media")
+    }
+
+    /// Take the media that the request which produced this info uploaded,
+    /// dropping the ones uploaded before it.
+    pub fn into_last(mut self) -> SentMediaItem {
+        self.medias.pop().expect("a `SentMediaInfo` always describes at least one media")
+    }
+
+    /// Take the media uploaded *before* the one this info was produced for.
+    pub fn into_previous(mut self) -> Vec<SentMediaItem> {
+        self.medias.pop();
+        self.medias
+    }
+}
+
+impl From<SentMediaItem> for SentMediaInfo {
+    fn from(value: SentMediaItem) -> Self {
+        Self { medias: vec![value] }
+    }
+}
+
+/// Deserialization helper for [`SentMediaInfo`], reading both the current
+/// layout and the one used before the fields of a single media moved into
+/// [`SentMediaInfo::medias`].
+#[derive(Deserialize)]
+struct SentMediaInfoDeHelper {
+    /// The current layout.
+    medias: Option<Vec<SentMediaItem>>,
+
+    /// Previous layout: the media of this very request…
+    file: Option<MediaSource>,
+    /// …its thumbnail…
+    thumbnail: Option<MediaSource>,
+    /// …and the ones uploaded before it, only ever written by a build with
+    /// gallery support.
     #[serde(default)]
-    pub accumulated: Vec<AccumulatedSentMediaInfo>,
+    accumulated: Vec<SentMediaItem>,
 }
 
-/// Accumulated information about a media (and its thumbnail) that have been
-/// sent to a homeserver.
-#[cfg(feature = "unstable-msc4274")]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccumulatedSentMediaInfo {
-    /// File that was uploaded by this request.
-    ///
-    /// If the request related to a thumbnail upload, this contains the
-    /// thumbnail media source.
-    pub file: MediaSource,
+impl TryFrom<SentMediaInfoDeHelper> for SentMediaInfo {
+    type Error = &'static str;
 
-    /// Optional thumbnail previously uploaded, when uploading a file.
-    ///
-    /// When uploading a thumbnail, this is set to `None`.
-    pub thumbnail: Option<MediaSource>,
-}
+    fn try_from(value: SentMediaInfoDeHelper) -> Result<Self, Self::Error> {
+        const EMPTY: &str = "a `SentMediaInfo` must describe at least one media";
 
-#[cfg(feature = "unstable-msc4274")]
-impl From<AccumulatedSentMediaInfo> for SentMediaInfo {
-    fn from(value: AccumulatedSentMediaInfo) -> Self {
-        Self { file: value.file, thumbnail: value.thumbnail, accumulated: vec![] }
+        if let Some(medias) = value.medias {
+            return if medias.is_empty() { Err(EMPTY) } else { Ok(Self { medias }) };
+        }
+
+        Ok(Self::new(value.accumulated, value.file.ok_or(EMPTY)?, value.thumbnail))
     }
 }
 
@@ -486,6 +640,10 @@ pub enum SentRequestKey {
 
     /// The parent transaction returned an uploaded resource URL.
     Media(SentMediaInfo),
+
+    /// The request succeeded without producing anything that another request
+    /// could depend on, such as a read receipt or an unread marker.
+    Nothing,
 
     /// The parent transaction returned a redaction event when it succeeded.
     Redaction {
@@ -591,8 +749,19 @@ impl fmt::Debug for QueuedRequest {
 #[cfg(test)]
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
+    use ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType,
+        events::{receipt::ReceiptThread, room::MediaSource},
+        owned_event_id, owned_mxc_uri,
+    };
+    use serde_json::json;
 
-    use super::DependentQueuedRequestKind;
+    use super::{
+        ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
+        EnforceThreadInReply, MilliSecondsSinceUnixEpoch, QueuedRequestKind,
+        RoomMessageEventContent, SentMediaInfo, SentMediaItem, SentRequestKey,
+        SerializableEventContent, SupersedesKey,
+    };
 
     #[test]
     fn test_deserialize_legacy_redact_event() {
@@ -602,6 +771,262 @@ mod tests {
         let deserialized: DependentQueuedRequestKind =
             serde_json::from_str("\"RedactEvent\"").unwrap();
         assert_matches!(deserialized, DependentQueuedRequestKind::RedactEvent);
+    }
+
+    #[test]
+    fn test_deserialize_legacy_sent_media_info() {
+        // Requests persisted before the single-media fields moved into `medias` use
+        // this layout, and must keep loading.
+        let deserialized: SentMediaInfo = serde_json::from_value(json!({
+            "file": { "url": "mxc://sdk.rs/file" },
+            "thumbnail": { "url": "mxc://sdk.rs/thumbnail" },
+        }))
+        .unwrap();
+
+        assert_eq!(deserialized.medias.len(), 1);
+        assert_let!(MediaSource::Plain(url) = &deserialized.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/file"));
+        assert_let!(Some(MediaSource::Plain(url)) = &deserialized.last().thumbnail);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/thumbnail"));
+
+        // A build with gallery support also wrote the media uploaded before it; they
+        // come first, and the request's own media stays last.
+        let deserialized: SentMediaInfo = serde_json::from_value(json!({
+            "file": { "url": "mxc://sdk.rs/second" },
+            "thumbnail": null,
+            "accumulated": [{ "file": { "url": "mxc://sdk.rs/first" }, "thumbnail": null }],
+        }))
+        .unwrap();
+
+        assert_eq!(deserialized.medias.len(), 2);
+        assert_let!(MediaSource::Plain(url) = &deserialized.medias[0].file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/first"));
+        assert_let!(MediaSource::Plain(url) = &deserialized.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/second"));
+
+        // A `SentMediaInfo` always describes at least one media.
+        assert!(serde_json::from_value::<SentMediaInfo>(json!({})).is_err());
+        assert!(serde_json::from_value::<SentMediaInfo>(json!({ "medias": [] })).is_err());
+    }
+
+    #[test]
+    fn test_sent_media_info_round_trip() {
+        let info = SentMediaInfo::new(
+            vec![],
+            MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/file")),
+            Some(MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/thumbnail"))),
+        );
+
+        let deserialized: SentMediaInfo =
+            serde_json::from_str(&serde_json::to_string(&info).unwrap()).unwrap();
+
+        assert_eq!(deserialized.medias.len(), 1);
+        assert_let!(MediaSource::Plain(url) = &deserialized.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/file"));
+    }
+
+    #[test]
+    fn test_deserialize_legacy_media_upload_accumulated() {
+        // The field was named `accumulated`, with the same shape.
+        let deserialized: QueuedRequestKind = serde_json::from_value(json!({
+            "MediaUpload": {
+                "content_type": "image/png",
+                "cache_key": {
+                    "source": { "url": "mxc://sdk.rs/cached" },
+                    "format": "File",
+                },
+                "thumbnail_source": null,
+                "related_to": "txn",
+                "accumulated": [{ "file": { "url": "mxc://sdk.rs/first" }, "thumbnail": null }],
+            }
+        }))
+        .unwrap();
+
+        assert_let!(QueuedRequestKind::MediaUpload { uploaded, .. } = deserialized);
+        assert_eq!(uploaded.len(), 1);
+    }
+
+    fn media_item(url: &str) -> SentMediaItem {
+        SentMediaItem {
+            file: MediaSource::Plain(<&ruma::MxcUri>::from(url).to_owned()),
+            thumbnail: None,
+        }
+    }
+
+    #[test]
+    fn test_sent_media_info_describes_the_last_upload() {
+        // The request's own media is the last entry; the ones before it were uploaded
+        // by the earlier requests of the same gallery transaction.
+        let info = SentMediaInfo::new(
+            vec![media_item("mxc://sdk.rs/first")],
+            MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/second")),
+            Some(MediaSource::Plain(owned_mxc_uri!("mxc://sdk.rs/thumbnail"))),
+        );
+
+        assert_eq!(info.medias.len(), 2);
+
+        assert_let!(MediaSource::Plain(url) = &info.last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/second"));
+        assert!(info.last().thumbnail.is_some());
+
+        let previous = info.clone().into_previous();
+        assert_eq!(previous.len(), 1);
+        assert_let!(MediaSource::Plain(url) = &previous[0].file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/first"));
+
+        let last = info.into_last();
+        assert_let!(MediaSource::Plain(url) = &last.file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/second"));
+    }
+
+    #[test]
+    fn test_sent_media_info_from_a_single_item() {
+        let info = SentMediaInfo::from(media_item("mxc://sdk.rs/only"));
+
+        assert_eq!(info.medias.len(), 1);
+        assert!(info.clone().into_previous().is_empty());
+        assert_let!(MediaSource::Plain(url) = &info.into_last().file);
+        assert_eq!(*url, owned_mxc_uri!("mxc://sdk.rs/only"));
+    }
+
+    #[test]
+    fn test_only_events_are_order_sensitive() {
+        // A message that couldn't be sent holds back the ones the user typed after
+        // it; what the client says about the room on the user's behalf doesn't
+        // belong to that ordering.
+        let event =
+            QueuedRequestKind::Redaction { redacts: owned_event_id!("$target"), reason: None };
+        assert!(event.is_order_sensitive());
+
+        for kind in [
+            QueuedRequestKind::ReadReceipt {
+                receipt_type: ReceiptType::Read,
+                thread: ReceiptThread::Unthreaded,
+                event_id: owned_event_id!("$read"),
+            },
+            QueuedRequestKind::ReadMarkers {
+                fully_read: Some(owned_event_id!("$read")),
+                read: None,
+                read_private: None,
+            },
+            QueuedRequestKind::UnreadMarker { unread: true },
+        ] {
+            assert!(!kind.is_order_sensitive(), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn test_superseding_receipts() {
+        let read = |thread: ReceiptThread, event_id: &str| QueuedRequestKind::ReadReceipt {
+            receipt_type: ReceiptType::Read,
+            thread,
+            event_id: ruma::EventId::parse(event_id).unwrap(),
+        };
+
+        // A newer receipt of the same type, in the same thread, makes the older one
+        // pointless, wherever each of them points.
+        assert_eq!(
+            read(ReceiptThread::Unthreaded, "$first").supersedes_key(),
+            read(ReceiptThread::Unthreaded, "$second").supersedes_key(),
+        );
+
+        // A receipt in another thread stands on its own...
+        assert_ne!(
+            read(ReceiptThread::Unthreaded, "$first").supersedes_key(),
+            read(ReceiptThread::Main, "$first").supersedes_key(),
+        );
+
+        // ...and so does one of another type.
+        assert_ne!(
+            read(ReceiptThread::Unthreaded, "$first").supersedes_key(),
+            QueuedRequestKind::ReadReceipt {
+                receipt_type: ReceiptType::ReadPrivate,
+                thread: ReceiptThread::Unthreaded,
+                event_id: owned_event_id!("$first"),
+            }
+            .supersedes_key(),
+        );
+
+        // The unread marker and the batch of read markers each have one key of their
+        // own, whatever they carry.
+        assert_eq!(
+            QueuedRequestKind::UnreadMarker { unread: true }.supersedes_key(),
+            Some(SupersedesKey::UnreadMarker)
+        );
+        assert_eq!(
+            QueuedRequestKind::UnreadMarker { unread: false }.supersedes_key(),
+            Some(SupersedesKey::UnreadMarker)
+        );
+        assert_eq!(
+            QueuedRequestKind::ReadMarkers {
+                fully_read: None,
+                read: Some(owned_event_id!("$read")),
+                read_private: None,
+            }
+            .supersedes_key(),
+            Some(SupersedesKey::ReadMarkers)
+        );
+
+        // An event never supersedes another: they all have to be sent.
+        assert_eq!(
+            QueuedRequestKind::Redaction { redacts: owned_event_id!("$target"), reason: None }
+                .supersedes_key(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_a_queued_reply_is_an_event_of_its_own() {
+        // Unlike an edit or a reaction, a reply becomes its own timeline item.
+        let reply = DependentQueuedRequest {
+            kind: DependentQueuedRequestKind::ReplyEvent {
+                content: SerializableEventContent::new(
+                    &RoomMessageEventContent::text_plain("reply").into(),
+                )
+                .unwrap(),
+                replied_to_thread: None,
+                enforce_thread: EnforceThreadInReply::MaybeThreaded,
+            },
+            parent_transaction_id: "parent".into(),
+            own_transaction_id: ChildTransactionId::new(),
+            parent_key: None,
+            created_at: MilliSecondsSinceUnixEpoch::now(),
+        };
+        assert!(reply.is_own_event());
+
+        let reaction = DependentQueuedRequest {
+            kind: DependentQueuedRequestKind::ReactEvent { key: "👍".to_owned() },
+            ..reply
+        };
+        assert!(!reaction.is_own_event());
+    }
+
+    #[test]
+    fn test_enforce_thread_in_reply_round_trip() {
+        for enforce_thread in [
+            EnforceThreadInReply::Threaded { is_reply: true },
+            EnforceThreadInReply::Threaded { is_reply: false },
+            EnforceThreadInReply::MaybeThreaded,
+            EnforceThreadInReply::Unthreaded,
+        ] {
+            let serialized = serde_json::to_string(&enforce_thread).unwrap();
+            let deserialized: EnforceThreadInReply = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(enforce_thread, deserialized, "{serialized}");
+        }
+    }
+
+    #[test]
+    fn test_nothing_is_not_something_to_depend_on() {
+        // A read receipt succeeds without producing anything another request could
+        // hang off.
+        assert!(SentRequestKey::Nothing.clone().into_event_id().is_none());
+        assert!(SentRequestKey::Nothing.clone().into_media().is_none());
+
+        // It is stored as a dependent request's parent key, so it has to survive a
+        // round trip through the store.
+        let serialized = serde_json::to_string(&SentRequestKey::Nothing).unwrap();
+        let deserialized: SentRequestKey = serde_json::from_str(&serialized).unwrap();
+        assert_matches!(deserialized, SentRequestKey::Nothing);
     }
 
     #[test]

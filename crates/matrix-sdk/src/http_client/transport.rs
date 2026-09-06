@@ -22,7 +22,7 @@ use bytes::Bytes;
 use eyeball::SharedObservable;
 use matrix_sdk_common::{BoxFuture, SendOutsideWasm, SyncOutsideWasm};
 
-use super::TransmissionProgress;
+use super::{RequestProgress, TransmissionProgress};
 use crate::error::HttpError;
 
 /// Something that can send an HTTP request and return its response.
@@ -123,6 +123,35 @@ pub trait HttpSend: fmt::Debug + SendOutsideWasm + SyncOutsideWasm + 'static {
         timeout: Option<Duration>,
         send_progress: SharedObservable<TransmissionProgress>,
     ) -> BoxFuture<'a, Result<http::Response<Bytes>, HttpError>>;
+
+    /// Send the given request and wait for its response, reporting progress in
+    /// both directions.
+    ///
+    /// This is what the SDK actually calls. The default implementation
+    /// forwards to [`send_request`](Self::send_request) and reports no
+    /// download progress, which is what a transport that cannot observe the
+    /// response body arriving should do; override it if yours can.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - The request to send, with its body fully in memory.
+    ///
+    /// * `timeout` - How long to wait for the response before giving up, if the
+    ///   transport supports it. `None` means no timeout.
+    ///
+    /// * `progress` - Observables to report upload and download progress into,
+    ///   by setting `total` to the body's length and adding each transferred
+    ///   chunk's length to `current`. An observable with no subscribers is not
+    ///   worth streaming for, so a transport may check
+    ///   [`SharedObservable::subscriber_count`] before doing any extra work.
+    fn send_request_with_progress<'a>(
+        &'a self,
+        request: http::Request<Bytes>,
+        timeout: Option<Duration>,
+        progress: RequestProgress,
+    ) -> BoxFuture<'a, Result<http::Response<Bytes>, HttpError>> {
+        self.send_request(request, timeout, progress.send)
+    }
 }
 
 /// The [`HttpSend`] implementation backed by [`reqwest`].
@@ -161,7 +190,16 @@ impl HttpSend for ReqwestTransport {
         timeout: Option<Duration>,
         send_progress: SharedObservable<TransmissionProgress>,
     ) -> BoxFuture<'a, Result<http::Response<Bytes>, HttpError>> {
-        Box::pin(super::execute_request(&self.inner, request, timeout, send_progress))
+        self.send_request_with_progress(request, timeout, RequestProgress::with_send(send_progress))
+    }
+
+    fn send_request_with_progress<'a>(
+        &'a self,
+        request: http::Request<Bytes>,
+        timeout: Option<Duration>,
+        progress: RequestProgress,
+    ) -> BoxFuture<'a, Result<http::Response<Bytes>, HttpError>> {
+        Box::pin(super::execute_request(&self.inner, request, timeout, progress))
     }
 }
 

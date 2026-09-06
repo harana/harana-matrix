@@ -504,8 +504,10 @@ pub enum RoomListEntriesDynamicFilterKind {
     NonSpace,
     Space,
     NonLeft,
-    // Not { filter: RoomListEntriesDynamicFilterKind } - requires recursive enum
-    // support in uniffi https://github.com/mozilla/uniffi-rs/issues/396
+    // `Not` is the negation of `All`: a room matches when it does not match all
+    // of `filters`. A vector is used because uniffi has no support for directly
+    // recursive enum variants, see https://github.com/mozilla/uniffi-rs/issues/396.
+    Not { filters: Vec<RoomListEntriesDynamicFilterKind> },
     Joined,
     ReadReceipts { expect: ReadReceiptsCategory },
     Favourite,
@@ -537,6 +539,9 @@ impl From<RoomListEntriesDynamicFilterKind> for BoxedFilterFn {
             Kind::NonSpace => Box::new(new_filter_not(Box::new(new_filter_space()))),
             Kind::Space => Box::new(new_filter_space()),
             Kind::NonLeft => Box::new(new_filter_non_left()),
+            Kind::Not { filters } => Box::new(new_filter_not(Box::new(new_filter_all(
+                filters.into_iter().map(BoxedFilterFn::from).collect(),
+            )))),
             Kind::Joined => Box::new(new_filter_joined()),
             Kind::ReadReceipts { expect } => Box::new(new_filter_read_receipts(expect)),
             Kind::Favourite => Box::new(new_filter_favourite()),
@@ -590,5 +595,43 @@ impl From<RumaUnreadNotificationsCount> for UnreadNotificationsCount {
                 .and_then(|x| x.try_into().ok())
                 .unwrap_or_default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use matrix_sdk::{ruma::room_id, test_utils::mocks::MatrixMockServer};
+    use matrix_sdk_ui::room_list_service::{RoomListItem, filters::BoxedFilterFn};
+
+    use super::RoomListEntriesDynamicFilterKind as Kind;
+
+    #[tokio::test]
+    async fn test_not_filter_kind_negates_the_filters_it_contains() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let room = server.sync_joined_room(&client, room_id!("!a:b.c")).await;
+        let room = RoomListItem::from(room);
+
+        // `None` matches no room, so its negation matches every room.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::None] });
+        assert!(filter(&room));
+
+        // The negation of a filter the room matches doesn't match the room.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::Joined] });
+        assert!(!filter(&room));
+
+        // Several filters are combined with `All` before being negated: this room is
+        // joined *and* non-left, so the negation doesn't match it.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::Joined, Kind::NonLeft] });
+        assert!(!filter(&room));
+
+        // … but it isn't a space, so the negation of the conjunction matches it.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![Kind::Joined, Kind::Space] });
+        assert!(filter(&room));
+
+        // `All` with no filter matches every room, so `Not` with no filter matches
+        // none.
+        let filter = BoxedFilterFn::from(Kind::Not { filters: vec![] });
+        assert!(!filter(&room));
     }
 }

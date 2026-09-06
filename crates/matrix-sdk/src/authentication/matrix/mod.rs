@@ -549,7 +549,7 @@ impl MatrixAuth {
 
                 if let Some(save_session_callback) =
                     self.client.inner.auth_ctx.save_session_callback.get()
-                    && let Err(err) = save_session_callback(self.client.clone())
+                    && let Err(err) = save_session_callback(self.client.clone()).await
                 {
                     error!("when saving session after refresh: {err}");
                 }

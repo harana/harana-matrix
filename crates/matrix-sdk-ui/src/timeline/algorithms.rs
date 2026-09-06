@@ -36,6 +36,18 @@ impl EventTimelineItemWithId<'_> {
         TimelineItem::new(self.inner.with_kind(kind), self.internal_id.clone())
     }
 
+    /// Create a clone of the underlying [`TimelineItem`] with the given media
+    /// download progress.
+    pub fn with_media_download_progress(
+        &self,
+        progress: Option<matrix_sdk::TransmissionProgress>,
+    ) -> Arc<TimelineItem> {
+        TimelineItem::new(
+            self.inner.with_media_download_progress(progress),
+            self.internal_id.clone(),
+        )
+    }
+
     /// Create a clone of the underlying [`TimelineItem`] with the given
     /// reactions.
     pub fn with_reactions(&self, reactions: ReactionsByKeyBySender) -> Arc<TimelineItem> {

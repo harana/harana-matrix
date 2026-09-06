@@ -495,9 +495,15 @@ async fn handle_thread_subscriber_linked_chunk_update(
     // or that answers one of their messages, iterating from the end of the new
     // events towards the oldest, so we can find the most recent event to subscribe
     // to.
+    //
+    // Note this looks for a *mention* (a highlight), not merely for something that
+    // notifies: in a room set to notify on all messages, every in-thread event
+    // notifies, and subscribing on that would subscribe the user to every single
+    // thread of the room. Per MSC4306, an automatic subscription follows from being
+    // mentioned in a thread, or from participating in it.
     for ev in new_events.rev() {
         let is_mention =
-            push_context.for_event(ev.raw()).await.into_iter().any(|action| action.should_notify());
+            push_context.for_event(ev.raw()).await.into_iter().any(|action| action.is_highlight());
 
         if is_mention
             || answers_our_own_message(&client, &room_id, &own_user_id, own_thread_root, &ev).await

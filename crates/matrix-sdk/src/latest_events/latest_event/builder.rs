@@ -145,7 +145,17 @@ impl Builder {
                                     replacement,
                                     replacement_encryption_info.map(|e| &(**e)),
                                 ) {
-                                    Ok(_) => edit.clone(),
+                                    Ok(_) => {
+                                        let mut edit = edit.clone();
+
+                                        // The edit provides the content to display, but it must
+                                        // not act as a recency signal: editing a message is not
+                                        // a new message, and must not bump the room in the room
+                                        // list. Keep the timestamp of the edited event.
+                                        edit.timestamp = event.timestamp();
+
+                                        edit
+                                    }
                                     Err(e) => {
                                         debug!(
                                         "Skipping an edit of a latest event due to the replacement event being invalid: {e}"
@@ -2563,6 +2573,111 @@ mod builder_tests {
             // We get `event_id_1` because it edits `event_id_0` which is a candidate.
             Builder::new_remote(&room_event_cache, None, LatestEventValue::None, user_id, None).await => with body = "* goodbye"
         );
+
+        // The edited content is displayed, but the value keeps the timestamp of the
+        // event that was edited: an edit must not bump the room in the room list.
+        let events = room_event_cache.events().await.unwrap();
+        let timestamp_of = |wanted: &EventId| {
+            events
+                .iter()
+                .find(|event| event.event_id() == Some(wanted))
+                .expect("the event is in the event cache")
+                .timestamp()
+        };
+        let original_timestamp = timestamp_of(event_id_0);
+        // Sanity check: the edit really is more recent than what it edits.
+        assert!(original_timestamp < timestamp_of(event_id_1));
+
+        let value =
+            Builder::new_remote(&room_event_cache, None, LatestEventValue::None, user_id, None)
+            .await
+            .unwrap();
+
+        assert_eq!(value.timestamp(), original_timestamp);
+    }
+
+    #[async_test]
+    async fn test_remote_edit_keeps_the_timestamp_of_the_edited_event() {
+        let room_id = room_id!("!r0");
+        let user_id = user_id!("@mnt_io:matrix.org");
+        let event_factory = EventFactory::new().sender(user_id).room(room_id);
+        let event_id_0 = event_id!("$ev0");
+        let event_id_1 = event_id!("$ev1");
+        let original_timestamp = MilliSecondsSinceUnixEpoch(1_000_u32.into());
+        let edit_timestamp = MilliSecondsSinceUnixEpoch(2_000_u32.into());
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        // Prelude.
+        {
+            // Create the room.
+            client.base_client().get_or_create_room(room_id, RoomState::Joined);
+
+            // Initialise the event cache store.
+            client
+                .event_cache_store()
+                .lock()
+                .await
+                .expect("Could not acquire the event cache lock")
+                .as_clean()
+                .expect("Could not acquire a clean event cache lock")
+                .handle_linked_chunk_updates(
+                    LinkedChunkId::Room(room_id),
+                    vec![
+                        Update::NewItemsChunk {
+                            previous: None,
+                            new: ChunkIdentifier::new(0),
+                            next: None,
+                        },
+                        Update::PushItems {
+                            at: Position::new(ChunkIdentifier::new(0), 0),
+                            items: vec![
+                                // a text message
+                                event_factory
+                                    .text_msg("hello")
+                                    .event_id(event_id_0)
+                                    .server_ts(original_timestamp)
+                                    .into(),
+                                // a replacement of the previous message, sent later
+                                event_factory
+                                    .text_msg("* goodbye")
+                                    .event_id(event_id_1)
+                                    .server_ts(edit_timestamp)
+                                    .edit(
+                                        event_id_0,
+                                        RoomMessageEventContent::text_plain("goodbye").into(),
+                                    )
+                                    .into(),
+                            ],
+                        },
+                    ],
+                )
+                .await
+                .unwrap();
+        }
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        let (room_event_cache, _) = event_cache.room(room_id).await.unwrap();
+
+        let value = Builder::new_remote(
+            &room_event_cache,
+            None,
+            LatestEventValue::None,
+            user_id,
+            None,
+        )
+        .await
+        .expect("a latest event value");
+
+        // The content is the edited one…
+        assert_remote_value_matches_room_message_with_body!(Some(value.clone()) => with body = "* goodbye");
+
+        // … but the timestamp is the one of the event being edited, so that an edit
+        // doesn't move the room in a room list sorted by recency.
+        assert_eq!(value.timestamp(), Some(original_timestamp));
     }
 
     #[async_test]
@@ -3268,7 +3383,7 @@ mod builder_tests {
                     None,
                     previous_value,
                     user_id,
-                    None
+                    None,
                 )
                 .await,
                 None
@@ -3369,7 +3484,7 @@ mod builder_tests {
                     None,
                     previous_value,
                     user_id,
-                    None
+                    None,
                 )
                 .await,
                 Some(LatestEventValue::None)
@@ -3598,7 +3713,7 @@ mod builder_tests {
                     None,
                     previous_value,
                     user_id,
-                    None
+                    None,
                 )
                 .await,
                 None
@@ -3965,7 +4080,7 @@ mod builder_tests {
                     None,
                     previous_value,
                     user_id,
-                    None
+                    None,
                 )
                 .await,
                 None
@@ -4248,7 +4363,7 @@ mod builder_tests {
                     None,
                     previous_value,
                     user_id,
-                    None
+                    None,
                 )
                 .await,
                 None

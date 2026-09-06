@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Added
+
+- Add `SenderData::legacy_session` and `SenderData::with_legacy_session`, to
+  read and carry over the legacy flag when a session's sender data is
+  recomputed. ([#178](https://github.com/harana/harana-matrix/issues/178))
+
+### Fixed
+
+- Keep the legacy flag on an inbound group session restored from a backup when
+  a `/keys/query` later tells us about the sending device. The session used to
+  be downgraded, hiding its messages wherever insecure devices are excluded.
+  ([#178](https://github.com/harana/harana-matrix/issues/178))
+- `Device::set_local_trust` and `OtherUserIdentity::pin_current_master_key` /
+  `withdraw_verification` no longer write a stale in-memory object back over
+  the store, reverting fields (or cross-signing keys) that changed in the
+  meantime. ([#128](https://github.com/harana/harana-matrix/issues/128),
+  [#129](https://github.com/harana/harana-matrix/issues/129))
+- Unwedge a device whose first Olm session wedged before it was ever persisted;
+  it used to stay wedged forever.
+  ([#103](https://github.com/harana/harana-matrix/issues/103))
+- Clamp Olm session timestamps read back from a pickle that lie in the future,
+  so a session cannot claim to be the freshest one we own.
+  ([#87](https://github.com/harana/harana-matrix/issues/87))
+
+### Performance
+
+- Only write the crypto `Account` back to the store when something actually
+  changed it. ([#70](https://github.com/harana/harana-matrix/issues/70))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 ### Fixed

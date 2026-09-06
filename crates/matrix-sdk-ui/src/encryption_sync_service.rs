@@ -59,6 +59,29 @@ impl EncryptionSyncPermit {
     }
 }
 
+/// Which process an [`EncryptionSyncService`] runs in.
+///
+/// The two differ in how they treat the device list cache: see
+/// [`EncryptionSyncMode::Notification`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EncryptionSyncMode {
+    /// The service runs in the app's own, long-lived process.
+    #[default]
+    App,
+
+    /// The service runs in a short-lived notification process, e.g. the [NSE]
+    /// on iOS.
+    ///
+    /// Such a process starts a new sliding sync on every push, so it never has
+    /// a `pos` to resume from. Invalidating the device list cache each time
+    /// would force a `/keys/query` for every tracked user on every push, so
+    /// this mode leaves the cache alone: the app's own encryption sync is the
+    /// one that tracks device list updates.
+    ///
+    /// [NSE]: https://developer.apple.com/documentation/usernotifications/unnotificationserviceextension
+    Notification,
+}
+
 /// High-level helper for synchronizing encryption events using sliding sync.
 ///
 /// See the module's documentation for more details.
@@ -74,8 +97,9 @@ impl EncryptionSyncService {
     pub async fn new(
         client: Client,
         poll_and_network_timeouts: Option<(Duration, Duration)>,
+        mode: EncryptionSyncMode,
     ) -> Result<Self, Error> {
-        Self::new_inner(client, poll_and_network_timeouts, true).await
+        Self::new_inner(client, poll_and_network_timeouts, mode == EncryptionSyncMode::App).await
     }
 
     /// Creates a new instance of an `EncryptionSyncService` for a short-lived,

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, iter, ops::Not, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, future::Future, iter, ops::Not, sync::Arc, time::Duration};
 
 use assert_matches2::{assert_let, assert_matches};
 use futures_util::{FutureExt, StreamExt, pin_mut};
@@ -427,6 +427,85 @@ async fn test_keys_query() {
     assert_eq!(device.device_id(), alice_device_id);
 }
 
+/// Regression test for issue #128: `set_local_trust` used to write back the
+/// whole in-memory `DeviceData`, reverting any field that had changed in the
+/// store in the meantime.
+#[async_test]
+async fn test_set_local_trust_does_not_revert_concurrent_device_changes() {
+    let (machine, _) = get_prepared_machine_test_helper(user_id(), false).await;
+    let alice_id = user_id!("@alice:example.org");
+    let alice_device_id: &DeviceId = device_id!("JLAFKJWSCS");
+
+    machine
+        .receive_keys_query_response(&TransactionId::new(), &keys_query_response())
+        .await
+        .unwrap();
+
+    // Given a `Device` we grabbed a while ago...
+    let device = machine.store().get_device(alice_id, alice_device_id).await.unwrap().unwrap();
+    assert!(!device.was_withheld_code_sent());
+
+    // ... and a change to the same device that landed in the store afterwards.
+    // Round-trip through serde so that this is a genuinely separate object, the way
+    // it would be with a real, serialising store.
+    let stored: DeviceData = json_convert(
+        &machine.store().get_device_data(alice_id, alice_device_id).await.unwrap().unwrap(),
+    )
+    .unwrap();
+    stored.mark_withheld_code_as_sent();
+    machine
+        .store()
+        .save_changes(Changes {
+            devices: DeviceChanges { changed: vec![stored], ..Default::default() },
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    // ... when we set the local trust through our stale handle...
+    device.set_local_trust(LocalTrust::Verified).await.unwrap();
+
+    // ... then the trust is recorded, and the concurrent change survives.
+    let stored = machine.store().get_device_data(alice_id, alice_device_id).await.unwrap().unwrap();
+    assert_eq!(stored.local_trust_state(), LocalTrust::Verified);
+    assert!(stored.was_withheld_code_sent());
+}
+
+#[async_test]
+async fn test_receive_keys_query_stores_untracked_users() {
+    let (machine, _) = get_prepared_machine_test_helper(user_id(), false).await;
+    let alice_id = user_id!("@alice:example.org");
+
+    // Given we do not track Alice's devices, e.g. because we share no encrypted
+    // room with her
+    assert!(!machine.tracked_users().await.unwrap().contains(alice_id));
+
+    // When we hand the machine a `/keys/query` response we made ourselves
+    machine.receive_keys_query(&keys_query_response()).await.unwrap();
+
+    // Then her devices are stored
+    let device = machine.store().get_device(alice_id, alice_device_id()).await.unwrap();
+    assert!(device.is_some(), "The devices of an untracked user should be stored");
+}
+
+#[async_test]
+async fn test_receive_keys_query_skips_tracked_users() {
+    let (machine, _) = get_prepared_machine_test_helper(user_id(), false).await;
+    let alice_id = user_id!("@alice:example.org");
+
+    // Given the machine tracks Alice's devices, so it queries them itself
+    machine.update_tracked_users([alice_id]).await.unwrap();
+    assert!(machine.tracked_users().await.unwrap().contains(alice_id));
+
+    // When we hand it a `/keys/query` response for her that it did not ask for
+    machine.receive_keys_query(&keys_query_response()).await.unwrap();
+
+    // Then it is ignored: a response the machine did not ask for must not race its
+    // own key queries
+    let device = machine.store().get_device(alice_id, alice_device_id()).await.unwrap();
+    assert!(device.is_none(), "The devices of a tracked user should be left to the machine");
+}
+
 #[async_test]
 async fn test_late_keys_query_response_updates_own_device() {
     // Inspired by a bug report[1], even though it looks like the client behaved
@@ -810,6 +889,213 @@ async fn test_request_missing_secrets_cross_signed() {
     // effect.
     let should_query_secrets_now = alice.query_missing_secrets_from_other_sessions().await.unwrap();
     assert!(!should_query_secrets_now);
+}
+
+#[async_test]
+async fn test_setting_the_local_trust_does_not_clobber_other_changes() {
+    let (machine, _) = get_machine_after_query_test_helper().await;
+
+    let alice = alice_id();
+    let alice_device_id = alice_device_id();
+
+    // Given a `Device` we read out of the store
+    let device = machine.get_device(alice, alice_device_id, None).await.unwrap().unwrap();
+    assert_eq!(device.local_trust_state(), LocalTrust::Unset);
+    assert!(!device.was_withheld_code_sent());
+
+    // And a change to the stored device made after we read it, as another part of
+    // the SDK would do. Round-trip it through serialization so that it really is a
+    // separate object, as it would be with a store that persists to disk.
+    let stored: DeviceData =
+        json_convert(&machine.store().get_device_data(alice, alice_device_id).await.unwrap().unwrap())
+            .unwrap();
+    stored.mark_withheld_code_as_sent();
+    machine
+        .store()
+        .save_changes(Changes {
+            devices: DeviceChanges { changed: vec![stored], ..Default::default() },
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    // When we set the local trust on our now-stale copy of the device
+    device.set_local_trust(LocalTrust::Verified).await.unwrap();
+
+    // Then the trust is recorded, and the change made in the meantime survives
+    let stored = machine.store().get_device_data(alice, alice_device_id).await.unwrap().unwrap();
+
+    assert_eq!(stored.local_trust_state(), LocalTrust::Verified);
+    assert!(
+        stored.was_withheld_code_sent(),
+        "Setting the local trust should not have reverted the withheld code flag"
+    );
+}
+
+#[async_test]
+async fn test_a_redacted_event_is_not_reported_as_a_utd() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+
+    let room_key_event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+    let room_key_event = json_convert(&room_key_event).unwrap();
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let group_session = bob
+        .store()
+        .with_transaction(async |tr| {
+            let res = bob
+                .decrypt_to_device_event(
+                    tr,
+                    &room_key_event,
+                    &mut Changes::default(),
+                    &decryption_settings,
+                )
+                .await?;
+            Ok(res)
+        })
+        .await
+        .unwrap()
+        .inbound_group_session
+        .unwrap();
+    bob.store()
+        .save_inbound_group_sessions(std::slice::from_ref(&group_session))
+        .await
+        .unwrap();
+
+    // Given an event which the server redacted before we got to decrypt it: the
+    // content, including the algorithm, has been stripped
+    let redacted_event = json_convert(&json!({
+        "event_id": "$redacted:example.org",
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+        "sender": alice.user_id(),
+        "type": "m.room.encrypted",
+        "content": {},
+        "unsigned": {
+            "redacted_because": {
+                "event_id": "$redaction:example.org",
+                "sender": alice.user_id(),
+                "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+                "type": "m.room.redaction",
+                "content": {},
+            },
+        },
+    }))
+    .unwrap();
+
+    // When we try to decrypt it
+    let error = bob
+        .decrypt_room_event(&redacted_event, room_id, &decryption_settings)
+        .await
+        .expect_err("A redacted event cannot be decrypted");
+
+    // Then we are told it was redacted, rather than that it was malformed
+    assert_matches!(error, MegolmError::RedactedEvent);
+
+    let result =
+        bob.try_decrypt_room_event(&redacted_event, room_id, &decryption_settings).await.unwrap();
+
+    assert_let!(RoomEventDecryptionResult::UnableToDecrypt(utd_info) = result);
+    assert_eq!(utd_info.reason, UnableToDecryptReason::Redacted);
+    assert!(
+        utd_info.reason.is_expected(),
+        "The failure should be recognisable as a redaction rather than a real UTD"
+    );
+    assert!(!utd_info.reason.is_missing_room_key());
+}
+
+#[async_test]
+async fn test_replayed_megolm_message_index_is_rejected() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+
+    let room_key_event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+    let room_key_event = json_convert(&room_key_event).unwrap();
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let group_session = bob
+        .store()
+        .with_transaction(async |tr| {
+            let res = bob
+                .decrypt_to_device_event(
+                    tr,
+                    &room_key_event,
+                    &mut Changes::default(),
+                    &decryption_settings,
+                )
+                .await?;
+            Ok(res)
+        })
+        .await
+        .unwrap()
+        .inbound_group_session
+        .unwrap();
+    bob.store()
+        .save_inbound_group_sessions(std::slice::from_ref(&group_session))
+        .await
+        .unwrap();
+
+    let content = RoomMessageEventContent::text_plain("It is a secret to everybody");
+    let encrypted = alice
+        .encrypt_room_event(room_id, AnyMessageLikeEventContent::RoomMessage(content))
+        .await
+        .unwrap();
+
+    let event_with_id = |event_id: &str| {
+        json_convert(&json!({
+            "event_id": event_id,
+            "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+            "sender": alice.user_id(),
+            "type": "m.room.encrypted",
+            "content": encrypted.content,
+        }))
+        .unwrap()
+    };
+
+    let event = event_with_id("$original:example.org");
+
+    bob.decrypt_room_event(&event, room_id, &decryption_settings)
+        .await
+        .expect("We should be able to decrypt the event");
+
+    // Decrypting the same event again is not a replay, it happens routinely.
+    bob.decrypt_room_event(&event, room_id, &decryption_settings)
+        .await
+        .expect("We should be able to decrypt the very same event again");
+
+    // The same ciphertext presented as a different event is a replay of the first
+    // one, and must not be shown as a new message.
+    let replayed_event = event_with_id("$replay:example.org");
+
+    let error = bob
+        .decrypt_room_event(&replayed_event, room_id, &decryption_settings)
+        .await
+        .expect_err("We should refuse to decrypt a replayed event");
+
+    assert_let!(MegolmError::ReplayedMessageIndex { original_event_id } = error);
+    assert_eq!(original_event_id, "$original:example.org");
 }
 
 #[async_test]
@@ -1282,6 +1568,135 @@ async fn test_withheld_unverified() {
             withheld_code: Some(WithheldCode::Unverified)
         }
     );
+}
+
+/// Poll `future` a handful of times, yielding in between, and assert that it
+/// still hasn't finished. Everything these tests do against a
+/// [`MemoryStore`](crate::store::MemoryStore) completes without waiting for
+/// anything, so a future that is still pending after this is one that is
+/// waiting on a lock.
+async fn assert_blocked<F: Future>(future: &mut std::pin::Pin<Box<F>>) {
+    use futures_util::poll;
+
+    for _ in 0..16 {
+        assert!(poll!(&mut *future).is_pending());
+        tokio::task::yield_now().await;
+    }
+}
+
+/// Creating the cross-signing identity has to be serialised against the
+/// processing of a `/keys/query` response. A response landing in the middle
+/// sees a public identity it doesn't recognise and throws the new private keys
+/// away, leaving an account that can log in but can't set up recovery (#154).
+#[async_test]
+async fn test_bootstrapping_cross_signing_holds_the_identity_lock() {
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+
+    // Given a `/keys/query` response is being processed,
+    let guard = machine.store().lock_identity_update().await;
+
+    // When we set up the cross-signing identity at the same time,
+    let mut bootstrap = Box::pin(machine.bootstrap_cross_signing(false));
+
+    // Then it waits its turn rather than racing the response,
+    assert_blocked(&mut bootstrap).await;
+
+    drop(guard);
+
+    // ... and once it gets its turn, the identity it created is the stored one.
+    bootstrap.await.unwrap();
+
+    let status = machine.cross_signing_status().await;
+    assert!(status.is_complete());
+    assert!(machine.get_identity(user_id(), None).await.unwrap().is_some());
+}
+
+/// The other half of #154: processing a `/keys/query` response takes the same
+/// lock, so it cannot run while an identity is being written.
+#[async_test]
+async fn test_receiving_a_keys_query_response_holds_the_identity_lock() {
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+
+    let guard = machine.store().lock_identity_update().await;
+
+    let response = keys_query_response();
+    let request_id = TransactionId::new();
+    let mut receive = Box::pin(machine.receive_keys_query_response(&request_id, &response));
+
+    assert_blocked(&mut receive).await;
+
+    drop(guard);
+
+    receive.await.unwrap();
+}
+
+/// Deciding whether a received room key is better than the stored one is a
+/// read, a comparison and a write. Importing room keys has to hold the merge
+/// lock across all three, or a room key arriving over sync can slip in between
+/// and the worse key ends up stored (#138).
+#[async_test]
+async fn test_importing_room_keys_holds_the_merge_lock() {
+    use futures_util::poll;
+
+    let machine = OlmMachine::new(user_id(), alice_device_id()).await;
+
+    // Given the merge lock is held by something else,
+    let guard = machine.store().lock_inbound_group_session_merge().await;
+
+    // When an import starts,
+    let mut import = Box::pin(machine.store().import_room_keys(vec![], None, |_, _| {}));
+
+    // Then it doesn't get to look at the store until the lock is free.
+    assert!(poll!(&mut import).is_pending());
+
+    drop(guard);
+
+    import.await.unwrap();
+}
+
+/// A redaction strips the `algorithm` field along with the rest of the
+/// content, which used to make a redacted event look like one using an
+/// algorithm we don't support. Those were reported as decryption failures and
+/// inflated UTD rates with events no key was ever going to open (#41).
+#[async_test]
+async fn test_decrypt_redacted_event() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    // Given an `m.room.encrypted` event whose content has been redacted away,
+    let room_event = json!({
+        "event_id": "$xxxxx:example.org",
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+        "sender": alice.user_id(),
+        "type": "m.room.encrypted",
+        "content": {},
+        "unsigned": {
+            "redacted_because": {
+                "event_id": "$redaction:example.org",
+                "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+                "sender": alice.user_id(),
+                "type": "m.room.redaction",
+                "content": {},
+            },
+        },
+    });
+    let room_event = json_convert(&room_event).unwrap();
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    // When we try to decrypt it, we are told it was redacted rather than that we
+    // don't know the algorithm.
+    let decrypt_result = bob.decrypt_room_event(&room_event, room_id, &decryption_settings).await;
+    assert_matches!(decrypt_result, Err(MegolmError::RedactedEvent));
+
+    // And the UTD it turns into is one that doesn't count: no key would help.
+    let decrypt_result =
+        bob.try_decrypt_room_event(&room_event, room_id, &decryption_settings).await.unwrap();
+    assert_let!(RoomEventDecryptionResult::UnableToDecrypt(utd_info) = decrypt_result);
+    assert_eq!(utd_info.reason, UnableToDecryptReason::Redacted);
+    assert!(utd_info.reason.is_expected());
 }
 
 /// Test what happens when we feed an unencrypted event into the decryption

@@ -47,6 +47,22 @@ use serde_json::json;
 use stream_assert::{assert_pending, assert_ready};
 use tokio::task::yield_now;
 
+/// Wait until the room's send queue has sent everything it had.
+///
+/// Read receipts and unread markers go through the send queue, so they land on
+/// the server a moment after the call that asked for them returned.
+async fn wait_for_empty_send_queue(client: &matrix_sdk::Client, room_id: &ruma::RoomId) {
+    for _ in 0..300 {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        if requests.is_empty() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+
+    panic!("the send queue still has pending requests");
+}
+
 fn filter_notice(ev: &AnySyncTimelineEvent, _rules: &RoomVersionRules) -> bool {
     match ev {
         AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(
@@ -649,6 +665,7 @@ async fn test_send_single_receipt() {
         .await
         .unwrap();
 
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(mock_post_receipt_guards);
 
     // Unchanged receipts are not sent.
@@ -731,6 +748,7 @@ async fn test_send_single_receipt() {
         .await
         .unwrap();
 
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(mock_post_receipt_guards);
 
     // Newer receipts in the timeline are sent.
@@ -807,6 +825,7 @@ async fn test_send_single_receipt() {
         .await
         .unwrap();
 
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(mock_post_receipt_guards);
 
     // Older receipts in the timeline are not sent.
@@ -846,6 +865,8 @@ async fn test_send_single_receipt() {
         .send_single_receipt(CreateReceiptType::FullyRead, second_receipts_event_id.to_owned())
         .await
         .unwrap();
+    // The receipts go out through the send queue; wait for them to land.
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -907,6 +928,7 @@ async fn test_send_single_receipt_threaded() {
         .unwrap();
     timeline.send_single_receipt(CreateReceiptType::FullyRead, event_id.to_owned()).await.unwrap();
 
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(mock_post_receipt_guards);
 
     let thread_root_event_id = event_id!("$thread_root");
@@ -962,7 +984,10 @@ async fn test_send_single_receipt_threaded() {
         .unwrap();
     timeline.send_single_receipt(CreateReceiptType::FullyRead, event_id.to_owned()).await.unwrap();
 
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(mock_post_receipt_guards);
+    // The receipts go out through the send queue; wait for them to land.
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -1017,12 +1042,14 @@ async fn test_send_single_receipt_with_unread_flag() {
         .await
         .unwrap();
 
-    // Unchanged unthreaded receipts are not sent, but the unread flag is unset.
+    // Unchanged unthreaded receipts are not sent, but the unread flag is unset. It
+    // is unset once, not once per receipt: the flag takes effect locally right
+    // away, so the two other calls have nothing left to do.
     {
         let _guard = server
             .mock_set_room_account_data(RoomAccountDataEventType::MarkedUnread)
             .ok()
-            .expect(3)
+            .expect(1)
             .mount_as_scoped()
             .await;
 
@@ -1038,6 +1065,9 @@ async fn test_send_single_receipt_with_unread_flag() {
             .send_single_receipt(CreateReceiptType::FullyRead, first_receipts_event_id)
             .await
             .unwrap();
+
+        assert!(!room.is_marked_unread());
+        wait_for_empty_send_queue(&client, room.room_id()).await;
     }
 
     // Unthreaded receipts on unknown events are set and the unread flag is unset.
@@ -1064,14 +1094,9 @@ async fn test_send_single_receipt_with_unread_flag() {
                 .named("Fully-read marker")
                 .mount_as_scoped()
                 .await,
-            server
-                .mock_set_room_account_data(RoomAccountDataEventType::MarkedUnread)
-                .ok()
-                .expect(3)
-                .mount_as_scoped()
-                .await,
         );
 
+        // The unread flag was already unset above, so nothing asks for it again.
         timeline
             .send_single_receipt(CreateReceiptType::Read, second_receipts_event_id.clone())
             .await
@@ -1084,6 +1109,8 @@ async fn test_send_single_receipt_with_unread_flag() {
             .send_single_receipt(CreateReceiptType::FullyRead, second_receipts_event_id.clone())
             .await
             .unwrap();
+
+        wait_for_empty_send_queue(&client, room.room_id()).await;
     }
 
     // Threaded receipt with unknown previous receipt is sent, but the unread flag
@@ -1103,6 +1130,8 @@ async fn test_send_single_receipt_with_unread_flag() {
         )
         .await
         .unwrap();
+
+        wait_for_empty_send_queue(&client, room.room_id()).await;
     }
 }
 
@@ -1176,6 +1205,8 @@ async fn test_mark_as_read() {
 
     // It works.
     assert!(has_sent);
+    // The receipts go out through the send queue; wait for them to land.
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -1230,6 +1261,8 @@ async fn test_mark_as_read_after_own_reply() {
     // push/badge count.
     let has_sent = timeline.mark_as_read(CreateReceiptType::Read).await.unwrap();
     assert!(has_sent);
+    // The receipts go out through the send queue; wait for them to land.
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -1278,6 +1311,8 @@ async fn test_mark_as_read_with_only_own_events() {
 
     let has_sent = timeline.mark_as_read(CreateReceiptType::Read).await.unwrap();
     assert!(has_sent);
+    // The receipts go out through the send queue; wait for them to land.
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -1486,6 +1521,8 @@ async fn test_mark_as_read_after_threaded_edit() {
     // I can mark the room as read.
     let has_sent = timeline.mark_as_read(CreateReceiptType::Read).await.unwrap();
     assert!(has_sent);
+    // The receipts go out through the send queue; wait for them to land.
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -1556,6 +1593,8 @@ async fn test_mark_as_read_with_unread_flag() {
 
         // The receipt is sent and the unread flag was unset.
         assert!(has_sent);
+
+        wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     }
 
     // Mock receiving the read receipt only.
@@ -1575,20 +1614,14 @@ async fn test_mark_as_read_with_unread_flag() {
         )
         .await;
 
-    {
-        let _set_room_account_data_guard = server
-            .mock_set_room_account_data(RoomAccountDataEventType::MarkedUnread)
-            .ok()
-            .expect(1)
-            .mount_as_scoped()
-            .await;
+    // When I mark the room as read by sending a read receipt to the latest event,
+    let has_sent = timeline.mark_as_read(CreateReceiptType::Read).await.unwrap();
 
-        // When I mark the room as read by sending a read receipt to the latest event,
-        let has_sent = timeline.mark_as_read(CreateReceiptType::Read).await.unwrap();
+    // Neither the receipt nor the unread flag is sent: the receipt is already
+    // there, and the flag was unset above and took effect locally right away.
+    assert!(!has_sent);
 
-        // The receipt is not sent but the unread flag was unset.
-        assert!(!has_sent);
-    }
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -1614,6 +1647,7 @@ async fn test_send_multiple_receipts() {
 
     timeline.send_multiple_receipts(first_receipts.clone()).await.unwrap();
 
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(guard);
 
     // Unchanged receipts are not sent.
@@ -1655,6 +1689,7 @@ async fn test_send_multiple_receipts() {
     let guard = server.mock_send_read_markers().ok().expect(1).mount_as_scoped().await;
 
     timeline.send_multiple_receipts(second_receipts.clone()).await.unwrap();
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(guard);
 
     // Newer receipts in the timeline are sent.
@@ -1701,6 +1736,7 @@ async fn test_send_multiple_receipts() {
     let guard = server.mock_send_read_markers().ok().expect(1).mount_as_scoped().await;
 
     timeline.send_multiple_receipts(third_receipts.clone()).await.unwrap();
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
     drop(guard);
 
     // Older receipts in the timeline are not sent.
@@ -1729,6 +1765,8 @@ async fn test_send_multiple_receipts() {
         .await;
 
     timeline.send_multiple_receipts(second_receipts.clone()).await.unwrap();
+    // The receipts go out through the send queue; wait for them to land.
+    wait_for_empty_send_queue(&client, timeline.room().room_id()).await;
 }
 
 #[async_test]
@@ -1792,25 +1830,24 @@ async fn test_send_multiple_receipts_with_unread_flag() {
             .public_read_receipt(Some(first_receipts_event_id.clone()))
             .private_read_receipt(Some(first_receipts_event_id));
         timeline.send_multiple_receipts(first_receipts).await.unwrap();
+
+        assert!(!room.is_marked_unread());
+        wait_for_empty_send_queue(&client, room.room_id()).await;
     }
 
-    // Receipts with unknown previous receipts are always sent, and the unread flag
-    // is unset.
+    // Receipts with unknown previous receipts are always sent. The unread flag was
+    // already unset above, so nothing asks for it again.
     {
         let _read_markers_guard =
             server.mock_send_read_markers().ok().expect(1).mount_as_scoped().await;
-        let _marked_unread_guard = server
-            .mock_set_room_account_data(RoomAccountDataEventType::MarkedUnread)
-            .ok()
-            .expect(1)
-            .mount_as_scoped()
-            .await;
 
         let second_receipts = Receipts::new()
             .fully_read_marker(Some(second_receipts_event_id.clone()))
             .public_read_receipt(Some(second_receipts_event_id.clone()))
             .private_read_receipt(Some(second_receipts_event_id));
         timeline.send_multiple_receipts(second_receipts.clone()).await.unwrap();
+
+        wait_for_empty_send_queue(&client, room.room_id()).await;
     }
 }
 

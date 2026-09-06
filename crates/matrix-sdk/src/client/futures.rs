@@ -34,7 +34,7 @@ use crate::{
     authentication::oauth::OAuthError,
     config::RequestConfig,
     error::{HttpError, HttpResult},
-    http_client::{SupportedAuthScheme, SupportedPathBuilder},
+    http_client::{RequestProgress, SupportedAuthScheme, SupportedPathBuilder},
     media::MediaError,
 };
 
@@ -44,7 +44,7 @@ pub struct SendRequest<R> {
     pub(crate) client: Client,
     pub(crate) request: R,
     pub(crate) config: Option<RequestConfig>,
-    pub(crate) send_progress: SharedObservable<TransmissionProgress>,
+    pub(crate) progress: RequestProgress,
 }
 
 impl<R> SendRequest<R> {
@@ -58,7 +58,21 @@ impl<R> SendRequest<R> {
         mut self,
         send_progress: SharedObservable<TransmissionProgress>,
     ) -> Self {
-        self.send_progress = send_progress;
+        self.progress.send = send_progress;
+        self
+    }
+
+    /// Replace the default `SharedObservable` used for tracking download
+    /// progress.
+    ///
+    /// Note that any subscribers obtained from
+    /// [`subscribe_to_receive_progress`][Self::subscribe_to_receive_progress]
+    /// will be invalidated by this.
+    pub fn with_receive_progress_observable(
+        mut self,
+        receive_progress: SharedObservable<TransmissionProgress>,
+    ) -> Self {
+        self.progress.receive = receive_progress;
         self
     }
 
@@ -72,7 +86,18 @@ impl<R> SendRequest<R> {
     /// Get a subscriber to observe the progress of sending the request
     /// body.
     pub fn subscribe_to_send_progress(&self) -> Subscriber<TransmissionProgress> {
-        self.send_progress.subscribe()
+        self.progress.send.subscribe()
+    }
+
+    /// Get a subscriber to observe the progress of receiving the response
+    /// body.
+    ///
+    /// The response is only read in chunks, and progress only reported, while
+    /// something is subscribed here. A response with no `Content-Length` (a
+    /// chunked or compressed one) has no known total, so `total` tracks
+    /// `current` until the body ends.
+    pub fn subscribe_to_receive_progress(&self) -> Subscriber<TransmissionProgress> {
+        self.progress.receive.subscribe()
     }
 }
 
@@ -162,20 +187,19 @@ where
             }
         }
 
-        let Self { client, request, config, send_progress } = self;
+        let Self { client, request, config, progress } = self;
 
         Box::pin(async move {
             // Refresh the access token if it is about to expire, so that this request
             // doesn't have to fail first to have it refreshed.
             client.refresh_access_token_if_expiring().await;
 
-            let res =
-                Box::pin(client.send_inner(request.clone(), config, send_progress.clone())).await;
+            let res = Box::pin(client.send_inner(request.clone(), config, progress.clone())).await;
 
             if let Err(e) = &res
                 && let RetryRequest::Yes = handle_unknown_token_error(e, &client).await?
             {
-                return Box::pin(client.send_inner(request, config, send_progress)).await;
+                return Box::pin(client.send_inner(request, config, progress)).await;
             }
 
             res
@@ -213,7 +237,7 @@ impl SendMediaUploadRequest {
     /// Get a subscriber to observe the progress of sending the request
     /// body.
     pub fn subscribe_to_send_progress(&self) -> Subscriber<TransmissionProgress> {
-        self.send_request.send_progress.subscribe()
+        self.send_request.progress.send.subscribe()
     }
 }
 

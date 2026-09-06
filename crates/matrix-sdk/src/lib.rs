@@ -153,7 +153,9 @@ pub use error::{
 };
 #[cfg(feature = "reqwest-transport")]
 pub use http_client::ReqwestTransport;
-pub use http_client::{HttpSend, SupportedAuthScheme, SupportedPathBuilder, TransmissionProgress};
+pub use http_client::{
+    HttpSend, RequestProgress, SupportedAuthScheme, SupportedPathBuilder, TransmissionProgress,
+};
 #[cfg(all(feature = "e2e-encryption", feature = "sqlite"))]
 pub use matrix_sdk_sqlite::SqliteCryptoStore;
 #[cfg(feature = "sqlite")]

@@ -1265,6 +1265,132 @@ pub(crate) mod tests {
         );
     }
 
+    /// The session we pick to talk to a device is the one that most recently
+    /// decrypted a message from it, not the one we created last (#100). The
+    /// other side has demonstrably got the former; it may never have received
+    /// the latter.
+    #[matrix_sdk_test::async_test]
+    async fn test_most_recent_session_is_the_last_one_that_decrypted() {
+        use std::time::Duration;
+
+        use ruma::{SecondsSinceUnixEpoch, device_id, time::SystemTime};
+        use vodozemac::olm::SessionConfig;
+
+        use crate::{
+            olm::Account,
+            store::{CryptoStoreWrapper, MemoryStore, types::Changes},
+        };
+
+        let alice_user = user_id!("@alice:localhost");
+        let alice_device = device_id!("ALICEDEVICE");
+        let alice = Account::with_device_id(alice_user, alice_device);
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEVICE"));
+
+        // Given two Olm sessions with Bob, the older of which is the one that has
+        // decrypted something.
+        bob.generate_one_time_keys(2);
+        let mut one_time_keys = bob.one_time_keys().into_values();
+
+        let session_config = {
+            #[cfg(feature = "experimental-algorithms")]
+            {
+                SessionConfig::version_2()
+            }
+            #[cfg(not(feature = "experimental-algorithms"))]
+            {
+                SessionConfig::version_1()
+            }
+        };
+
+        let mut sessions: Vec<_> = one_time_keys
+            .by_ref()
+            .take(2)
+            .map(|one_time_key| {
+                alice
+                    .create_outbound_session_helper(
+                        session_config,
+                        bob.identity_keys().curve25519,
+                        one_time_key,
+                        false,
+                        alice.device_keys(),
+                    )
+                    .unwrap()
+            })
+            .collect();
+
+        let long_ago =
+            SecondsSinceUnixEpoch::from_system_time(SystemTime::now() - Duration::from_secs(3600))
+                .unwrap();
+        let recently =
+            SecondsSinceUnixEpoch::from_system_time(SystemTime::now() - Duration::from_secs(60))
+                .unwrap();
+
+        // The first session is old, but it has decrypted something recently.
+        sessions[0].creation_time = long_ago;
+        sessions[0].last_decryption_time = Some(recently);
+
+        // The second one was created after it, and has never decrypted anything.
+        sessions[1].creation_time = SecondsSinceUnixEpoch::now();
+        sessions[1].last_decryption_time = None;
+
+        let expected_session_id = sessions[0].session_id().to_owned();
+
+        let store = CryptoStoreWrapper::new(alice_user, alice_device, MemoryStore::new());
+        store.save_changes(Changes { sessions, ..Default::default() }).await.unwrap();
+
+        // When we ask which session to use,
+        let bob_device = DeviceData::from_account(&bob);
+        let session = bob_device.get_most_recent_session(&store).await.unwrap().unwrap();
+
+        // Then we get the one that decrypted a message, not the one created last.
+        assert_eq!(session.session_id(), expected_session_id);
+    }
+
+    /// Setting the local trust used to write back the whole device as it was
+    /// when the caller got hold of it, silently reverting anything that had
+    /// changed on the stored copy since (#128).
+    #[matrix_sdk_test::async_test]
+    async fn test_set_local_trust_does_not_revert_other_changes() {
+        use ruma::user_id;
+
+        use crate::{
+            machine::test_helpers::get_machine_pair,
+            store::types::{Changes, DeviceChanges},
+        };
+
+        let alice_id = user_id!("@alice:localhost");
+        let bob_id = user_id!("@bob:localhost");
+        let (alice, bob, _) = get_machine_pair(alice_id, bob_id, false).await;
+
+        // Given a handle on Bob's device,
+        let device = alice.get_device(bob.user_id(), bob.device_id(), None).await.unwrap().unwrap();
+        assert_eq!(device.local_trust_state(), LocalTrust::Unset);
+
+        // ... and a change to the stored copy that the handle knows nothing about,
+        let mut stored =
+            alice.store().get_device_data(bob.user_id(), bob.device_id()).await.unwrap().unwrap();
+        let mut device_keys = stored.as_device_keys().clone();
+        device_keys.unsigned.device_display_name = Some("Bob's new phone".to_owned());
+        assert!(stored.update_device(&device_keys).unwrap());
+        alice
+            .store()
+            .save_changes(Changes {
+                devices: DeviceChanges { changed: vec![stored], ..Default::default() },
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // When we set the local trust through the stale handle,
+        device.set_local_trust(LocalTrust::Verified).await.unwrap();
+
+        // Then the trust is set, and the change we didn't know about is still there.
+        let stored =
+            alice.store().get_device_data(bob.user_id(), bob.device_id()).await.unwrap().unwrap();
+        assert_eq!(stored.local_trust_state(), LocalTrust::Verified);
+        assert_eq!(stored.display_name(), Some("Bob's new phone"));
+    }
+
     /// A device signed by its owner's self-signing key becomes trusted when
     /// the owner's identity is verified via X.509, even though we never
     /// cross-signed the identity ourselves.

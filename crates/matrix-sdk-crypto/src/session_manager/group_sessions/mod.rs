@@ -1623,6 +1623,53 @@ mod tests {
     }
 
     #[async_test]
+    async fn test_withheld_messages_carry_a_message_id() {
+        let machine = machine().await;
+        let room_id = room_id!("!test:localhost");
+        let keys_claim = keys_claim_response();
+
+        let users = keys_claim.one_time_keys.keys().map(Deref::deref);
+        let settings = EncryptionSettings {
+            sharing_strategy: CollectStrategy::OnlyTrustedDevices,
+            ..Default::default()
+        };
+
+        // Given a share which withholds the room key from some devices
+        let requests = machine.share_room_key(room_id, users, settings).await.unwrap();
+
+        let withheld_requests: Vec<_> = requests
+            .iter()
+            .filter(|r| r.event_type == "m.room_key.withheld".into())
+            .collect();
+        assert!(!withheld_requests.is_empty(), "We should have withheld the key from someone");
+
+        // Then every withheld message carries a message ID, so that it can be traced
+        // through the logs of the sender and of the recipient, and each of them has its
+        // own
+        let mut message_ids = BTreeSet::new();
+
+        for request in withheld_requests {
+            for message in request.messages.values() {
+                for content in message.values() {
+                    let withheld = content
+                        .deserialize_as_unchecked::<RoomKeyWithheldContent>()
+                        .expect("We should be able to deserialize the withheld content");
+
+                    let message_id = withheld
+                        .message_id()
+                        .expect("Every withheld message should carry a message ID")
+                        .to_owned();
+
+                    assert!(
+                        message_ids.insert(message_id),
+                        "Each withheld message should have its own message ID"
+                    );
+                }
+            }
+        }
+    }
+
+    #[async_test]
     async fn test_no_olm_withheld_only_sent_once() {
         let keys_query = keys_query_response();
         let txn_id = TransactionId::new();

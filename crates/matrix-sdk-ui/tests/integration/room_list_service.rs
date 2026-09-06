@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use assert_matches::assert_matches;
-use eyeball_im::VectorDiff;
+use eyeball_im::{Vector, VectorDiff};
 use futures_util::{FutureExt, StreamExt, pin_mut};
 use matrix_sdk::{
     Client, RoomDisplayName,
@@ -12,8 +12,12 @@ use matrix_sdk_test::{ALICE, async_test, event_factory::EventFactory};
 use matrix_sdk_ui::{
     RoomListService,
     room_list_service::{
-        ALL_ROOMS_LIST_NAME as ALL_ROOMS, Error, RoomListLoadingState, State, SyncIndicator,
-        filters::{new_filter_fuzzy_match_room_name, new_filter_non_left, new_filter_none},
+        ALL_ROOMS_LIST_NAME as ALL_ROOMS, Error, RoomListItem, RoomListLoadingState, State,
+        SyncIndicator,
+        filters::{
+            new_filter_deduplicate_versions, new_filter_fuzzy_match_room_name, new_filter_non_left,
+            new_filter_none,
+        },
     },
     timeline::{LatestEventValue, RoomExt as _, TimelineItemKind, VirtualTimelineItem},
 };
@@ -3402,4 +3406,139 @@ async fn test_thread_subscriptions_extension_enabled_only_if_server_advertises_i
             },
         },
     };
+}
+
+/// A tombstoned room must disappear from the room list as soon as its successor
+/// room is joined, not only when the successor was already joined when the
+/// filter was set.
+#[async_test]
+async fn test_dynamic_entries_stream_deduplicate_versions_when_joining_the_successor()
+-> Result<(), Error> {
+    let (_client, server, room_list) = new_room_list_service().await?;
+
+    let sync = room_list.sync();
+    pin_mut!(sync);
+
+    let all_rooms = room_list.all_rooms().await?;
+
+    let (dynamic_entries_stream, dynamic_entries) = all_rooms.entries_with_dynamic_adapters(10);
+    pin_mut!(dynamic_entries_stream);
+
+    // `!r0` is tombstoned in favour of `!r1`, which isn't known yet.
+    sync_then_assert_request_and_fake_response! {
+        [server, room_list, sync]
+        states = Init => SettingUp,
+        assert request >= {
+            "lists": {
+                ALL_ROOMS: {
+                    "ranges": [[0, 19]],
+                    "timeline_limit": 1,
+                },
+            },
+        },
+        respond with = {
+            "pos": "0",
+            "lists": {
+                ALL_ROOMS: {
+                    "count": 1,
+                },
+            },
+            "rooms": {
+                "!r0:bar.org": {
+                    "initial": true,
+                    "bump_stamp": 1,
+                    "required_state": [
+                        {
+                            "content": {
+                                "body": "This room has been replaced",
+                                "replacement_room": "!r1:bar.org"
+                            },
+                            "event_id": "$s0",
+                            "origin_server_ts": 1,
+                            "sender": "@example:bar.org",
+                            "state_key": "",
+                            "type": "m.room.tombstone"
+                        },
+                    ],
+                },
+            },
+        },
+    };
+
+    dynamic_entries.set_filter(Box::new(new_filter_deduplicate_versions()));
+
+    // `!r0` is the active version: its successor is unknown.
+    let mut entries = Vector::new();
+    drain_entries(&mut dynamic_entries_stream, &mut entries).await;
+
+    assert_eq!(room_ids(&entries), ["!r0:bar.org"]);
+
+    // Now, the successor room is joined.
+    sync_then_assert_request_and_fake_response! {
+        [server, room_list, sync]
+        states = SettingUp => Running,
+        assert request >= {
+            "lists": {
+                ALL_ROOMS: {
+                    "ranges": [[0, 0]],
+                    "timeline_limit": 1,
+                },
+            },
+        },
+        respond with = {
+            "pos": "1",
+            "lists": {
+                ALL_ROOMS: {
+                    "count": 2,
+                },
+            },
+            "rooms": {
+                "!r1:bar.org": {
+                    "initial": true,
+                    "bump_stamp": 2,
+                    "required_state": [
+                        {
+                            "content": {
+                                "membership": "join"
+                            },
+                            "event_id": "$s1",
+                            "origin_server_ts": 2,
+                            "sender": "@example:localhost",
+                            "state_key": "@example:localhost",
+                            "type": "m.room.member"
+                        },
+                    ],
+                },
+            },
+        },
+    };
+
+    // `!r0` is not the active version anymore: it must be gone from the list.
+    drain_entries(&mut dynamic_entries_stream, &mut entries).await;
+
+    assert_eq!(room_ids(&entries), ["!r1:bar.org"]);
+
+    Ok(())
+}
+
+/// Apply everything the `dynamic_entries_stream` has to offer onto `entries`.
+async fn drain_entries<S>(stream: &mut S, entries: &mut Vector<RoomListItem>)
+where
+    S: futures_util::Stream<Item = Vec<VectorDiff<RoomListItem>>> + Unpin,
+{
+    // Give the tasks feeding the stream a chance to run before concluding the
+    // stream has nothing more to offer.
+    for _ in 0..10 {
+        yield_now().await;
+
+        while let Some(Some(diffs)) = stream.next().now_or_never() {
+            for diff in diffs {
+                diff.apply(entries);
+            }
+        }
+    }
+}
+
+fn room_ids(entries: &Vector<RoomListItem>) -> Vec<String> {
+    entries.iter().map(|room| room.room_id().to_string()).collect()
 }

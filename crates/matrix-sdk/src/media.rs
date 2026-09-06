@@ -171,6 +171,23 @@ pub trait MediaFetcher: SendOutsideWasm + SyncOutsideWasm + fmt::Debug {
         client: &'a Client,
         request: &'a MediaRequestParameters,
     ) -> BoxFuture<'a, Result<Vec<u8>, Error>>;
+
+    /// Fetches the media content, reporting how much of it has arrived into
+    /// `progress`.
+    ///
+    /// This is what [`Media::get_media_content_with_progress`] calls. The
+    /// default implementation ignores the observable and forwards to
+    /// [`fetch_media_content`](Self::fetch_media_content), which is the right
+    /// thing for a fetcher that cannot see the download advance.
+    fn fetch_media_content_with_progress<'a>(
+        &'a self,
+        client: &'a Client,
+        request: &'a MediaRequestParameters,
+        progress: SharedObservable<TransmissionProgress>,
+    ) -> BoxFuture<'a, Result<Vec<u8>, Error>> {
+        let _ = progress;
+        self.fetch_media_content(client, request)
+    }
 }
 
 impl Media {
@@ -440,6 +457,62 @@ impl Media {
         request: &MediaRequestParameters,
         use_cache: bool,
     ) -> Result<Vec<u8>> {
+        self.get_media_content_with_progress(request, use_cache, Default::default()).await
+    }
+
+    /// Get a media file's content, reporting how much of it has been
+    /// downloaded.
+    ///
+    /// Same as [`Media::get_media_content`], plus an observable that the
+    /// download progress is reported into, so a client can show a progress
+    /// indicator for an attachment.
+    ///
+    /// Nothing is reported when the content comes back from the media cache
+    /// rather than the network, since there is no transfer to watch; a caller
+    /// showing a progress bar should treat the returned content as the end of
+    /// it either way. A response with no `Content-Length` (a chunked or
+    /// compressed one) has no known total, so `total` tracks `current` until
+    /// the download ends.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use eyeball::SharedObservable;
+    /// # use matrix_sdk::{
+    /// #     Client, TransmissionProgress,
+    /// #     media::{MediaFormat, MediaRequestParameters},
+    /// # };
+    /// # use matrix_sdk::ruma::{events::room::MediaSource, owned_mxc_uri};
+    /// # async {
+    /// # let client: Client = unimplemented!();
+    /// let request = MediaRequestParameters {
+    ///     source: MediaSource::Plain(owned_mxc_uri!("mxc://localhost/media")),
+    ///     format: MediaFormat::File,
+    /// };
+    ///
+    /// // The type is spelled out because `SharedObservable` has both a
+    /// // synchronous and an async-lock flavour, and `subscribe` on each.
+    /// let progress = SharedObservable::<TransmissionProgress>::default();
+    /// let mut subscriber = progress.subscribe();
+    ///
+    /// tokio::spawn(async move {
+    ///     while let Some(progress) = subscriber.next().await {
+    ///         println!("{} / {} bytes", progress.current, progress.total);
+    ///     }
+    /// });
+    ///
+    /// let content = client
+    ///     .media()
+    ///     .get_media_content_with_progress(&request, true, progress)
+    ///     .await?;
+    /// # anyhow::Ok(()) };
+    /// ```
+    pub async fn get_media_content_with_progress(
+        &self,
+        request: &MediaRequestParameters,
+        use_cache: bool,
+        progress: SharedObservable<TransmissionProgress>,
+    ) -> Result<Vec<u8>> {
         // This is a local media. Force to read the media's content from the store: it
         // cannot exist somewhere else!
         if Self::is_local_uri(&request.source) {
@@ -469,7 +542,7 @@ impl Media {
             .media_fetcher
             .read()
             .await
-            .fetch_media_content(&self.client, request)
+            .fetch_media_content_with_progress(&self.client, request, progress)
             .await?;
 
         if use_cache {
@@ -812,6 +885,15 @@ impl MediaFetcher for DefaultMediaFetcher {
         client: &'a Client,
         request: &'a MediaRequestParameters,
     ) -> BoxFuture<'a, Result<Vec<u8>, Error>> {
+        self.fetch_media_content_with_progress(client, request, Default::default())
+    }
+
+    fn fetch_media_content_with_progress<'a>(
+        &'a self,
+        client: &'a Client,
+        request: &'a MediaRequestParameters,
+        progress: SharedObservable<TransmissionProgress>,
+    ) -> BoxFuture<'a, Result<Vec<u8>, Error>> {
         Box::pin(async move {
             let request_config = client
                 .request_config()
@@ -828,11 +910,21 @@ impl MediaFetcher for DefaultMediaFetcher {
                     let content = if use_auth {
                         let request =
                             authenticated_media::get_content::v1::Request::from_uri(&file.url)?;
-                        client.send(request).with_request_config(request_config).await?.file
+                        client
+                            .send(request)
+                            .with_request_config(request_config)
+                            .with_receive_progress_observable(progress.clone())
+                            .await?
+                            .file
                     } else {
                         #[allow(deprecated)]
                         let request = media::get_content::v3::Request::from_url(&file.url)?;
-                        client.send(request).with_request_config(request_config).await?.file
+                        client
+                            .send(request)
+                            .with_request_config(request_config)
+                            .with_receive_progress_observable(progress.clone())
+                            .await?
+                            .file
                     };
 
                     #[cfg(feature = "e2e-encryption")]
@@ -868,7 +960,12 @@ impl MediaFetcher for DefaultMediaFetcher {
                             request.method = Some(settings.method.clone());
                             request.animated = Some(settings.animated);
 
-                            Ok(client.send(request).with_request_config(request_config).await?.file)
+                            Ok(client
+                                .send(request)
+                                .with_request_config(request_config)
+                                .with_receive_progress_observable(progress.clone())
+                                .await?
+                                .file)
                         } else {
                             #[allow(deprecated)]
                             let request = {
@@ -883,15 +980,30 @@ impl MediaFetcher for DefaultMediaFetcher {
                                 request
                             };
 
-                            Ok(client.send(request).with_request_config(request_config).await?.file)
+                            Ok(client
+                                .send(request)
+                                .with_request_config(request_config)
+                                .with_receive_progress_observable(progress.clone())
+                                .await?
+                                .file)
                         }
                     } else if use_auth {
                         let request = authenticated_media::get_content::v1::Request::from_uri(uri)?;
-                        Ok(client.send(request).with_request_config(request_config).await?.file)
+                        Ok(client
+                            .send(request)
+                            .with_request_config(request_config)
+                            .with_receive_progress_observable(progress.clone())
+                            .await?
+                            .file)
                     } else {
                         #[allow(deprecated)]
                         let request = media::get_content::v3::Request::from_url(uri)?;
-                        Ok(client.send(request).with_request_config(request_config).await?.file)
+                        Ok(client
+                            .send(request)
+                            .with_request_config(request_config)
+                            .with_receive_progress_observable(progress.clone())
+                            .await?
+                            .file)
                     }
                 }
             }

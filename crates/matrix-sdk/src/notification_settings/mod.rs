@@ -330,18 +330,44 @@ impl NotificationSettings {
             }
         };
 
-        // Extract all the custom rules except the one we just created.
+        // A room-level `dont_notify` rule stops the homeserver from pushing anything at
+        // all for an encrypted room: it can't read the ciphertext, so it can never tell
+        // that a message mentions the user, and the device never wakes up to find out.
+        //
+        // Keep the encrypted events of such a room notifying with an extra `Override`
+        // rule. The client evaluates the push rules again on the decrypted event, where
+        // the room-level rule does apply, so non-mentions are still filtered out —
+        // client-side, where the mention is actually visible.
+        let encrypted_events_rule_id = if mode == RoomNotificationMode::MentionsAndKeywordsOnly
+            && self.is_room_encrypted(room_id).await
+        {
+            Some(rules::encrypted_events_rule_id(room_id))
+        } else {
+            None
+        };
+
+        // Extract all the custom rules except the ones we just created.
         let new_rule_id = room_id.as_str();
         let custom_rules: Vec<(RuleKind, String)> = rules
             .get_custom_rules_for_room(room_id)
             .into_iter()
-            .filter(|(kind, rule_id)| kind != &new_rule_kind || rule_id != new_rule_id)
+            .filter(|(kind, rule_id)| {
+                if kind == &new_rule_kind && rule_id == new_rule_id {
+                    return false;
+                }
+
+                kind != &RuleKind::Override
+                    || Some(rule_id.as_str()) != encrypted_events_rule_id.as_deref()
+            })
             .collect();
 
         // Build the command list to delete all other custom rules, with the exception
-        // of the newly inserted rule.
+        // of the newly inserted rules.
         let mut rule_commands = RuleCommands::new(rules.ruleset);
         rule_commands.insert_rule(new_rule_kind.clone(), room_id, notify)?;
+        if encrypted_events_rule_id.is_some() {
+            rule_commands.insert_encrypted_events_rule(room_id)?;
+        }
         for (kind, rule_id) in custom_rules {
             rule_commands.delete_rule(kind, rule_id)?;
         }
@@ -352,6 +378,24 @@ impl NotificationSettings {
         rules.apply(rule_commands);
 
         Ok(())
+    }
+
+    /// Whether the given room is encrypted, as far as this client can tell.
+    ///
+    /// Defaults to `false` when the room is unknown, or its encryption state
+    /// can't be determined.
+    async fn is_room_encrypted(&self, room_id: &RoomId) -> bool {
+        let Some(room) = self.client.get_room(room_id) else {
+            return false;
+        };
+
+        match room.latest_encryption_state().await {
+            Ok(state) => state.is_encrypted(),
+            Err(error) => {
+                debug!("Failed to get the encryption state of {room_id}: {error}");
+                false
+            }
+        }
     }
 
     /// Delete all user defined rules for a room.
@@ -512,6 +556,16 @@ impl NotificationSettings {
                     self.client.send(request).with_request_config(request_config).await.map_err(
                         |error| {
                             error!("Unable to set override push rule `{rule_id}`: {error}");
+                            NotificationSettingsError::UnableToAddPushRule
+                        },
+                    )?;
+                }
+                Command::SetEncryptedEventsPushRule { rule_id, room_id: _ } => {
+                    let push_rule = command.to_push_rule()?;
+                    let request = set_pushrule::v3::Request::new(push_rule);
+                    self.client.send(request).with_request_config(request_config).await.map_err(
+                        |error| {
+                            error!("Unable to set encrypted events push rule `{rule_id}`: {error}");
                             NotificationSettingsError::UnableToAddPushRule
                         },
                     )?;
@@ -938,6 +992,144 @@ mod tests {
             assert_eq!(
                 new_mode,
                 settings.get_user_defined_room_notification_mode(&room_id).await.unwrap()
+            );
+        }
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn test_set_room_notification_mode_mentions_only_in_an_encrypted_room() -> TestResult {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(server.server())
+            .await;
+        Mock::given(method("DELETE"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(server.server())
+            .await;
+
+        server.mock_room_state_encryption().encrypted().mount().await;
+        let room_id = get_test_room_id();
+        let room = server.sync_joined_room(&client, &room_id).await;
+        assert!(room.latest_encryption_state().await?.is_encrypted());
+
+        let settings = client.notification_settings().await;
+        settings
+            .set_room_notification_mode(&room_id, RoomNotificationMode::MentionsAndKeywordsOnly)
+            .await?;
+
+        // The mode is still reported as `MentionsAndKeywordsOnly`…
+        assert_eq!(
+            settings.get_user_defined_room_notification_mode(&room_id).await,
+            Some(RoomNotificationMode::MentionsAndKeywordsOnly)
+        );
+
+        // … but an extra `Override` rule keeps the encrypted events of the room
+        // notifying, so that the device wakes up, decrypts them, and evaluates the
+        // push rules itself.
+        let rules = settings.rules.read().await;
+        let rule = rules
+            .ruleset
+            .get(RuleKind::Override, super::rules::encrypted_events_rule_id(&room_id))
+            .expect("the encrypted events rule should have been inserted");
+        assert!(rule.enabled());
+        assert!(rule.triggers_notification());
+
+        assert_matches!(rule, AnyPushRuleRef::Override(rule) => {
+            assert!(rule.conditions.iter().any(|condition| matches!(
+                condition,
+                PushCondition::EventMatch(data)
+                    if data.key == "room_id" && data.pattern == room_id.as_str()
+            )));
+            assert!(rule.conditions.iter().any(|condition| matches!(
+                condition,
+                PushCondition::EventMatch(data)
+                    if data.key == "type" && data.pattern == "m.room.encrypted"
+            )));
+        });
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn test_set_room_notification_mode_mentions_only_in_a_clear_room() -> TestResult {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(server.server())
+            .await;
+        Mock::given(method("DELETE"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(server.server())
+            .await;
+
+        server.mock_room_state_encryption().plain().mount().await;
+        let room_id = get_test_room_id();
+        server.sync_joined_room(&client, &room_id).await;
+
+        let settings = client.notification_settings().await;
+        settings
+            .set_room_notification_mode(&room_id, RoomNotificationMode::MentionsAndKeywordsOnly)
+            .await?;
+
+        // An unencrypted room needs no workaround: the server can evaluate the mention
+        // rules itself.
+        let rules = settings.rules.read().await;
+        assert!(
+            rules
+                .ruleset
+                .get(RuleKind::Override, super::rules::encrypted_events_rule_id(&room_id))
+                .is_none()
+        );
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn test_set_room_notification_mode_removes_the_encrypted_events_rule() -> TestResult {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(server.server())
+            .await;
+        Mock::given(method("DELETE"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(server.server())
+            .await;
+
+        server.mock_room_state_encryption().encrypted().mount().await;
+        let room_id = get_test_room_id();
+        server.sync_joined_room(&client, &room_id).await;
+
+        let settings = client.notification_settings().await;
+        settings
+            .set_room_notification_mode(&room_id, RoomNotificationMode::MentionsAndKeywordsOnly)
+            .await?;
+
+        // Moving to another mode drops the workaround rule again.
+        for mode in [RoomNotificationMode::Mute, RoomNotificationMode::AllMessages] {
+            settings.set_room_notification_mode(&room_id, mode).await?;
+
+            assert_eq!(
+                settings.get_user_defined_room_notification_mode(&room_id).await,
+                Some(mode)
+            );
+            assert!(
+                settings
+                    .rules
+                    .read()
+                    .await
+                    .ruleset
+                    .get(RuleKind::Override, super::rules::encrypted_events_rule_id(&room_id))
+                    .is_none()
             );
         }
 

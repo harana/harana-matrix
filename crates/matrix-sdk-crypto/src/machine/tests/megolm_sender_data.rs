@@ -287,6 +287,59 @@ async fn test_update_unknown_device_senderdata_on_keys_query() {
     );
 }
 
+/// A session restored from a backup or a key export is flagged as legacy so
+/// that its messages are still shown. Recomputing its sender data has no way of
+/// knowing where the session came from, and used to reset the flag, hiding
+/// messages that had been readable a moment earlier (#178).
+#[async_test]
+async fn test_recomputing_sender_data_keeps_the_legacy_flag() {
+    let (alice, bob) = get_machine_pair().await;
+    let mut bob_room_keys_received_stream = Box::pin(bob.store().room_keys_received_stream());
+
+    forget_devices_for_user(&bob, alice.user_id()).await;
+
+    let room_id = room_id!("!test:example.org");
+    let event = create_and_share_session_with_custom_sender_data(&alice, &bob, room_id, None).await;
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    receive_to_device_event(&bob, &event, &decryption_settings).await;
+
+    let room_key_info = get_room_key_received_update(&mut bob_room_keys_received_stream);
+    let mut session = get_inbound_group_session_or_panic(&bob, &room_key_info).await;
+
+    // Given the session is one we treat as legacy, the way a backup-restored
+    // session is.
+    session.sender_data =
+        SenderData::UnknownDevice { legacy_session: true, owner_check_failed: false };
+    bob.store().save_inbound_group_sessions(&[session]).await.unwrap();
+
+    // When a `/keys/query` response arrives that lets us recompute the sender data,
+    let alice_device = DeviceData::from_machine_test_helper(&alice).await.unwrap();
+    let kq_response = json!({
+        "device_keys": { alice.user_id() : { alice.device_id():  alice_device.as_device_keys()}}
+    });
+    bob.receive_keys_query_response(
+        &TransactionId::new(),
+        &matrix_sdk_test::ruma_response_from_json(&kq_response),
+    )
+    .await
+    .unwrap();
+
+    // Then the sender data has moved on, but the session is still flagged as
+    // legacy, so its messages stay readable.
+    let room_key_info = get_room_key_received_update(&mut bob_room_keys_received_stream);
+    let session = get_inbound_group_session_or_panic(&bob, &room_key_info).await;
+
+    assert_matches!(
+        session.sender_data,
+        SenderData::DeviceInfo { legacy_session, .. } => {
+            assert!(legacy_session);
+        }
+    );
+}
+
 /// If we have a megolm session from an unsigned device, test what happens when
 /// we get a /keys/query response that includes that device.
 #[async_test]

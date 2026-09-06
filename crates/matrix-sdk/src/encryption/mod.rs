@@ -465,6 +465,29 @@ impl CrossSigningResetAuthType {
     }
 }
 
+/// What happened when we tried to bootstrap a cross-signing identity.
+///
+/// Returned by [`Encryption::bootstrap_cross_signing_if_needed_with_outcome`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrossSigningBootstrapOutcome {
+    /// A cross-signing identity was created and published to the homeserver.
+    Created,
+
+    /// The account already had a cross-signing identity, so nothing was done.
+    AlreadyPresent,
+
+    /// The homeserver wants user-interactive authentication before it accepts
+    /// the cross-signing keys.
+    ///
+    /// Collect the authentication data from the user and call the method again
+    /// with it.
+    AuthenticationRequired,
+
+    /// Cross-signing is not available, because this client has no crypto
+    /// machine, e.g. it is not logged in.
+    Unavailable,
+}
+
 /// OAuth 2.0 specific information about the required authentication for the
 /// upload of cross-signing keys.
 #[derive(Debug, Clone, Deserialize)]
@@ -487,6 +510,25 @@ impl OAuthCrossSigningResetInfo {
             session: auth_info.session.clone(),
         }))
     }
+}
+
+/// Is this the error Synapse returns when we upload a one-time key it already
+/// has?
+///
+/// Returns the server's error message when it is, so that the keys can be
+/// pulled out of it for reporting.
+fn duplicate_one_time_key_message(error: &Error) -> Option<&str> {
+    let error = error.as_client_api_error()?;
+
+    if error.status_code != 400 {
+        return None;
+    }
+
+    let ErrorBody::Standard(StandardErrorBody { message, .. }) = &error.body else {
+        return None;
+    };
+
+    message.starts_with("One time key").then_some(message.as_str())
 }
 
 /// A struct that helps to parse the custom error message Synapse posts if a
@@ -809,6 +851,48 @@ impl Client {
         Ok(())
     }
 
+    /// Report that the server rejected a one-time key we had already uploaded.
+    ///
+    /// Reported at most once per session store: the condition does not clear up
+    /// on its own, and there is no point filling the logs with it.
+    async fn report_duplicate_one_time_key(&self, message: &str) -> Result<()> {
+        let already_reported = self
+            .state_store()
+            .get_kv_data(StateStoreDataKey::OneTimeKeyAlreadyUploaded)
+            .await?
+            .is_some();
+
+        if already_reported {
+            return Ok(());
+        }
+
+        let error_message = DuplicateOneTimeKeyErrorMessage::from_str(message);
+
+        if let Ok(message) = &error_message {
+            error!(
+                sentry = true,
+                old_key = %message.old_key,
+                new_key = %message.new_key,
+                "Duplicate one-time keys have been uploaded"
+            );
+        } else {
+            error!(sentry = true, "Duplicate one-time keys have been uploaded");
+        }
+
+        self.state_store()
+            .set_kv_data(
+                StateStoreDataKey::OneTimeKeyAlreadyUploaded,
+                StateStoreDataValue::OneTimeKeyAlreadyUploaded,
+            )
+            .await?;
+
+        if let Err(e) = self.inner.duplicate_key_upload_error_sender.send(error_message.ok()) {
+            error!("Failed to dispatch duplicate key upload error notification: {}", e);
+        }
+
+        Ok(())
+    }
+
     async fn send_outgoing_request(&self, r: OutgoingRequest) -> Result<()> {
         use matrix_sdk_base::crypto::types::requests::AnyOutgoingRequest;
 
@@ -817,87 +901,31 @@ impl Client {
                 self.keys_query(r.request_id(), request.device_keys.clone()).await?;
             }
             AnyOutgoingRequest::KeysUpload(request) => {
-                let response = self.keys_upload(r.request_id(), request).await;
+                if let Err(error) = self.keys_upload(r.request_id(), request).await {
+                    let duplicate_key_message = duplicate_one_time_key_message(&error);
 
-                // A duplicate one-time key is a permanent failure: the server already has
-                // that key and will reject this request every time. Retrying it forever
-                // just hammers the homeserver and blocks every other outgoing request
-                // behind it, so the request is marked as sent below and the affected keys
-                // are dropped locally so fresh ones get generated.
-                let mut is_terminal = false;
+                    let Some(duplicate_key_message) = duplicate_key_message else {
+                        return Err(error);
+                    };
 
-                if let Err(e) = &response {
-                    match e.as_client_api_error() {
-                        Some(e) if e.status_code == 400 => {
-                            if let ErrorBody::Standard(StandardErrorBody { message, .. }) = &e.body
-                            {
-                                // This is one of the nastiest errors we can have. The server
-                                // telling us that we already have a one-time key uploaded means
-                                // that we forgot about some of our one-time keys. This will lead to
-                                // UTDs.
-                                {
-                                    let already_reported = self
-                                        .state_store()
-                                        .get_kv_data(StateStoreDataKey::OneTimeKeyAlreadyUploaded)
-                                        .await?
-                                        .is_some();
+                    // This is one of the nastiest errors we can have. The server telling
+                    // us that we already have a one-time key uploaded means that we
+                    // forgot about some of our one-time keys. This will lead to UTDs.
+                    self.report_duplicate_one_time_key(duplicate_key_message).await?;
 
-                                    if message.starts_with("One time key") {
-                                        is_terminal = true;
-                                    }
-
-                                    if message.starts_with("One time key") && !already_reported {
-                                        let error_message =
-                                            DuplicateOneTimeKeyErrorMessage::from_str(message);
-
-                                        if let Ok(message) = &error_message {
-                                            error!(
-                                                sentry = true,
-                                                old_key = %message.old_key,
-                                                new_key = %message.new_key,
-                                                "Duplicate one-time keys have been uploaded"
-                                            );
-                                        } else {
-                                            error!(
-                                                sentry = true,
-                                                "Duplicate one-time keys have been uploaded"
-                                            );
-                                        }
-
-                                        self.state_store()
-                                            .set_kv_data(
-                                                StateStoreDataKey::OneTimeKeyAlreadyUploaded,
-                                                StateStoreDataValue::OneTimeKeyAlreadyUploaded,
-                                            )
-                                            .await?;
-
-                                        if let Err(e) = self
-                                            .inner
-                                            .duplicate_key_upload_error_sender
-                                            .send(error_message.ok())
-                                        {
-                                            error!(
-                                                "Failed to dispatch duplicate key upload error notification: {}",
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-
-                    if is_terminal {
-                        // Tell the `OlmMachine` the request is done with. It marks the
-                        // keys we tried to upload as published, which drops them from the
-                        // account so the next round generates keys the server hasn't seen.
-                        let response = upload_keys::v3::Response::new(Default::default());
-
-                        self.mark_request_as_sent(r.request_id(), &response).await?;
-                    } else {
-                        response?;
-                    }
+                    // The server is not going to change its mind: the same request will
+                    // be rejected the same way for as long as we keep sending it, and
+                    // the crypto machine keeps handing it back to us until it is marked
+                    // as sent. That loop used to run forever, blocking everything behind
+                    // it - cross-signing bootstrap included. Mark the request as sent
+                    // with an empty response instead: the keys we were holding are
+                    // dropped, and fresh ones are generated for the next upload.
+                    // See issues #191 and #259.
+                    self.mark_request_as_sent(
+                        r.request_id(),
+                        &upload_keys::v3::Response::new(BTreeMap::new()),
+                    )
+                    .await?;
                 }
             }
             AnyOutgoingRequest::ToDeviceRequest(request) => {
@@ -1710,6 +1738,57 @@ impl Encryption {
         Ok(())
     }
 
+    /// Bootstrap cross-signing for this account if it does not have a
+    /// cross-signing identity yet, reporting what happened.
+    ///
+    /// Unlike [`Encryption::bootstrap_cross_signing_if_needed`], the caller can
+    /// tell an identity that was just created from one that already existed,
+    /// and a homeserver which wants user-interactive authentication from a
+    /// hard failure. No private key material is returned, and an existing
+    /// identity is never reset.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth_data` - The authentication data to send with the upload of the
+    ///   cross-signing keys, if the homeserver asked for it in a previous call.
+    ///   Passing it always retries the upload, since the identity the earlier
+    ///   attempt created locally is not one the homeserver has accepted yet.
+    pub async fn bootstrap_cross_signing_if_needed_with_outcome(
+        &self,
+        auth_data: Option<AuthData>,
+    ) -> Result<CrossSigningBootstrapOutcome> {
+        let user_id = {
+            let olm_machine = self.client.olm_machine().await;
+            let Some(olm_machine) = olm_machine.as_ref() else {
+                return Ok(CrossSigningBootstrapOutcome::Unavailable);
+            };
+
+            olm_machine.user_id().to_owned()
+        };
+
+        self.ensure_initial_key_query().await?;
+
+        // A caller who passes authentication data is answering a challenge from an
+        // earlier attempt, so the upload has to be retried. The identity exists
+        // locally at that point precisely because that attempt created it before the
+        // homeserver refused to publish it, so the check below would otherwise stop us
+        // from ever publishing it.
+        if auth_data.is_none() && self.get_user_identity(&user_id).await?.is_some() {
+            return Ok(CrossSigningBootstrapOutcome::AlreadyPresent);
+        }
+
+        match self.bootstrap_cross_signing(auth_data).await {
+            Ok(()) => Ok(CrossSigningBootstrapOutcome::Created),
+            Err(error) => {
+                if error.as_uiaa_response().is_some() {
+                    Ok(CrossSigningBootstrapOutcome::AuthenticationRequired)
+                } else {
+                    Err(error)
+                }
+            }
+        }
+    }
+
     /// Export E2EE keys that match the given predicate encrypting them with the
     /// given passphrase.
     ///
@@ -1961,19 +2040,19 @@ impl Encryption {
     /// cause confusing issues because of stale data contained in in-memory
     /// caches.
     ///
-    /// The provided `lock_value` must be a unique identifier for this process.
+    /// The provided `holder_name` must be a unique identifier for this process.
     /// Use [`Client::cross_process_lock_config`] to get the global value, if
     /// multi-process is enabled.
-    pub async fn enable_cross_process_store_lock(&self, lock_value: String) -> Result<(), Error> {
+    pub async fn enable_cross_process_store_lock(&self, holder_name: String) -> Result<(), Error> {
         // If the lock has already been created, don't recreate it from scratch.
         if let Some(prev_lock) = self.client.locks().cross_process_crypto_store_lock.get() {
             let prev_holder = prev_lock.lock_holder();
-            if prev_holder.is_some() && prev_holder.unwrap() == lock_value {
+            if prev_holder.is_some() && prev_holder.unwrap() == holder_name {
                 return Ok(());
             }
             warn!(
-                "Recreating cross-process store lock with a different holder value: \
-                 prev was {prev_holder:?}, new is {lock_value}"
+                "Recreating cross-process store lock with a different holder name: \
+                 prev was {prev_holder:?}, new is {holder_name}"
             );
         }
 
@@ -1982,7 +2061,7 @@ impl Encryption {
 
         let lock = olm_machine.store().create_store_lock(
             "cross_process_lock".to_owned(),
-            CrossProcessLockConfig::multi_process(lock_value.to_owned()),
+            CrossProcessLockConfig::multi_process(holder_name.to_owned()),
         );
 
         // Gently try to initialize the crypto store generation counter.
@@ -2217,6 +2296,11 @@ impl Encryption {
                 self.update_verification_state().await;
             }
         }
+
+        // New signatures may have resolved what was blocking a send: a device is now
+        // signed by its owner, a user's identity is trusted again, or our own session
+        // has become verified.
+        self.client.send_queue().retry_requests_blocked_on_verification().await;
     }
 
     async fn update_verification_state(&self) {
@@ -2389,7 +2473,7 @@ mod tests {
         str::FromStr,
         sync::{
             Arc,
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
         },
     };
 
@@ -2405,7 +2489,7 @@ mod tests {
     use serde_json::json;
     use wiremock::{
         Mock, MockServer, Request, ResponseTemplate,
-        matchers::{header, method, path_regex},
+        matchers::{header, method, path, path_regex},
     };
 
     #[cfg(feature = "sqlite")]
@@ -2417,6 +2501,246 @@ mod tests {
         },
         test_utils::{logged_in_client, no_retry_test_client, set_client_session},
     };
+
+    /// A one-time key the homeserver already has will be rejected every time we
+    /// send it, so retrying the upload forever hammers the homeserver and
+    /// blocks every other outgoing request behind it (#191).
+    #[async_test]
+    async fn test_duplicate_one_time_key_upload_is_terminal() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let uploads = Arc::new(AtomicUsize::new(0));
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/r0/keys/upload"))
+            .respond_with({
+                let uploads = uploads.clone();
+
+                move |_: &Request| {
+                    uploads.fetch_add(1, Ordering::SeqCst);
+
+                    ResponseTemplate::new(400).set_body_json(json!({
+                        "errcode": "M_UNKNOWN",
+                        "error": "One time key signed_curve25519:AAAAAAAAAAA already exists. \
+                                  Old key: AAAAAAAAAAA; new key: BBBBBBBBBBB"
+                    }))
+                }
+            })
+            .mount(&server)
+            .await;
+
+        // The round completes rather than failing, so the requests queued behind the
+        // upload still get their turn.
+        client
+            .send_outgoing_requests()
+            .await
+            .expect("A duplicate one-time key should not fail the whole round");
+
+        assert_eq!(uploads.load(Ordering::SeqCst), 1);
+
+        // The request was marked as sent, so the keys the server rejected are not
+        // handed out again on the next round.
+        client.send_outgoing_requests().await.expect("The next round should also complete");
+
+        assert_eq!(
+            uploads.load(Ordering::SeqCst),
+            1,
+            "We should not have sent the rejected keys a second time"
+        );
+    }
+
+    /// The homeserver reports per-key failures in the body of an otherwise
+    /// successful `/keys/signatures/upload` response, and we used to ignore
+    /// them: a device finished a verification believing itself verified while
+    /// the signature saying so never landed (#241).
+    #[async_test]
+    async fn test_signature_upload_failures_are_followed_by_a_keys_query() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/r0/keys/upload"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "one_time_key_counts": {}
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/unstable/keys/device_signing/upload"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/unstable/keys/signatures/upload"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "failures": {
+                    "@example:localhost": {
+                        "DEVICEID": {
+                            "errcode": "M_INVALID_SIGNATURE",
+                            "error": "Invalid signature"
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let queries = Arc::new(AtomicUsize::new(0));
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/r0/keys/query"))
+            .respond_with({
+                let queries = queries.clone();
+
+                move |_: &Request| {
+                    queries.fetch_add(1, Ordering::SeqCst);
+
+                    ResponseTemplate::new(200).set_body_json(json!({
+                        "device_keys": {},
+                        "master_keys": {},
+                        "self_signing_keys": {},
+                        "user_signing_keys": {}
+                    }))
+                }
+            })
+            .mount(&server)
+            .await;
+
+        // Bootstrapping produces a signature upload for our own keys.
+        client.encryption().bootstrap_cross_signing(None).await.unwrap();
+
+        client
+            .send_outgoing_requests()
+            .await
+            .expect("Rejected signatures should not fail the round");
+
+        // Having uploaded signatures for ourselves, we read our own keys back rather
+        // than trusting that the upload achieved what we asked for.
+        assert!(
+            queries.load(Ordering::SeqCst) > 0,
+            "We should have queried our own keys after uploading signatures for them"
+        );
+    }
+
+    #[async_test]
+    async fn test_bootstrap_cross_signing_without_a_crypto_machine() {
+        use crate::encryption::CrossSigningBootstrapOutcome;
+
+        // Given a client which is not logged in, so it has no crypto machine
+        let client = no_retry_test_client(None).await;
+
+        // When we ask it to bootstrap cross-signing
+        let outcome = client
+            .encryption()
+            .bootstrap_cross_signing_if_needed_with_outcome(None)
+            .await
+            .expect("Not being logged in is not a failure");
+
+        // Then we are told that cross-signing is unavailable
+        assert_eq!(outcome, CrossSigningBootstrapOutcome::Unavailable);
+    }
+
+    #[async_test]
+    async fn test_bootstrap_cross_signing_reports_an_existing_identity() {
+        use wiremock::matchers::path_regex;
+
+        use crate::encryption::CrossSigningBootstrapOutcome;
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+        let user_id = client.user_id().unwrap().to_string();
+
+        // Given an identity which exists, both locally and on the homeserver
+        let identity_request = {
+            let machine = client.olm_machine().await;
+            machine
+                .as_ref()
+                .unwrap()
+                .bootstrap_cross_signing(false)
+                .await
+                .unwrap()
+                .upload_signing_keys_req
+        };
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/.*/keys/query"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "master_keys": { user_id.clone(): identity_request.master_key },
+                "self_signing_keys": { user_id.clone(): identity_request.self_signing_key },
+                "user_signing_keys": { user_id.clone(): identity_request.user_signing_key },
+            })))
+            .mount(&server)
+            .await;
+
+        // When we ask to bootstrap cross-signing
+        let outcome = client
+            .encryption()
+            .bootstrap_cross_signing_if_needed_with_outcome(None)
+            .await
+            .expect("Bootstrapping an account which has an identity is not an error");
+
+        // Then nothing is done and we are told the identity was already there
+        assert_eq!(outcome, CrossSigningBootstrapOutcome::AlreadyPresent);
+    }
+
+    #[async_test]
+    async fn test_a_rejected_key_upload_is_not_retried_forever() {
+        use matrix_sdk_base::crypto::types::requests::AnyOutgoingRequest;
+        use wiremock::matchers::path;
+
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let olm_machine = client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().unwrap();
+
+        let has_key_upload = async |machine: &matrix_sdk_base::crypto::OlmMachine| {
+            machine
+                .outgoing_requests()
+                .await
+                .unwrap()
+                .iter()
+                .any(|r| matches!(r.request(), AnyOutgoingRequest::KeysUpload(_)))
+        };
+
+        // Given we have keys to upload
+        assert!(has_key_upload(olm_machine).await, "We should want to upload our keys");
+
+        // And a homeserver which rejects the upload, as it does when it already has
+        // these keys, e.g. because our crypto store lost the account
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/keys/upload"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                "errcode": "M_INVALID_PARAM",
+                "error": "One time key signed_curve25519:AAAAAA already exists. \
+                          Old key: key1; new key: key2",
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // When we send our outgoing requests
+        client
+            .send_outgoing_requests()
+            .await
+            .expect("A rejected key upload should not fail the whole batch");
+
+        // Then the request is not generated again: retrying it on every sync forever
+        // is what a restored session with an empty crypto store used to do
+        assert!(
+            !has_key_upload(olm_machine).await,
+            "The rejected key upload should have been marked as sent"
+        );
+
+        server.verify().await;
+    }
 
     #[async_test]
     async fn test_reaction_sending() {
@@ -2709,6 +3033,58 @@ mod tests {
             .expect("We should be able to deserialize the UiaaInfo");
         OAuthCrossSigningResetInfo::from_auth_info(&auth_info)
             .expect("We should be able to fetch the cross-signing reset info from the auth info");
+    }
+
+    /// Regression test for issues #191 and #259: a keys upload the server
+    /// keeps rejecting with "One time key ... already exists" used to be
+    /// retried forever, because the request was never marked as sent.
+    #[async_test]
+    async fn test_a_rejected_duplicate_one_time_key_upload_is_not_retried_forever() {
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        let upload_attempts = Arc::new(AtomicUsize::new(0));
+
+        Mock::given(method("POST"))
+            .and(path("/_matrix/client/r0/keys/upload"))
+            .respond_with({
+                let upload_attempts = upload_attempts.clone();
+                move |_: &Request| {
+                    upload_attempts.fetch_add(1, Ordering::SeqCst);
+
+                    ResponseTemplate::new(400).set_body_json(json!({
+                        "errcode": "M_UNKNOWN",
+                        "error": "One time key signed_curve25519:AAAAAAAAAAA already exists.",
+                    }))
+                }
+            })
+            .mount(&server)
+            .await;
+
+        // Sending the outgoing requests must not fail, even though the server
+        // rejects the upload...
+        client
+            .encryption()
+            .client
+            .send_outgoing_requests()
+            .await
+            .expect("A rejected keys upload should not fail the whole request round");
+
+        let first_round = upload_attempts.load(Ordering::SeqCst);
+        assert!(first_round > 0, "the client should have tried to upload its keys");
+
+        // ... and the machine must have moved on: the very same request is not
+        // handed back to us to be sent again.
+        let outgoing =
+            client.olm_machine().await.as_ref().unwrap().outgoing_requests().await.unwrap();
+
+        assert!(
+            !outgoing.iter().any(|request| matches!(
+                request.request(),
+                matrix_sdk_base::crypto::types::requests::AnyOutgoingRequest::KeysUpload(_)
+            )),
+            "the rejected keys upload should have been marked as sent",
+        );
     }
 
     #[test]

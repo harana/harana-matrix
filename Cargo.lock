@@ -3709,6 +3709,7 @@ dependencies = [
  "rand 0.10.2",
  "reqwest",
  "ruma",
+ "rustls",
  "serde",
  "serde_html_form",
  "serde_json",
@@ -3932,6 +3933,7 @@ dependencies = [
  "anyhow",
  "assert_matches2",
  "async-compat",
+ "async-trait",
  "chrono",
  "console_error_panic_hook",
  "extension-trait",
@@ -3973,6 +3975,7 @@ dependencies = [
  "url",
  "uuid",
  "vergen-gitcl",
+ "wiremock",
  "zeroize",
  "zxcvbn",
 ]
@@ -5911,6 +5914,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
@@ -8745,6 +8749,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "tempfile",
  "uniffi_bindgen",
  "url",
  "xshell",
