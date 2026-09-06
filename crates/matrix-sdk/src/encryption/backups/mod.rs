@@ -1994,6 +1994,7 @@ mod test {
     async fn test_the_done_of_an_earlier_upload_does_not_end_the_wait() {
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
+        bootstrap_cross_signing_locally(&client).await;
 
         server.mock_add_room_keys_version().ok().expect(1).mount().await;
         client.encryption().backups().create().await.expect("We should be able to create a backup");
@@ -2017,12 +2018,11 @@ mod test {
         let wait_for_steady_state = backups.wait_for_steady_state();
 
         // When we wait for the room keys to be uploaded, without triggering an upload
-        let result =
-            matrix_sdk_common::timeout::timeout(
-                async { wait_for_steady_state.await },
-                Duration::from_millis(300),
-            )
-            .await;
+        let result = matrix_sdk_common::timeout::timeout(
+            async { wait_for_steady_state.await },
+            Duration::from_millis(300),
+        )
+        .await;
 
         // Then the stale `Done` does not end the wait: those keys are still not backed
         // up. (A real upload attempt failing is fine, that is not the stale `Done`.)

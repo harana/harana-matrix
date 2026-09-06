@@ -85,7 +85,7 @@ async fn wait_for_empty_send_queue(client: &matrix_sdk::Client, room_id: &ruma::
         if requests.is_empty() {
             return;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("the send queue still has pending requests");
 }

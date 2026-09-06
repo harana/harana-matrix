@@ -504,7 +504,8 @@ impl OtherUserIdentity {
     /// keys, and applying the change to the new identity would record a
     /// decision the user never made about it.
     async fn identity_to_update(&self) -> Result<Option<OtherUserIdentityData>, CryptoStoreError> {
-        let stored = self.verification_machine.store.inner().get_user_identity(self.user_id()).await?;
+        let stored =
+            self.verification_machine.store.inner().get_user_identity(self.user_id()).await?;
 
         match stored {
             // Nothing stored yet, so there is nothing of ours to overwrite.

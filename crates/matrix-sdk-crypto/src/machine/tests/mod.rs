@@ -909,9 +909,10 @@ async fn test_setting_the_local_trust_does_not_clobber_other_changes() {
     // And a change to the stored device made after we read it, as another part of
     // the SDK would do. Round-trip it through serialization so that it really is a
     // separate object, as it would be with a store that persists to disk.
-    let stored: DeviceData =
-        json_convert(&machine.store().get_device_data(alice, alice_device_id).await.unwrap().unwrap())
-            .unwrap();
+    let stored: DeviceData = json_convert(
+        &machine.store().get_device_data(alice, alice_device_id).await.unwrap().unwrap(),
+    )
+    .unwrap();
     stored.mark_withheld_code_as_sent();
     machine
         .store()
@@ -972,10 +973,7 @@ async fn test_a_redacted_event_is_not_reported_as_a_utd() {
         .unwrap()
         .inbound_group_session
         .unwrap();
-    bob.store()
-        .save_inbound_group_sessions(std::slice::from_ref(&group_session))
-        .await
-        .unwrap();
+    bob.store().save_inbound_group_sessions(std::slice::from_ref(&group_session)).await.unwrap();
 
     // Given an event which the server redacted before we got to decrypt it: the
     // content, including the algorithm, has been stripped
@@ -1055,10 +1053,7 @@ async fn test_replayed_megolm_message_index_is_rejected() {
         .unwrap()
         .inbound_group_session
         .unwrap();
-    bob.store()
-        .save_inbound_group_sessions(std::slice::from_ref(&group_session))
-        .await
-        .unwrap();
+    bob.store().save_inbound_group_sessions(std::slice::from_ref(&group_session)).await.unwrap();
 
     let content = RoomMessageEventContent::text_plain("It is a secret to everybody");
     let encrypted = alice

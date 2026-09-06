@@ -1926,10 +1926,11 @@ async fn save_store_cipher(
     db: &Database,
     export: &Vec<u8>,
 ) -> Result<(), IndexeddbCryptoStoreError> {
-    let tx: Transaction<'_> =
-        db.transaction("matrix-sdk-crypto").with_mode(TransactionMode::Readwrite)
-            .with_options(strict_durability())
-            .build()?;
+    let tx: Transaction<'_> = db
+        .transaction("matrix-sdk-crypto")
+        .with_mode(TransactionMode::Readwrite)
+        .with_options(strict_durability())
+        .build()?;
     let ob = tx.object_store("matrix-sdk-crypto")?;
 
     ob.put(&JsValue::from_serde(&export)?)

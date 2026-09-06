@@ -1500,12 +1500,10 @@ async fn test_a_backed_up_room_key_we_cannot_read_is_reported() -> TestResult {
         .await;
 
     // When we download it
-    let error = client
-        .encryption()
-        .backups()
-        .download_room_key(room_id, session_id)
-        .await
-        .expect_err("A room key we cannot read should not be reported as a successful download");
+    let error =
+        client.encryption().backups().download_room_key(room_id, session_id).await.expect_err(
+            "A room key we cannot read should not be reported as a successful download",
+        );
 
     // Then we are told that the key is unreadable, rather than the failure being
     // swallowed and the message staying stuck as a UTD with no explanation

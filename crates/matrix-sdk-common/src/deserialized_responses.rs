@@ -1231,7 +1231,6 @@ pub enum UnableToDecryptReason {
     /// state key and type.
     #[cfg(feature = "experimental-encrypted-state-events")]
     StateKeyVerificationFailed,
-
 }
 
 impl UnableToDecryptReason {

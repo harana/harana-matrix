@@ -1709,10 +1709,8 @@ mod tests {
         // Given a share which withholds the room key from some devices
         let requests = machine.share_room_key(room_id, users, settings).await.unwrap();
 
-        let withheld_requests: Vec<_> = requests
-            .iter()
-            .filter(|r| r.event_type == "m.room_key.withheld".into())
-            .collect();
+        let withheld_requests: Vec<_> =
+            requests.iter().filter(|r| r.event_type == "m.room_key.withheld".into()).collect();
         assert!(!withheld_requests.is_empty(), "We should have withheld the key from someone");
 
         // Then every withheld message carries a message ID, so that it can be traced
