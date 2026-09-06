@@ -29,7 +29,7 @@ use ruma::OwnedEventId;
 #[cfg(feature = "unstable-msc4426")]
 use ruma::{OwnedUserId, UserId};
 use tokio::sync::broadcast::{Receiver, error::RecvError};
-use tracing::{error, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::timeline::{
     TimelineController, TimelineFocus, controller::ActiveCallInfo, event_item::RemoteEventOrigin,
@@ -47,14 +47,20 @@ use crate::timeline::{
 pub(in crate::timeline) async fn pinned_events_task(
     pinned_events_cache: PinnedEventsCache,
     timeline_controller: TimelineController,
-    mut pinned_events_recv: Receiver<TimelineVectorDiffs>,
+    mut pinned_events_recv: Subscriber<TimelineVectorDiffs>,
 ) {
     loop {
         trace!("Waiting for an event.");
 
         let update = match pinned_events_recv.recv().await {
             Ok(up) => up,
-            Err(RecvError::Closed) => break,
+            Err(RecvError::Closed) => {
+                warn!(
+                    "the pinned-event cache dropped its update sender; this timeline will not \
+                     receive any further update"
+                );
+                break;
+            }
             Err(RecvError::Lagged(num_skipped)) => {
                 warn!(num_skipped, "Lagged behind pinned-event cache updates, resetting timeline");
 
@@ -112,7 +118,13 @@ pub(in crate::timeline) async fn event_focused_task(
 
         let update = match event_focused_events_recv.recv().await {
             Ok(up) => up,
-            Err(RecvError::Closed) => break,
+            Err(RecvError::Closed) => {
+                warn!(
+                    "the focused-event cache dropped its update sender; this timeline will not \
+                     receive any further update"
+                );
+                break;
+            }
             Err(RecvError::Lagged(num_skipped)) => {
                 warn!(num_skipped, "Lagged behind focused-event cache updates, resetting timeline");
 
@@ -204,7 +216,16 @@ pub(in crate::timeline) async fn room_event_cache_updates_task(
 
         let update = match room_event_cache_subscriber.recv().await {
             Ok(up) => up,
-            Err(RecvError::Closed) => break,
+            Err(RecvError::Closed) => {
+                // This is the main suspect whenever a timeline silently stops updating: the
+                // room event cache was dropped (or shut down) while the timeline is still
+                // alive, and nothing will ever be sent on this channel again.
+                warn!(
+                    "the room event cache dropped its update sender; this timeline will not \
+                     receive any further update"
+                );
+                break;
+            }
             Err(RecvError::Lagged(num_skipped)) => {
                 warn!(num_skipped, "Lagged behind event cache updates, resetting timeline");
 
@@ -245,6 +266,13 @@ pub(in crate::timeline) async fn room_event_cache_updates_task(
                 };
 
                 let has_diffs = !diffs.is_empty();
+
+                debug!(
+                    num_diffs = diffs.len(),
+                    ?origin,
+                    focus = timeline_focus.debug_string(),
+                    "handling timeline event diffs from the room event cache"
+                );
 
                 if matches!(timeline_focus, TimelineFocus::Live { .. }) {
                     timeline_controller.handle_remote_events_with_diffs(diffs, origin).await;
@@ -291,6 +319,8 @@ pub(in crate::timeline) async fn room_event_cache_updates_task(
             }
         }
     }
+
+    debug!("exiting the room event cache update task");
 }
 
 /// Long-lived task that refreshes displayed sender profiles when the users'

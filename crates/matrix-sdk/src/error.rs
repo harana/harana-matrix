@@ -89,6 +89,11 @@ pub enum HttpError {
     #[error(transparent)]
     RefreshToken(RefreshTokenError),
 
+    /// The request was cancelled before it was answered, because the session
+    /// it was made on behalf of ended.
+    #[error("the request was cancelled, the session it belongs to is over")]
+    Cancelled,
+
     /// Error while fetching data that is cached.
     ///
     /// This variant is present for convenience because cached data wraps
@@ -402,6 +407,10 @@ pub enum Error {
     #[error(transparent)]
     SendQueueWedgeError(Box<QueueWedgeError>),
 
+    /// An item couldn't be queued in a room's send queue.
+    #[error(transparent)]
+    SendQueue(Box<crate::send_queue::RoomSendQueueError>),
+
     /// Backups are not enabled
     #[error("backups are not enabled")]
     BackupNotEnabled,
@@ -598,6 +607,12 @@ impl From<EventCacheError> for Error {
 impl From<QueueWedgeError> for Error {
     fn from(error: QueueWedgeError) -> Self {
         Error::SendQueueWedgeError(Box::new(error))
+    }
+}
+
+impl From<crate::send_queue::RoomSendQueueError> for Error {
+    fn from(error: crate::send_queue::RoomSendQueueError) -> Self {
+        Error::SendQueue(Box::new(error))
     }
 }
 

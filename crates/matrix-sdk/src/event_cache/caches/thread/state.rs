@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::empty;
+use std::{collections::BTreeSet, iter::empty};
 
 use eyeball_im::VectorDiff;
 use matrix_sdk_base::{
@@ -27,7 +27,7 @@ use matrix_sdk_base::{
 };
 use matrix_sdk_common::executor::spawn;
 use ruma::{
-    EventId, OwnedEventId, OwnedRoomId, OwnedUserId,
+    EventId, OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     events::{
         receipt::ReceiptEventContent, relation::RelationType,
         room::redaction::SyncRoomRedactionEvent,
@@ -313,6 +313,10 @@ impl<'a> StateLockReadGuard<'a, ThreadEventCacheState> {
                         None,
                         &self.state.own_user_id,
                         None,
+                        // A thread summary describes the thread itself, and the events of
+                        // an ignored user are dropped from the caches when they are
+                        // ignored, so there is nothing to filter out here.
+                        &BTreeSet::new(),
                     )
                     .is_break()
                 })
@@ -462,7 +466,7 @@ impl<'a> StateLockWriteGuard<'a, ThreadEventCacheState> {
 
         let DeduplicationOutcome {
             all_events: events,
-            in_memory_duplicated_event_ids,
+            mut in_memory_duplicated_event_ids,
             in_store_duplicated_event_ids,
             non_empty_all_duplicates: all_duplicates,
         } = filter_duplicate_events(
@@ -495,6 +499,30 @@ impl<'a> StateLockWriteGuard<'a, ThreadEventCacheState> {
             self.state.waited_for_initial_prev_token = true;
         }
 
+        // Events we already know about, sitting at the very end of the linked chunk in
+        // the same order as they arrive here, don't move: update them in place instead
+        // of removing and pushing them back, so observers don't see the item disappear
+        // and reappear. See the same reasoning in the room state.
+        let in_place = if prev_batch_token.is_none() {
+            self.state.thread_linked_chunk.common_tail_with(&events)
+        } else {
+            Vec::new()
+        };
+
+        if !in_place.is_empty() {
+            in_memory_duplicated_event_ids
+                .retain(|(_event_id, position)| !in_place.contains(position));
+
+            // Replace before removing anything: the positions above were computed on the
+            // untouched linked chunk, and replacing an event doesn't move any other one.
+            for (position, event) in in_place.iter().zip(events.iter()) {
+                self.state
+                    .thread_linked_chunk
+                    .replace_event_at(*position, event.clone())
+                    .expect("we just read this position from the linked chunk");
+            }
+        }
+
         // Remove the old duplicated events.
         //
         // We don't have to worry about the removals can change the position of the
@@ -503,7 +531,7 @@ impl<'a> StateLockWriteGuard<'a, ThreadEventCacheState> {
 
         self.state.thread_linked_chunk.push_live_events(
             prev_batch_token.as_ref().map(|prev_token| Gap { token: prev_token.clone() }),
-            &events,
+            &events[in_place.len()..],
         );
 
         // Update the store.
@@ -693,6 +721,80 @@ impl<'a> StateLockWriteGuard<'a, ThreadEventCacheState> {
         .expect("joining failed")?;
 
         Ok(())
+    }
+
+    /// Remove every event sent by one of the given users, from memory and from
+    /// the store.
+    ///
+    /// Returns the updates to send to the observers of this cache, which is
+    /// empty when nothing has been removed.
+    #[must_use = "Propagate `VectorDiff` updates via `ThreadEventCacheUpdate`"]
+    #[instrument(skip_all)]
+    pub async fn remove_events_sent_by(
+        &mut self,
+        senders: &BTreeSet<OwnedUserId>,
+    ) -> Result<Vec<VectorDiff<Event>>> {
+        let sent_by_one_of_them = |event: &Event| {
+            event.sender().is_some_and(|sender| senders.contains::<UserId>(&sender))
+        };
+
+        // The events loaded in memory: their position is known.
+        let in_memory_events = self
+            .state
+            .thread_linked_chunk
+            .events()
+            .filter(|(_position, event)| sent_by_one_of_them(event))
+            .filter_map(|(position, event)| Some((event.event_id()?.to_owned(), position)))
+            .collect::<Vec<_>>();
+
+        // The events that live in the store only: ask the store where they are.
+        let in_store_events = {
+            let stored_event_ids = self
+                .store
+                .get_room_events(&self.state.room_id, None, None)
+                .await?
+                .into_iter()
+                .filter(sent_by_one_of_them)
+                .filter_map(|event| event.event_id().map(ToOwned::to_owned))
+                .collect::<Vec<_>>();
+
+            if stored_event_ids.is_empty() {
+                Vec::new()
+            } else {
+                let in_memory_chunk_identifiers = self
+                    .state
+                    .thread_linked_chunk
+                    .chunks()
+                    .map(|chunk| chunk.identifier())
+                    .collect::<Vec<_>>();
+
+                self.store
+                    .filter_duplicated_events(
+                        LinkedChunkId::Thread(&self.state.room_id, &self.state.thread_id),
+                        stored_event_ids,
+                    )
+                    .await?
+                    .into_iter()
+                    .filter(|(_event_id, position)| {
+                        !in_memory_chunk_identifiers.contains(&position.chunk_identifier())
+                    })
+                    .collect()
+            }
+        };
+
+        if in_memory_events.is_empty() && in_store_events.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        trace!(
+            num_in_memory = in_memory_events.len(),
+            num_in_store = in_store_events.len(),
+            "removing the events sent by ignored users"
+        );
+
+        self.remove_events(in_memory_events, in_store_events).await?;
+
+        Ok(self.state.thread_linked_chunk.updates_as_vector_diffs())
     }
 
     /// Remove events by their position, in `EventLinkedChunk`.

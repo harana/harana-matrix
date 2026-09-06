@@ -14,6 +14,10 @@ uniffi = ["dep:uniffi", "matrix-sdk/uniffi"]
 
 rustls-aws-lc-rs = ["matrix-sdk/rustls-aws-lc-rs"]
 
+# Use ring rather than aws-lc-rs as the rustls crypto provider; see
+# `matrix-sdk`'s feature of the same name.
+rustls-ring = ["matrix-sdk/rustls-ring"]
+
 [dependencies]
 assert_matches2.workspace = true
 matrix-sdk = { workspace = true, features = ["e2e-encryption", "testing"] }

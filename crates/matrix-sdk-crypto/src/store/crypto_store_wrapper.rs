@@ -132,6 +132,24 @@ impl CryptoStoreWrapper {
         }
     }
 
+    /// Get the encryption settings for the given room.
+    ///
+    /// The settings are cached in memory, so that the common case of asking
+    /// for them repeatedly does not hit the store every time.
+    pub(crate) async fn get_room_settings(
+        &self,
+        room_id: &RoomId,
+    ) -> store::Result<Option<RoomSettings>> {
+        if let Some(settings) = self.room_settings.read().get(room_id) {
+            return Ok(settings.clone());
+        }
+
+        let settings = self.store.get_room_settings(room_id).await?;
+        self.room_settings.write().insert(room_id.to_owned(), settings.clone());
+
+        Ok(settings)
+    }
+
     /// Save the set of changes to the store.
     ///
     /// Also responsible for sending updates to the broadcast streams such as
@@ -349,10 +367,17 @@ impl CryptoStoreWrapper {
     /// ones we have, and never removed one, so a device we keep failing to
     /// talk to grows the store without a bound and makes every later lookup
     /// for that device slower.
+    ///
+    /// This works off the session cache rather than reading the store back:
+    /// the cache holds what we just saved, and everything the store had for a
+    /// sender key we have read since. Sessions this process has never seen are
+    /// left alone until a read pulls them in.
     async fn expire_old_sessions(&self, sender_key: &str) -> store::Result<()> {
-        let Some(mut sessions) = self.store.get_sessions(sender_key).await? else {
+        let Some(sessions_lock) = self.sessions.get(sender_key).await else {
             return Ok(());
         };
+
+        let mut sessions = sessions_lock.lock().await;
 
         if sessions.len() <= MAX_OLM_SESSIONS_PER_SENDER_KEY {
             return Ok(());
@@ -364,8 +389,9 @@ impl CryptoStoreWrapper {
         sessions
             .sort_by_key(|session| session.last_decryption_time.unwrap_or(session.last_use_time));
 
+        let expired_count = sessions.len() - MAX_OLM_SESSIONS_PER_SENDER_KEY;
         let expired: Vec<String> = sessions
-            .drain(..sessions.len() - MAX_OLM_SESSIONS_PER_SENDER_KEY)
+            .drain(..expired_count)
             .map(|session| session.session_id().to_owned())
             .collect();
 
@@ -376,10 +402,6 @@ impl CryptoStoreWrapper {
         );
 
         self.store.delete_sessions(sender_key, &expired).await?;
-
-        // Keep the cache in step, otherwise the expired sessions stay in use
-        // for the lifetime of this process and get written back.
-        self.sessions.set_for_sender(sender_key, sessions).await;
 
         Ok(())
     }
@@ -453,23 +475,6 @@ impl CryptoStoreWrapper {
     /// Must be held across the read, the change and the write.
     pub(crate) async fn lock_identity_update(&self) -> tokio::sync::MutexGuard<'_, ()> {
         self.identity_update_lock.lock().await
-    }
-
-    /// Get the encryption settings for a room, going through an in-memory
-    /// cache.
-    ///
-    /// The settings only ever change when we write them ourselves, which is
-    /// what keeps the cache correct.
-    pub async fn get_room_settings(&self, room_id: &RoomId) -> store::Result<Option<RoomSettings>> {
-        if let Some(settings) = self.room_settings.read().get(room_id) {
-            return Ok(settings.clone());
-        }
-
-        let settings = self.store.get_room_settings(room_id).await?;
-
-        self.room_settings.write().insert(room_id.to_owned(), settings.clone());
-
-        Ok(settings)
     }
 
     /// Receive notifications of room keys being received as a [`Stream`].
@@ -617,6 +622,7 @@ mod test {
         let one_time_keys: Vec<_> = bob.one_time_keys().values().copied().take(total).collect();
 
         let mut sessions = Vec::with_capacity(total);
+        let now = u64::from(SecondsSinceUnixEpoch::now().get());
 
         for (index, one_time_key) in one_time_keys.into_iter().enumerate() {
             let mut session = alice
@@ -629,8 +635,15 @@ mod test {
                 )
                 .unwrap();
 
-            session.last_use_time =
-                SecondsSinceUnixEpoch(UInt::try_from(u64::try_from(index).unwrap()).unwrap());
+            // A minute apart, oldest first, and in the past: `Session::from_pickle`
+            // clamps a time in the future, and raises a last use that precedes the
+            // session's creation, so both have to be plausible to survive the round
+            // trip through the store.
+            let age = u64::try_from(total - index).unwrap() * 60;
+            let used_at = SecondsSinceUnixEpoch(UInt::try_from(now - age).unwrap());
+            session.creation_time = used_at;
+            session.last_use_time = used_at;
+
             sessions.push(session);
         }
 
@@ -704,5 +717,54 @@ mod test {
             first.store().inner.store.sessions.get(&sender_key).await.is_none(),
             "The session should no longer be in the cache after our own device keys changed"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use matrix_sdk_test::async_test;
+    use ruma::{device_id, room_id, user_id};
+
+    use super::CryptoStoreWrapper;
+    use crate::store::{
+        CryptoStore, MemoryStore,
+        types::{Changes, RoomSettings},
+    };
+
+    /// Reading a room's encryption settings went to the store and
+    /// deserialized on every call, on the critical path of showing that
+    /// room's encryption state. They only ever change when we write them, so
+    /// they are remembered instead (#143).
+    #[async_test]
+    async fn test_room_settings_are_cached_and_updated_on_write() {
+        let user_id = user_id!("@alice:localhost");
+        let device_id = device_id!("ALICEDEVICE");
+        let room_id = room_id!("!test:localhost");
+
+        let memory_store = Arc::new(MemoryStore::new());
+        let wrapper = CryptoStoreWrapper::new(user_id, device_id, memory_store.clone());
+
+        // Nothing is stored to begin with. "No settings for this room" is the answer
+        // that gets asked for over and over, so it is remembered as well.
+        assert!(wrapper.get_room_settings(room_id).await.unwrap().is_none());
+
+        // A write that goes around the wrapper isn't picked up, which is what tells us
+        // the answer came from the cache rather than from the store.
+        let settings = RoomSettings { only_allow_trusted_devices: true, ..Default::default() };
+        let changes = || Changes {
+            room_settings: HashMap::from([(room_id.to_owned(), settings.clone())]),
+            ..Default::default()
+        };
+        CryptoStore::save_changes(&*memory_store, changes()).await.unwrap();
+
+        assert!(wrapper.get_room_settings(room_id).await.unwrap().is_none());
+
+        // A write that goes through the wrapper is: the cache is kept in step with
+        // what we write.
+        wrapper.save_changes(changes()).await.unwrap();
+
+        assert_eq!(wrapper.get_room_settings(room_id).await.unwrap().as_ref(), Some(&settings));
     }
 }

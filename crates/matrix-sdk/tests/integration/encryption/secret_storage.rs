@@ -375,6 +375,7 @@ async fn test_restore_cross_signing_from_secret_store() {
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
     let (client, server) = no_retry_test_client_with_server().await;
     client.restore_session(session).await.unwrap();
@@ -566,6 +567,132 @@ async fn test_restore_cross_signing_from_secret_store() {
     server.verify().await;
 }
 
+/// Secret storage holding a cross-signing key that we then fail to import used
+/// to be passed over in silence, leaving a partial identity behind and the user
+/// retrying the same recovery key in a loop (#156).
+#[async_test]
+async fn test_incomplete_cross_signing_import_is_reported() {
+    let user_id = user_id!("@example:morpheus.localhost");
+
+    let session = MatrixSession {
+        meta: SessionMeta {
+            user_id: owned_user_id!("@example:morpheus.localhost"),
+            device_id: owned_device_id!("DEVICEID"),
+        },
+        tokens: mock_session_tokens(),
+        homeserver: None,
+    };
+    let (client, server) = no_retry_test_client_with_server().await;
+    client.restore_session(session).await.unwrap();
+
+    mock_secret_store_key(
+        &server,
+        user_id,
+        "bmur2d9ypPUH1msSwCxQOJkuKRmJI55e",
+        "xv5b6/p3ExEw++wTyfSHEg==",
+        "ujBBbXahnTAMkmPUX2/0+VTfUh63pGyVRuBcDMgmJC8=",
+    )
+    .await;
+
+    // The homeserver has no public cross-signing keys for us, so nothing we recover
+    // from secret storage can be imported.
+    Mock::given(method("POST"))
+        .and(path("_matrix/client/r0/keys/query"))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "master_keys": {},
+            "self_signing_keys": {},
+            "user_signing_keys": {}
+        })))
+        .named("/keys/query POST")
+        .mount(&server)
+        .await;
+
+    // Secret storage, on the other hand, has all three of them.
+    Mock::given(method("GET"))
+        .and(path("_matrix/client/r0/user/@example:morpheus.localhost/account_data/m.cross_signing.master"))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "encrypted": {
+                "bmur2d9ypPUH1msSwCxQOJkuKRmJI55e": {
+                    "ciphertext": "lCRSSA1lChONEXj/8RyogsgAa8ouQwYDnLr4XBCheRikrZykLRzPCx3doCE=",
+                    "iv": "bdfCwu+ECYgZ/jWTkGrQ/A==",
+                    "mac": "NXeV1dZaOe2JLvQ6Hh6tFto7AgFFdaQnY0l9pruwdtE="
+                }
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(
+            "_matrix/client/r0/user/@example:morpheus.localhost/account_data/m.cross_signing.self_signing",
+        ))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "encrypted": {
+                "bmur2d9ypPUH1msSwCxQOJkuKRmJI55e": {
+                    "ciphertext": "+B9WD02IvtQ8S4OaquhuYEZAx20xvz0oTN7r2VM9VOBxmlOyi+KkkWOvLAo=",
+                    "iv": "3BCaKGCaSMkg1x9WnTqUmw==",
+                    "mac": "xQEDxQbPH0bYeZUFC3wYJh0lsLkP2amcFGdaZ3VdfQg="
+                }
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(
+            "_matrix/client/r0/user/@example:morpheus.localhost/account_data/m.cross_signing.user_signing",
+        ))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "encrypted": {
+                "bmur2d9ypPUH1msSwCxQOJkuKRmJI55e": {
+                    "ciphertext": "atqNy5IDzYRkRC+lkKoflwsyHkd0dr4UeoViwJdUzexiq0M8h1i8JMkADNg=",
+                    "iv": "bjb1V2n9YmA8j31Z9muMqQ==",
+                    "mac": "vusvNuV8Kkq50VxtC78oioofVBurnTTVEhiRyZkfu/4="
+                }
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(
+            "_matrix/client/r0/user/@example:morpheus.localhost/account_data/m.megolm_backup.v1",
+        ))
+        .and(header("authorization", "Bearer 1234"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({
+            "errcode": "M_NOT_FOUND",
+            "error": "Account data not found"
+        })))
+        .mount(&server)
+        .await;
+
+    let secret_store = client
+        .encryption()
+        .secret_storage()
+        .open_secret_store(SECRET_STORE_KEY)
+        .await
+        .expect("We should be able to open our secret store");
+
+    let error = secret_store
+        .import_secrets()
+        .await
+        .expect_err("Importing an identity we can't complete should be reported");
+
+    assert_matches!(
+        error,
+        SecretStorageError::IncompleteCrossSigningImport { missing } => {
+            assert!(
+                missing.contains(&"m.cross_signing.master".to_owned()),
+                "The master key we couldn't import should be named: {missing:?}"
+            );
+        }
+    );
+}
+
 #[async_test]
 async fn test_is_secret_storage_enabled() {
     let user_id = user_id!("@example:morpheus.localhost");
@@ -576,6 +703,7 @@ async fn test_is_secret_storage_enabled() {
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
     let (client, server) = no_retry_test_client_with_server().await;
     client.restore_session(session).await.unwrap();

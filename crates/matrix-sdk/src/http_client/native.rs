@@ -35,7 +35,7 @@ use tracing::{info, warn};
 
 #[cfg(feature = "reqwest-transport")]
 use super::{DEFAULT_REQUEST_TIMEOUT, response_to_http_response};
-use super::{HttpClient, HttpSend, TransmissionProgress};
+use super::{HttpClient, HttpSend, RequestProgress, TransmissionProgress};
 use crate::{
     HttpResult,
     config::RequestConfig,
@@ -47,7 +47,7 @@ impl HttpClient {
         &self,
         request: http::Request<Bytes>,
         config: RequestConfig,
-        send_progress: SharedObservable<TransmissionProgress>,
+        progress: RequestProgress,
     ) -> HttpResult<R::IncomingResponse>
     where
         R: OutgoingRequest + Debug,
@@ -82,14 +82,14 @@ impl HttpClient {
             request: &http::Request<Bytes>,
             timeout: Option<Duration>,
             retry_count: &AtomicU64,
-            send_progress: SharedObservable<TransmissionProgress>,
+            progress: RequestProgress,
         ) -> HttpResult<http::Response<Bytes>> {
             let num_attempt = retry_count.fetch_add(1, Ordering::SeqCst);
             debug!(num_attempt, "Sending request");
             let before = ruma::time::Instant::now();
 
             let response =
-                http_client.send_request(request.clone(), timeout, send_progress).await?;
+                http_client.send_request_with_progress(request.clone(), timeout, progress).await?;
 
             let request_duration = ruma::time::Instant::now().saturating_duration_since(before);
 
@@ -148,14 +148,14 @@ impl HttpClient {
         let retry_count = AtomicU64::new(1);
 
         let send_request = || {
-            let send_progress = send_progress.clone();
+            let progress = progress.clone();
             async {
                 let response = send_request_inner(
                     self.inner.as_ref(),
                     &request,
                     config.timeout,
                     &retry_count,
-                    send_progress,
+                    progress,
                 )
                 .await?;
                 let (parts, body) = response.into_parts();
@@ -208,6 +208,8 @@ impl Default for HttpSettings {
 impl HttpSettings {
     /// Build a client with the specified configuration.
     pub(crate) fn make_client(&self) -> Result<reqwest::Client, HttpError> {
+        install_crypto_provider();
+
         let user_agent = self.user_agent.clone().unwrap_or_else(|| "matrix-rust-sdk".to_owned());
         let mut http_client = reqwest::Client::builder()
             .user_agent(user_agent)
@@ -244,16 +246,43 @@ impl HttpSettings {
     }
 }
 
+/// Makes ring the process-wide crypto provider for rustls, when the
+/// `rustls-ring` feature asks for it.
+///
+/// aws-lc-rs, the provider `rustls-aws-lc-rs` installs, misbehaves on some
+/// Android targets and emulators (16 KB page size arm64 among them), where it
+/// crashes the process as the client is being built.
+///
+/// Installing is a no-op if a provider is already the default, which is what
+/// happens when both features end up enabled: the first client built wins.
+#[cfg(all(feature = "reqwest-transport", feature = "rustls-ring"))]
+fn install_crypto_provider() {
+    use std::sync::Once;
+
+    static INSTALL: Once = Once::new();
+
+    INSTALL.call_once(|| {
+        if rustls::crypto::ring::default_provider().install_default().is_err() {
+            debug!("A rustls crypto provider was already installed, keeping it");
+        }
+    });
+}
+
+#[cfg(all(feature = "reqwest-transport", not(feature = "rustls-ring")))]
+fn install_crypto_provider() {}
+
 #[cfg(feature = "reqwest-transport")]
 pub(super) async fn execute_request(
     client: &reqwest::Client,
     request: http::Request<Bytes>,
     timeout: Option<Duration>,
-    send_progress: SharedObservable<TransmissionProgress>,
+    progress: RequestProgress,
 ) -> Result<http::Response<Bytes>, HttpError> {
     use std::convert::Infallible;
 
     use futures_util::stream;
+
+    let RequestProgress { send: send_progress, receive: receive_progress } = progress;
 
     let request = {
         let mut request = if send_progress.subscriber_count() != 0 {
@@ -290,7 +319,57 @@ pub(super) async fn execute_request(
     };
 
     let response = client.execute(request).await?;
+
+    if receive_progress.subscriber_count() != 0 {
+        return Ok(response_to_http_response_with_progress(response, receive_progress).await?);
+    }
+
     Ok(response_to_http_response(response).await?)
+}
+
+/// Read a response's body, reporting how much of it has arrived.
+///
+/// The body is read chunk by chunk rather than in one go, which is the only way
+/// to see it arrive; the chunks are then concatenated, so the caller still gets
+/// the whole body as one buffer.
+#[cfg(feature = "reqwest-transport")]
+async fn response_to_http_response_with_progress(
+    mut response: reqwest::Response,
+    progress: SharedObservable<TransmissionProgress>,
+) -> Result<http::Response<Bytes>, reqwest::Error> {
+    use bytes::BufMut as _;
+
+    let status = response.status();
+
+    let mut http_builder = http::Response::builder().status(status);
+    let headers = http_builder.headers_mut().expect("Can't get the response builder headers");
+
+    for (k, v) in response.headers_mut().drain() {
+        if let Some(key) = k {
+            headers.insert(key, v);
+        }
+    }
+
+    // A chunked or compressed response has no content length; the total then
+    // only becomes known as the body ends, and grows as it arrives.
+    let content_length = response.content_length().and_then(|l| usize::try_from(l).ok());
+    progress.update(|p| p.total += content_length.unwrap_or(0));
+
+    let mut body = bytes::BytesMut::with_capacity(content_length.unwrap_or(0));
+
+    while let Some(chunk) = response.chunk().await? {
+        body.put_slice(&chunk);
+
+        progress.update(|p| {
+            p.current += chunk.len();
+            // Without a content length, the best estimate of the total is what
+            // has arrived so far, so progress reads as "not finished yet"
+            // instead of overshooting.
+            p.total = p.total.max(p.current);
+        });
+    }
+
+    Ok(http_builder.body(body.freeze()).expect("Can't construct a response using the given body"))
 }
 
 #[cfg(feature = "reqwest-transport")]
@@ -327,6 +406,38 @@ mod tests {
     use bytes::Bytes;
 
     use super::BytesChunks;
+
+    /// The ring provider must actually end up installed, and installing it
+    /// twice must not panic: `install_default` fails when a provider is
+    /// already there, which is the normal case for the second client built in
+    /// a process.
+    ///
+    /// Regression test for the aws-lc-rs crash on Android: with `rustls-ring`
+    /// on, no aws-lc-rs code may be reached.
+    #[cfg(all(feature = "reqwest-transport", feature = "rustls-ring"))]
+    #[test]
+    fn test_ring_is_installed_as_the_rustls_provider() {
+        use rustls::crypto::CryptoProvider;
+
+        super::install_crypto_provider();
+        super::install_crypto_provider();
+
+        let installed = CryptoProvider::get_default().expect("a provider is installed");
+
+        // With aws-lc-rs also compiled in, whichever provider got there first
+        // wins, so only assert the identity when ring is the only one.
+        #[cfg(not(feature = "rustls-aws-lc-rs"))]
+        {
+            let suites = |provider: &CryptoProvider| {
+                provider.cipher_suites.iter().map(|suite| suite.suite()).collect::<Vec<_>>()
+            };
+
+            assert_eq!(suites(installed), suites(&rustls::crypto::ring::default_provider()));
+        }
+
+        #[cfg(feature = "rustls-aws-lc-rs")]
+        let _ = installed;
+    }
 
     #[test]
     fn test_bytes_chunks() {

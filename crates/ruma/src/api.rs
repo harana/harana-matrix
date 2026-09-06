@@ -253,7 +253,7 @@ use self::error::{FromHttpRequestError, FromHttpResponseError, IntoHttpError};
 pub use crate::metadata;
 use crate::{DeviceId, UserId};
 
-#[cfg(feature = "appservice-api-s")]
+#[cfg(feature = "appservice-api")]
 pub mod appservice;
 pub mod auth_scheme;
 mod body;

@@ -18,7 +18,7 @@
 
 #[cfg(feature = "sso-login")]
 use std::future::Future;
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, fmt, time::Duration};
 
 use matrix_sdk_base::{SessionMeta, store::RoomLoadSettings};
 use ruma::{
@@ -38,6 +38,7 @@ use ruma::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, instrument};
+use url::Url;
 
 use crate::{
     Client, Error, RefreshTokenError, Result,
@@ -542,11 +543,13 @@ impl MatrixAuth {
                     session_tokens.refresh_token = Some(refresh_token);
                 }
 
-                self.client.auth_ctx().set_session_tokens(session_tokens);
+                self.client
+                    .auth_ctx()
+                    .set_session_tokens_with_expiry(session_tokens, res.expires_in_ms);
 
                 if let Some(save_session_callback) =
                     self.client.inner.auth_ctx.save_session_callback.get()
-                    && let Err(err) = save_session_callback(self.client.clone())
+                    && let Err(err) = save_session_callback(self.client.clone()).await
                 {
                     error!("when saving session after refresh: {err}");
                 }
@@ -621,6 +624,7 @@ impl MatrixAuth {
                 .set_session(
                     session,
                     RoomLoadSettings::default(),
+                    response.expires_in,
                     #[cfg(feature = "e2e-encryption")]
                     login_info,
                 )
@@ -636,7 +640,15 @@ impl MatrixAuth {
         self.client.stop_background_tasks();
 
         let request = logout::v3::Request::new();
-        self.client.send(request).await
+        let response = self.client.send(request).await;
+
+        // Whatever is still waiting for the homeserver was sent under a session that
+        // no longer exists, so nothing can come of it. This happens whether or not the
+        // logout request itself succeeded: the caller is done with the session either
+        // way.
+        self.client.cancel_in_flight_requests();
+
+        response
     }
 
     /// Get the whole native Matrix authentication session info of this client.
@@ -649,7 +661,11 @@ impl MatrixAuth {
     pub fn session(&self) -> Option<MatrixSession> {
         let meta = self.client.session_meta()?;
         let tokens = self.client.session_tokens()?;
-        Some(MatrixSession { meta: meta.to_owned(), tokens })
+        Some(MatrixSession {
+            meta: meta.to_owned(),
+            tokens,
+            homeserver: Some(self.client.homeserver()),
+        })
     }
 
     /// Restore a previously logged in session.
@@ -667,6 +683,11 @@ impl MatrixAuth {
     ///
     /// * `room_load_settings` — Specify how many rooms must be restored; use
     ///   `::default()` if you don't know which value to pick.
+    ///
+    /// A session that carries a [`homeserver`][MatrixSession::homeserver]
+    /// points the client at it, so a client built with any URL ends up talking
+    /// to the right server without the `.well-known` lookup that discovery
+    /// costs.
     ///
     /// # Panics
     ///
@@ -695,6 +716,9 @@ impl MatrixAuth {
     ///         access_token: "My-Token".to_owned(),
     ///         refresh_token: None,
     ///     },
+    ///     // Skips the `.well-known` lookup that discovery would cost. `None` keeps
+    ///     // the homeserver the client was built with.
+    ///     homeserver: None,
     /// };
     ///
     /// client.restore_session(session).await?;
@@ -731,9 +755,22 @@ impl MatrixAuth {
         room_load_settings: RoomLoadSettings,
     ) -> Result<()> {
         debug!("Restoring Matrix auth session");
+
+        // A session that knows where it came from spares us the `.well-known` lookup
+        // that discovering the homeserver again would cost, and works offline.
+        if let Some(homeserver) = &session.homeserver
+            && *homeserver != self.client.homeserver()
+        {
+            debug!(%homeserver, "Using the homeserver stored with the session");
+            self.client.set_homeserver(homeserver.clone());
+        }
+
         self.set_session(
             session,
             room_load_settings,
+            // A restored access token comes without its lifetime: only the process that
+            // obtained it saw that, so this session refreshes reactively.
+            None,
             #[cfg(feature = "e2e-encryption")]
             None,
         )
@@ -794,8 +831,11 @@ impl MatrixAuth {
             .await?;
 
         let device_id = response.device_id.ok_or(Error::MissingDeviceId)?;
-        let session =
-            MatrixSession { meta: SessionMeta { user_id: response.user_id, device_id }, tokens };
+        let session = MatrixSession {
+            meta: SessionMeta { user_id: response.user_id, device_id },
+            tokens,
+            homeserver: Some(self.client.homeserver()),
+        };
 
         self.restore_session(session.clone(), room_load_settings).await?;
 
@@ -818,6 +858,7 @@ impl MatrixAuth {
         self.set_session(
             response.into(),
             RoomLoadSettings::default(),
+            response.expires_in,
             #[cfg(feature = "e2e-encryption")]
             login_info,
         )
@@ -835,6 +876,10 @@ impl MatrixAuth {
     /// * `room_load_settings` — Specify how much rooms must be restored; use
     ///   `::default()` if you don't know which value to pick.
     ///
+    /// * `expires_in` — How long the access token is valid for, when the
+    ///   homeserver said so; `None` when it did not, or when the token comes
+    ///   from a stored session rather than from this process.
+    ///
     /// # Panic
     ///
     /// Panics if authentication data was already set.
@@ -842,6 +887,7 @@ impl MatrixAuth {
         &self,
         session: MatrixSession,
         room_load_settings: RoomLoadSettings,
+        expires_in: Option<Duration>,
         #[cfg(feature = "e2e-encryption")] login_info: Option<login::v3::LoginInfo>,
     ) -> Result<()> {
         // This API doesn't have any data but by setting this variant we protect the
@@ -851,7 +897,7 @@ impl MatrixAuth {
             .auth_data
             .set(AuthData::Matrix)
             .expect("Client authentication data was already set");
-        self.client.auth_ctx().set_session_tokens(session.tokens);
+        self.client.auth_ctx().set_session_tokens_with_expiry(session.tokens, expires_in);
         self.client
             .base_client()
             .activate(
@@ -902,6 +948,7 @@ impl MatrixAuth {
 ///         access_token: "My-Token".to_owned(),
 ///         refresh_token: None,
 ///     },
+///     homeserver: None,
 /// };
 ///
 /// assert_eq!(session.meta.device_id, "MYDEVICEID");
@@ -915,6 +962,31 @@ pub struct MatrixSession {
     /// The tokens used for authentication.
     #[serde(flatten)]
     pub tokens: SessionTokens,
+
+    /// The URL of the homeserver this session belongs to.
+    ///
+    /// Storing it with the session is what lets a client restore the session
+    /// without discovering the homeserver again: discovery costs a request to
+    /// the server's `.well-known` file at every start, and fails when the
+    /// device is offline, even though the answer was already known the first
+    /// time.
+    ///
+    /// [`MatrixAuth::session()`] fills this in, and
+    /// [`MatrixAuth::restore_session()`] uses it, so a session that was saved
+    /// by this SDK and restored into a client built with
+    /// [`ClientBuilder::homeserver_url()`] never needs the lookup. It is
+    /// `None` for a session that was built by hand or stored before this field
+    /// existed, and the client then keeps the homeserver it was built with.
+    ///
+    /// This is where the homeserver moves too: pass the session you get back
+    /// from [`MatrixAuth::session()`] to storage after
+    /// [`Client::revalidate_homeserver()`] reports a move, or the client will
+    /// go on starting at the old address.
+    ///
+    /// [`ClientBuilder::homeserver_url()`]: crate::ClientBuilder::homeserver_url
+    /// [`Client::revalidate_homeserver()`]: crate::Client::revalidate_homeserver
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homeserver: Option<Url>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -933,6 +1005,10 @@ impl From<&login::v3::Response> for MatrixSession {
                 access_token: access_token.clone(),
                 refresh_token: refresh_token.clone(),
             },
+            // The response says nothing about which homeserver answered it; the client
+            // knows, and fills it in when the session is read back with
+            // `MatrixAuth::session()`.
+            homeserver: None,
         }
     }
 }
@@ -948,6 +1024,7 @@ impl MatrixSession {
                 access_token: access_token.clone()?,
                 refresh_token: refresh_token.clone(),
             },
+            homeserver: None,
         })
     }
 }

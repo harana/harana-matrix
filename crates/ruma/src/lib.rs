@@ -13,8 +13,9 @@
 //! | `ruma-html`            | `html`               |
 //! | `ruma-signatures`      | `signatures`         |
 //!
-//! Only the parts used by this workspace are kept: the appservice, identity-service and
-//! push-gateway APIs and the state resolution implementation are not vendored.
+//! Only the parts used by this workspace are kept: of the appservice API only the registration
+//! file format ([`api::appservice`]) is vendored, and the identity-service and push-gateway APIs
+//! and the state resolution implementation are not vendored at all.
 //!
 //! > For internal consistency, Ruma uses American spelling for variable names. Names may differ
 //! > in the serialized representation, as the Matrix specification has a mix of British and
@@ -24,6 +25,8 @@
 //!
 //! * `client` -- `OutgoingRequest` / `IncomingResponse` impls, for code talking *to* a server.
 //! * `server` -- `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
+//! * `appservice-api` -- the application service registration types ([`api::appservice`]). Also
+//!   available as `appservice-api-c` and `appservice-api-s`, for parity with upstream `ruma`.
 //! * `federation-api` -- the server-server API ([`api::federation`]). Implies `signatures`.
 //! * `signatures` -- digital signatures (`signatures`).
 //! * `html` -- HTML parsing and sanitizing (`html`).

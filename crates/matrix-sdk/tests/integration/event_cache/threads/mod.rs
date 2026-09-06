@@ -125,7 +125,7 @@ async fn test_thread_contains_its_root_event() {
 }
 
 #[async_test]
-async fn test_ignored_user_empties_threads() {
+async fn test_ignored_user_events_are_dropped_from_threads() {
     let server = MatrixMockServer::new().await;
     let client = client_with_threading_support(&server).await;
 
@@ -182,11 +182,11 @@ async fn test_ignored_user_empties_threads() {
         })
         .await;
 
-    // We do receive a clear.
+    // Only the event sent by `dexter` is removed from the thread.
     {
         assert_let_timeout!(Ok(TimelineVectorDiffs { diffs, .. }) = thread_stream.recv());
         assert_eq!(diffs.len(), 1);
-        assert_let!(VectorDiff::Clear = &diffs[0]);
+        assert_let!(VectorDiff::Remove { index: 0 } = &diffs[0]);
     }
 
     // Receiving new events still works.
@@ -533,6 +533,89 @@ async fn test_auto_subscribe_when_someone_answers_our_message_in_a_thread() {
     assert_let_timeout!(Ok(()) = thread_subscriber_updates.recv());
 
     // The actual check is the `mock_once` call above!
+}
+
+#[async_test]
+async fn test_dont_auto_subscribe_on_a_notifying_but_non_mentioning_thread_event() {
+    let mut s = thread_subscription_test_setup().await;
+
+    // Given a room that notifies on every message…
+    let own_user_id = s.client.user_id().unwrap();
+    let mut push_rules = Ruleset::default();
+    push_rules.override_.insert(ConditionalPushRule::is_user_mention(own_user_id));
+    push_rules.underride.insert(ConditionalPushRule::message());
+
+    let f = EventFactory::new().room(&s.room_id).sender(*ALICE);
+    s.server
+        .mock_sync()
+        .ok_and_run(&s.client, |sync_builder| {
+            sync_builder.add_global_account_data(f.push_rules(push_rules));
+        })
+        .await;
+
+    // …the PUT endpoint (to subscribe to the thread) must not be called…
+    s.server.mock_room_put_thread_subscription().ok().expect(0).mount().await;
+
+    // …when I receive an in-thread event that notifies without mentioning me.
+    let event = s
+        .factory
+        .text_msg("hey there")
+        .in_thread(&s.thread_root, &s.thread_root)
+        .event_id(event_id!("$no_mention"))
+        .into_raw_sync();
+
+    s.server
+        .sync_room(&s.client, JoinedRoomBuilder::new(&s.room_id).add_timeline_bulk(vec![event]))
+        .await;
+
+    // Let the event cache process the update.
+    assert_let_timeout!(
+        Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { .. })) =
+            s.subscriber.recv()
+    );
+
+    // Let a bit of time for the background thread subscriber task to process the
+    // update.
+    sleep(Duration::from_millis(200)).await;
+
+    // The actual check is the `expect` call above!
+}
+
+#[async_test]
+async fn test_dont_auto_subscribe_on_a_thread_the_user_unsubscribed_from() {
+    let mut s = thread_subscription_test_setup().await;
+
+    // Given a thread I explicitly unsubscribed from,
+    s.server
+        .mock_room_delete_thread_subscription()
+        .match_thread_id(s.thread_root.to_owned())
+        .ok()
+        .mock_once()
+        .mount()
+        .await;
+
+    let room = s.client.get_room(&s.room_id).unwrap();
+    room.unsubscribe_thread(s.thread_root.to_owned()).await.unwrap();
+
+    // The PUT endpoint (to subscribe to the thread) shouldn't be called…
+    s.server.mock_room_put_thread_subscription().ok().expect(0).mount().await;
+
+    // …when I receive a new in-thread mention for this thread.
+    s.server
+        .sync_room(&s.client, JoinedRoomBuilder::new(&s.room_id).add_timeline_bulk(s.events))
+        .await;
+
+    // Let the event cache process the update.
+    assert_let_timeout!(
+        Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { .. })) =
+            s.subscriber.recv()
+    );
+
+    // Let a bit of time for the background thread subscriber task to process the
+    // update.
+    sleep(Duration::from_millis(200)).await;
+
+    // The actual check is the `expect` call above!
 }
 
 #[async_test]

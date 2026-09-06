@@ -21,10 +21,13 @@ use matrix_sdk::deserialized_responses::TimelineEvent;
 use matrix_sdk_test::{ALICE, BOB, async_test, sync_timeline_event};
 use ruma::{
     events::{
-        AnySyncTimelineEvent, MessageLikeEventType, StateEventType, TimelineEventType,
+        AnyMessageLikeEventContent, AnySyncTimelineEvent, MessageLikeEventType, StateEventType,
+        TimelineEventType,
+        reaction::ReactionEventContent,
+        relation::Annotation,
         room::{
             member::MembershipState,
-            message::{MessageType, RedactedRoomMessageEventContent},
+            message::{MessageType, RedactedRoomMessageEventContent, RoomMessageEventContent},
         },
     },
     mxc_uri,
@@ -114,6 +117,67 @@ async fn test_filter_always_false() {
     timeline.handle_live_event(f.room_name("Alice's room").sender(&ALICE)).await;
 
     assert_eq!(timeline.controller.items().await.len(), 0);
+}
+
+#[async_test]
+async fn test_local_echoes_are_filtered_too() {
+    // A local echo goes through the same filter as a remote event: a timeline that
+    // only shows notices must not show a text message just because it hasn't been
+    // sent yet.
+    let timeline = TestTimelineBuilder::new()
+        .settings(TimelineSettings {
+            event_filter: Arc::new(|event, _| {
+                assert_let!(AnySyncTimelineEvent::MessageLike(event) = event);
+                assert_let!(
+                    Some(AnyMessageLikeEventContent::RoomMessage(content)) =
+                        event.original_content()
+                );
+                matches!(content.msgtype, MessageType::Notice(_))
+            }),
+            ..Default::default()
+        })
+        .build()
+        .await;
+
+    timeline.handle_local_event(RoomMessageEventContent::text_plain("filtered out").into()).await;
+    assert!(timeline.controller.items().await.is_empty());
+
+    timeline.handle_local_event(RoomMessageEventContent::notice_plain("kept").into()).await;
+
+    let items = timeline.controller.items().await;
+    assert_eq!(items.len(), 2);
+    assert!(items[0].is_date_divider());
+    assert_let!(Some(event) = items[1].as_event());
+    assert!(event.is_local_echo());
+}
+
+#[async_test]
+async fn test_local_echo_aggregations_are_not_filtered_out() {
+    // The filter decides whether a local echo becomes an item of its own; it must
+    // not stop an aggregation from being applied to the item it targets. A
+    // reaction is filtered out by the default filter, yet it still shows up on
+    // its target.
+    let timeline = TestTimeline::new().await;
+
+    let f = &timeline.factory;
+    timeline.handle_live_event(f.text_msg("hello").sender(&ALICE)).await;
+
+    let event_id =
+        timeline.controller.items().await[1].as_event().unwrap().event_id().unwrap().to_owned();
+
+    timeline
+        .handle_local_event(
+            ReactionEventContent::new(Annotation::new(event_id, "👍".to_owned())).into(),
+        )
+        .await;
+
+    let items = timeline.controller.items().await;
+    // Still only the date divider and the message: no item for the reaction.
+    assert_eq!(items.len(), 2);
+    assert_eq!(
+        items[1].as_event().unwrap().content().reactions().cloned().unwrap_or_default().len(),
+        1
+    );
 }
 
 #[async_test]
@@ -823,4 +887,45 @@ fn is_profile_change_item(item: &&Arc<TimelineItem>) -> bool {
         }
         _ => false,
     }
+}
+
+#[async_test]
+async fn test_event_filter_applies_to_local_echoes() {
+    // A filter that only lets notices through.
+    let timeline = TestTimelineBuilder::new()
+        .settings(TimelineSettings {
+            event_filter: Arc::new(|event, _| {
+                let AnySyncTimelineEvent::MessageLike(msg) = event else { return false };
+                matches!(
+                    msg.original_content(),
+                    Some(AnyMessageLikeEventContent::RoomMessage(content))
+                        if matches!(content.msgtype, MessageType::Notice(_))
+                )
+            }),
+            ..Default::default()
+        })
+        .build()
+        .await;
+
+    // A local echo the filter excludes doesn't get an item…
+    timeline
+        .handle_local_event(AnyMessageLikeEventContent::RoomMessage(
+            RoomMessageEventContent::text_plain("filtered out"),
+        ))
+        .await;
+    assert_eq!(timeline.controller.items().await.len(), 0);
+
+    // …while one the filter allows does.
+    timeline
+        .handle_local_event(AnyMessageLikeEventContent::RoomMessage(
+            RoomMessageEventContent::notice_plain("let through"),
+        ))
+        .await;
+
+    let items = timeline.controller.items().await;
+    assert_eq!(items.len(), 2); // the local echo, and its date divider
+    let event = items[1].as_event().unwrap();
+    assert!(event.is_local_echo());
+    assert_let!(Some(message) = event.content().as_message());
+    assert_matches!(message.msgtype(), MessageType::Notice(_));
 }

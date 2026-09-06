@@ -1,21 +1,20 @@
-//! (De)serializable types for the [Matrix Application Service
-//! API][appservice-api].
+//! Types for the [appservice API].
 //!
-//! Only the registration file is vendored here: the transaction endpoints the
-//! homeserver pushes to an appservice are not used by this workspace.
+//! Only the registration file format is vendored here: the endpoints of the
+//! appservice API are not used by this workspace.
 //!
-//! [appservice-api]: https://spec.matrix.org/v1.19/application-service-api/
+//! [appservice API]: https://spec.matrix.org/latest/application-service-api/
 
 use serde::{Deserialize, Serialize};
 
 /// A namespace defined by an application service.
 ///
-/// Used in [`Namespaces`].
-#[derive(Clone, Debug, Deserialize, Serialize)]
+/// Used for [`Namespaces`].
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Namespace {
-    /// Whether this application service has exclusive access to events within
-    /// this namespace.
+    /// Whether this application service has exclusive access to matching
+    /// events.
     pub exclusive: bool,
 
     /// A regular expression defining which values this namespace includes.
@@ -31,20 +30,20 @@ impl Namespace {
 
 /// Namespaces defined by an application service.
 ///
-/// Used in [`Registration`].
+/// Used for [`Registration`].
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Namespaces {
     /// Events which are sent from certain users.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub users: Vec<Namespace>,
 
     /// Events which are sent in rooms with certain room aliases.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub aliases: Vec<Namespace>,
 
     /// Events which are sent in rooms with certain room IDs.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub rooms: Vec<Namespace>,
 }
 
@@ -55,11 +54,12 @@ impl Namespaces {
     }
 }
 
-/// A registration file, as it is read by the homeserver and by the application
-/// service itself.
+/// A registration is represented by a YAML file provided to each homeserver.
 ///
-/// Create this with [`RegistrationInit`].
-#[derive(Clone, Debug, Deserialize, Serialize)]
+/// It defines the namespaces the application service is interested in, and the
+/// tokens the homeserver and the application service authenticate each other
+/// with.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Registration {
     /// A unique, user-defined ID of the application service which will never
@@ -94,19 +94,15 @@ pub struct Registration {
     /// The external protocols which the application service provides (e.g.
     /// IRC).
     pub protocols: Option<Vec<String>>,
-
-    /// Whether the application service wants to receive ephemeral data.
-    ///
-    /// Defaults to `false`.
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub receive_ephemeral: bool,
 }
 
 /// Initial set of fields of [`Registration`].
 ///
 /// This struct will not be updated even if additional fields are added to
-/// `Registration` in a new (non-breaking) release of the Matrix specification.
+/// [`Registration`] in a new (non-breaking) release of the Matrix
+/// specification.
 #[derive(Clone, Debug)]
+#[allow(clippy::exhaustive_structs)]
 pub struct RegistrationInit {
     /// A unique, user-defined ID of the application service which will never
     /// change.
@@ -164,11 +160,66 @@ impl From<RegistrationInit> for Registration {
             namespaces,
             rate_limited,
             protocols,
-            receive_ephemeral: false,
         }
     }
 }
 
-fn is_false(value: &bool) -> bool {
-    !*value
+#[cfg(test)]
+mod tests {
+    use serde_json::{json, to_value as to_json_value};
+
+    use super::{Namespace, Namespaces, Registration};
+
+    #[test]
+    fn registration_serializes_to_the_documented_shape() {
+        let mut namespaces = Namespaces::new();
+        namespaces.users = vec![Namespace::new(true, "@_bridge_.*".to_owned())];
+
+        let registration = Registration {
+            id: "bridge".to_owned(),
+            url: Some("http://localhost:9000".to_owned()),
+            as_token: "as-token".to_owned(),
+            hs_token: "hs-token".to_owned(),
+            sender_localpart: "bridgebot".to_owned(),
+            namespaces,
+            rate_limited: None,
+            protocols: None,
+        };
+
+        assert_eq!(
+            to_json_value(&registration).unwrap(),
+            json!({
+                "id": "bridge",
+                "url": "http://localhost:9000",
+                "as_token": "as-token",
+                "hs_token": "hs-token",
+                "sender_localpart": "bridgebot",
+                "namespaces": {
+                    "users": [{ "exclusive": true, "regex": "@_bridge_.*" }],
+                    "aliases": [],
+                    "rooms": [],
+                },
+                "rate_limited": null,
+                "protocols": null,
+            })
+        );
+    }
+
+    #[test]
+    fn a_registration_without_namespaces_deserializes() {
+        let registration: Registration = serde_json::from_value(json!({
+            "id": "bridge",
+            "url": null,
+            "as_token": "as-token",
+            "hs_token": "hs-token",
+            "sender_localpart": "bridgebot",
+            "namespaces": {},
+        }))
+        .unwrap();
+
+        assert!(registration.namespaces.users.is_empty());
+        assert!(registration.namespaces.aliases.is_empty());
+        assert!(registration.namespaces.rooms.is_empty());
+        assert_eq!(registration.url, None);
+    }
 }

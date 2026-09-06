@@ -36,7 +36,8 @@ pub use identity_status_changes::IdentityStatusChanges;
 use matrix_sdk_base::crypto::types::events::room::encrypted::EncryptedEvent;
 #[cfg(feature = "e2e-encryption")]
 use matrix_sdk_base::crypto::{
-    IdentityStatusChange, RoomIdentityProvider, UserIdentity, types::events::CryptoContextInfo,
+    CollectStrategy, IdentityStatusChange, RoomIdentityProvider, UserIdentity,
+    types::events::CryptoContextInfo,
 };
 pub use matrix_sdk_base::store::StoredThreadSubscription;
 use matrix_sdk_base::{
@@ -63,8 +64,6 @@ use mime::Mime;
 use reply::Reply;
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::AnySyncMessageLikeEvent;
-#[cfg(feature = "experimental-encrypted-state-events")]
-use ruma::events::AnySyncStateEvent;
 #[cfg(feature = "unstable-msc4274")]
 use ruma::events::room::message::GalleryItemType;
 #[cfg(feature = "e2e-encryption")]
@@ -89,7 +88,6 @@ use ruma::{
                 kick_user, leave_room, unban_user,
             },
             message::send_message_event,
-            read_marker::set_read_marker,
             receipt::create_receipt,
             redact::redact_event,
             retention::get_retention_configuration,
@@ -106,11 +104,11 @@ use ruma::{
     },
     assign,
     events::{
-        AnyRoomAccountDataEvent, AnyRoomAccountDataEventContent, AnyTimelineEvent, EmptyStateKey,
-        Mentions, MessageLikeEventContent, OriginalSyncStateEvent, RedactContent,
-        RedactedStateEventContent, RoomAccountDataEvent, RoomAccountDataEventContent,
-        RoomAccountDataEventType, StateEventContent, StateEventType, StaticEventContent,
-        StaticStateEventContent, SyncStateEvent,
+        AnyRoomAccountDataEvent, AnyRoomAccountDataEventContent, AnyStateEventContent,
+        AnySyncStateEvent, AnyTimelineEvent, EmptyStateKey, Mentions, MessageLikeEventContent,
+        OriginalSyncStateEvent, RedactContent, RedactedStateEventContent, RoomAccountDataEvent,
+        RoomAccountDataEventContent, RoomAccountDataEventType, StateEventContent, StateEventType,
+        StaticEventContent, StaticStateEventContent, SyncStateEvent,
         beacon::BeaconEventContent,
         beacon_info::BeaconInfoEventContent,
         direct::DirectEventContent,
@@ -2254,14 +2252,11 @@ impl Room {
                 ))
                 .await;
 
-                let mut request = create_receipt::v3::Request::new(
-                    self.room_id().to_owned(),
-                    receipt_type,
-                    event_id,
-                );
-                request.thread = thread;
-
-                if let Err(error) = self.client.send(request).await {
+                // The send queue owns the round trip, so the receipt survives being
+                // offline and supersedes any receipt still waiting to be sent.
+                if let Err(error) =
+                    self.send_queue().send_read_receipt(receipt_type, thread, event_id).await
+                {
                     if let Some(echo) = echo {
                         echo.roll_back(self).await;
                     }
@@ -2346,13 +2341,10 @@ impl Room {
         }
 
         let Receipts { fully_read, public_read_receipt, private_read_receipt } = receipts;
-        let request = assign!(set_read_marker::v3::Request::new(self.room_id().to_owned()), {
-            fully_read,
-            read_receipt: public_read_receipt,
-            private_read_receipt,
-        });
 
-        self.client.send(request).await?;
+        self.send_queue()
+            .send_read_markers(fully_read, public_read_receipt, private_read_receipt)
+            .await?;
 
         self.set_unread_flag(false).await?;
 
@@ -2523,7 +2515,7 @@ impl Room {
     // e.g. a user starts to type a message for a room.
     #[cfg(feature = "e2e-encryption")]
     #[instrument(skip_all, fields(room_id = ?self.room_id()))]
-    async fn preshare_room_key(&self) -> Result<()> {
+    async fn preshare_room_key(&self, strategy_override: Option<CollectStrategy>) -> Result<()> {
         self.ensure_room_joined()?;
 
         // Take and release the lock on the store, if needs be.
@@ -2542,7 +2534,7 @@ impl Room {
                     self.client.claim_one_time_keys(members.iter().map(Deref::deref)).await?;
                 };
 
-                let response = self.share_room_key().await;
+                let response = self.share_room_key(strategy_override.clone()).await;
 
                 // If one of the responses failed invalidate the group
                 // session as using it would end up in undecryptable
@@ -2560,6 +2552,48 @@ impl Room {
             .await
     }
 
+    /// Store a state event we have just sent successfully, so it can be read
+    /// back before the sync echoes it.
+    ///
+    /// `content` must be the plaintext content, even when the event was sent
+    /// encrypted: this is the state the room is now in, and the sync will
+    /// bring back the very same thing.
+    ///
+    /// Failing to store it isn't fatal - the sync brings the event in
+    /// eventually - so this only logs.
+    pub(crate) async fn store_sent_state_event(
+        &self,
+        event_id: &EventId,
+        event_type: &StateEventType,
+        state_key: &str,
+        content: &Raw<AnyStateEventContent>,
+    ) {
+        let Some(sender) = self.client.user_id() else { return };
+
+        let json = serde_json::json!({
+            "type": event_type,
+            "state_key": state_key,
+            "content": content,
+            "event_id": event_id,
+            "sender": sender,
+            "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+        });
+
+        let event = match Raw::<AnySyncStateEvent>::from_json_string(json.to_string()) {
+            Ok(event) => event,
+            Err(error) => {
+                warn!("couldn't build the state event we just sent: {error}");
+                return;
+            }
+        };
+
+        if let Err(error) =
+            self.client.base_client().receive_sent_state_event(self.room_id(), event).await
+        {
+            warn!("couldn't store the state event we just sent: {error}");
+        }
+    }
+
     /// Share a group session for a room.
     ///
     /// # Panics
@@ -2567,10 +2601,11 @@ impl Room {
     /// Panics if the client isn't logged in.
     #[cfg(feature = "e2e-encryption")]
     #[instrument(skip_all)]
-    async fn share_room_key(&self) -> Result<()> {
+    async fn share_room_key(&self, strategy_override: Option<CollectStrategy>) -> Result<()> {
         self.ensure_room_joined()?;
 
-        let requests = self.client.base_client().share_room_key(self.room_id()).await?;
+        let requests =
+            self.client.base_client().share_room_key(self.room_id(), strategy_override).await?;
 
         for request in requests {
             let response = self.client.send_to_device(&request).await?;
@@ -2860,6 +2895,11 @@ impl Room {
         let mentions = config.mentions.take();
 
         let thumbnail = config.thumbnail.take();
+
+        // Remove the image's metadata, if the caller asked for it, before it is
+        // uploaded or cached.
+        let (data, thumbnail) =
+            crate::attachment::preprocess(content_type, data, thumbnail, &mut config).await;
 
         // If necessary, store caching data for the thumbnail ahead of time.
         let thumbnail_cache_info = if store_in_cache {
@@ -3338,7 +3378,12 @@ impl Room {
         self.ensure_room_joined()?;
         let request =
             send_state_event::v3::Request::new(self.room_id().to_owned(), state_key, &content)?;
+        let (event_type, state_key, body) =
+            (request.event_type.clone(), request.state_key.clone(), request.body.clone());
         let response = self.client.send(request).await?;
+
+        self.store_sent_state_event(&response.event_id, &event_type, &state_key, &body).await;
+
         Ok(response)
     }
 
@@ -3448,14 +3493,19 @@ impl Room {
     ) -> Result<send_state_event::v3::Response> {
         self.ensure_room_joined()?;
 
+        let content = content.into_raw_state_event_content();
         let request = send_state_event::v3::Request::new_raw(
             self.room_id().to_owned(),
             event_type.into(),
             state_key.to_owned(),
-            content.into_raw_state_event_content(),
+            content.clone(),
         );
+        let event_type = request.event_type.clone();
+        let response = self.client.send(request).await?;
 
-        Ok(self.client.send(request).await?)
+        self.store_sent_state_event(&response.event_id, &event_type, state_key, &content).await;
+
+        Ok(response)
     }
 
     /// Send a raw room state event to the homeserver.
@@ -3982,6 +4032,43 @@ impl Room {
         }
     }
 
+    /// Get the notification mode this room falls back to when the user hasn't
+    /// defined one for it.
+    ///
+    /// This is the account-level default for rooms of the same kind, i.e. it
+    /// depends on whether the room is encrypted and whether it involves
+    /// exactly two people.
+    ///
+    /// Returns `None` if the room isn't joined, or if its encryption state is
+    /// not known yet. Unlike [`Room::notification_mode`], this never requests
+    /// the encryption state over the network, so it is safe to call on a hot
+    /// path.
+    pub async fn default_notification_mode(&self) -> Option<RoomNotificationMode> {
+        if !matches!(self.state(), RoomState::Joined) {
+            return None;
+        }
+
+        let encryption_state = self.encryption_state();
+        if encryption_state.is_unknown() {
+            return None;
+        }
+
+        // From the point of view of notification settings, a `one-to-one` room is one
+        // that involves exactly two people.
+        let is_one_to_one = IsOneToOne::from(self.active_members_count() == 2);
+
+        Some(
+            self.client()
+                .notification_settings()
+                .await
+                .get_default_room_notification_mode(
+                    IsEncrypted::from(encryption_state.is_encrypted()),
+                    is_one_to_one,
+                )
+                .await,
+        )
+    }
+
     /// Get the user-defined notification mode.
     ///
     /// The result is cached for fast and non-async call. To read the cached
@@ -4070,6 +4157,16 @@ impl Room {
             return Ok(());
         }
 
+        self.send_queue().set_unread_marker(unread).await?;
+
+        Ok(())
+    }
+
+    /// Set the room's "marked as unread" flag on the server, right now.
+    ///
+    /// This is what [`Self::set_unread_flag`] eventually results in; it is the
+    /// send queue's business to decide when that happens.
+    pub(crate) async fn set_unread_flag_now(&self, unread: bool) -> Result<()> {
         let user_id = self.client.user_id().ok_or(Error::AuthenticationRequired)?;
 
         let content = MarkedUnreadEventContent::new(unread);
@@ -4081,6 +4178,7 @@ impl Room {
         )?;
 
         self.client.send(request).await?;
+
         Ok(())
     }
 
@@ -4645,11 +4743,29 @@ impl Room {
     /// This is like [`Self::subscribe_thread`], but it first checks if the user
     /// has already subscribed to a thread, so as to minimize sending
     /// unnecessary subscriptions which would be ignored by the server.
+    ///
+    /// An explicit unsubscription is sticky: once the user has unsubscribed
+    /// from a thread, only a manual subscription (`automatic` unset) can
+    /// subscribe them again.
     pub async fn subscribe_thread_if_needed(
         &self,
         thread_root: &EventId,
         automatic: Option<OwnedEventId>,
     ) -> Result<()> {
+        if automatic.is_some()
+            && let Some(stored) = self
+                .client
+                .state_store()
+                .load_thread_subscription(self.room_id(), thread_root)
+                .await?
+            && matches!(stored.status, ThreadSubscriptionStatus::Unsubscribed)
+        {
+            // The user explicitly unsubscribed from this thread; don't undo that on the
+            // next event landing in it.
+            trace!("not automatically subscribing to a thread the user unsubscribed from");
+            return Ok(());
+        }
+
         if let Some(prev_sub) = self.load_or_fetch_thread_subscription(thread_root).await? {
             // If we have a previous subscription, we should only send the new one if it's
             // manual and the previous one was automatic.
@@ -5188,7 +5304,7 @@ mod tests {
         let room = client.get_room(&DEFAULT_TEST_ROOM_ID).expect("Room should exist");
 
         // Step 1, preshare the room keys.
-        room.preshare_room_key().await.unwrap();
+        room.preshare_room_key(None).await.unwrap();
 
         // Step 2, force lock invalidation by pretending another client obtained the
         // lock.

@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The timeline item type is deeply nested (it reaches into the HTTP client
+// through the send queue handles it holds), and auto-trait solving for the
+// futures that carry it runs past the default limit.
+#![recursion_limit = "256"]
+
 mod encryption_sync_service;
 mod notification_client;
 mod room_list_service;

@@ -674,6 +674,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "blurhash"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e79769241dcd44edf79a732545e8b5cec84c247ac060f5252cd51885d093a8fc"
+
+[[package]]
 name = "bon"
 version = "3.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3670,6 +3676,7 @@ dependencies = [
  "async-trait",
  "axum",
  "backon",
+ "blurhash",
  "bytes",
  "bytesize",
  "cfg-if",
@@ -3685,6 +3692,7 @@ dependencies = [
  "gloo-timers",
  "hex",
  "http",
+ "image",
  "imbl",
  "indexmap",
  "insta",
@@ -3709,6 +3717,7 @@ dependencies = [
  "rand 0.10.2",
  "reqwest",
  "ruma",
+ "rustls",
  "serde",
  "serde_html_form",
  "serde_json",
@@ -3932,6 +3941,7 @@ dependencies = [
  "anyhow",
  "assert_matches2",
  "async-compat",
+ "async-trait",
  "chrono",
  "console_error_panic_hook",
  "extension-trait",
@@ -3973,6 +3983,7 @@ dependencies = [
  "url",
  "uuid",
  "vergen-gitcl",
+ "wiremock",
  "zeroize",
  "zxcvbn",
 ]
@@ -4084,7 +4095,6 @@ dependencies = [
  "ruma",
  "serde",
  "serde_json",
- "thiserror 2.0.19",
  "tokio",
  "tracing",
 ]
@@ -4165,7 +4175,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
- "tracing",
 ]
 
 [[package]]
@@ -4675,7 +4684,8 @@ dependencies = [
 [[package]]
 name = "olm-rs"
 version = "2.2.0"
-source = "git+https://github.com/poljar/olm-rs?rev=9f7108c3b852c39bf1d0f09ccaafb9a1cf7bb83e#9f7108c3b852c39bf1d0f09ccaafb9a1cf7bb83e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6c2c7054110ce4d7b4756d7b7fe507fea9413968ad0ef8f1d043d504aec725"
 dependencies = [
  "getrandom 0.2.17",
  "olm-sys",
@@ -4687,7 +4697,8 @@ dependencies = [
 [[package]]
 name = "olm-sys"
 version = "1.3.2"
-source = "git+https://github.com/poljar/olm-sys?rev=fcd8f12352025df7fa666dd5be797dc97d1f3734#fcd8f12352025df7fa666dd5be797dc97d1f3734"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2afecf25624989021f9f0f157f7152102fd147b89445d08449739f216002d339"
 dependencies = [
  "cmake",
  "fs_extra",
@@ -5748,39 +5759,6 @@ dependencies = [
 [[package]]
 name = "ruma"
 version = "0.16.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "assign",
- "js_int",
- "js_option",
- "language-tags",
- "ruma-appservice-api",
- "ruma-client-api",
- "ruma-common",
- "ruma-events",
- "ruma-federation-api",
- "ruma-html",
- "ruma-signatures",
- "ruma-state-res",
- "web-time",
-]
-
-[[package]]
-name = "ruma-appservice-api"
-version = "0.16.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "js_int",
- "ruma-common",
- "ruma-events",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ruma-client-api"
-version = "0.24.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
 dependencies = [
  "as_variant",
  "assert_matches2",
@@ -5869,37 +5847,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ruma-signatures"
-version = "0.21.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "base64 0.22.1",
- "ed25519-dalek",
- "pkcs8",
- "rand 0.10.2",
- "ruma-common",
- "ruma-events",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "ruma-state-res"
-version = "0.17.0"
-source = "git+https://github.com/matrix-org/ruma?rev=bf21677a8fcba04fd01e341809eb5991908441a2#bf21677a8fcba04fd01e341809eb5991908441a2"
-dependencies = [
- "js_int",
- "ruma-common",
- "ruma-events",
- "ruma-signatures",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tracing",
-]
-
-[[package]]
 name = "rusqlite"
 version = "0.40.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5973,6 +5920,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
@@ -8776,6 +8724,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "tempfile",
  "uniffi_bindgen",
  "url",
  "xshell",

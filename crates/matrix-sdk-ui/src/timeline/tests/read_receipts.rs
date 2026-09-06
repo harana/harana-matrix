@@ -21,7 +21,7 @@ use matrix_sdk_test::{
     ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
 };
 use ruma::{
-    event_id,
+    OwnedEventId, event_id,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent,
         receipt::{Receipt, ReceiptThread, ReceiptType},
@@ -37,7 +37,7 @@ use super::{ReadReceiptMap, TestRoomDataProvider};
 use crate::timeline::{
     MsgLikeContent, MsgLikeKind, RoomExt, TimelineFocus, TimelineReadReceiptTracking,
     controller::TimelineSettings,
-    tests::{TestTimelineBuilder, encryption::get_client},
+    tests::{TestTimeline, TestTimelineBuilder, encryption::get_client},
 };
 
 fn filter_notice(ev: &AnySyncTimelineEvent, _rules: &RoomVersionRules) -> bool {
@@ -948,4 +948,78 @@ async fn test_unthreaded_client_updates_threaded_read_receipts() {
     assert!(event_b.read_receipts().get(*BOB).is_some());
 
     assert_pending!(stream);
+}
+
+#[async_test]
+async fn test_read_receipt_is_not_shown_before_the_user_joined() {
+    /// Finds the message with the given body, and returns its event ID and
+    /// whether Carol's read receipt sits on it.
+    async fn find(timeline: &TestTimeline, body: &str) -> (OwnedEventId, bool) {
+        timeline
+            .controller
+            .items()
+            .await
+            .iter()
+            .find_map(|item| {
+                let event = item.as_event()?;
+                (event.content().as_message()?.body() == body).then(|| {
+                    (
+                        event.event_id().unwrap().to_owned(),
+                        event.read_receipts().get(*CAROL).is_some(),
+                    )
+                })
+            })
+            .expect("the message is in the timeline")
+    }
+
+    let timeline = TestTimelineBuilder::new()
+        .settings(TimelineSettings {
+            track_read_receipts: TimelineReadReceiptTracking::MessageLikeEvents,
+            ..Default::default()
+        })
+        .build()
+        .await;
+
+    let f = &timeline.factory;
+
+    // A message sent before Carol was in the room.
+    timeline.handle_live_event(f.text_msg("before").sender(*ALICE)).await;
+    // Carol joins: her implicit read receipt must not land on the message above,
+    // which she couldn't have read. The join event can't show read receipts with
+    // this tracking mode, so the receipt isn't shown at all.
+    timeline.handle_live_event(f.member(&CAROL).sender(*CAROL)).await;
+    timeline.handle_live_event(f.text_msg("after").sender(*ALICE)).await;
+
+    let (before_event_id, has_receipt) = find(&timeline, "before").await;
+    assert!(!has_receipt);
+
+    // An explicit receipt from the homeserver pointing at that same message is
+    // ignored for the same reason.
+    timeline
+        .handle_read_receipts([(
+            before_event_id,
+            ReceiptType::Read,
+            CAROL.to_owned(),
+            ReceiptThread::Unthreaded,
+        )])
+        .await;
+
+    let (_, has_receipt) = find(&timeline, "before").await;
+    assert!(!has_receipt);
+
+    // A receipt on a message sent after she joined is shown as usual.
+    let (after_event_id, _) = find(&timeline, "after").await;
+    timeline
+        .handle_read_receipts([(
+            after_event_id,
+            ReceiptType::Read,
+            CAROL.to_owned(),
+            ReceiptThread::Unthreaded,
+        )])
+        .await;
+
+    let (_, has_receipt) = find(&timeline, "after").await;
+    assert!(has_receipt);
+    let (_, has_receipt) = find(&timeline, "before").await;
+    assert!(!has_receipt);
 }

@@ -44,6 +44,7 @@ fn session() -> MatrixSession {
             access_token: "1234".to_owned(),
             refresh_token: Some("abcd".to_owned()),
         },
+        homeserver: None,
     }
 }
 
@@ -185,7 +186,7 @@ async fn test_refresh_token() {
             let num_save_session_callback_calls = num_save_session_callback_calls.clone();
             Box::new(move |_client| {
                 *num_save_session_callback_calls.lock().unwrap() += 1;
-                Ok(())
+                Box::pin(async { Ok(()) })
             })
         })
         .unwrap();
@@ -240,6 +241,58 @@ async fn test_refresh_token() {
     assert_eq!(session_changes.try_recv(), Ok(SessionChange::TokensRefreshed));
 
     assert_eq!(session_changes.try_recv(), Err(TryRecvError::Empty));
+}
+
+/// The save callback returns a future, so a host that writes the session
+/// somewhere asynchronous does not have to block a thread inside it. The
+/// refresh must not report success until that future has run to completion,
+/// or the host would be told about tokens it has not stored yet.
+#[async_test]
+async fn test_the_save_session_callback_is_awaited_to_completion() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (builder, server) = test_client_builder_with_server().await;
+    let client = builder
+        .request_config(RequestConfig::new().disable_retry())
+        .server_versions([MatrixVersion::V1_3])
+        .build()
+        .await
+        .unwrap();
+    let auth = client.matrix_auth();
+
+    let stored = Arc::new(AtomicBool::new(false));
+    client
+        .set_session_callbacks(Box::new(|_| panic!("reload session never called")), {
+            let stored = stored.clone();
+            Box::new(move |_client| {
+                let stored = stored.clone();
+                Box::pin(async move {
+                    // Suspend, so this only finishes if the SDK polls the
+                    // future again rather than dropping it.
+                    tokio::task::yield_now().await;
+                    stored.store(true, Ordering::SeqCst);
+                    Ok(())
+                })
+            })
+        })
+        .unwrap();
+
+    auth.restore_session(session(), RoomLoadSettings::default()).await.unwrap();
+    assert!(!stored.load(Ordering::SeqCst));
+
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/refresh"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::REFRESH_TOKEN))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+
+    auth.refresh_access_token().await.unwrap();
+
+    assert!(
+        stored.load(Ordering::SeqCst),
+        "the refresh returned before the save callback's future had finished"
+    );
 }
 
 #[async_test]
@@ -709,7 +762,7 @@ async fn test_oauth_handle_refresh_tokens() {
             let num_save_session_callback_calls = num_save_session_callback_calls.clone();
             Box::new(move |_client| {
                 *num_save_session_callback_calls.lock().unwrap() += 1;
-                Ok(())
+                Box::pin(async { Ok(()) })
             })
         })
         .unwrap();
@@ -926,4 +979,161 @@ async fn test_refresh_token_not_handled_supported_versions_not_cached() {
 
     // The supported versions were not cached.
     assert_matches!(client.supported_versions_cached().await, Ok(None));
+}
+
+#[async_test]
+async fn test_token_is_refreshed_before_it_expires() {
+    let server = MatrixMockServer::new().await;
+
+    // The homeserver hands out an access token that expires within the leeway the
+    // client refreshes in.
+    server
+        .mock_login()
+        .ok_with(
+            LoginResponseTemplate200::new(
+                "abc123",
+                owned_device_id!("GHTYAJCE"),
+                owned_user_id!("@cheeky_monkey:matrix.org"),
+            )
+            .expires_in(Duration::from_secs(30))
+            .refresh_token("zyx987"),
+        )
+        .mount()
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/refresh"))
+        .and(body_partial_json(json!({ "refresh_token": "zyx987" })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::REFRESH_TOKEN))
+        .expect(1)
+        .named("`POST /refresh` before the token expires")
+        .mount(server.server())
+        .await;
+
+    // The token that is about to expire is never used for the request: the refresh
+    // happens first.
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .and(header(http::header::AUTHORIZATION, "Bearer abc123"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .named("`GET /whoami` with the expiring token")
+        .mount(server.server())
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .and(header(http::header::AUTHORIZATION, "Bearer 5678"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::WHOAMI))
+        .expect(1)
+        .named("`GET /whoami` with the refreshed token")
+        .mount(server.server())
+        .await;
+
+    let client = server
+        .client_builder()
+        .unlogged()
+        .on_builder(|builder| builder.handle_refresh_tokens())
+        .build()
+        .await;
+
+    client
+        .matrix_auth()
+        .login_username("example", "wordpass")
+        .request_refresh_token()
+        .send()
+        .await
+        .unwrap();
+
+    let mut session_changes = client.subscribe_to_session_changes();
+
+    client.whoami().await.unwrap();
+
+    assert_eq!(client.session_tokens().unwrap().access_token, "5678");
+    assert_eq!(session_changes.try_recv(), Ok(SessionChange::TokensRefreshed));
+}
+
+#[async_test]
+async fn test_a_token_without_a_known_lifetime_is_not_refreshed_ahead_of_time() {
+    let server = MatrixMockServer::new().await;
+
+    // A restored session: the token works, and nothing says when it expires, so
+    // there is nothing to refresh ahead of.
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/refresh"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::REFRESH_TOKEN))
+        .expect(0)
+        .named("`POST /refresh`")
+        .mount(server.server())
+        .await;
+    server.mock_who_am_i().ok().expect(1).named("`GET /whoami`").mount().await;
+
+    let client = server
+        .client_builder()
+        .unlogged()
+        .on_builder(|builder| builder.handle_refresh_tokens())
+        .build()
+        .await;
+    client.matrix_auth().restore_session(session(), RoomLoadSettings::default()).await.unwrap();
+
+    client.whoami().await.unwrap();
+}
+
+#[async_test]
+async fn test_a_failed_refresh_ahead_of_expiry_is_not_retried_on_every_request() {
+    let server = MatrixMockServer::new().await;
+
+    server
+        .mock_login()
+        .ok_with(
+            LoginResponseTemplate200::new(
+                "abc123",
+                owned_device_id!("GHTYAJCE"),
+                owned_user_id!("@cheeky_monkey:matrix.org"),
+            )
+            .expires_in(Duration::from_secs(30))
+            .refresh_token("zyx987"),
+        )
+        .mount()
+        .await;
+
+    // The refresh fails, and is attempted once and not once per request: the
+    // expiration is in the past for every one of them.
+    Mock::given(method("POST"))
+        .and(path("/_matrix/client/v3/refresh"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(1)
+        .named("`POST /refresh` failing")
+        .mount(server.server())
+        .await;
+
+    // The requests still go out, with the token that has not expired yet.
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .and(header(http::header::AUTHORIZATION, "Bearer abc123"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::WHOAMI))
+        .expect(2)
+        .named("`GET /whoami`")
+        .mount(server.server())
+        .await;
+
+    let client = server
+        .client_builder()
+        .unlogged()
+        .on_builder(|builder| builder.handle_refresh_tokens())
+        .build()
+        .await;
+
+    client
+        .matrix_auth()
+        .login_username("example", "wordpass")
+        .request_refresh_token()
+        .send()
+        .await
+        .unwrap();
+
+    client.whoami().await.unwrap();
+    client.whoami().await.unwrap();
+
+    assert_eq!(client.session_tokens().unwrap().access_token, "abc123");
 }

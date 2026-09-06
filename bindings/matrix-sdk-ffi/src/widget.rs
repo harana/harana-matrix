@@ -17,10 +17,10 @@ use std::sync::{Arc, Mutex};
 use language_tags::LanguageTag;
 use matrix_sdk::widget::{MessageLikeEventFilter, StateEventFilter, ToDeviceEventFilter};
 use matrix_sdk_common::{SendOutsideWasm, SyncOutsideWasm};
-use ruma::events::MessageLikeEventType;
+use ruma::UserId;
 use tracing::error;
 
-use crate::{room::Room, runtime::get_runtime_handle};
+use crate::{error::ClientError, room::Room, runtime::get_runtime_handle};
 
 #[derive(uniffi::Record)]
 pub struct WidgetDriverAndHandle {
@@ -158,117 +158,22 @@ pub fn new_virtual_element_call_widget(
 /// Editing and extending the capabilities from this function is also possible,
 /// but should only be done as temporal workarounds until this function is
 /// adjusted
+///
+/// The list itself lives in the SDK, as
+/// [`matrix_sdk::widget::Capabilities::element_call_required`], so it can be
+/// shared with consumers that do not go through the bindings.
 #[matrix_sdk_ffi_macros::export]
 pub fn get_element_call_required_permissions(
     own_user_id: String,
     own_device_id: String,
-) -> WidgetCapabilities {
-    use ruma::events::StateEventType;
+) -> Result<WidgetCapabilities, ClientError> {
+    let own_user_id = UserId::parse(own_user_id)?;
 
-    let read_send = vec![
-        // To read and send rageshake requests from other room members
-        WidgetEventFilter::MessageLikeWithType {
-            event_type: "org.matrix.rageshake_request".to_owned(),
-        },
-        // To read and send encryption keys
-        WidgetEventFilter::ToDevice { event_type: "io.element.call.encryption_keys".to_owned() },
-        // TODO change this to the appropriate to-device version once ready
-        // remove this once all matrixRTC call apps supports to-device encryption.
-        WidgetEventFilter::MessageLikeWithType {
-            event_type: "io.element.call.encryption_keys".to_owned(),
-        },
-        // To read and send custom EC reactions. They are different to normal `m.reaction`
-        // because they can be send multiple times to the same event.
-        WidgetEventFilter::MessageLikeWithType {
-            event_type: "io.element.call.reaction".to_owned(),
-        },
-        // This allows send raise hand reactions.
-        WidgetEventFilter::MessageLikeWithType {
-            event_type: MessageLikeEventType::Reaction.to_string(),
-        },
-        // This allows to detect if someone does not raise their hand anymore.
-        WidgetEventFilter::MessageLikeWithType {
-            event_type: MessageLikeEventType::RoomRedaction.to_string(),
-        },
-        // This allows declining an incoming call and detect if someone declines a call.
-        WidgetEventFilter::MessageLikeWithType {
-            event_type: MessageLikeEventType::RtcDecline.to_string(),
-        },
-    ];
-
-    WidgetCapabilities {
-        read: vec![
-            // To compute the current state of the matrixRTC session.
-            WidgetEventFilter::StateWithType { event_type: StateEventType::CallMember.to_string() },
-            // To display the name of the room.
-            WidgetEventFilter::StateWithType { event_type: StateEventType::RoomName.to_string() },
-            // To detect leaving/kicked room members during a call.
-            WidgetEventFilter::StateWithType { event_type: StateEventType::RoomMember.to_string() },
-            // To decide whether to encrypt the call streams based on the room encryption setting.
-            WidgetEventFilter::StateWithType {
-                event_type: StateEventType::RoomEncryption.to_string(),
-            },
-            // This allows the widget to check the room version, so it can know about
-            // version-specific auth rules (namely MSC3779).
-            WidgetEventFilter::StateWithType { event_type: StateEventType::RoomCreate.to_string() },
-        ]
-        .into_iter()
-        .chain(read_send.clone())
-        .collect(),
-        send: vec![
-            // To notify other users that a call has started.
-            WidgetEventFilter::MessageLikeWithType {
-                event_type: MessageLikeEventType::RtcNotification.to_string(),
-            },
-            // Also for call notifications, except this is the deprecated fallback type which
-            // Element Call still sends.
-            // Deprecated for now, kept for backward compatibility as widgets will send both
-            // CallNotify and RtcNotification.
-            WidgetEventFilter::MessageLikeWithType {
-                event_type: MessageLikeEventType::CallNotify.to_string(),
-            },
-            // To send the call participation state event (main MatrixRTC event).
-            // This is required for legacy state events (using only one event for all devices with
-            // a membership array). TODO: remove once legacy call member events are
-            // sunset.
-            WidgetEventFilter::StateWithTypeAndStateKey {
-                event_type: StateEventType::CallMember.to_string(),
-                state_key: own_user_id.clone(),
-            },
-            // `delayed_event`` version for session memberhips
-            // [MSC3779](https://github.com/matrix-org/matrix-spec-proposals/pull/3779), with no leading underscore.
-            WidgetEventFilter::StateWithTypeAndStateKey {
-                event_type: StateEventType::CallMember.to_string(),
-                state_key: format!("{own_user_id}_{own_device_id}"),
-            },
-            // Same as above for [MSC3779] and [MSC4143](https://github.com/matrix-org/matrix-spec-proposals/pull/4143),
-            // with application suffix
-            WidgetEventFilter::StateWithTypeAndStateKey {
-                event_type: StateEventType::CallMember.to_string(),
-                state_key: format!("{own_user_id}_{own_device_id}_m.call"),
-            },
-            // The same as above but with an underscore.
-            // To work around the issue that state events starting with `@` have to be Matrix id's
-            // but we use mxId+deviceId.
-            WidgetEventFilter::StateWithTypeAndStateKey {
-                event_type: StateEventType::CallMember.to_string(),
-                state_key: format!("_{own_user_id}_{own_device_id}"),
-            },
-            // Same as above for [MSC4143], with application suffix
-            WidgetEventFilter::StateWithTypeAndStateKey {
-                event_type: StateEventType::CallMember.to_string(),
-                state_key: format!("_{own_user_id}_{own_device_id}_m.call"),
-            },
-        ]
-        .into_iter()
-        .chain(read_send)
-        .collect(),
-        requires_client: true,
-        update_delayed_event: true,
-        send_delayed_event: true,
-        download_files: true,
-        rtc_transports: true,
-    }
+    Ok(matrix_sdk::widget::Capabilities::element_call_required(
+        &own_user_id,
+        own_device_id.as_str().into(),
+    )
+    .into())
 }
 
 #[derive(uniffi::Record)]
@@ -509,9 +414,10 @@ mod tests {
     #[test]
     fn element_call_permissions_are_correct() {
         let widget_cap = get_element_call_required_permissions(
-            "@my_user:my_domain.org".to_owned(),
+            "@my_user:my-domain.org".to_owned(),
             "ABCDEFGHI".to_owned(),
-        );
+        )
+        .expect("the user ID is a valid one");
 
         // We test two things:
 
@@ -544,19 +450,19 @@ mod tests {
         cap_assert("org.matrix.msc2762.receive.event:io.element.call.encryption_keys");
         cap_assert("org.matrix.msc2762.receive.state_event:m.room.create");
         cap_assert(
-            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#@my_user:my_domain.org",
+            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#@my_user:my-domain.org",
         );
         cap_assert(
-            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#@my_user:my_domain.org_ABCDEFGHI",
+            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#@my_user:my-domain.org_ABCDEFGHI",
         );
         cap_assert(
-            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#@my_user:my_domain.org_ABCDEFGHI_m.call",
+            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#@my_user:my-domain.org_ABCDEFGHI_m.call",
         );
         cap_assert(
-            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#_@my_user:my_domain.org_ABCDEFGHI",
+            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#_@my_user:my-domain.org_ABCDEFGHI",
         );
         cap_assert(
-            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#_@my_user:my_domain.org_ABCDEFGHI_m.call",
+            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member#_@my_user:my-domain.org_ABCDEFGHI_m.call",
         );
         cap_assert("org.matrix.msc2762.send.event:org.matrix.rageshake_request");
         cap_assert("org.matrix.msc2762.send.event:io.element.call.encryption_keys");

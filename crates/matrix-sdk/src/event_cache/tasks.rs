@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     ops::ControlFlow,
     sync::{Arc, Weak},
 };
@@ -91,8 +91,9 @@ pub(super) async fn room_updates_task(
     }
 }
 
-/// Listen to _ignore user list update changes_ to clear the rooms when a user
-/// is ignored or unignored.
+/// Listen to _ignore user list update changes_ to drop the events of the
+/// ignored users, and to recompute what the other rooms derive from their
+/// events.
 #[instrument(skip_all)]
 pub(super) async fn ignore_user_list_update_task(
     inner: Arc<EventCacheInner>,
@@ -102,11 +103,16 @@ pub(super) async fn ignore_user_list_update_task(
     span.follows_from(Span::current());
 
     async move {
-        while ignore_user_list_stream.next().await.is_some() {
+        while let Some(ignored_users) = ignore_user_list_stream.next().await {
             info!("Received an ignore user list change");
 
-            if let Err(err) = inner.clear_all_rooms().await {
-                error!("when clearing room storage after ignore user list change: {err}");
+            let ignored_users = ignored_users
+                .iter()
+                .filter_map(|user_id| UserId::parse(user_id).ok())
+                .collect::<BTreeSet<_>>();
+
+            if let Err(err) = inner.handle_ignore_user_list_change(&ignored_users).await {
+                error!("when handling an ignore user list change: {err}");
             }
         }
 
@@ -158,6 +164,25 @@ pub(super) async fn auto_shrink_linked_chunk_task(
                         continue;
                     }
                 }
+            }
+
+            AutoShrinkMessage::PinnedEvents { room_id } => {
+                let ControlFlow::Continue(caches) = all_caches(inner.as_ref(), &room_id).await
+                else {
+                    continue;
+                };
+
+                let Some(cache) = caches.loaded_pinned_events() else {
+                    // The cache is gone already, nothing to unload.
+                    continue;
+                };
+
+                if let Err(err) = cache.unload_if_no_subscribers().await {
+                    warn!(%room_id, ?err, "Failed to unload the pinned events cache");
+                }
+
+                // Unloading doesn't produce any diff for anyone: nobody is listening.
+                continue;
             }
 
             AutoShrinkMessage::Thread { room_id, thread_id } => {
@@ -470,9 +495,15 @@ async fn handle_thread_subscriber_linked_chunk_update(
     // or that answers one of their messages, iterating from the end of the new
     // events towards the oldest, so we can find the most recent event to subscribe
     // to.
+    //
+    // Note this looks for a *mention* (a highlight), not merely for something that
+    // notifies: in a room set to notify on all messages, every in-thread event
+    // notifies, and subscribing on that would subscribe the user to every single
+    // thread of the room. Per MSC4306, an automatic subscription follows from being
+    // mentioned in a thread, or from participating in it.
     for ev in new_events.rev() {
         let is_mention =
-            push_context.for_event(ev.raw()).await.into_iter().any(|action| action.should_notify());
+            push_context.for_event(ev.raw()).await.into_iter().any(|action| action.is_highlight());
 
         if is_mention
             || answers_our_own_message(&client, &room_id, &own_user_id, own_thread_root, &ev).await

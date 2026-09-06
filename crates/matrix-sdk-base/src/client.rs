@@ -41,12 +41,13 @@ use ruma::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::{self as api, sync::sync_events::v5},
     events::{
-        StateEvent, StateEventType,
+        AnyRoomAccountDataEvent, AnySyncStateEvent, StateEvent, StateEventType,
         ignored_user_list::IgnoredUserListEventContent,
         push_rules::{PushRulesEvent, PushRulesEventContent},
         room::member::{MembershipState, SyncRoomMemberEvent},
     },
     push::Ruleset,
+    serde::Raw,
     time::Instant,
 };
 use tokio::sync::{Mutex, broadcast};
@@ -73,6 +74,7 @@ use crate::{
         ambiguity_map::{AmbiguityCache, is_member_active},
     },
     sync::{RoomUpdates, SyncResponse},
+    utils::RawStateEventWithKeys,
 };
 
 /// A no (network) IO client implementation.
@@ -1124,6 +1126,109 @@ impl BaseClient {
         Ok(())
     }
 
+    /// Store a state event that we have just sent successfully.
+    ///
+    /// A send only returns the event ID the server assigned to the event; the
+    /// event itself only reaches the store once the sync echoes it back. Until
+    /// then, reading the state we have just written gives the previous value,
+    /// and every consumer has to work around that gap on its own. Applying the
+    /// event here closes it: the guarantee is that a successfully sent state
+    /// event is readable as soon as the send returns.
+    ///
+    /// `event` is the *plaintext* event, even when it was sent encrypted, and
+    /// the same data the sync will bring back, so the echo deduplicates
+    /// naturally.
+    ///
+    /// `m.room.member` events are left out: they also feed the ambiguity cache
+    /// and the profile store, which the sync maintains and this shortcut
+    /// doesn't.
+    pub async fn receive_sent_state_event(
+        &self,
+        room_id: &RoomId,
+        event: Raw<AnySyncStateEvent>,
+    ) -> Result<()> {
+        let Some(room) = self.state_store.room(room_id) else {
+            // The room is unknown to us: leave early.
+            return Ok(());
+        };
+
+        let Some(mut raw_event) = RawStateEventWithKeys::try_from_raw_state_event(event) else {
+            return Ok(());
+        };
+
+        if raw_event.event_type == StateEventType::RoomMember {
+            return Ok(());
+        }
+
+        let mut context = Context::default();
+        let mut room_info = room.clone_info();
+
+        room_info.handle_state_event(&mut raw_event);
+
+        context
+            .state_changes
+            .state
+            .entry(room_id.to_owned())
+            .or_default()
+            .entry(raw_event.event_type)
+            .or_default()
+            .insert(raw_event.state_key, raw_event.raw);
+
+        context.state_changes.add_room(room_info);
+
+        let state_store_guard = self.state_store_lock().lock().await;
+
+        processors::changes::save_and_apply(
+            context,
+            &self.state_store,
+            &state_store_guard,
+            &self.ignore_user_list_changes,
+            None,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    /// Store a room account data event that we have just sent successfully.
+    ///
+    /// Like [`Self::receive_sent_state_event`], this closes the gap between a
+    /// send returning and the sync echoing the change back: marking a room as
+    /// unread, say, takes effect right away instead of only once the server
+    /// tells us about it.
+    pub async fn receive_sent_room_account_data(
+        &self,
+        room_id: &RoomId,
+        event: Raw<AnyRoomAccountDataEvent>,
+    ) -> Result<()> {
+        if self.state_store.room(room_id).is_none() {
+            // The room is unknown to us: leave early.
+            return Ok(());
+        }
+
+        let mut context = Context::default();
+
+        processors::account_data::for_room(
+            &mut context,
+            room_id,
+            std::slice::from_ref(&event),
+            &self.state_store,
+        );
+
+        let state_store_guard = self.state_store_lock().lock().await;
+
+        processors::changes::save_and_apply(
+            context,
+            &self.state_store,
+            &state_store_guard,
+            &self.ignore_user_list_changes,
+            None,
+        )
+        .await?;
+
+        Ok(())
+    }
+
     /// Receive a successful filter upload response, the filter id will be
     /// stored under the given name in the store.
     ///
@@ -1175,8 +1280,18 @@ impl BaseClient {
     }
 
     /// Get a to-device request that will share a room key with users in a room.
+    ///
+    /// `strategy_override` replaces the client's configured
+    /// [`CollectStrategy`] for this sharing only. It is meant for the rare
+    /// events that must reach devices the configured strategy would refuse to
+    /// share with; the caller is responsible for making sure the resulting
+    /// session isn't reused for anything else.
     #[cfg(feature = "e2e-encryption")]
-    pub async fn share_room_key(&self, room_id: &RoomId) -> Result<Vec<Arc<ToDeviceRequest>>> {
+    pub async fn share_room_key(
+        &self,
+        room_id: &RoomId,
+        strategy_override: Option<CollectStrategy>,
+    ) -> Result<Vec<Arc<ToDeviceRequest>>> {
         match self.olm_machine().await.as_ref() {
             Some(o) => {
                 let Some(room) = self.get_room(room_id) else {
@@ -1201,7 +1316,7 @@ impl BaseClient {
                 let Some(settings) = EncryptionSettings::from_possibly_redacted(
                     room_encryption_event,
                     history_visibility,
-                    self.room_key_recipient_strategy.clone(),
+                    strategy_override.unwrap_or_else(|| self.room_key_recipient_strategy.clone()),
                 ) else {
                     return Err(Error::EncryptionNotEnabled);
                 };
@@ -1296,21 +1411,29 @@ impl BaseClient {
 
     /// Checks whether the provided `user_id` belongs to an ignored user.
     pub async fn is_user_ignored(&self, user_id: &UserId) -> bool {
+        self.ignored_users().await.contains(user_id)
+    }
+
+    /// The set of users the current user has ignored.
+    ///
+    /// It returns an empty set if the ignored user list is unknown, or cannot
+    /// be read.
+    pub async fn ignored_users(&self) -> BTreeSet<OwnedUserId> {
         match self.state_store.get_account_data_event_static::<IgnoredUserListEventContent>().await
         {
             Ok(Some(raw_ignored_user_list)) => match raw_ignored_user_list.deserialize() {
                 Ok(current_ignored_user_list) => {
-                    current_ignored_user_list.content.ignored_users.contains_key(user_id)
+                    current_ignored_user_list.content.ignored_users.into_keys().collect()
                 }
                 Err(error) => {
                     warn!(?error, "Failed to deserialize the ignored user list event");
-                    false
+                    BTreeSet::new()
                 }
             },
-            Ok(None) => false,
+            Ok(None) => BTreeSet::new(),
             Err(error) => {
                 warn!(?error, "Could not get the ignored user list from the state store");
-                false
+                BTreeSet::new()
             }
         }
     }
@@ -1469,6 +1592,152 @@ mod tests {
     };
     #[cfg(feature = "unstable-msc4426")]
     use crate::{RoomMemberships, store::StateChanges};
+
+    #[async_test]
+    async fn test_receive_sent_state_event_makes_it_readable_right_away() {
+        // A send only returns the event ID the server assigned to the event; without
+        // this, reading the state we just wrote gives the previous value until the
+        // sync echoes it back.
+        let client = logged_in_base_client(None).await;
+        let room_id = room_id!("!r:e.uk");
+
+        let mut sync_builder = SyncResponseBuilder::new();
+        let response = sync_builder
+            .add_joined_room(matrix_sdk_test::JoinedRoomBuilder::new(room_id))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        let room = client.get_room(room_id).unwrap();
+        assert_eq!(room.topic(), None);
+
+        client
+            .receive_sent_state_event(
+                room_id,
+                Raw::from_json_string(
+                    json!({
+                        "type": "m.room.topic",
+                        "state_key": "",
+                        "content": { "topic": "the new topic" },
+                        "event_id": "$topic",
+                        "sender": "@u:e.uk",
+                        "origin_server_ts": 42,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(room.topic().as_deref(), Some("the new topic"));
+
+        let stored = client
+            .state_store()
+            .get_state_event(room_id, StateEventType::RoomTopic, "")
+            .await
+            .unwrap();
+        assert!(stored.is_some(), "the topic event we just sent is in the store");
+    }
+
+    #[async_test]
+    async fn test_receive_sent_state_event_leaves_member_events_to_the_sync() {
+        // Member events also feed the ambiguity cache and the profile store, which
+        // this shortcut doesn't maintain.
+        let client = logged_in_base_client(None).await;
+        let room_id = room_id!("!r:e.uk");
+
+        let mut sync_builder = SyncResponseBuilder::new();
+        let response = sync_builder
+            .add_joined_room(matrix_sdk_test::JoinedRoomBuilder::new(room_id))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        client
+            .receive_sent_state_event(
+                room_id,
+                Raw::from_json_string(
+                    json!({
+                        "type": "m.room.member",
+                        "state_key": "@u:e.uk",
+                        "content": { "membership": "join", "displayname": "Alice" },
+                        "event_id": "$member",
+                        "sender": "@u:e.uk",
+                        "origin_server_ts": 42,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let stored = client
+            .state_store()
+            .get_state_event(room_id, StateEventType::RoomMember, "@u:e.uk")
+            .await
+            .unwrap();
+        assert!(stored.is_none(), "member events are left to the sync");
+    }
+
+    #[async_test]
+    async fn test_receive_sent_state_event_for_an_unknown_room_is_a_no_op() {
+        let client = logged_in_base_client(None).await;
+
+        client
+            .receive_sent_state_event(
+                room_id!("!nowhere:e.uk"),
+                Raw::from_json_string(
+                    json!({
+                        "type": "m.room.topic",
+                        "state_key": "",
+                        "content": { "topic": "the new topic" },
+                        "event_id": "$topic",
+                        "sender": "@u:e.uk",
+                        "origin_server_ts": 42,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+    }
+
+    #[async_test]
+    async fn test_receive_sent_room_account_data_applies_the_unread_marker() {
+        // Marking a room as unread takes effect right away, instead of only once the
+        // server has been told and has told us back.
+        let client = logged_in_base_client(None).await;
+        let room_id = room_id!("!r:e.uk");
+
+        let mut sync_builder = SyncResponseBuilder::new();
+        let response = sync_builder
+            .add_joined_room(matrix_sdk_test::JoinedRoomBuilder::new(room_id))
+            .build_sync_response();
+        client.receive_sync_response(response).await.unwrap();
+
+        let room = client.get_room(room_id).unwrap();
+        assert!(!room.is_marked_unread());
+
+        for unread in [true, false] {
+            client
+                .receive_sent_room_account_data(
+                    room_id,
+                    Raw::from_json_string(
+                        json!({
+                            "type": "m.marked_unread",
+                            "content": { "unread": unread },
+                        })
+                        .to_string(),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(room.is_marked_unread(), unread);
+        }
+    }
 
     #[test]
     fn test_requested_required_states() {

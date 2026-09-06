@@ -429,8 +429,16 @@ impl ClientBuilder {
         self
     }
 
-    /// Update the client's homeserver URL with the discovery information
-    /// present in the login response, if any.
+    /// Update the client's homeserver URL with the discovery information the
+    /// homeserver publishes: the `well_known` field of a login response, and
+    /// the `.well-known` file itself whenever the client reads it again, such
+    /// as in [`Client::revalidate_homeserver()`].
+    ///
+    /// Defaults to `true`. Turn it off when the URL the client was built with
+    /// must be the one requests go to whatever discovery says, which is what a
+    /// proxy in front of the homeserver needs.
+    ///
+    /// [`Client::revalidate_homeserver()`]: crate::Client::revalidate_homeserver
     pub fn respect_login_well_known(mut self, value: bool) -> Self {
         self.respect_login_well_known = value;
         self

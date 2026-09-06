@@ -37,3 +37,4 @@ pub(crate) async fn remove_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
         .await
         .expect("Removing a directory should never panic")
 }
+

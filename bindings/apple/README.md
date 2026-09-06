@@ -53,14 +53,14 @@ The available profiles and the defaults used by the xtasks are documented in the
 ### Building only the crypto SDK
 
 ```text
-build_crypto_xcframework.sh
+cargo xtask swift build-crypto-framework
 ```
 
-The `build_crypto_xcframework.sh` script will go through all the steps required
-to generate a fully usable `.xcframework`:
+The `build-crypto-framework` task will go through all the steps required to
+generate a fully usable `.xcframework`:
 
-1. compile `matrix-sdk-crypto-ffi` libraries for iOS and the iOS simulator under
-   `/target`
+1. compile `matrix-sdk-crypto-ffi` libraries for iOS, macOS and the iOS
+   simulator under `/target`. Pass `--only-ios` to build for iOS alone.
 2. `lipo` together the libraries for the same platform under `/generated`
 3. run `uniffi` and generate the C header, module map and swift files
 4. `xcodebuild` an `xcframework` from the fat static libs and the original iOS
@@ -68,6 +68,11 @@ to generate a fully usable `.xcframework`:
    `generated/MatrixSDKCryptoFFI.xcframework`
 5. cleanup and delete the generated files except the .xcframework and the swift
    sources (that aren't part of the framework)
+6. zip the framework, the Swift sources and the licence together into
+   `generated/MatrixSDKCryptoFFI.zip`, which is what the podspec downloads
+
+The task builds with the `release` profile; pass `--profile` to use another
+one.
 
 ### Building & testing the Swift package
 
@@ -90,9 +95,8 @@ the case of SDK, and as a CocoaPods podspec in the case of Crypto SDK.
 
 ### Publishing `MatrixSDKCrypto`
 
-1. Navigate into `bindings/apple` and run
-   [`build_crypto_xcframework.sh`](#building-only-the-crypto-sdk) script which
-   generates a .zip file with the framework in `./generated` folder
+1. Run [`cargo xtask swift build-crypto-framework`](#building-only-the-crypto-sdk),
+   which generates a .zip file with the framework in the `./generated` folder
 
    Note that whilst you can run this command from any git branch, if you want to
    make a public release, ensure you are building from latest `main`

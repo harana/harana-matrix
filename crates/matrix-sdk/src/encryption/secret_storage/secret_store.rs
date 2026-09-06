@@ -14,7 +14,9 @@
 
 use std::fmt;
 
-use matrix_sdk_base::crypto::{CrossSigningKeyExport, secret_storage::SecretStorageKey};
+use matrix_sdk_base::crypto::{
+    CrossSigningKeyExport, secret_storage::SecretStorageKey,
+};
 use ruma::{
     events::{
         GlobalAccountDataEventType, secret::request::SecretName,

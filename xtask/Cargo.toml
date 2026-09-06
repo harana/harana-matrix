@@ -11,7 +11,6 @@ release = false
 
 [[bin]]
 name = "xtask"
-test = false
 
 [dependencies]
 camino = { version = "1.2.2", default-features = false, features = ["serde1"] }
@@ -26,3 +25,6 @@ serde_json.workspace = true
 uniffi_bindgen.workspace = true
 url.workspace = true
 xshell = "0.2.2"
+
+[dev-dependencies]
+tempfile.workspace = true

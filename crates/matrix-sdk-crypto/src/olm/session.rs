@@ -55,7 +55,8 @@ pub struct Session {
     pub created_using_fallback_key: bool,
     /// When the session was created
     pub creation_time: SecondsSinceUnixEpoch,
-    /// When the session was last used
+    /// When the session was last used, either to encrypt or to decrypt a
+    /// message.
     pub last_use_time: SecondsSinceUnixEpoch,
     /// When the session last decrypted a message successfully, if it ever did.
     ///
@@ -319,8 +320,9 @@ impl Session {
         let now = SecondsSinceUnixEpoch::now();
         let creation_time =
             clamp_timestamp(pickle.creation_time, now, "creation_time", &session_id);
-        let last_use_time =
-            clamp_timestamp(pickle.last_use_time, now, "last_use_time", &session_id);
+        let last_use_time = clamp_timestamp(pickle.last_use_time, now, "last_use_time", &session_id)
+            // A session cannot have been used before it existed.
+            .max(creation_time);
         let last_decryption_time = pickle
             .last_decryption_time
             .map(|time| clamp_timestamp(time, now, "last_decryption_time", &session_id));
@@ -405,6 +407,7 @@ mod tests {
     use serde_json::{self, Value};
     use vodozemac::olm::{OlmMessage, SessionConfig};
 
+    use super::Session;
     use crate::{
         identities::DeviceData,
         olm::Account,
@@ -459,7 +462,7 @@ mod tests {
         };
 
         // When we unpickle it,
-        let session = super::Session::from_pickle(alice.device_keys(), pickle).unwrap();
+        let session = Session::from_pickle(alice.device_keys(), pickle).unwrap();
 
         // Then the timestamps have been clamped to the present, so this session can't
         // sort ahead of every other session forever.

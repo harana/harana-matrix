@@ -16,17 +16,35 @@ pub mod pagination;
 mod state;
 mod updates;
 
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    sync::Arc,
+    time::Duration,
+};
 
 use eyeball::SharedObservable;
 use matrix_sdk_base::{
+    RoomInfoNotableUpdateReasons,
     deserialized_responses::{AmbiguityChange, ThreadSummary},
     event_cache::Event,
+    read_receipts::ReadReceipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
 };
 use ruma::{
-    EventId, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId,
-    events::{AnyRoomAccountDataEvent, receipt::ReceiptEventContent, relation::RelationType},
+    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
+    RoomId, UInt,
+    api::client::retention::get_retention_configuration,
+    events::{
+        AnyRoomAccountDataEvent, AnySyncMessageLikeEvent, AnySyncTimelineEvent,
+        SyncMessageLikeEvent,
+        receipt::{
+            Receipt, ReceiptEventContent, ReceiptThread, ReceiptType, Receipts, UserReceipts,
+        },
+        relation::RelationType,
+        room::{MediaSource, message::MessageType},
+        sticker::StickerMediaSource,
+    },
     serde::Raw,
 };
 use tokio::sync::{Notify, mpsc};
@@ -42,7 +60,7 @@ pub use self::{
 };
 use super::{
     super::{
-        EventsOrigin, Result,
+        EventCacheError, EventsOrigin, Result,
         states::{CacheStateLock, StateLockWriteGuard, selectors::RoomStateSelector},
     },
     EphemeralEvents, TimelineVectorDiffs,
@@ -96,13 +114,75 @@ impl RoomEventCache {
         &self.inner.room_id
     }
 
+    /// Apply a read receipt of the current user locally, i.e. without waiting
+    /// for the server to send it back through sync.
+    ///
+    /// It gives a local echo to marking a room as read: the unread counts of
+    /// the room drop as soon as the request is issued, instead of when the
+    /// receipt comes back.
+    ///
+    /// It returns the [`ReadReceipts`] the room had before, if it has been
+    /// changed, so that the caller can hand it back to
+    /// [`Self::restore_read_receipts`] if the request fails.
+    pub async fn apply_local_read_receipt(
+        &self,
+        receipt_type: ReceiptType,
+        thread: ReceiptThread,
+        event_id: OwnedEventId,
+    ) -> Result<Option<ReadReceipts>> {
+        let Some(room) = self.inner.weak_room.get() else {
+            trace!("can't apply a local read receipt: client's closing");
+            return Ok(None);
+        };
+
+        let previous_read_receipts = room.read_receipts();
+
+        // Build the receipt event the server would send us back, and let the regular
+        // machinery compute the new unread counts out of it.
+        let mut receipt = Receipt::new(MilliSecondsSinceUnixEpoch::now());
+        receipt.thread = thread;
+
+        let receipt_event = ReceiptEventContent::from_iter([(
+            event_id,
+            Receipts::from_iter([(
+                receipt_type,
+                UserReceipts::from_iter([(self.inner.own_user_id.clone(), receipt)]),
+            )]),
+        )]);
+
+        self.inner.state.write().await?.update_read_receipts(&[receipt_event]).await?;
+
+        Ok((room.read_receipts() != previous_read_receipts).then_some(previous_read_receipts))
+    }
+
+    /// Restore the [`ReadReceipts`] returned by
+    /// [`Self::apply_local_read_receipt`], because the request that was
+    /// supposed to send the receipt failed.
+    pub async fn restore_read_receipts(&self, read_receipts: ReadReceipts) {
+        let Some(room) = self.inner.weak_room.get() else {
+            trace!("can't restore the read receipts: client's closing");
+            return;
+        };
+
+        let result = room
+            .update_and_save_room_info(|mut room_info| {
+                room_info.set_read_receipts(read_receipts);
+                (room_info, RoomInfoNotableUpdateReasons::READ_RECEIPT)
+            })
+            .await;
+
+        if let Err(error) = result {
+            warn!(room_id = ?room.room_id(), ?error, "Failed to restore the read receipts");
+        }
+    }
+
     /// Get the owner of this [`RoomEventCache`].
     pub(super) fn own_user_id(&self) -> &OwnedUserId {
         &self.inner.own_user_id
     }
 
     /// Get the weak room of this [`RoomEventCache`].
-    pub(super) fn weak_room(&self) -> &WeakRoom {
+    pub(crate) fn weak_room(&self) -> &WeakRoom {
         &self.inner.weak_room
     }
 
@@ -292,6 +372,136 @@ impl RoomEventCache {
         Ok(())
     }
 
+    /// Remove every event sent by one of the given users, from memory and from
+    /// the store, and notify the observers of this cache.
+    pub(in super::super) async fn remove_events_sent_by(
+        &self,
+        senders: &BTreeSet<OwnedUserId>,
+    ) -> Result<()> {
+        let timeline_event_diffs =
+            self.inner.state.write().await?.remove_events_sent_by(senders).await?;
+
+        if !timeline_event_diffs.is_empty() {
+            self.inner.update_sender.send(
+                RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs {
+                    diffs: timeline_event_diffs,
+                    origin: EventsOrigin::Cache,
+                }),
+                Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Delete the events of this room that fall outside its retention policy,
+    /// from memory and from the store, and clear the local media they refer to.
+    ///
+    /// The policy is the effective one for this room, per [MSC1763]: the
+    /// server's per-room override, then its default, then the room's own
+    /// `m.room.retention` state event clamped to the server's limits. A room
+    /// with no effective policy, or one that sets no maximum lifetime, keeps
+    /// all of its events.
+    ///
+    /// Nothing schedules this: it deletes the user's messages, so it is left to
+    /// the caller to decide when a room should be swept.
+    ///
+    /// Returns the number of events that were removed.
+    ///
+    /// [MSC1763]: https://github.com/matrix-org/matrix-spec-proposals/pull/1763
+    pub async fn purge_expired_events(&self) -> Result<usize> {
+        let Some(room) = self.inner.weak_room.get() else {
+            // The client is shutting down.
+            return Ok(0);
+        };
+
+        let retention = room
+            .effective_retention()
+            .await
+            .map_err(|error| EventCacheError::RetentionPolicy(Arc::new(error)))?;
+
+        self.purge_expired_events_with_retention(retention.and_then(|r| r.max_lifetime())).await
+    }
+
+    /// Same as [`RoomEventCache::purge_expired_events`], but with the server's
+    /// retention configuration already fetched.
+    ///
+    /// Prefer this when sweeping several rooms in one pass, to avoid asking the
+    /// server for its configuration once per room.
+    pub async fn purge_expired_events_with_server_config(
+        &self,
+        config: &get_retention_configuration::unstable::Response,
+    ) -> Result<usize> {
+        let Some(room) = self.inner.weak_room.get() else {
+            return Ok(0);
+        };
+
+        let retention = room.effective_retention_with_server_config(config);
+
+        self.purge_expired_events_with_retention(retention.and_then(|r| r.max_lifetime())).await
+    }
+
+    /// Delete the events of this room that are older than `max_lifetime`, from
+    /// memory and from the store, and clear the local media they refer to.
+    ///
+    /// This ignores the room's retention policy: use it to apply a local
+    /// retention of the caller's choosing. See
+    /// [`RoomEventCache::purge_expired_events`] to apply the room's own policy.
+    ///
+    /// Returns the number of events that were removed.
+    pub async fn purge_events_older_than(&self, max_lifetime: Duration) -> Result<usize> {
+        self.purge_expired_events_with_retention(Some(max_lifetime)).await
+    }
+
+    async fn purge_expired_events_with_retention(
+        &self,
+        max_lifetime: Option<Duration>,
+    ) -> Result<usize> {
+        let Some(max_lifetime) = max_lifetime else {
+            // No maximum lifetime: every event is kept.
+            trace!("no retention policy for this room, nothing to purge");
+            return Ok(0);
+        };
+
+        let Some(cutoff) = retention_cutoff(max_lifetime) else {
+            // The retention period reaches back past the epoch, so no event is old
+            // enough to be expired.
+            return Ok(0);
+        };
+
+        let (removed, timeline_event_diffs) =
+            self.inner.state.write().await?.purge_events_older_than(cutoff).await?;
+
+        if !timeline_event_diffs.is_empty() {
+            self.inner.update_sender.send(
+                RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs {
+                    diffs: timeline_event_diffs,
+                    origin: EventsOrigin::Cache,
+                }),
+                Some(RoomEventCacheGenericUpdate { room_id: self.inner.room_id.clone() }),
+            );
+        }
+
+        if removed.is_empty() {
+            return Ok(0);
+        }
+
+        // Clear the local media of the events that are gone. The media store is
+        // separate from the event cache store, and a failure to reach it must not
+        // undo the purge: the events are already deleted, so log and move on.
+        if let Some(room) = self.inner.weak_room.get() {
+            let media = room.client().media();
+
+            for uri in removed.iter().flat_map(media_uris_of) {
+                if let Err(error) = media.remove_media_content_for_uri(&uri).await {
+                    warn!(%uri, "failed to clear the local media of a purged event: {error}");
+                }
+            }
+        }
+
+        Ok(removed.len())
+    }
+
     /// Get a reference to the [`RoomEventCacheUpdateSender`].
     pub(in super::super) fn update_sender(&self) -> &RoomEventCacheUpdateSender {
         &self.inner.update_sender
@@ -330,6 +540,82 @@ impl RoomEventCache {
 }
 
 /// The (non-cloneable) details of the `RoomEventCache`.
+/// The instant before which an event is outside a retention period of
+/// `max_lifetime`.
+///
+/// Returns `None` when the period reaches back past the Unix epoch, in which
+/// case no event can be old enough to have expired.
+fn retention_cutoff(max_lifetime: Duration) -> Option<MilliSecondsSinceUnixEpoch> {
+    let now = u64::from(MilliSecondsSinceUnixEpoch::now().0);
+    let lifetime = u64::try_from(max_lifetime.as_millis()).ok()?;
+
+    UInt::try_from(now.checked_sub(lifetime)?).ok().map(MilliSecondsSinceUnixEpoch)
+}
+
+/// The media an event refers to: its file, and its thumbnail when it has one.
+///
+/// Only the media the SDK caches locally is listed, i.e. the media of a room
+/// message or of a sticker.
+fn media_uris_of(event: &Event) -> Vec<OwnedMxcUri> {
+    fn uri_of(source: &MediaSource) -> OwnedMxcUri {
+        match source {
+            MediaSource::Plain(uri) => uri.clone(),
+            MediaSource::Encrypted(file) => file.url.clone(),
+        }
+    }
+
+    let Ok(deserialized) = event.raw().deserialize() else {
+        return Vec::new();
+    };
+
+    let AnySyncTimelineEvent::MessageLike(message_like) = deserialized else {
+        return Vec::new();
+    };
+
+    let mut uris = Vec::new();
+
+    match message_like {
+        AnySyncMessageLikeEvent::RoomMessage(SyncMessageLikeEvent::Original(event)) => {
+            match event.content.msgtype {
+                MessageType::Audio(content) => uris.push(uri_of(&content.source)),
+
+                MessageType::File(content) => {
+                    uris.push(uri_of(&content.source));
+                    uris.extend(
+                        content.info.and_then(|info| info.thumbnail_source).as_ref().map(uri_of),
+                    );
+                }
+
+                MessageType::Image(content) => {
+                    uris.push(uri_of(&content.source));
+                    uris.extend(
+                        content.info.and_then(|info| info.thumbnail_source).as_ref().map(uri_of),
+                    );
+                }
+
+                MessageType::Video(content) => {
+                    uris.push(uri_of(&content.source));
+                    uris.extend(
+                        content.info.and_then(|info| info.thumbnail_source).as_ref().map(uri_of),
+                    );
+                }
+
+                _ => {}
+            }
+        }
+
+        AnySyncMessageLikeEvent::Sticker(SyncMessageLikeEvent::Original(event)) => {
+            if let StickerMediaSource::Plain(uri) = event.content.source {
+                uris.push(uri);
+            }
+        }
+
+        _ => {}
+    }
+
+    uris
+}
+
 pub(super) struct RoomEventCacheInner {
     /// The room id for this room.
     room_id: OwnedRoomId,
@@ -501,15 +787,116 @@ impl RoomEventCacheInner {
 
 #[cfg(test)]
 mod tests {
-    use matrix_sdk_base::{RoomState, event_cache::Event};
+    use matrix_sdk_base::{
+        RoomState,
+        event_cache::Event,
+        linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
+    };
     use matrix_sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         RoomId, event_id,
-        events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
+        events::{
+            receipt::{ReceiptThread, ReceiptType},
+            relation::RelationType,
+            room::message::RoomMessageEventContentWithoutRelation,
+        },
         room_id, user_id,
     };
 
     use crate::test_utils::logged_in_client;
+
+    #[async_test]
+    async fn test_local_read_receipt_can_be_applied_and_restored() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let other_user_id = user_id!("@dexter:saucisse.bzh");
+        let event_id_0 = event_id!("$ev0");
+        let event_id_1 = event_id!("$ev1");
+
+        let client = logged_in_client(None).await;
+        let event_factory = EventFactory::new().room(room_id).sender(other_user_id);
+
+        // Two messages from somebody else are in the room.
+        client
+            .event_cache_store()
+            .lock()
+            .await
+            .expect("Could not acquire the event cache lock")
+            .as_clean()
+            .expect("Could not acquire a clean event cache lock")
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            event_factory.text_msg("hello").event_id(event_id_0).into_event(),
+                            event_factory.text_msg("world").event_id(event_id_1).into_event(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Compute the unread counts a first time, as a sync would do.
+        room_event_cache
+            .inner
+            .state
+            .write()
+            .await
+            .unwrap()
+            .update_read_receipts(&[])
+            .await
+            .unwrap();
+
+        assert_eq!(room.num_unread_messages(), 2);
+
+        // Applying a read receipt locally drops the unread counts right away, and
+        // returns the previous value.
+        let previous_read_receipts = room_event_cache
+            .apply_local_read_receipt(
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+                event_id_1.to_owned(),
+            )
+            .await
+            .unwrap()
+            .expect("the read receipts must have changed");
+
+        assert_eq!(previous_read_receipts.num_unread, 2);
+        assert_eq!(room.num_unread_messages(), 0);
+
+        // Applying the very same receipt again changes nothing, so there is nothing to
+        // restore.
+        assert!(
+            room_event_cache
+                .apply_local_read_receipt(
+                    ReceiptType::Read,
+                    ReceiptThread::Unthreaded,
+                    event_id_1.to_owned(),
+                )
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Restoring the previous value rolls the local echo back.
+        room_event_cache.restore_read_receipts(previous_read_receipts).await;
+
+        assert_eq!(room.num_unread_messages(), 2);
+    }
 
     #[async_test]
     async fn test_find_event_by_id_with_edit_relation() {
@@ -786,7 +1173,7 @@ mod tests {
 
 #[cfg(all(test, not(target_family = "wasm")))] // This uses the cross-process lock, so needs time support.
 mod timed_tests {
-    use std::{ops::Not, sync::Arc};
+    use std::{collections::BTreeSet, ops::Not, sync::Arc, time::Duration};
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
@@ -808,7 +1195,7 @@ mod timed_tests {
     use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
     use matrix_sdk_test::{ALICE, BOB, async_test, event_factory::EventFactory};
     use ruma::{
-        EventId, event_id,
+        EventId, MilliSecondsSinceUnixEpoch, event_id,
         events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent},
         room_id,
         serde::Raw,
@@ -900,6 +1287,361 @@ mod timed_tests {
 
         // That's all, folks!
         assert!(chunks.next().is_none());
+    }
+
+    #[async_test]
+    async fn test_remove_events_sent_by() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id);
+
+        let event_cache_store = Arc::new(MemoryStore::new());
+
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder.store_config(
+                    StoreConfig::new(CrossProcessLockConfig::multi_process("hodor"))
+                        .event_cache_store(event_cache_store.clone()),
+                )
+            })
+            .build()
+            .await;
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Three events: Alice, Bob, Alice.
+        room_event_cache
+            .handle_joined_room_update(
+                JoinedRoomUpdate {
+                    timeline: Timeline {
+                        limited: false,
+                        prev_batch: None,
+                        events: vec![
+                            f.text_msg("hey").sender(*ALICE).event_id(event_id!("$ev0")).into(),
+                            f.text_msg("buy my coin")
+                                .sender(*BOB)
+                                .event_id(event_id!("$ev1"))
+                                .into(),
+                            f.text_msg("ugh").sender(*ALICE).event_id(event_id!("$ev2")).into(),
+                        ],
+                    },
+                    ..Default::default()
+                },
+                EphemeralEvents::default(),
+            )
+            .await
+            .unwrap();
+
+        let (initial_events, mut subscriber) = room_event_cache.subscribe().await.unwrap();
+        assert_eq!(initial_events.len(), 3);
+
+        // Removing the events of a user who sent none is a no-op: no update is sent.
+        room_event_cache
+            .remove_events_sent_by(&BTreeSet::from([user_id!("@nobody:saucisse.bzh").to_owned()]))
+            .await
+            .unwrap();
+
+        assert!(subscriber.is_empty());
+
+        // Bob's event is removed, Alice's events are kept.
+        room_event_cache.remove_events_sent_by(&BTreeSet::from([BOB.to_owned()])).await.unwrap();
+
+        assert_let_timeout!(
+            Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) =
+                subscriber.recv()
+        );
+        assert_eq!(diffs.len(), 1);
+        assert_let!(VectorDiff::Remove { index: 1 } = &diffs[0]);
+
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event_id(), Some(event_id!("$ev0")));
+        assert_eq!(events[1].event_id(), Some(event_id!("$ev2")));
+
+        // And it is gone from the storage too.
+        let linked_chunk = from_all_chunks::<3, _, _>(
+            event_cache_store.load_all_chunks(LinkedChunkId::Room(room_id)).await.unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+
+        let stored_event_ids = linked_chunk
+            .items()
+            .filter_map(|(_position, event)| event.event_id())
+            .collect::<Vec<_>>();
+        assert_eq!(stored_event_ids, vec![event_id!("$ev0"), event_id!("$ev2")]);
+    }
+
+    #[async_test]
+    async fn test_purge_events_older_than() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id).sender(*ALICE);
+
+        let event_cache_store = Arc::new(MemoryStore::new());
+
+        let now = u64::from(MilliSecondsSinceUnixEpoch::now().0);
+        let an_hour = 60 * 60 * 1000;
+
+        // Two chunks in the store: only the last one is loaded in memory. The first
+        // chunk is entirely expired; the second holds one expired event and one
+        // recent one.
+        event_cache_store
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            f.text_msg("ancient")
+                                .event_id(event_id!("$ev0"))
+                                .server_ts(now - 5 * an_hour)
+                                .into(),
+                            f.text_msg("old")
+                                .event_id(event_id!("$ev1"))
+                                .server_ts(now - 4 * an_hour)
+                                .into(),
+                        ],
+                    },
+                    Update::NewItemsChunk {
+                        previous: Some(ChunkIdentifier::new(0)),
+                        new: ChunkIdentifier::new(1),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(1), 0),
+                        items: vec![
+                            f.text_msg("stale")
+                                .event_id(event_id!("$ev2"))
+                                .server_ts(now - 3 * an_hour)
+                                .into(),
+                            f.text_msg("fresh")
+                                .event_id(event_id!("$ev3"))
+                                .server_ts(now - an_hour / 2)
+                                .into(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder.store_config(
+                    StoreConfig::new(CrossProcessLockConfig::multi_process("hodor"))
+                        .event_cache_store(event_cache_store.clone()),
+                )
+            })
+            .build()
+            .await;
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Only the last chunk is loaded in memory.
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+
+        // A retention period nothing falls outside of removes nothing.
+        let removed =
+            room_event_cache.purge_events_older_than(Duration::from_secs(24 * 3600)).await.unwrap();
+        assert_eq!(removed, 0);
+
+        // Keep an hour's worth of events: the three older ones go, the recent one
+        // stays.
+        let removed =
+            room_event_cache.purge_events_older_than(Duration::from_secs(3600)).await.unwrap();
+        assert_eq!(removed, 3);
+
+        // The loaded expired event is gone from memory…
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_id(), Some(event_id!("$ev3")));
+
+        // …and so are the two that were only in the store.
+        let linked_chunk = from_all_chunks::<3, _, _>(
+            event_cache_store.load_all_chunks(LinkedChunkId::Room(room_id)).await.unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+
+        let stored_event_ids = linked_chunk
+            .items()
+            .filter_map(|(_position, event)| event.event_id())
+            .collect::<Vec<_>>();
+        assert_eq!(stored_event_ids, vec![event_id!("$ev3")]);
+    }
+
+    #[async_test]
+    async fn test_purge_events_older_than_stops_at_the_first_recent_event() {
+        // Events are stored in topological order, so an event older than the cutoff
+        // that sits after a recent one is kept: the sweep stops at the first event
+        // still within the retention period.
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id).sender(*ALICE);
+
+        let event_cache_store = Arc::new(MemoryStore::new());
+
+        let now = u64::from(MilliSecondsSinceUnixEpoch::now().0);
+        let an_hour = 60 * 60 * 1000;
+
+        event_cache_store
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            f.text_msg("old")
+                                .event_id(event_id!("$ev0"))
+                                .server_ts(now - 4 * an_hour)
+                                .into(),
+                            f.text_msg("recent")
+                                .event_id(event_id!("$ev1"))
+                                .server_ts(now - an_hour / 2)
+                                .into(),
+                            f.text_msg("out of order")
+                                .event_id(event_id!("$ev2"))
+                                .server_ts(now - 3 * an_hour)
+                                .into(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder.store_config(
+                    StoreConfig::new(CrossProcessLockConfig::multi_process("hodor"))
+                        .event_cache_store(event_cache_store.clone()),
+                )
+            })
+            .build()
+            .await;
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        let removed =
+            room_event_cache.purge_events_older_than(Duration::from_secs(3600)).await.unwrap();
+        assert_eq!(removed, 1);
+
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event_id(), Some(event_id!("$ev1")));
+        assert_eq!(events[1].event_id(), Some(event_id!("$ev2")));
+    }
+
+    #[async_test]
+    async fn test_remove_events_sent_by_reaches_the_events_that_are_not_loaded() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id);
+
+        let event_cache_store = Arc::new(MemoryStore::new());
+
+        // Two chunks in the store: only the last one is loaded in memory, and each
+        // holds one event of the user to ignore.
+        event_cache_store
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            f.text_msg("old spam").sender(*BOB).event_id(event_id!("$ev0")).into(),
+                            f.text_msg("old hey").sender(*ALICE).event_id(event_id!("$ev1")).into(),
+                        ],
+                    },
+                    Update::NewItemsChunk {
+                        previous: Some(ChunkIdentifier::new(0)),
+                        new: ChunkIdentifier::new(1),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(1), 0),
+                        items: vec![
+                            f.text_msg("new spam").sender(*BOB).event_id(event_id!("$ev2")).into(),
+                            f.text_msg("new hey").sender(*ALICE).event_id(event_id!("$ev3")).into(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder.store_config(
+                    StoreConfig::new(CrossProcessLockConfig::multi_process("hodor"))
+                        .event_cache_store(event_cache_store.clone()),
+                )
+            })
+            .build()
+            .await;
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Only the last chunk is loaded in memory.
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+
+        room_event_cache.remove_events_sent_by(&BTreeSet::from([BOB.to_owned()])).await.unwrap();
+
+        // The loaded event is gone…
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_id(), Some(event_id!("$ev3")));
+
+        // …and so is the one that was only in the store.
+        let linked_chunk = from_all_chunks::<3, _, _>(
+            event_cache_store.load_all_chunks(LinkedChunkId::Room(room_id)).await.unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+
+        let stored_event_ids = linked_chunk
+            .items()
+            .filter_map(|(_position, event)| event.event_id())
+            .collect::<Vec<_>>();
+        assert_eq!(stored_event_ids, vec![event_id!("$ev1"), event_id!("$ev3")]);
     }
 
     #[async_test]

@@ -178,14 +178,15 @@ async fn test_ignored_unignored() {
         })
         .await;
 
-    // We do receive a clear.
+    // Only the event sent by `dexter` is removed; the other events are kept, so
+    // that the room list keeps its ordering.
     {
         assert_let_timeout!(
             Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) =
                 room_stream.recv()
         );
         assert_eq!(diffs.len(), 1);
-        assert_let!(VectorDiff::Clear = &diffs[0]);
+        assert_let!(VectorDiff::Remove { index: 0 } = &diffs[0]);
     }
 
     // We do receive the new event.
@@ -201,12 +202,21 @@ async fn test_ignored_unignored() {
         assert_event_matches_msg(&events[0], "i don't like this dexter");
     }
 
-    // The other room has been cleared too.
+    // `ivan`'s event is still there, and so is the new one.
+    {
+        let events = room_event_cache.events().await.unwrap();
+        assert_eq!(events.len(), 2);
+        assert_event_matches_msg(&events[0], "hoy!");
+        assert_event_matches_msg(&events[1], "i don't like this dexter");
+    }
+
+    // The other room has no event from `dexter`: it is left untouched.
     {
         let room = client.get_room(other_room_id).unwrap();
         let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
         let events = room_event_cache.events().await.unwrap();
-        assert!(events.is_empty());
+        assert_eq!(events.len(), 1);
+        assert_event_matches_msg(&events[0], "demat!");
     }
 
     // That's all, folks!
@@ -443,6 +453,58 @@ async fn test_backpaginate_many_times_with_many_iterations() {
     assert_eq!(events.len(), 4);
 
     assert!(room_stream.is_empty());
+}
+
+#[async_test]
+async fn test_backpaginate_with_an_empty_response_and_an_unchanged_token() {
+    // A server may answer a back-pagination with no events and the very token the
+    // request was made with. Asking again would get the same answer, so the
+    // pagination must stop instead of looping, and the timeline must be told the
+    // start has been reached rather than left loading forever.
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let event_cache = client.event_cache();
+    event_cache.subscribe().unwrap();
+
+    let room_id = room_id!("!omelette:fromage.fr");
+    let f = EventFactory::new().room(room_id).sender(user_id!("@a:b.c"));
+
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("heyo").event_id(event_id!("$1")))
+                .set_timeline_prev_batch("prev_batch".to_owned())
+                .set_timeline_limited(),
+        )
+        .await;
+
+    let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+    let (events, mut room_stream) = room_event_cache.subscribe().await.unwrap();
+    wait_for_initial_events(events, &mut room_stream).await;
+
+    // The server keeps handing back the token it was given, with nothing to show
+    // for it. `mock_once` makes a second request fail the test.
+    server
+        .mock_room_messages()
+        .match_from("prev_batch")
+        .ok(RoomMessagesResponseTemplate::default().end_token("prev_batch"))
+        .mock_once()
+        .mount()
+        .await;
+
+    let pagination = room_event_cache.pagination();
+
+    let outcome = pagination.run_backwards_until(20).await.unwrap();
+    assert!(outcome.events.is_empty());
+    assert!(outcome.reached_start);
+
+    // And the cache remembers it, so a second pagination doesn't hit the network
+    // either.
+    let outcome = pagination.run_backwards_until(20).await.unwrap();
+    assert!(outcome.events.is_empty());
+    assert!(outcome.reached_start);
 }
 
 #[async_test]
@@ -2935,6 +2997,88 @@ async fn test_send_queue_does_insert_event_in_the_event_cache() {
             assert_let!(VectorDiff::Append { values } = &diffs[0]);
             assert_eq!(values.len(), 1);
             assert_eq!(values[0].event_id(), Some(event_id_2));
+        }
+    );
+
+    assert!(room_stream.is_empty());
+}
+
+#[async_test]
+async fn test_deduplicated_sync_updates_the_event_in_place() {
+    // An event we already know about at the end of the linked chunk, coming back
+    // through the sync, must be updated in place: it hasn't moved, so removing and
+    // re-inserting it would make it visibly bounce in the timeline.
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let event_cache = client.event_cache();
+    event_cache.subscribe().unwrap();
+
+    let room_id = room_id!("!omelette:fromage.fr");
+    let f = EventFactory::new().room(room_id).sender(user_id!("@a:b.c"));
+
+    // The event cache must not be empty for the send queue to insert its event in
+    // it.
+    let room = server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("hello").event_id(event_id!("$1"))),
+        )
+        .await;
+
+    // Give time to the event cache to handle the sync.
+    sleep(Duration::from_secs(1)).await;
+
+    let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+    let (events, mut room_stream) = room_event_cache.subscribe().await.unwrap();
+
+    assert_eq!(events.len(), 1);
+    assert!(room_stream.is_empty());
+
+    // Send an event with the send queue; it lands in the event cache right away.
+    let event_id_2 = event_id!("$2");
+    server.mock_room_state_encryption().plain().mount().await;
+    server.mock_room_send().ok(event_id_2).mock_once().mount().await;
+    room.send_queue()
+        .send(RoomMessageEventContent::text_plain("Hello, World!").into())
+        .await
+        .unwrap();
+
+    assert_matches!(
+        room_stream.recv().await,
+        Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) => {
+            assert_eq!(diffs.len(), 1);
+            assert_let!(VectorDiff::Append { values } = &diffs[0]);
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0].event_id(), Some(event_id_2));
+        }
+    );
+
+    // Now the sync brings the very same event back, followed by a new one.
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("Hello, World!").event_id(event_id_2))
+                .add_timeline_event(f.text_msg("and hello again").event_id(event_id!("$3"))),
+        )
+        .await;
+
+    assert_matches!(
+        room_stream.recv().await,
+        Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) => {
+            assert_eq!(diffs.len(), 2);
+
+            // `$2` is updated where it already was: no remove, no re-insert.
+            assert_matches!(&diffs[0], VectorDiff::Set { index, value } => {
+                assert_eq!(*index, 1);
+                assert_eq!(value.event_id(), Some(event_id_2));
+            });
+            assert_matches!(&diffs[1], VectorDiff::Append { values } => {
+                assert_eq!(values.len(), 1);
+                assert_eq!(values[0].event_id(), Some(event_id!("$3")));
+            });
         }
     );
 

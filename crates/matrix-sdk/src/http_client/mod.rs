@@ -18,7 +18,7 @@ use std::{
     fmt::Debug,
     num::NonZeroUsize,
     sync::{
-        Arc,
+        Arc, RwLock as StdRwLock,
         atomic::{AtomicU64, Ordering},
     },
     time::Duration,
@@ -36,6 +36,7 @@ use ruma::api::{
     path_builder,
 };
 use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, field::debug, trace};
 
 use crate::{HttpResult, config::RequestConfig, error::HttpError};
@@ -90,6 +91,13 @@ pub(crate) struct HttpClient {
     pub(crate) request_config: RequestConfig,
     concurrent_request_semaphore: MaybeSemaphore,
     next_request_id: Arc<AtomicU64>,
+
+    /// Cancels the requests that are in flight right now.
+    ///
+    /// Taken by every request as it starts, and cancelled and replaced by
+    /// [`HttpClient::cancel_in_flight_requests`], so that cancelling once
+    /// doesn't stop the requests made afterwards.
+    in_flight_requests: Arc<StdRwLock<CancellationToken>>,
 }
 
 impl HttpClient {
@@ -101,7 +109,22 @@ impl HttpClient {
                 request_config.max_concurrent_requests,
             ),
             next_request_id: AtomicU64::new(0).into(),
+            in_flight_requests: Arc::new(StdRwLock::new(CancellationToken::new())),
         }
+    }
+
+    /// Abort every request that is in flight right now.
+    ///
+    /// A request that has already been answered is unaffected, and so is one
+    /// made after this call: this ends the requests of the session that is
+    /// over, it does not close the client.
+    pub(crate) fn cancel_in_flight_requests(&self) {
+        let mut in_flight = self.in_flight_requests.write().unwrap();
+
+        in_flight.cancel();
+        // The requests that come after this one belong to whatever happens next, and
+        // must not start out cancelled.
+        *in_flight = CancellationToken::new();
     }
 
     fn get_request_id(&self) -> String {
@@ -151,7 +174,7 @@ impl HttpClient {
         homeserver: String,
         access_token: Option<&str>,
         path_builder_input: <R::PathBuilder as path_builder::PathBuilder>::Input<'_>,
-        send_progress: SharedObservable<TransmissionProgress>,
+        progress: RequestProgress,
     ) -> impl Future<Output = Result<R::IncomingResponse, HttpError>>
     where
         R: OutgoingRequest + Debug,
@@ -224,9 +247,16 @@ impl HttpClient {
             // will be automatically dropped at the end of this function
             let _handle = self.concurrent_request_semaphore.acquire().await;
 
+            let cancelled = self.in_flight_requests.read().unwrap().clone();
+
             // There's a bunch of state in send_request, factor out a pinned inner
             // future to reduce the size of futures that await this function.
-            match Box::pin(self.send_request::<R>(request, config, send_progress)).await {
+            let result = tokio::select! {
+                result = Box::pin(self.send_request::<R>(request, config, progress)) => result,
+                _ = cancelled.cancelled() => Err(HttpError::Cancelled),
+            };
+
+            match result {
                 Ok(response) => {
                     log_got_response();
                     Ok(response)
@@ -248,6 +278,32 @@ pub struct TransmissionProgress {
     pub current: usize,
     /// How many bytes there are in total.
     pub total: usize,
+}
+
+/// The progress observables of a single request, in both directions.
+///
+/// A transport only does the work of reporting progress in a direction that
+/// someone is watching, which is why both observables travel together: the
+/// number of subscribers is what says whether it is worth streaming rather than
+/// buffering.
+#[derive(Clone, Debug, Default)]
+pub struct RequestProgress {
+    /// Progress of sending the request body, for uploads.
+    pub send: SharedObservable<TransmissionProgress>,
+    /// Progress of receiving the response body, for downloads.
+    pub receive: SharedObservable<TransmissionProgress>,
+}
+
+impl RequestProgress {
+    /// A pair of progress observables nobody is watching.
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    /// Report progress of sending the request body into the given observable.
+    pub fn with_send(send: SharedObservable<TransmissionProgress>) -> Self {
+        Self { send, receive: Default::default() }
+    }
 }
 
 #[cfg(feature = "reqwest-transport")]

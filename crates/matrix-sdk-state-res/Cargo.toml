@@ -16,6 +16,8 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [dependencies]
+# The state resolution algorithm and the authorization rules themselves live in
+# the vendored `ruma`; this crate is the asynchronous, store-backed adapter.
 ruma = { workspace = true, features = ["state-res"] }
 thiserror.workspace = true
 tracing.workspace = true

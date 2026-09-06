@@ -28,7 +28,7 @@
 #![forbid(missing_docs)]
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fmt,
     num::NonZeroUsize,
     ops::Deref,
@@ -42,13 +42,13 @@ use matrix_sdk_base::{
     sync::RoomUpdates,
     task_monitor::BackgroundTaskHandle,
 };
-use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
+use ruma::{EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId};
 use tokio::sync::{
     OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock,
     broadcast::{Receiver, Sender, channel},
     mpsc,
 };
-use tracing::{error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::{
     Client,
@@ -140,6 +140,10 @@ pub enum EventCacheError {
     /// An error has been observed while back- or forward- paginating.
     #[error(transparent)]
     PaginationError(Arc<crate::Error>),
+
+    /// An error has been observed while reading a room's retention policy.
+    #[error(transparent)]
+    RetentionPolicy(Arc<crate::Error>),
 
     /// An error has been observed while initiating an event-focused timeline.
     #[error(transparent)]
@@ -487,6 +491,59 @@ impl EventCache {
         self.inner.clear_all_rooms().await
     }
 
+    /// Delete, in every room whose cache is loaded, the events that fall
+    /// outside the room's retention policy, and clear the local media they
+    /// refer to.
+    ///
+    /// The policy is the effective one for each room, per [MSC1763]. The
+    /// server's retention configuration is fetched once and reused across
+    /// rooms. A homeserver that doesn't implement MSC1763, or a room with no
+    /// effective policy, keeps all of its events.
+    ///
+    /// Rooms whose cache isn't loaded are left alone: their events are purged
+    /// the next time they are loaded and this is called.
+    ///
+    /// Nothing schedules this: it deletes the user's messages, so when a sweep
+    /// happens is left to the caller.
+    ///
+    /// Returns the total number of events that were removed.
+    ///
+    /// [MSC1763]: https://github.com/matrix-org/matrix-spec-proposals/pull/1763
+    pub async fn purge_expired_events(&self) -> Result<usize> {
+        let client = self.inner.client()?;
+
+        let config = match client.get_retention_configuration().await {
+            Ok(config) => config,
+
+            Err(error) if error.is_endpoint_not_implemented() => {
+                debug!(
+                    "the homeserver doesn't implement the MSC1763 retention configuration \
+                     endpoint; nothing to purge"
+                );
+                return Ok(0);
+            }
+
+            Err(error) => return Err(EventCacheError::RetentionPolicy(Arc::new(error.into()))),
+        };
+
+        let caches_for_all_rooms = self.inner.by_room.read().await;
+
+        let mut total = 0;
+
+        for (room_id, caches) in caches_for_all_rooms.iter() {
+            match caches.room().purge_expired_events_with_server_config(&config).await {
+                Ok(num_removed) => total += num_removed,
+
+                // One room failing to be swept mustn't stop the others.
+                Err(error) => {
+                    warn!(%room_id, "failed to purge the expired events of a room: {error}");
+                }
+            }
+        }
+
+        Ok(total)
+    }
+
     /// Subscribe to room _generic_ updates.
     ///
     /// If one wants to listen what has changed in a specific room for example,
@@ -673,6 +730,43 @@ impl EventCacheInner {
 
         // Then, we can clear and reload the states for all the rooms.
         self.state.clear_and_reload(&caches_for_all_rooms, None).await?;
+
+        Ok(())
+    }
+
+    /// Handle a change of the ignored user list.
+    ///
+    /// The events sent by the ignored users are removed from the caches that
+    /// are loaded; the events of the other users are kept, so that the room
+    /// list keeps its ordering, and so that unignoring a user restores what
+    /// their messages hid.
+    ///
+    /// Every loaded room is then asked to recompute what it derives from its
+    /// events, since a message of a user who has just been unignored can become
+    /// a room's latest event again.
+    ///
+    /// Note the caches that aren't loaded are left alone: the events of an
+    /// ignored user are filtered out when computing a latest event, and the
+    /// server doesn't serve them anymore anyway.
+    async fn handle_ignore_user_list_change(
+        &self,
+        ignored_users: &BTreeSet<OwnedUserId>,
+    ) -> Result<()> {
+        let caches_for_all_rooms = self.by_room.read().await;
+
+        for (room_id, caches) in caches_for_all_rooms.iter() {
+            if !ignored_users.is_empty() {
+                caches.room().remove_events_sent_by(ignored_users).await?;
+
+                for thread in caches.loaded_threads().await.iter() {
+                    thread.remove_events_sent_by(ignored_users).await?;
+                }
+            }
+
+            let _ = self
+                .generic_update_sender
+                .send(RoomEventCacheGenericUpdate { room_id: room_id.clone() });
+        }
 
         Ok(())
     }

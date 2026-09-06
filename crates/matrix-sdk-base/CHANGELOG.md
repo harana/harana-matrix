@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 - Add `EventCacheStore::get_custom_value`, `set_custom_value` and
   `remove_custom_value`, a key/value area for cross-process data that is not
   tied to a room. ([#250](https://github.com/harana/harana-matrix/issues/250))
+- Add `StateStoreExt::get_serialized_custom_value`,
+  `set_serialized_custom_value`, `set_serialized_custom_value_no_read` and
+  `remove_serialized_custom_value`, so structured data can be kept in the
+  custom-value store without hand-rolling serialization.
+  ([#16](https://github.com/harana/harana-matrix/issues/16))
 
 ### Fixed
 

@@ -20,6 +20,7 @@ use ruma::events::{
 };
 
 use super::{
+    ProfileDetails,
     content::{BeaconInfo, LiveLocationContent, Reaction},
     reply::{EmbeddedEventDetails, InReplyToDetails},
 };
@@ -48,7 +49,12 @@ pub enum MsgLikeKind {
     },
 
     /// A redacted message.
-    Redacted,
+    Redacted {
+        /// The user who sent the redaction, if it is known.
+        redacted_by: Option<String>,
+        /// The profile of the user who sent the redaction.
+        redacted_by_profile: Option<ProfileDetails>,
+    },
 
     /// An `m.room.encrypted` event that could not be decrypted.
     UnableToDecrypt { msg: EncryptedMessage },
@@ -179,8 +185,11 @@ impl TryFrom<matrix_sdk_ui::timeline::MsgLikeContent> for MsgLikeContent {
                     thread_summary,
                 }
             }
-            Kind::Redacted => Self {
-                kind: MsgLikeKind::Redacted,
+            Kind::Redacted(redacted) => Self {
+                kind: MsgLikeKind::Redacted {
+                    redacted_by: redacted.redacted_by.map(|user_id| user_id.to_string()),
+                    redacted_by_profile: Some((&redacted.redacted_by_profile).into()),
+                },
                 reactions,
                 in_reply_to,
                 thread_root,

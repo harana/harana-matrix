@@ -9,6 +9,10 @@ maintained by the owners of the Matrix Rust SDK project.
   the [`matrix-sdk-crypto`] crate,
 - [`matrix-sdk-ffi`], UniFFI bindings of the [`matrix-sdk`] crate.
 
+Worked examples of driving [`matrix-sdk-ffi`] from Swift and Kotlin, covering
+client initialisation, authentication, sending a message and basic room
+operations, live in [`examples`].
+
 There are also external bindings in other repositories:
 
 - [`matrix-sdk-crypto-wasm`], JavaScript / WebAssembly bindings of the
@@ -17,6 +21,7 @@ There are also external bindings in other repositories:
   [`matrix-sdk-crypto`] crate
 
 [`apple`]: ./apple
+[`examples`]: ./examples
 [`matrix-sdk-crypto-ffi`]: ./matrix-sdk-crypto-ffi
 [`matrix-sdk-crypto`]: ../crates/matrix-sdk-crypto
 [`matrix-sdk-ffi`]: ./matrix-sdk-ffi

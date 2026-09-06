@@ -17,7 +17,7 @@ use std::{fs::File, io::Write as _, path::PathBuf, time::Duration};
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
-use futures_util::StreamExt;
+use futures_util::{FutureExt as _, StreamExt};
 #[cfg(feature = "unstable-msc4274")]
 use matrix_sdk::attachment::{AttachmentInfo, BaseFileInfo};
 use matrix_sdk::{
@@ -813,5 +813,107 @@ async fn test_react_to_local_media() -> TestResult {
 
     // That's all, folks!
     assert_pending!(timeline_stream);
+    Ok(())
+}
+
+/// Downloading a timeline item's media reports its progress on the item, so a
+/// client can show per-message download status.
+#[async_test]
+async fn test_download_media_reports_progress_on_the_item() -> TestResult {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+    let room_id = room_id!("!a:b.c");
+
+    // Big enough that the response arrives in more than one chunk.
+    let content = vec![b'x'; 512 * 1024];
+    mock.mock_authed_media_download().ok_bytes(content.clone()).mock_once().mount().await;
+
+    let room = mock.sync_joined_room(&client, room_id).await;
+    let timeline = room.timeline().await?;
+    let (_, mut stream) = timeline.subscribe().await;
+
+    let event_factory = EventFactory::new().room(room_id).sender(&ALICE);
+    mock.sync_room(
+        &client,
+        JoinedRoomBuilder::new(room_id).add_timeline_event(
+            event_factory
+                .image("cat.jpg".to_owned(), mxc_uri!("mxc://sdk.rs/cat").to_owned())
+                .event_id(event_id!("$cat")),
+        ),
+    )
+    .await;
+
+    assert_let_timeout!(Some(updates) = stream.next());
+    assert_let!(VectorDiff::PushBack { value: item } = &updates[0]);
+    let item = item.as_event().unwrap();
+    assert!(item.media_download_progress().is_none());
+
+    let item_id = item.identifier();
+
+    let downloaded = timeline.download_media(&item_id, MediaFormat::File, false).await?;
+    assert_eq!(downloaded, content);
+
+    // The item was updated at least once with progress, and ends with none.
+    let mut reported = Vec::new();
+
+    while let Some(updates) = stream.next().now_or_never().flatten() {
+        for update in updates {
+            if let VectorDiff::Set { value, .. } = update
+                && let Some(item) = value.as_event()
+            {
+                reported.push(item.media_download_progress().copied());
+            }
+        }
+    }
+
+    assert!(
+        reported.iter().any(|progress| progress.is_some()),
+        "download progress should have been reported on the item"
+    );
+    assert!(
+        reported.last().copied().flatten().is_none(),
+        "the progress should be cleared once the download is over"
+    );
+
+    // Progress only ever moves forward, and never past the total.
+    let mut previous = 0;
+    for progress in reported.into_iter().flatten() {
+        assert!(progress.current >= previous);
+        assert!(progress.current <= progress.total);
+        previous = progress.current;
+    }
+
+    Ok(())
+}
+
+/// Asking to download the media of an event that has none is an error, not a
+/// panic or an empty download.
+#[async_test]
+async fn test_download_media_of_an_event_without_media() -> TestResult {
+    let mock = MatrixMockServer::new().await;
+    let client = mock.client_builder().build().await;
+    let room_id = room_id!("!a:b.c");
+
+    let room = mock.sync_joined_room(&client, room_id).await;
+    let timeline = room.timeline().await?;
+    let (_, mut stream) = timeline.subscribe().await;
+
+    let event_factory = EventFactory::new().room(room_id).sender(&ALICE);
+    mock.sync_room(
+        &client,
+        JoinedRoomBuilder::new(room_id)
+            .add_timeline_event(event_factory.text_msg("hello").event_id(event_id!("$hello"))),
+    )
+    .await;
+
+    assert_let_timeout!(Some(updates) = stream.next());
+    assert_let!(VectorDiff::PushBack { value: item } = &updates[0]);
+    let item_id = item.as_event().unwrap().identifier();
+
+    assert_matches!(
+        timeline.download_media(&item_id, MediaFormat::File, false).await,
+        Err(matrix_sdk_ui::timeline::Error::EventHasNoMedia)
+    );
+
     Ok(())
 }

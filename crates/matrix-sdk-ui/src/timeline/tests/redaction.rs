@@ -16,7 +16,8 @@ use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
 use imbl::vector;
-use matrix_sdk_test::{ALICE, BOB, async_test};
+use matrix_sdk::deserialized_responses::TimelineEvent;
+use matrix_sdk_test::{ALICE, BOB, async_test, sync_timeline_event};
 use ruma::{
     event_id,
     events::{
@@ -29,7 +30,7 @@ use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;
 use crate::timeline::{
-    AnyOtherStateEventContentChange, TimelineDetails, TimelineItemContent,
+    AnyOtherStateEventContentChange, MsgLikeKind, TimelineDetails, TimelineItemContent,
     event_item::{EventTimelineItemKind, RemoteEventOrigin, RemoteEventTimelineItem},
 };
 
@@ -277,4 +278,57 @@ async fn test_local_and_remote_echo_of_redaction() {
         EventTimelineItemKind::Remote(RemoteEventTimelineItem { original_json, .. }) = item.kind
     );
     assert!(original_json.is_none());
+}
+
+#[async_test]
+async fn test_redacted_message_knows_who_redacted_it() {
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe_events().await;
+
+    let f = &timeline.factory;
+
+    timeline.handle_live_event(f.text_msg("hello").sender(&ALICE)).await;
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    let event_id = item.event_id().unwrap().to_owned();
+
+    // Bob is a moderator, and deletes Alice's message.
+    timeline.handle_live_event(f.redaction(&event_id).sender(&BOB)).await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    assert_let!(TimelineItemContent::MsgLike(msglike) = item.content());
+    assert_let!(MsgLikeKind::Redacted(redacted) = &msglike.kind);
+    assert_eq!(redacted.redacted_by.as_deref(), Some(*BOB));
+}
+
+#[async_test]
+async fn test_event_arriving_already_redacted_knows_who_redacted_it() {
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe_events().await;
+
+    // An event that was already redacted when we first saw it: the homeserver
+    // bundles the redaction in `unsigned.redacted_because`.
+    timeline
+        .handle_live_event(TimelineEvent::from_plaintext(sync_timeline_event!({
+            "content": {},
+            "event_id": "$redacted-before-we-saw-it",
+            "origin_server_ts": 10,
+            "sender": "@alice:example.org",
+            "type": "m.room.message",
+            "unsigned": {
+                "redacted_because": {
+                    "content": {},
+                    "event_id": "$the-redaction",
+                    "origin_server_ts": 11,
+                    "redacts": "$redacted-before-we-saw-it",
+                    "sender": "@bob:other.server",
+                    "type": "m.room.redaction",
+                },
+            },
+        })))
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    assert_let!(TimelineItemContent::MsgLike(msglike) = item.content());
+    assert_let!(MsgLikeKind::Redacted(redacted) = &msglike.kind);
+    assert_eq!(redacted.redacted_by.as_deref(), Some(*BOB));
 }
