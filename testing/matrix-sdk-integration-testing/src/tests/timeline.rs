@@ -347,10 +347,12 @@ async fn test_stale_local_echo_time_abort_edit() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_enabling_backups_retries_decryption() {
+    // A backup has to carry a signature from the cross-signing master key, so
+    // cross-signing has to be bootstrapped before one can be created.
     let encryption_settings = EncryptionSettings {
         auto_enable_backups: true,
+        auto_enable_cross_signing: true,
         backup_download_strategy: BackupDownloadStrategy::AfterDecryptionFailure,
-        ..Default::default()
     };
     let alice = TestClientBuilder::new("alice")
         .use_sqlite()
