@@ -17,11 +17,11 @@ use matrix::{
     },
     executor::JoinHandle,
 };
+use sdk_common::executor::spawn;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
-use sdk_common::executor::spawn;
 use throbber_widgets_tui::{Throbber, ThrobberState};
 
 use super::{ShouldExit, create_centered_throbber_area};

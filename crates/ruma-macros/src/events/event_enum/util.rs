@@ -7,8 +7,7 @@ use crate::{
     util::RumaEvents,
 };
 
-/// Generate `ruma_common::serde::JsonCastable` implementations for all
-/// compatible types.
+/// Generate `ruma_common::serde::JsonCastable` implementations for all compatible types.
 pub(super) fn expand_json_castable_impl(
     ident: &syn::Ident,
     kind: EventEnumKind,
@@ -51,8 +50,8 @@ pub(super) fn expand_json_castable_impl(
                 }),
         );
 
-        // Matching event enums can be cast to this one, e.g. `AnyMessageLikeEvent` can
-        // be cast to `AnyTimelineEvent`.
+        // Matching event enums can be cast to this one, e.g. `AnyMessageLikeEvent` can be cast to
+        // `AnyTimelineEvent`.
         let event_enum_variations = event_kind.event_enum_variations();
 
         json_castable_impls.extend(
@@ -81,14 +80,12 @@ pub(super) fn expand_json_castable_impl(
 }
 
 impl EventEnumKind {
-    /// Get the name of the `Any*Event` enum for this kind and the given
-    /// variation.
+    /// Get the name of the `Any*Event` enum for this kind and the given variation.
     pub(super) fn to_event_enum_ident(self, variation: EventVariation) -> syn::Ident {
         format_ident!("Any{variation}{self}")
     }
 
-    /// Get the list of extra event kinds that are part of the event enum for
-    /// this kind.
+    /// Get the list of extra event kinds that are part of the event enum for this kind.
     fn extra_enum_kinds(self) -> &'static [Self] {
         match self {
             Self::Timeline => &[Self::MessageLike, Self::State],
@@ -143,9 +140,8 @@ impl EventWithBounds {
             EventEnumKind::MessageLike | EventEnumKind::State
                 if matches!(variation, EventVariation::None | EventVariation::Sync) =>
             {
-                // `MessageLike` and `State` event kinds have an extra `RedactContent` bound
-                // with a `where` clause on the variations that match enum
-                // types.
+                // `MessageLike` and `State` event kinds have an extra `RedactContent` bound with a
+                // `where` clause on the variations that match enum types.
                 let redacted_trait =
                     kind.to_content_kind_trait(EventContentTraitVariation::Redacted);
 

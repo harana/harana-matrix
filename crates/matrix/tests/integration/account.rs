@@ -1,5 +1,6 @@
 use assert_matches2::assert_matches;
 use matrix::test_utils::mocks::MatrixMockServer;
+use sdk_test::async_test;
 use ruma::{
     api::{
         MatrixVersion,
@@ -8,7 +9,6 @@ use ruma::{
     mxc_uri,
     profile::{ProfileFieldName, ProfileFieldValue},
 };
-use sdk_test::async_test;
 use serde_json::json;
 use wiremock::{
     Mock, Request, ResponseTemplate,

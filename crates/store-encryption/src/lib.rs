@@ -148,8 +148,8 @@ impl StoreCipher {
     ///
     /// ```
     /// # let example = || {
-    /// use serde_json::json;
     /// use store_encryption::StoreCipher;
+    /// use serde_json::json;
     ///
     /// let store_cipher = StoreCipher::new()?;
     ///
@@ -180,8 +180,8 @@ impl StoreCipher {
     ///
     /// ```rust,no_run
     /// # let example = || {
-    /// use serde_json::json;
     /// use store_encryption::StoreCipher;
+    /// use serde_json::json;
     ///
     /// let store_cipher = StoreCipher::new()?;
     ///
@@ -289,8 +289,8 @@ impl StoreCipher {
     ///
     /// ```rust,no_run
     /// # let example = || {
-    /// use serde_json::json;
     /// use store_encryption::StoreCipher;
+    /// use serde_json::json;
     ///
     /// let store_cipher = StoreCipher::new()?;
     ///
@@ -341,8 +341,8 @@ impl StoreCipher {
     ///
     /// ```rust,no_run
     /// # let example = || {
-    /// use serde_json::json;
     /// use store_encryption::StoreCipher;
+    /// use serde_json::json;
     ///
     /// let store_cipher = StoreCipher::new()?;
     ///
@@ -422,8 +422,8 @@ impl StoreCipher {
     ///
     /// ```rust,no_run
     /// # let example = || {
-    /// use serde_json::json;
     /// use store_encryption::StoreCipher;
+    /// use serde_json::json;
     ///
     /// let store_cipher = StoreCipher::new()?;
     ///

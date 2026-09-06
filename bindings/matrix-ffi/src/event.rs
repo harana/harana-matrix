@@ -14,6 +14,7 @@
 
 use anyhow::{Context, bail};
 use matrix::IdParseError;
+use ui::timeline::TimelineEventItemId;
 use ruma::{
     EventId,
     events::{
@@ -28,7 +29,6 @@ use ruma::{
         },
     },
 };
-use ui::timeline::TimelineEventItemId;
 
 use crate::{
     ClientError,

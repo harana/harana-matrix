@@ -9,9 +9,8 @@ use super::room::encrypted::{EncryptedEventScheme, Relation};
 
 /// The payload for an extensible encrypted message.
 ///
-/// This is the new primary type introduced in [MSC3956] and should only be sent
-/// in rooms with a version that supports it. See the documentation of the
-/// [`message`] module for more information.
+/// This is the new primary type introduced in [MSC3956] and should only be sent in rooms with a
+/// version that supports it. See the documentation of the [`message`] module for more information.
 ///
 /// [MSC3956]: https://github.com/matrix-org/matrix-spec-proposals/pull/3956
 /// [`message`]: super::message
@@ -29,8 +28,7 @@ pub struct EncryptedEventContent {
 }
 
 impl EncryptedEventContent {
-    /// Creates a new `EncryptedEventContent` with the given scheme and
-    /// relation.
+    /// Creates a new `EncryptedEventContent` with the given scheme and relation.
     pub fn new(scheme: EncryptedEventScheme, relates_to: Option<Relation>) -> Self {
         Self { encrypted: scheme.into(), relates_to }
     }

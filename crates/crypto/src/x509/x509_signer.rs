@@ -173,9 +173,9 @@ mod tests {
     use std::sync::Arc;
 
     use assert_matches::assert_matches;
+    use sdk_test::async_test;
     use rcgen::{CertificateParams, KeyPair};
     use ruma::{DeviceKeyAlgorithm, DeviceKeyId, encryption::KeyUsage, user_id};
-    use sdk_test::async_test;
     use vodozemac::Ed25519SecretKey;
 
     use crate::{

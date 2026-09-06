@@ -57,13 +57,16 @@
 
 use std::{future::IntoFuture, time::Duration};
 
+use futures_core::Stream;
 use base::crypto::{
     OlmError,
     dehydrated_devices::{DehydrationError, RehydratedDevice},
     store::types::DehydratedDeviceKey,
     vodozemac::base64_decode,
 };
-use futures_core::Stream;
+use sdk_common::{
+    boxed_into_future, locks::Mutex as StdMutex, sleep::sleep, task_monitor::BackgroundTaskHandle,
+};
 use ruma::{
     OwnedDeviceId,
     api::{
@@ -74,9 +77,6 @@ use ruma::{
     },
     events::secret::request::SecretName,
     serde::Raw,
-};
-use sdk_common::{
-    boxed_into_future, locks::Mutex as StdMutex, sleep::sleep, task_monitor::BackgroundTaskHandle,
 };
 use thiserror::Error;
 use tokio::sync::broadcast;

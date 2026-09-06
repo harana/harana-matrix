@@ -45,8 +45,8 @@ use std::{
 };
 
 use base::{locks::Mutex, task_monitor::TaskMonitor};
-use ruma::OwnedRoomId;
 use sdk_common::executor::{AbortOnDrop, JoinHandleExt as _, spawn};
+use ruma::OwnedRoomId;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::{debug, info, instrument, trace, warn};

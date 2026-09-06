@@ -20,6 +20,7 @@ use std::{
 };
 
 pub(crate) use machine::GossipMachine;
+use sdk_common::locks::RwLock as StdRwLock;
 use ruma::{
     DeviceId, OwnedDeviceId, OwnedTransactionId, OwnedUserId, TransactionId, UserId,
     events::{
@@ -34,7 +35,6 @@ use ruma::{
     serde::Raw,
     to_device::DeviceIdOrAllDevices,
 };
-use sdk_common::locks::RwLock as StdRwLock;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -449,7 +449,11 @@ impl ServedSecretRequests {
         device_id: &DeviceId,
         request_id: &TransactionId,
     ) -> bool {
-        self.served.contains(&(user_id.to_owned(), device_id.to_owned(), request_id.to_owned()))
+        self.served.contains(&(
+            user_id.to_owned(),
+            device_id.to_owned(),
+            request_id.to_owned(),
+        ))
     }
 
     /// Record that we have answered this request.

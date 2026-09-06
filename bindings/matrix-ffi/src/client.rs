@@ -21,8 +21,6 @@ use std::{
 };
 
 use anyhow::{Context as _, anyhow};
-#[cfg(feature = "experimental-x509-identity-verification")]
-use base::crypto::x509::RawX509Signature;
 use futures_util::pin_mut;
 #[cfg(feature = "sqlite")]
 use matrix::STATE_STORE_DATABASE_NAME;
@@ -63,6 +61,19 @@ use matrix::{
     store::RoomLoadSettings as SdkRoomLoadSettings,
     sync::Notification,
     task_monitor::BackgroundTaskFailureReason,
+};
+#[cfg(feature = "experimental-x509-identity-verification")]
+use base::crypto::x509::RawX509Signature;
+use sdk_common::{
+    SendOutsideWasm, SyncOutsideWasm, cross_process_lock::CrossProcessLockConfig, stream::StreamExt,
+};
+use ui::{
+    notification_client::{
+        NotificationClient as MatrixNotificationClient,
+        NotificationProcessSetup as MatrixNotificationProcessSetup,
+    },
+    spaces::SpaceService as UISpaceService,
+    unable_to_decrypt_hook::UtdHookManager,
 };
 use mime::Mime;
 use oauth2::Scope;
@@ -109,21 +120,10 @@ use ruma::{
     push::{HttpPusherData as RumaHttpPusherData, PushFormat as RumaPushFormat},
     room::RoomType,
 };
-use sdk_common::{
-    SendOutsideWasm, SyncOutsideWasm, cross_process_lock::CrossProcessLockConfig, stream::StreamExt,
-};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{RwLock, broadcast::error::RecvError};
 use tracing::{debug, error, warn};
-use ui::{
-    notification_client::{
-        NotificationClient as MatrixNotificationClient,
-        NotificationProcessSetup as MatrixNotificationProcessSetup,
-    },
-    spaces::SpaceService as UISpaceService,
-    unable_to_decrypt_hook::UtdHookManager,
-};
 use url::Url;
 use zeroize::Zeroize as _;
 
@@ -318,7 +318,9 @@ pub struct DuplicateOneTimeKeyErrorMessage {
     pub new_key: String,
 }
 
-impl From<matrix::encryption::DuplicateOneTimeKeyErrorMessage> for DuplicateOneTimeKeyErrorMessage {
+impl From<matrix::encryption::DuplicateOneTimeKeyErrorMessage>
+    for DuplicateOneTimeKeyErrorMessage
+{
     fn from(value: matrix::encryption::DuplicateOneTimeKeyErrorMessage) -> Self {
         Self { old_key: value.old_key.to_base64(), new_key: value.new_key.to_base64() }
     }
@@ -1763,8 +1765,8 @@ impl Client {
     /// This is useful to mitigate backend led wrong iOS app badges and work
     /// around https://github.com/element-hq/element-x-ios/issues/3151
     pub async fn mark_all_rooms_as_read(&self) -> Result<(), ClientError> {
-        use base::RoomStateFilter;
         use matrix::room::Receipts;
+        use base::RoomStateFilter;
         use ui::timeline::{TimelineBuilder, TimelineFocus};
 
         for sdk_room in self.inner.rooms_filtered(RoomStateFilter::JOINED) {
@@ -1983,9 +1985,9 @@ impl Client {
     }
 
     pub fn room_directory_search(&self) -> Arc<RoomDirectorySearch> {
-        Arc::new(RoomDirectorySearch::new(matrix::room_directory_search::RoomDirectorySearch::new(
-            (*self.inner).clone(),
-        )))
+        Arc::new(RoomDirectorySearch::new(
+            matrix::room_directory_search::RoomDirectorySearch::new((*self.inner).clone()),
+        ))
     }
 
     /// Join a room by its ID.

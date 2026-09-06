@@ -1,5 +1,6 @@
 use assert_matches2::assert_let;
 use fakes::poll_a2;
+use sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     EventId, OwnedEventId, UserId, event_id,
     events::poll::unstable_start::{
@@ -8,7 +9,6 @@ use ruma::{
     },
     server_name,
 };
-use sdk_test::{ALICE, BOB, async_test};
 
 use crate::timeline::{EventTimelineItem, event_item::PollState, tests::TestTimeline};
 
@@ -300,6 +300,7 @@ fn assert_poll_start_eq(a: &UnstablePollStartContentBlock, b: &UnstablePollStart
 }
 
 mod fakes {
+    use sdk_test::event_factory::{EventBuilder, EventFactory};
     use ruma::events::poll::{
         start::PollKind,
         unstable_start::{
@@ -307,7 +308,6 @@ mod fakes {
             UnstablePollStartEventContent,
         },
     };
-    use sdk_test::event_factory::{EventBuilder, EventFactory};
 
     pub fn poll_a2(f: &EventFactory) -> EventBuilder<UnstablePollStartEventContent> {
         f.poll_start("Up or down?", "Up or down?", vec!["Up", "Down"])

@@ -9,13 +9,12 @@ pub mod unstable {
 
     use crate::{
         OwnedDeviceId,
-        api::{
-            auth_scheme::AccessToken, client::dehydrated_device::DehydratedDeviceData, request,
-            response,
-        },
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
         serde::Raw,
     };
+
+    use crate::api::client::dehydrated_device::DehydratedDeviceData;
 
     metadata! {
         method: GET,

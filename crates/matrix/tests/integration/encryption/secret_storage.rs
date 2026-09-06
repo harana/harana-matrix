@@ -1,12 +1,13 @@
 use std::sync::{Arc, Mutex};
 
 use assert_matches::assert_matches;
-use base::SessionMeta;
 use matrix::{
     authentication::matrix::MatrixSession,
     encryption::secret_storage::SecretStorageError,
     test_utils::{client::mock_session_tokens, no_retry_test_client_with_server},
 };
+use base::SessionMeta;
+use sdk_test::async_test;
 use ruma::{
     UserId,
     events::{
@@ -17,7 +18,6 @@ use ruma::{
     },
     owned_device_id, owned_user_id, user_id,
 };
-use sdk_test::async_test;
 use serde_json::json;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,

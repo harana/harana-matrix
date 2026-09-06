@@ -2,10 +2,6 @@ use std::{ops::Not, sync::Arc, time::Duration};
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::event_cache::{
-    Gap,
-    store::{EventCacheStore, MemoryStore},
-};
 use eyeball_im::VectorDiff;
 use futures_util::FutureExt;
 use imbl::Vector;
@@ -23,6 +19,12 @@ use matrix::{
         mocks::{MatrixMockServer, RoomMessagesResponseTemplate},
     },
 };
+use base::event_cache::{
+    Gap,
+    store::{EventCacheStore, MemoryStore},
+};
+use sdk_common::cross_process_lock::CrossProcessLockConfig;
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
     EventId, event_id,
     events::{
@@ -33,8 +35,6 @@ use ruma::{
     room_version_rules::RedactionRules,
     user_id,
 };
-use sdk_common::cross_process_lock::CrossProcessLockConfig;
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use tokio::{spawn, sync::broadcast, task::yield_now, time::sleep};
 
 mod read_receipts;

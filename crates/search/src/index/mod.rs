@@ -380,6 +380,7 @@ impl RoomSearchIndex for RoomIndex {
 mod tests {
     use std::{collections::HashSet, error::Error};
 
+    use sdk_test::event_factory::EventFactory;
     use ruma::{
         EventId, MilliSecondsSinceUnixEpoch, UInt, event_id,
         events::{
@@ -391,7 +392,6 @@ mod tests {
         },
         room_id, user_id,
     };
-    use sdk_test::event_factory::EventFactory;
 
     use super::{IndexableEvent, RoomIndex, RoomIndexOperation, builder::RoomIndexBuilder};
     use crate::{backend::MAX_MILLISECONDS, error::IndexError};

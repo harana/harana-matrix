@@ -26,8 +26,8 @@ use base::{
     timer,
     tracing_timer::TracingTimer,
 };
-use ruma::{OwnedEventId, OwnedRoomId, RoomId};
 use sdk_common::SyncOutsideWasm;
+use ruma::{OwnedEventId, OwnedRoomId, RoomId};
 use tokio::sync::{Mutex, RwLock, RwLockMappedWriteGuard, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{instrument, trace};
 

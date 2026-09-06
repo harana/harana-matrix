@@ -19,10 +19,10 @@
 //! Then we move the data into the new store.
 //! The migration 6->7 deletes the old store inbound_group_sessions.
 
-use crypto::olm::InboundGroupSession;
 use indexed_db_futures::{
     Build, error::OpenDbError, query_source::QuerySource, transaction::TransactionMode,
 };
+use crypto::olm::InboundGroupSession;
 use tracing::{debug, info};
 use wasm_bindgen::JsValue;
 
@@ -72,9 +72,10 @@ pub(crate) async fn data_migrate(name: &str, serializer: &SafeEncodeSerializer) 
         let mut idx = 0;
         while let Some(value) = cursor.next_record::<JsValue>().await? {
             idx += 1;
-            let key = cursor.key::<JsValue>()?.ok_or(crypto::CryptoStoreError::Backend(
-                "inbound_group_sessions v1 cursor has no key".into(),
-            ))?;
+            let key =
+                cursor.key::<JsValue>()?.ok_or(crypto::CryptoStoreError::Backend(
+                    "inbound_group_sessions v1 cursor has no key".into(),
+                ))?;
 
             if idx % 100 == 0 {
                 debug!("Migrating session {idx} of {row_count}");

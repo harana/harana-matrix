@@ -17,12 +17,12 @@
 use std::future::Future;
 use std::future::IntoFuture;
 
+use sdk_common::boxed_into_future;
 use ruma::{
     api::client::{session::login, uiaa::UserIdentifier},
     assign,
     serde::JsonObject,
 };
-use sdk_common::boxed_into_future;
 use tracing::{info, instrument};
 
 use super::MatrixAuth;

@@ -1,7 +1,6 @@
 //! `GET /_matrix/client/*/notifications`
 //!
-//! Paginate through the list of events that the user has been, or would have
-//! been notified about.
+//! Paginate through the list of events that the user has been, or would have been notified about.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -9,16 +8,15 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3notifications
 
     use js_int::UInt;
-    use serde::{Deserialize, Serialize};
-
     use crate::{
         MilliSecondsSinceUnixEpoch, OwnedRoomId,
         api::{auth_scheme::AccessToken, request, response},
-        events::AnySyncTimelineEvent,
         metadata,
         push::Action,
         serde::Raw,
     };
+    use crate::events::AnySyncTimelineEvent;
+    use serde::{Deserialize, Serialize};
 
     metadata! {
         method: GET,
@@ -46,8 +44,8 @@ pub mod v3 {
 
         /// Allows basic filtering of events returned.
         ///
-        /// Supply "highlight" to return only events where the notification had
-        /// the 'highlight' tweak set.
+        /// Supply "highlight" to return only events where the notification had the 'highlight'
+        /// tweak set.
         #[ruma_api(query)]
         #[serde(skip_serializing_if = "Option::is_none")]
         pub only: Option<String>,
@@ -56,8 +54,8 @@ pub mod v3 {
     /// Response type for the `get_notifications` endpoint.
     #[response]
     pub struct Response {
-        /// The token to supply in the from param of the next /notifications
-        /// request in order to request more events.
+        /// The token to supply in the from param of the next /notifications request in order to
+        /// request more events.
         ///
         /// If this is absent, there are no more results.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -95,8 +93,8 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub profile_tag: Option<String>,
 
-        /// Indicates whether the user has sent a read receipt indicating that
-        /// they have read this message.
+        /// Indicates whether the user has sent a read receipt indicating that they have read this
+        /// message.
         pub read: bool,
 
         /// The ID of the room in which the event was posted.
@@ -107,8 +105,8 @@ pub mod v3 {
     }
 
     impl Notification {
-        /// Creates a new `Notification` with the given actions, event, read
-        /// flag, room ID and timestamp.
+        /// Creates a new `Notification` with the given actions, event, read flag, room ID and
+        /// timestamp.
         pub fn new(
             actions: Vec<Action>,
             event: Raw<AnySyncTimelineEvent>,

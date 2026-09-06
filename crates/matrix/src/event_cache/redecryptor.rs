@@ -57,7 +57,7 @@
 //! subscribes to [`RedecryptorReport`] stream.
 //!
 //! ```markdown
-//! 
+//!
 //!      .----------------------.
 //!     |                        |
 //!     |      Beeb, boop!       |
@@ -121,6 +121,8 @@ use std::{
 };
 
 use as_variant::as_variant;
+use futures_core::Stream;
+use futures_util::{StreamExt, future::try_join_all, pin_mut};
 #[cfg(doc)]
 use base::{BaseClient, crypto::OlmMachine};
 use base::{
@@ -136,16 +138,14 @@ use base::{
     task_monitor::BackgroundTaskHandle,
     timer,
 };
-use futures_core::Stream;
-use futures_util::{StreamExt, future::try_join_all, pin_mut};
+#[cfg(doc)]
+use sdk_common::deserialized_responses::EncryptionInfo;
 use ruma::{
     OwnedEventId, OwnedRoomId, RoomId,
     events::{AnySyncTimelineEvent, room::encrypted::OriginalSyncRoomEncryptedEvent},
     push::Action,
     serde::{JsonObject, Raw},
 };
-#[cfg(doc)]
-use sdk_common::deserialized_responses::EncryptionInfo;
 use tokio::sync::{
     broadcast::{self, Sender},
     mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
@@ -1451,6 +1451,7 @@ mod tests {
 
     use assert_matches2::assert_matches;
     use async_trait::async_trait;
+    use eyeball_im::VectorDiff;
     use base::{
         cross_process_lock::CrossProcessLockGeneration,
         crypto::types::events::{ToDeviceEvent, room::encrypted::ToDeviceEncryptedEventContent},
@@ -1471,7 +1472,8 @@ mod tests {
         sleep::sleep,
         store::StoreConfig,
     };
-    use eyeball_im::VectorDiff;
+    use sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
         EventId, OwnedEventId, RoomId, RoomVersionId, device_id, event_id,
         events::{AnySyncTimelineEvent, relation::RelationType},
@@ -1479,8 +1481,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_common::cross_process_lock::CrossProcessLockConfig;
-    use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use serde_json::{Value, json};
     use tokio::sync::oneshot::{self, Sender};
     use tracing::{Instrument, info};

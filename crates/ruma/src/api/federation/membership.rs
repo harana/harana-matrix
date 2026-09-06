@@ -1,12 +1,9 @@
 //! Room membership endpoints.
 
+use crate::serde::{Raw, from_raw_json_value};
+use crate::events::AnyStrippedStateEvent;
 use serde::{Deserialize, Serialize, de};
 use serde_json::value::RawValue as RawJsonValue;
-
-use crate::{
-    events::AnyStrippedStateEvent,
-    serde::{Raw, from_raw_json_value},
-};
 
 pub mod create_invite;
 pub mod create_join_event;
@@ -71,14 +68,11 @@ impl From<Raw<AnyStrippedStateEvent>> for RawStrippedState {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
+    use crate::{serde::Raw, user_id};
+    use crate::events::{AnyStrippedStateEvent, room::member::MembershipState};
     use serde_json::{from_value as from_json_value, json};
 
     use super::RawStrippedState;
-    use crate::{
-        events::{AnyStrippedStateEvent, room::member::MembershipState},
-        serde::Raw,
-        user_id,
-    };
 
     #[test]
     #[allow(deprecated)]

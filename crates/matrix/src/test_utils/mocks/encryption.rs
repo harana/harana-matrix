@@ -23,6 +23,7 @@ use std::{
 
 use assert_matches2::assert_let;
 use base::crypto::types::events::room::encrypted::EncryptedToDeviceEvent;
+use sdk_test::test_json;
 use ruma::{
     CrossSigningKeyId, DeviceId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OwnedDeviceId,
     OwnedOneTimeKeyId, OwnedUserId, UserId,
@@ -35,7 +36,6 @@ use ruma::{
     serde::Raw,
     to_device::DeviceIdOrAllDevices,
 };
-use sdk_test::test_json;
 use serde_json::json;
 use tracing::Instrument;
 use wiremock::{

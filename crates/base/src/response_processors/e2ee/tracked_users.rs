@@ -14,9 +14,9 @@
 
 use std::collections::BTreeSet;
 
+use sdk_common::timer;
 use crypto::OlmMachine;
 use ruma::{OwnedUserId, RoomId};
-use sdk_common::timer;
 
 use crate::{EncryptionState, Result, RoomMemberships, StateStore, store::BaseStateStore};
 

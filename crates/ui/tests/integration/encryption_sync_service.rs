@@ -6,18 +6,18 @@ use std::{
     },
 };
 
-use base::crypto::store::types::Changes;
 use futures_util::{StreamExt as _, pin_mut};
 use matrix::test_utils::mocks::MatrixMockServer;
+use base::crypto::store::types::Changes;
 use sdk_common::cross_process_lock::CrossProcessLockConfig;
 use sdk_test::async_test;
+use ui::encryption_sync_service::{
+    EncryptionSyncMode, EncryptionSyncPermit, EncryptionSyncService,
+};
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::{error, info, trace, warn};
-use ui::encryption_sync_service::{
-    EncryptionSyncMode, EncryptionSyncPermit, EncryptionSyncService,
-};
 use wiremock::{
     Mock, MockGuard, MockServer, Request, ResponseTemplate,
     matchers::{method, path},

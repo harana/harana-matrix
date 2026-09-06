@@ -101,14 +101,14 @@ pub enum ProfileFieldValue {
 impl ProfileFieldValue {
     /// Construct a new `ProfileFieldValue` with the given field and value.
     ///
-    /// Prefer to use the public variants of `ProfileFieldValue` where possible;
-    /// this constructor is meant to be used for unsupported fields only and
-    /// does not allow setting arbitrary data for supported ones.
+    /// Prefer to use the public variants of `ProfileFieldValue` where possible; this constructor is
+    /// meant to be used for unsupported fields only and does not allow setting arbitrary data for
+    /// supported ones.
     ///
     /// # Errors
     ///
-    /// Returns an error if the `field` is known and serialization of `value` to
-    /// the corresponding `ProfileFieldValue` variant fails.
+    /// Returns an error if the `field` is known and serialization of `value` to the corresponding
+    /// `ProfileFieldValue` variant fails.
     pub fn new(field: &str, value: JsonValue) -> serde_json::Result<Self> {
         Ok(match field {
             "avatar_url" => Self::AvatarUrl(from_json_value(value)?),
@@ -134,8 +134,8 @@ impl ProfileFieldValue {
 
     /// Returns the value of the field.
     ///
-    /// Prefer to use the public variants of `ProfileFieldValue` where possible;
-    /// this method is meant to be used for custom fields only.
+    /// Prefer to use the public variants of `ProfileFieldValue` where possible; this method is
+    /// meant to be used for custom fields only.
     pub fn value(&self) -> Cow<'_, JsonValue> {
         match self {
             Self::AvatarUrl(value) => {
@@ -186,8 +186,8 @@ impl StatusProfileField {
     }
 }
 
-/// An indicator that the user is currently in a call, and optionally how long
-/// they’ve been in the call.
+/// An indicator that the user is currently in a call, and optionally how long they’ve been in the
+/// call.
 #[cfg(feature = "unstable-msc4426")]
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -220,6 +220,7 @@ pub struct CustomProfileFieldValue {
 
 #[cfg(test)]
 mod tests {
+    use crate::{canonical_json::assert_to_canonical_json_eq, owned_mxc_uri};
     use serde_json::{from_value as from_json_value, json};
 
     use super::ProfileFieldValue;
@@ -227,7 +228,6 @@ mod tests {
     use super::{CallProfileField, StatusProfileField};
     #[cfg(feature = "unstable-msc4426")]
     use crate::SecondsSinceUnixEpoch;
-    use crate::{canonical_json::assert_to_canonical_json_eq, owned_mxc_uri};
 
     #[test]
     fn serialize_profile_field_value() {

@@ -25,8 +25,8 @@ mod tests {
     use std::ops::Not;
 
     use matrix::test_utils::mocks::MatrixMockServer;
-    use ruma::room_id;
     use sdk_test::async_test;
+    use ruma::room_id;
 
     use super::{super::new_rooms, *};
 

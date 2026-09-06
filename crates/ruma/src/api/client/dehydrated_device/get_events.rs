@@ -10,10 +10,10 @@ pub mod unstable {
     use crate::{
         OwnedDeviceId,
         api::{auth_scheme::AccessToken, request, response},
-        events::AnyToDeviceEvent,
         metadata,
         serde::Raw,
     };
+    use crate::events::AnyToDeviceEvent;
 
     metadata! {
         method: POST,
@@ -32,8 +32,8 @@ pub mod unstable {
         pub device_id: OwnedDeviceId,
         /// A point in time to continue getting events from.
         ///
-        /// Should be a token from the `next_batch` field of a previous
-        /// `/events` request.
+        /// Should be a token from the `next_batch` field of a previous `/events`
+        /// request.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub next_batch: Option<String>,
     }
@@ -41,8 +41,8 @@ pub mod unstable {
     /// Request type for the `dehydrated_device/{device_id}/events` endpoint.
     #[response]
     pub struct Response {
-        /// The batch token to supply in the `since` param of the next `/events`
-        /// request. Will be none if no further events can be found.
+        /// The batch token to supply in the `since` param of the next `/events` request. Will be
+        /// none if no further events can be found.
         pub next_batch: Option<String>,
 
         /// Messages sent directly between devices.

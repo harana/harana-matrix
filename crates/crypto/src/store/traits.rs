@@ -15,10 +15,10 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use async_trait::async_trait;
+use sdk_common::{AsyncTraitDeps, cross_process_lock::CrossProcessLockGeneration};
 use ruma::{
     DeviceId, OwnedDeviceId, RoomId, TransactionId, UserId, events::secret::request::SecretName,
 };
-use sdk_common::{AsyncTraitDeps, cross_process_lock::CrossProcessLockGeneration};
 use vodozemac::Curve25519PublicKey;
 use zeroize::Zeroizing;
 

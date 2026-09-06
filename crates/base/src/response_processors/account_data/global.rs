@@ -17,6 +17,7 @@ use std::{
     mem,
 };
 
+use sdk_common::timer;
 use ruma::{
     RoomId,
     events::{
@@ -24,7 +25,6 @@ use ruma::{
     },
     serde::Raw,
 };
-use sdk_common::timer;
 use tracing::{debug, instrument, trace, warn};
 
 use super::super::Context;
@@ -180,6 +180,7 @@ fn map_info<F: FnOnce(&mut RoomInfo)>(
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         events::{
             AnyGlobalAccountDataEvent, GlobalAccountDataEventType,
@@ -189,7 +190,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
 
     use crate::{

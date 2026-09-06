@@ -7,13 +7,12 @@ use crate::{CanonicalJsonObject, CanonicalJsonValue, room_version_rules::Redacti
 
 /// [`CanonicalJsonObject`] serializer that redacts fields on the fly.
 ///
-/// The main use case for this is to compute the hashes or signatures of an
-/// event, where the event needs to be redacted and have a few other fields
-/// removed.
+/// The main use case for this is to compute the hashes or signatures of an event, where the event
+/// needs to be redacted and have a few other fields removed.
 ///
 /// This avoids having to `.clone()` a `CanonicalJsonObject`, and then to
-/// [`redact()`](super::redact) it and potentially remove other fields, and
-/// serialize it with [`serde_json::to_vec()`].
+/// [`redact()`](super::redact) it and potentially remove other fields, and serialize it with
+/// [`serde_json::to_vec()`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RedactingSerializer<'a> {
     /// The redaction rules to apply, if any.
@@ -31,8 +30,7 @@ impl<'a> RedactingSerializer<'a> {
 
     /// Add the redaction rules to apply.
     ///
-    /// If this is set, the object to serialize must be an event with a `type`
-    /// field.
+    /// If this is set, the object to serialize must be an event with a `type` field.
     pub fn rules(mut self, rules: &'a RedactionRules) -> Self {
         self.rules = Some(rules);
         self
@@ -63,8 +61,7 @@ impl<'a> RedactingSerializer<'a> {
     }
 }
 
-/// Wrapper around [`CanonicalJsonObject`] that redacts fields during
-/// serialization.
+/// Wrapper around [`CanonicalJsonObject`] that redacts fields during serialization.
 struct RedactingObjectSerializer<'a> {
     object: &'a CanonicalJsonObject,
     retained_keys: Option<RetainedKeysWithRules<'a>>,

@@ -11,8 +11,7 @@ mod parse;
 
 use self::owned_id::OwnedId;
 
-/// Generate the `Owned` version of an identifier and various trait
-/// implementations.
+/// Generate the `Owned` version of an identifier and various trait implementations.
 pub(crate) fn expand_id_dst(input: syn::ItemStruct) -> syn::Result<TokenStream> {
     let id_dst = IdDst::parse(input)?;
 
@@ -51,8 +50,7 @@ struct IdDst {
     /// The generics on the borrowed type.
     generics: syn::Generics,
 
-    /// The declaration of the generics of the borrowed type to use on `impl`
-    /// blocks.
+    /// The declaration of the generics of the borrowed type to use on `impl` blocks.
     impl_generics: TokenStream,
 
     /// The path to the function to use to validate the identifier.
@@ -74,8 +72,8 @@ struct IdDst {
 }
 
 impl IdDst {
-    /// Generate `AsRef<str>` and `AsRef<[u8]>` implementations and string
-    /// conversions for this identifier.
+    /// Generate `AsRef<str>` and `AsRef<[u8]>` implementations and string conversions for this
+    /// identifier.
     fn expand_as_str_and_bytes_impls(&self) -> TokenStream {
         let ident = &self.ident;
         let impl_generics = &self.impl_generics;
@@ -141,8 +139,7 @@ impl IdDst {
         }
     }
 
-    /// Generate unchecked private methods to convert a string type to the
-    /// identifier.
+    /// Generate unchecked private methods to convert a string type to the identifier.
     fn expand_unchecked_from_str_impls(&self) -> TokenStream {
         let impl_generics = &self.impl_generics;
 
@@ -209,8 +206,8 @@ impl IdDst {
         }
     }
 
-    /// Generate `FromStr` and other fallible string conversions implementations
-    /// for this identifier, if it has a validation function.
+    /// Generate `FromStr` and other fallible string conversions implementations for this
+    /// identifier, if it has a validation function.
     ///
     /// The error returned during conversion is `ruma_common::IdParseError`.
     fn expand_fallible_from_str_impls(&self) -> Option<TokenStream> {
@@ -328,9 +325,8 @@ impl IdDst {
         })
     }
 
-    /// Generate `From<&str>` and other infallible string conversions
-    /// implementations for this identifier, if it doesn't have a validation
-    /// function.
+    /// Generate `From<&str>` and other infallible string conversions implementations for this
+    /// identifier, if it doesn't have a validation function.
     fn expand_infallible_from_str_impls(&self) -> Option<TokenStream> {
         if self.validate.is_some() {
             return None;
@@ -405,8 +401,8 @@ impl IdDst {
         })
     }
 
-    /// Generate `std::fmt::Display`, `std::fmt::Debug` and `serde::Serialize`
-    /// traits implementations, using it's `.as_str()` function.
+    /// Generate `std::fmt::Display`, `std::fmt::Debug` and `serde::Serialize` traits
+    /// implementations, using it's `.as_str()` function.
     fn expand_to_string_impls(&self, ty: &syn::Type) -> TokenStream {
         let serde = self.ruma_common.reexported(RumaCommonReexport::Serde);
 
@@ -470,8 +466,8 @@ impl IdDst {
             }
         };
 
-        // Implement reciprocal `PartialEq` implementation for the given type with the
-        // given other types.
+        // Implement reciprocal `PartialEq` implementation for the given type with the given other
+        // types.
         let expand_partial_eq_impls_for_type =
             |ty: &syn::Type, others: &[&syn::Type]| -> TokenStream {
                 others

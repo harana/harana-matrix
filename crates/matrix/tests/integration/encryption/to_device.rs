@@ -4,14 +4,14 @@ use std::{future, sync::Arc};
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::crypto::CollectStrategy;
 use matrix::test_utils::mocks::MatrixMockServer;
-use ruma::{events::AnyToDeviceEvent, serde::Raw};
+use base::crypto::CollectStrategy;
 use sdk_common::{
     deserialized_responses::{AlgorithmInfo, EncryptionInfo},
     locks::Mutex,
 };
 use sdk_test::{async_test, test_json};
+use ruma::{events::AnyToDeviceEvent, serde::Raw};
 use serde_json::json;
 use wiremock::{
     Mock, ResponseTemplate,

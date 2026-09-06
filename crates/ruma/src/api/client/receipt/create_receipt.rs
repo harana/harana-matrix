@@ -9,11 +9,13 @@ pub mod v3 {
 
     use crate::{
         OwnedEventId, OwnedRoomId,
-        api::{auth_scheme::AccessToken, client::PrivOwnedStr, request, response},
-        events::receipt::ReceiptThread,
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
         serde::StringEnum,
     };
+    use crate::events::receipt::ReceiptThread;
+
+    use crate::api::client::PrivOwnedStr;
 
     metadata! {
         method: POST,
@@ -46,7 +48,11 @@ pub mod v3 {
         /// [`ReceiptType::FullyRead`].
         ///
         /// Defaults to [`ReceiptThread::Unthreaded`].
-        #[serde(rename = "thread_id", default, skip_serializing_if = "crate::serde::is_default")]
+        #[serde(
+            rename = "thread_id",
+            default,
+            skip_serializing_if = "crate::serde::is_default"
+        )]
         pub thread: ReceiptThread,
     }
 
@@ -56,8 +62,7 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given room ID, receipt type and
-        /// event ID.
+        /// Creates a new `Request` with the given room ID, receipt type and event ID.
         pub fn new(
             room_id: OwnedRoomId,
             receipt_type: ReceiptType,
@@ -93,8 +98,8 @@ pub mod v3 {
         ///
         /// Indicates that the given event has been presented to the user.
         ///
-        /// This read receipt is not federated so only the user and their
-        /// homeserver are aware of it.
+        /// This read receipt is not federated so only the user and their homeserver
+        /// are aware of it.
         ///
         /// [private read receipt]: https://spec.matrix.org/v1.19/client-server-api/#private-read-receipts
         #[ruma_enum(rename = "m.read.private")]
@@ -104,8 +109,8 @@ pub mod v3 {
         ///
         /// Indicates that the given event has been read by the user.
         ///
-        /// This is actually not a receipt, but a piece of room account data. It
-        /// is provided here for convenience.
+        /// This is actually not a receipt, but a piece of room account data. It is
+        /// provided here for convenience.
         ///
         /// [fully read marker]: https://spec.matrix.org/v1.19/client-server-api/#fully-read-markers
         #[ruma_enum(rename = "m.fully_read")]

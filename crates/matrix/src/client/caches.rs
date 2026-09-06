@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use base::store::WellKnownResponse;
+use sdk_common::{locks::Mutex, ttl::TtlValue};
 use ruma::api::{
     SupportedVersions,
     client::{
@@ -25,7 +26,6 @@ use ruma::api::{
         rtc::RtcTransport,
     },
 };
-use sdk_common::{locks::Mutex, ttl::TtlValue};
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::HttpError;

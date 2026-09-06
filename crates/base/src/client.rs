@@ -21,6 +21,10 @@ use std::{
     ops::Deref,
 };
 
+use eyeball::{SharedObservable, Subscriber};
+use eyeball_im::{Vector, VectorDiff};
+use futures_util::Stream;
+use sdk_common::{cross_process_lock::CrossProcessLockConfig, timer};
 #[cfg(feature = "experimental-x509-identity-verification")]
 use crypto::x509::{RawX509Signer, RawX509Verifier};
 #[cfg(feature = "e2e-encryption")]
@@ -29,9 +33,6 @@ use crypto::{
     OlmMachineBuilder, TrustRequirement, store::DynCryptoStore,
     store::types::RoomPendingKeyBundleDetails, types::requests::ToDeviceRequest,
 };
-use eyeball::{SharedObservable, Subscriber};
-use eyeball_im::{Vector, VectorDiff};
-use futures_util::Stream;
 #[cfg(doc)]
 use ruma::DeviceId;
 #[cfg(feature = "e2e-encryption")]
@@ -49,7 +50,6 @@ use ruma::{
     serde::Raw,
     time::Instant,
 };
-use sdk_common::{cross_process_lock::CrossProcessLockConfig, timer};
 use tokio::sync::{Mutex, broadcast};
 #[cfg(feature = "e2e-encryption")]
 use tokio::sync::{RwLock, RwLockReadGuard};
@@ -372,13 +372,14 @@ impl BaseClient {
     /// * `session_meta` - The meta of a session that the user already has from
     ///   a previous login call.
     ///
-    /// * `custom_account` - A custom [`crypto::vodozemac::olm::Account`] to be
-    ///   used for the identity and one-time keys of this [`BaseClient`]. If no
-    ///   account is provided, a new default one or one from the store will be
-    ///   used. If an account is provided and one already exists in the store
-    ///   for this [`UserId`]/[`DeviceId`] combination, an error will be raised.
-    ///   This is useful if one wishes to create identity keys before knowing
-    ///   the user/device IDs, e.g., to use the identity key as the device ID.
+    /// * `custom_account` - A custom
+    ///   [`crypto::vodozemac::olm::Account`] to be used for the
+    ///   identity and one-time keys of this [`BaseClient`]. If no account is
+    ///   provided, a new default one or one from the store will be used. If an
+    ///   account is provided and one already exists in the store for this
+    ///   [`UserId`]/[`DeviceId`] combination, an error will be raised. This is
+    ///   useful if one wishes to create identity keys before knowing the
+    ///   user/device IDs, e.g., to use the identity key as the device ID.
     ///
     /// * `room_load_settings` — Specify how many rooms must be restored; use
     ///   `::default()` if you don't know which value to pick.
@@ -1560,6 +1561,11 @@ mod tests {
     #[cfg(feature = "e2e-encryption")]
     use assert_matches2::assert_matches;
     use futures_util::FutureExt as _;
+    use sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use sdk_test::{
+        BOB, InvitedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
+        event_factory::EventFactory, ruma_response_from_json,
+    };
     #[cfg(feature = "unstable-msc4426")]
     use ruma::profile::{
         ProfileFieldValue, StatusProfileField, UserProfileChanges, UserProfileUpdate,
@@ -1572,11 +1578,6 @@ mod tests {
         room_id,
         serde::Raw,
         user_id,
-    };
-    use sdk_common::cross_process_lock::CrossProcessLockConfig;
-    use sdk_test::{
-        BOB, InvitedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
-        event_factory::EventFactory, ruma_response_from_json,
     };
     use serde_json::{json, value::to_raw_value};
 

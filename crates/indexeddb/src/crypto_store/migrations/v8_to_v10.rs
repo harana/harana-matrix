@@ -15,10 +15,10 @@
 //! Migration code that moves from inbound_group_sessions2 to
 //! inbound_group_sessions3, shrinking the values stored in each record.
 
-use crypto::olm::InboundGroupSession;
 use indexed_db_futures::{
     Build, error::OpenDbError, query_source::QuerySource, transaction::TransactionMode,
 };
+use crypto::olm::InboundGroupSession;
 use tracing::{debug, info};
 use wasm_bindgen::JsValue;
 

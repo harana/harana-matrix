@@ -14,6 +14,8 @@
 
 use std::time::Duration;
 
+use eyeball::SharedObservable;
+use futures_core::Stream;
 use base::{
     boxed_into_future,
     crypto::types::{
@@ -21,11 +23,9 @@ use base::{
         qr_login::{QrCodeData, QrCodeIntent},
     },
 };
-use eyeball::SharedObservable;
-use futures_core::Stream;
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use oauth2::VerificationUriComplete;
 use ruma::time::Instant;
-use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use url::Url;
 #[cfg(doc)]
 use vodozemac::ecies::CheckCode;
@@ -425,12 +425,12 @@ mod test {
     use std::sync::Arc;
 
     use assert_matches2::{assert_let, assert_matches};
-    use base::crypto::types::SecretsBundle;
     use futures_util::StreamExt;
-    use oauth2::{EndUserVerificationUrl, VerificationUriComplete};
-    use ruma::{owned_device_id, owned_user_id};
+    use base::crypto::types::SecretsBundle;
     use sdk_common::executor::spawn;
     use sdk_test::async_test;
+    use oauth2::{EndUserVerificationUrl, VerificationUriComplete};
+    use ruma::{owned_device_id, owned_user_id};
     use tokio::sync::oneshot;
     use tracing::debug;
 

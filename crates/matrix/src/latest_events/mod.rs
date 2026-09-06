@@ -56,15 +56,15 @@ use std::{
     sync::Arc,
 };
 
-use base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons, timer};
 pub use error::LatestEventsError;
 use eyeball::{AsyncLock, Subscriber};
 pub(crate) use latest_event::filter_timeline_event;
 use latest_event::{LatestEvent, With};
 pub use latest_event::{LatestEventValue, LocalLatestEventValue, RemoteLatestEventValue};
+use base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons, timer};
+use sdk_common::task_monitor::{BackgroundTaskHandle, TaskMonitor};
 use room_latest_events::{RoomLatestEvents, RoomLatestEventsWriteGuard};
 use ruma::{EventId, OwnedRoomId, RoomId};
-use sdk_common::task_monitor::{BackgroundTaskHandle, TaskMonitor};
 use tokio::{
     select,
     sync::{RwLock, RwLockReadGuard, RwLockWriteGuard, broadcast, mpsc},
@@ -706,12 +706,15 @@ mod tests {
     use std::{collections::HashMap, ops::Not, time::Duration};
 
     use assert_matches::assert_matches;
+    use eyeball::SharedObservable;
     use base::{
         RoomState,
         deserialized_responses::TimelineEventKind,
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
     };
-    use eyeball::SharedObservable;
+    use sdk_test::{
+        InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory,
+    };
     use ruma::{
         MilliSecondsSinceUnixEpoch, OwnedTransactionId, event_id,
         events::{
@@ -719,9 +722,6 @@ mod tests {
             room::member::{MembershipState, SyncRoomMemberEvent},
         },
         owned_event_id, owned_room_id, room_id, user_id,
-    };
-    use sdk_test::{
-        InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory,
     };
     use stream_assert::assert_pending;
     use tokio::{task::yield_now, time::timeout};

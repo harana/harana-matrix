@@ -2,13 +2,13 @@
 //!
 //! Ask the [Policy Server] to sign an event.
 //!
-//! This endpoint MUST NOT be called for events which have a type of
-//! `m.room.policy` and an empty string `state_key`. All other events, including
-//! state events, non-state `m.room.policy` events, and `m.room.policy` state
-//! events with non-empty string `state_key`s are processed by this endpoint.
+//! This endpoint MUST NOT be called for events which have a type of `m.room.policy` and an empty
+//! string `state_key`. All other events, including state events, non-state `m.room.policy` events,
+//! and `m.room.policy` state events with non-empty string `state_key`s are processed by this
+//! endpoint.
 //!
-//! Whether a signature is required by a Policy Server further depends on
-//! whether the room has enabled a Policy Server.
+//! Whether a signature is required by a Policy Server further depends on whether the room has
+//! enabled a Policy Server.
 //!
 //! [Policy Server]: https://spec.matrix.org/v1.19/server-server-api/#policy-servers
 
@@ -17,17 +17,16 @@ pub mod v1 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#post_matrixpolicyv1sign
 
-    use serde_json::value::RawValue as RawJsonValue;
-
     use crate::{
         OwnedServerName, ServerName, ServerSignatures as ServerSignaturesMap,
         ServerSigningKeyVersion, SigningKeyId,
-        api::{
-            federation::authentication::ServerSignatures as ServerSignaturesAuth, request, response,
-        },
-        events::room::policy::POLICY_SERVER_ED25519_SIGNING_KEY_ID,
+        api::{request, response},
         metadata,
     };
+    use crate::events::room::policy::POLICY_SERVER_ED25519_SIGNING_KEY_ID;
+    use serde_json::value::RawValue as RawJsonValue;
+
+    use crate::api::federation::authentication::ServerSignatures as ServerSignaturesAuth;
 
     metadata! {
         method: POST,
@@ -49,8 +48,8 @@ pub mod v1 {
     pub struct Response {
         /// A map containing the Policy Server's signature of the event.
         ///
-        /// This signature is to be added to the event before sending or
-        /// processing the event further.
+        /// This signature is to be added to the event before sending or processing the event
+        /// further.
         ///
         /// `ed25519:policy_server` is always used for Ed25519 signatures.
         #[ruma_api(body)]
@@ -65,8 +64,7 @@ pub mod v1 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given Policy Server name and event
-        /// signature.
+        /// Creates a new `Response` with the given Policy Server name and event signature.
         pub fn new(server_name: OwnedServerName, ed25519_signature: String) -> Self {
             Self {
                 signatures: ServerSignaturesMap::from_iter(std::iter::once((
@@ -78,8 +76,7 @@ pub mod v1 {
             }
         }
 
-        /// Get the signature of the event for the given Policy Server name, if
-        /// any.
+        /// Get the signature of the event for the given Policy Server name, if any.
         pub fn ed25519_signature(&self, server_name: &ServerName) -> Option<&str> {
             self.signatures
                 .get(server_name)?
@@ -101,9 +98,8 @@ mod tests {
     #[cfg(feature = "server")]
     #[test]
     fn construct_and_serialize_response() {
-        use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
-
         use crate::{api::OutgoingResponseExt as _, owned_server_name};
+        use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
 
         let response = Response::new(owned_server_name!("policy.example.org"), "zLFxllD0pbBuBpfHh8NuHNaICpReF/PAOpUQTsw+bFGKiGfDNAsnhcP7pbrmhhpfbOAxIdLraQLeeiXBryLmBw".to_owned());
 
@@ -122,9 +118,8 @@ mod tests {
     #[cfg(feature = "client")]
     #[test]
     fn deserialize_response() {
-        use serde_json::json;
-
         use crate::{api::IncomingResponseExt as _, server_name};
+        use serde_json::json;
 
         let body = json!({
             "policy.example.org": {

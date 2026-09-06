@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, ops::Not as _, time::Duration};
 
 use assert_matches2::{assert_let, assert_matches};
-use base::{RoomState, sync::RoomUpdates};
 use eyeball::SharedObservable;
 use eyeball_im::VectorDiff;
 use futures_util::{FutureExt, StreamExt, pin_mut};
@@ -17,6 +16,22 @@ use matrix::{
     sync::{RoomUpdate, State},
     test_utils::{
         client::mock_matrix_session, mocks::MatrixMockServer, no_retry_test_client_with_server,
+    },
+};
+use base::{RoomState, sync::RoomUpdates};
+use sdk_common::{cross_process_lock::CrossProcessLockConfig, executor::spawn};
+#[cfg(feature = "sqlite")]
+use sdk_test::InvitedRoomBuilder;
+use sdk_test::{
+    DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, async_test,
+    event_factory::EventFactory,
+    sync_state_event,
+    test_json::{
+        self,
+        sync::{
+            MIXED_INVITED_ROOM_ID, MIXED_JOINED_ROOM_ID, MIXED_KNOCKED_ROOM_ID, MIXED_LEFT_ROOM_ID,
+            MIXED_SYNC,
+        },
     },
 };
 use ruma::{
@@ -49,21 +64,6 @@ use ruma::{
     room_id,
     serde::Raw,
     uint, user_id,
-};
-use sdk_common::{cross_process_lock::CrossProcessLockConfig, executor::spawn};
-#[cfg(feature = "sqlite")]
-use sdk_test::InvitedRoomBuilder;
-use sdk_test::{
-    DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, async_test,
-    event_factory::EventFactory,
-    sync_state_event,
-    test_json::{
-        self,
-        sync::{
-            MIXED_INVITED_ROOM_ID, MIXED_JOINED_ROOM_ID, MIXED_KNOCKED_ROOM_ID, MIXED_LEFT_ROOM_ID,
-            MIXED_SYNC,
-        },
-    },
 };
 use serde_json::{Value as JsonValue, json};
 use stream_assert::{assert_next_matches, assert_pending};

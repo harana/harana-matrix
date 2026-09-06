@@ -7,10 +7,11 @@ mod lazy_load;
 mod url;
 
 use js_int::UInt;
+use crate::{OwnedRoomId, OwnedUserId, serde::StringEnum};
 use serde::{Deserialize, Serialize};
 
 pub use self::{lazy_load::LazyLoadOptions, url::UrlFilter};
-use crate::{OwnedRoomId, OwnedUserId, api::client::PrivOwnedStr, serde::StringEnum};
+use crate::api::client::PrivOwnedStr;
 
 /// Format to use for returned events.
 #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc/string_enum.md"))]
@@ -35,16 +36,16 @@ pub enum EventFormat {
 pub struct RoomEventFilter {
     /// A list of event types to exclude.
     ///
-    /// If this list is absent then no event types are excluded. A matching type
-    /// will be excluded even if it is listed in the 'types' filter. A '*'
-    /// can be used as a wildcard to match any sequence of characters.
+    /// If this list is absent then no event types are excluded. A matching type will be excluded
+    /// even if it is listed in the 'types' filter. A '*' can be used as a wildcard to match any
+    /// sequence of characters.
     #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
     pub not_types: Vec<String>,
 
     /// A list of room IDs to exclude.
     ///
-    /// If this list is absent then no rooms are excluded. A matching room will
-    /// be excluded even if it is listed in the 'rooms' filter.
+    /// If this list is absent then no rooms are excluded. A matching room will be excluded even if
+    /// it is listed in the 'rooms' filter.
     #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
     pub not_rooms: Vec<OwnedRoomId>,
 
@@ -60,8 +61,8 @@ pub struct RoomEventFilter {
 
     /// A list of sender IDs to exclude.
     ///
-    /// If this list is absent then no senders are excluded. A matching sender
-    /// will be excluded even if it is listed in the 'senders' filter.
+    /// If this list is absent then no senders are excluded. A matching sender will be excluded
+    /// even if it is listed in the 'senders' filter.
     #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
     pub not_senders: Vec<OwnedUserId>,
 
@@ -73,8 +74,8 @@ pub struct RoomEventFilter {
 
     /// A list of event types to include.
     ///
-    /// If this list is absent then all event types are included. A '*' can be
-    /// used as a wildcard to match any sequence of characters.
+    /// If this list is absent then all event types are included. A '*' can be used as a wildcard
+    /// to match any sequence of characters.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub types: Option<Vec<String>>,
 
@@ -110,8 +111,7 @@ impl RoomEventFilter {
         Self::default()
     }
 
-    /// Creates a new `RoomEventFilter` that can be used to ignore all room
-    /// events.
+    /// Creates a new `RoomEventFilter` that can be used to ignore all room events.
     pub fn ignore_all() -> Self {
         Self { types: Some(vec![]), ..Default::default() }
     }
@@ -173,8 +173,8 @@ pub struct RoomFilter {
     #[serde(default, skip_serializing_if = "crate::serde::is_empty")]
     pub timeline: RoomEventFilter,
 
-    /// The events that aren't recorded in the room history, e.g. typing and
-    /// receipts, to include for rooms.
+    /// The events that aren't recorded in the room history, e.g. typing and receipts, to include
+    /// for rooms.
     #[serde(default, skip_serializing_if = "crate::serde::is_empty")]
     pub ephemeral: RoomEventFilter,
 
@@ -184,18 +184,16 @@ pub struct RoomFilter {
 
     /// A list of room IDs to exclude.
     ///
-    /// If this list is absent then no rooms are excluded. A matching room will
-    /// be excluded even if it is listed in the 'rooms' filter. This filter
-    /// is applied before the filters in `ephemeral`, `state`, `timeline` or
-    /// `account_data`.
+    /// If this list is absent then no rooms are excluded. A matching room will be excluded even if
+    /// it is listed in the 'rooms' filter. This filter is applied before the filters in
+    /// `ephemeral`, `state`, `timeline` or `account_data`.
     #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
     pub not_rooms: Vec<OwnedRoomId>,
 
     /// A list of room IDs to include.
     ///
-    /// If this list is absent then all rooms are included. This filter is
-    /// applied before the filters in `ephemeral`, `state`, `timeline` or
-    /// `account_data`.
+    /// If this list is absent then all rooms are included. This filter is applied before the
+    /// filters in `ephemeral`, `state`, `timeline` or `account_data`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rooms: Option<Vec<OwnedRoomId>>,
 }
@@ -208,8 +206,7 @@ impl RoomFilter {
         Self::default()
     }
 
-    /// Creates a new `RoomFilter` that can be used to ignore all room events
-    /// (of any type).
+    /// Creates a new `RoomFilter` that can be used to ignore all room events (of any type).
     pub fn ignore_all() -> Self {
         Self { rooms: Some(vec![]), ..Default::default() }
     }
@@ -243,9 +240,9 @@ impl RoomFilter {
 pub struct Filter {
     /// A list of event types to exclude.
     ///
-    /// If this list is absent then no event types are excluded. A matching type
-    /// will be excluded even if it is listed in the 'types' filter. A '*'
-    /// can be used as a wildcard to match any sequence of characters.
+    /// If this list is absent then no event types are excluded. A matching type will be excluded
+    /// even if it is listed in the 'types' filter. A '*' can be used as a wildcard to match any
+    /// sequence of characters.
     #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
     pub not_types: Vec<String>,
 
@@ -261,15 +258,15 @@ pub struct Filter {
 
     /// A list of event types to include.
     ///
-    /// If this list is absent then all event types are included. A '*' can be
-    /// used as a wildcard to match any sequence of characters.
+    /// If this list is absent then all event types are included. A '*' can be used as a wildcard
+    /// to match any sequence of characters.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub types: Option<Vec<String>>,
 
     /// A list of sender IDs to exclude.
     ///
-    /// If this list is absent then no senders are excluded. A matching sender
-    /// will be excluded even if it is listed in the 'senders' filter.
+    /// If this list is absent then no senders are excluded. A matching sender will be excluded
+    /// even if it is listed in the 'senders' filter.
     #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
     pub not_senders: Vec<OwnedUserId>,
 }
@@ -304,19 +301,17 @@ impl Filter {
 pub struct FilterDefinition {
     /// List of event fields to include.
     ///
-    /// If this list is absent then all fields are included. The entries may
-    /// include '.' characters to indicate sub-fields. So ['content.body']
-    /// will include the 'body' field of the 'content' object. A literal '.'
-    /// or '\' character in a field name may be escaped using a '\'. A server
+    /// If this list is absent then all fields are included. The entries may include '.' characters
+    /// to indicate sub-fields. So ['content.body'] will include the 'body' field of the 'content'
+    /// object. A literal '.' or '\' character in a field name may be escaped using a '\'. A server
     /// may include more fields than were requested.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub event_fields: Option<Vec<String>>,
 
     /// The format to use for events.
     ///
-    /// 'client' will return the events in a format suitable for clients.
-    /// 'federation' will return the raw event as received over federation.
-    /// The default is 'client'.
+    /// 'client' will return the events in a format suitable for clients. 'federation' will return
+    /// the raw event as received over federation. The default is 'client'.
     #[serde(default, skip_serializing_if = "crate::serde::is_default")]
     pub event_format: EventFormat,
 
@@ -351,8 +346,7 @@ impl FilterDefinition {
         }
     }
 
-    /// Creates a new `FilterDefinition` with [room member lazy-loading]
-    /// enabled.
+    /// Creates a new `FilterDefinition` with [room member lazy-loading] enabled.
     ///
     /// Redundant membership events are disabled.
     ///
@@ -389,6 +383,7 @@ can_be_empty!(RoomFilter);
 
 #[cfg(test)]
 mod tests {
+    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{
         from_str as from_json_str, from_value as from_json_value, json, to_string as to_json_string,
     };
@@ -396,7 +391,6 @@ mod tests {
     use super::{
         Filter, FilterDefinition, LazyLoadOptions, RoomEventFilter, RoomFilter, UrlFilter,
     };
-    use crate::canonical_json::assert_to_canonical_json_eq;
 
     #[test]
     fn default_filters_are_empty() {

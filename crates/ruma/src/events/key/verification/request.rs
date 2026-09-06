@@ -2,11 +2,11 @@
 //!
 //! [`m.key.verification.request`]: https://spec.matrix.org/v1.19/client-server-api/#mkeyverificationrequest
 
+use crate::{MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedTransactionId};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::VerificationMethod;
-use crate::{MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedTransactionId};
 
 /// The content of an `m.key.verification.request` event.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
@@ -26,14 +26,14 @@ pub struct ToDeviceKeyVerificationRequestEventContent {
 
     /// The time in milliseconds for when the request was made.
     ///
-    /// If the request is in the future by more than 5 minutes or more than 10
-    /// minutes in the past, the message should be ignored by the receiver.
+    /// If the request is in the future by more than 5 minutes or more than 10 minutes in
+    /// the past, the message should be ignored by the receiver.
     pub timestamp: MilliSecondsSinceUnixEpoch,
 }
 
 impl ToDeviceKeyVerificationRequestEventContent {
-    /// Creates a new `ToDeviceKeyVerificationRequestEventContent` with the
-    /// given device ID, transaction ID, methods and timestamp.
+    /// Creates a new `ToDeviceKeyVerificationRequestEventContent` with the given device ID,
+    /// transaction ID, methods and timestamp.
     pub fn new(
         from_device: OwnedDeviceId,
         transaction_id: OwnedTransactionId,

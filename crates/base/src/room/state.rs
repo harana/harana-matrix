@@ -175,8 +175,8 @@ impl RoomStateFilter {
 mod tests {
     use assert_matches::assert_matches;
     use futures_util::{FutureExt as _, StreamExt as _};
-    use ruma::owned_room_id;
     use sdk_test::async_test;
+    use ruma::owned_room_id;
 
     use super::{RoomState, RoomStateFilter};
     use crate::test_utils::logged_in_base_client;

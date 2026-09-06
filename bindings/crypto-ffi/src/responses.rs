@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use http::Response;
 use crypto::{
     CrossSigningBootstrapRequests,
     types::requests::{
@@ -10,7 +11,6 @@ use crypto::{
         UploadSigningKeysRequest as RustUploadSigningKeysRequest,
     },
 };
-use http::Response;
 use ruma::{
     OwnedTransactionId, UserId,
     api::client::{

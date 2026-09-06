@@ -21,7 +21,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use base::{RoomInfo, RoomState, crypto::types::events::CryptoContextInfo};
 use eyeball::{SharedObservable, Subscriber};
 use eyeball_im::VectorDiff;
 use futures_core::Stream;
@@ -35,6 +34,8 @@ use matrix::{
     send_queue::RoomSendQueueUpdate,
     test_utils::mocks::MatrixMockServer,
 };
+use base::{RoomInfo, RoomState, crypto::types::events::CryptoContextInfo};
+use sdk_test::{ALICE, DEFAULT_TEST_ROOM_ID, event_factory::EventFactory};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId,
     OwnedUserId, RoomId, TransactionId, UInt, UserId,
@@ -48,7 +49,6 @@ use ruma::{
     room_version_rules::RoomVersionRules,
     serde::Raw,
 };
-use sdk_test::{ALICE, DEFAULT_TEST_ROOM_ID, event_factory::EventFactory};
 use tokio::sync::RwLock;
 
 use super::{
@@ -346,7 +346,10 @@ impl PaginableThread for TestRoomDataProvider {
         unimplemented!();
     }
 
-    async fn load_event(&self, _event_id: &OwnedEventId) -> Result<TimelineEvent, matrix::Error> {
+    async fn load_event(
+        &self,
+        _event_id: &OwnedEventId,
+    ) -> Result<TimelineEvent, matrix::Error> {
         unimplemented!();
     }
 }

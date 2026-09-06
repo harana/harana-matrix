@@ -23,6 +23,10 @@ use matrix::{
     room::Receipts,
     test_utils::mocks::{MatrixMockServer, RoomMessagesResponseTemplate},
 };
+use sdk_test::{
+    ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
+};
+use ui::timeline::{RoomExt, TimelineFocus, TimelineReadReceiptTracking};
 use ruma::{
     MilliSecondsSinceUnixEpoch, OwnedEventId,
     api::client::receipt::create_receipt::v3::ReceiptType as CreateReceiptType,
@@ -39,11 +43,9 @@ use ruma::{
     room_version_rules::RoomVersionRules,
     uint, user_id,
 };
-use sdk_test::{ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde_json::json;
 use stream_assert::{assert_pending, assert_ready};
 use tokio::task::yield_now;
-use ui::timeline::{RoomExt, TimelineFocus, TimelineReadReceiptTracking};
 
 /// Wait until the room's send queue has sent everything it had.
 ///

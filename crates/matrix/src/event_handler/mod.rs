@@ -50,17 +50,17 @@ use std::{
 use anymap2::any::CloneAny;
 #[cfg(not(target_family = "wasm"))]
 use anymap2::any::CloneAnySendSync;
+use eyeball::{SharedObservable, Subscriber};
+use futures_core::Stream;
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use base::{
     SendOutsideWasm, SyncOutsideWasm,
     deserialized_responses::{EncryptionInfo, TimelineEvent},
     sync::State,
 };
-use eyeball::{SharedObservable, Subscriber};
-use futures_core::Stream;
-use futures_util::stream::{FuturesUnordered, StreamExt};
+use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use pin_project_lite::pin_project;
 use ruma::{EventId, OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
-use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::value::RawValue as RawJsonValue;
 use tracing::{debug, error, field::debug, instrument, trace, warn};
@@ -811,6 +811,8 @@ mod tests {
     };
 
     use assert_matches2::assert_let;
+    use sdk_common::{deserialized_responses::EncryptionInfo, locks::Mutex};
+    use sdk_test::SyncResponseBuilder;
     use ruma::{
         event_id,
         events::{
@@ -830,8 +832,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_common::{deserialized_responses::EncryptionInfo, locks::Mutex};
-    use sdk_test::SyncResponseBuilder;
     use serde_json::json;
 
     use crate::{
@@ -944,7 +944,8 @@ mod tests {
             fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
                 let metadata = event.metadata();
 
-                if *metadata.level() != Level::TRACE || metadata.target() != "matrix::event_handler"
+                if *metadata.level() != Level::TRACE
+                    || metadata.target() != "matrix::event_handler"
                 {
                     return;
                 }

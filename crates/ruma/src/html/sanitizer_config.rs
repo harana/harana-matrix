@@ -14,8 +14,7 @@ pub struct SanitizerConfig {
 
     /// Change to the list of elements to replace.
     ///
-    /// The content is a map of element name to their replacement's element
-    /// name.
+    /// The content is a map of element name to their replacement's element name.
     replace_elements: Option<List<HashMap<&'static str, &'static str>>>,
 
     /// Elements to remove.
@@ -32,8 +31,8 @@ pub struct SanitizerConfig {
 
     /// Change to the list of attributes to replace per element.
     ///
-    /// The content is a map of element name to a map of attribute name to their
-    /// replacement's attribute name.
+    /// The content is a map of element name to a map of attribute name to their replacement's
+    /// attribute name.
     replace_attrs: Option<List<HashMap<&'static str, HashMap<&'static str, &'static str>>>>,
 
     /// Removed attributes per element.
@@ -44,14 +43,12 @@ pub struct SanitizerConfig {
 
     /// Denied URI schemes per attribute per element.
     ///
-    /// The content is a map of element name to a map of attribute name to a set
-    /// of schemes.
+    /// The content is a map of element name to a map of attribute name to a set of schemes.
     deny_schemes: Option<HashMap<&'static str, HashMap<&'static str, HashSet<&'static str>>>>,
 
     /// Change to the list of allowed URI schemes per attribute per element.
     ///
-    /// The content is a map of element name to a map of attribute name to a set
-    /// of schemes.
+    /// The content is a map of element name to a map of attribute name to a set of schemes.
     #[allow(clippy::type_complexity)]
     allow_schemes:
         Option<List<HashMap<&'static str, HashMap<&'static str, HashSet<&'static str>>>>>,
@@ -71,84 +68,70 @@ pub struct SanitizerConfig {
 }
 
 impl SanitizerConfig {
-    /// Constructs an empty `SanitizerConfig` that will not filter any element
-    /// or attribute.
+    /// Constructs an empty `SanitizerConfig` that will not filter any element or attribute.
     ///
-    /// The list of allowed and replaced elements can be changed with
-    /// [`Self::allow_elements()`], [`Self::replace_elements()`],
-    /// [`Self::ignore_elements()`], [`Self::remove_elements()`],
+    /// The list of allowed and replaced elements can be changed with [`Self::allow_elements()`],
+    /// [`Self::replace_elements()`], [`Self::ignore_elements()`], [`Self::remove_elements()`],
     /// [`Self::remove_reply_fallback()`].
     ///
     /// The list of allowed and replaced attributes can be changed with
     /// [`Self::allow_attributes()`], [`Self::replace_attributes()`],
-    /// [`Self::remove_attributes()`], [`Self::allow_schemes()`],
-    /// [`Self::deny_schemes()`], [`Self::allow_classes()`],
-    /// [`Self::remove_classes()`].
+    /// [`Self::remove_attributes()`], [`Self::allow_schemes()`], [`Self::deny_schemes()`],
+    /// [`Self::allow_classes()`], [`Self::remove_classes()`].
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Constructs a `SanitizerConfig` with the given mode for filtering
-    /// elements and attributes.
+    /// Constructs a `SanitizerConfig` with the given mode for filtering elements and attributes.
     ///
-    /// The mode defines the basic list of allowed and replaced elements and
-    /// attributes and the maximum nesting level of elements.
+    /// The mode defines the basic list of allowed and replaced elements and attributes and the
+    /// maximum nesting level of elements.
     ///
-    /// The list of allowed and replaced elements can be changed with
-    /// [`Self::allow_elements()`], [`Self::replace_elements()`],
-    /// [`Self::ignore_elements()`], [`Self::remove_elements()`],
+    /// The list of allowed and replaced elements can be changed with [`Self::allow_elements()`],
+    /// [`Self::replace_elements()`], [`Self::ignore_elements()`], [`Self::remove_elements()`],
     /// [`Self::remove_reply_fallback()`].
     ///
     /// The list of allowed and replaced attributes can be changed with
     /// [`Self::allow_attributes()`], [`Self::replace_attributes()`],
-    /// [`Self::remove_attributes()`], [`Self::allow_schemes()`],
-    /// [`Self::deny_schemes()`], [`Self::allow_classes()`],
-    /// [`Self::remove_classes()`].
+    /// [`Self::remove_attributes()`], [`Self::allow_schemes()`], [`Self::deny_schemes()`],
+    /// [`Self::allow_classes()`], [`Self::remove_classes()`].
     pub fn with_mode(mode: HtmlSanitizerMode) -> Self {
         Self { mode: Some(mode), ..Default::default() }
     }
 
-    /// Constructs a `SanitizerConfig` that will filter elements and attributes
-    /// not [suggested in the Matrix specification].
+    /// Constructs a `SanitizerConfig` that will filter elements and attributes not [suggested in
+    /// the Matrix specification].
     ///
-    /// The list of allowed and replaced elements can be changed with
-    /// [`Self::allow_elements()`], [`Self::replace_elements()`],
-    /// [`Self::ignore_elements()`], [`Self::remove_elements()`],
+    /// The list of allowed and replaced elements can be changed with [`Self::allow_elements()`],
+    /// [`Self::replace_elements()`], [`Self::ignore_elements()`], [`Self::remove_elements()`],
     /// [`Self::remove_reply_fallback()`].
     ///
     /// The list of allowed and replaced attributes can be changed with
     /// [`Self::allow_attributes()`], [`Self::replace_attributes()`],
-    /// [`Self::remove_attributes()`], [`Self::allow_schemes()`],
-    /// [`Self::deny_schemes()`], [`Self::allow_classes()`],
-    /// [`Self::remove_classes()`].
+    /// [`Self::remove_attributes()`], [`Self::allow_schemes()`], [`Self::deny_schemes()`],
+    /// [`Self::allow_classes()`], [`Self::remove_classes()`].
     ///
-    /// This is the same as calling
-    /// `SanitizerConfig::with_mode(HtmlSanitizerMode::Strict)`.
+    /// This is the same as calling `SanitizerConfig::with_mode(HtmlSanitizerMode::Strict)`.
     ///
     /// [suggested in the Matrix specification]: https://spec.matrix.org/v1.19/client-server-api/#mroommessage-msgtypes
     pub fn strict() -> Self {
         Self::with_mode(HtmlSanitizerMode::Strict)
     }
 
-    /// Constructs a `SanitizerConfig` that will filter elements and attributes
-    /// not [suggested in the Matrix specification], except a few for
-    /// improved compatibility:
+    /// Constructs a `SanitizerConfig` that will filter elements and attributes not [suggested in
+    /// the Matrix specification], except a few for improved compatibility:
     ///
     /// * The `matrix` scheme is allowed in links.
     ///
-    /// The list of allowed elements can be changed with
-    /// [`Self::allow_elements()`], [`Self::replace_elements()`],
-    /// [`Self::ignore_elements()`], [`Self::remove_elements()`],
+    /// The list of allowed elements can be changed with [`Self::allow_elements()`],
+    /// [`Self::replace_elements()`], [`Self::ignore_elements()`], [`Self::remove_elements()`],
     /// [`Self::remove_reply_fallback()`].
     ///
-    /// The list of allowed attributes can be changed with
-    /// [`Self::allow_attributes()`], [`Self::replace_attributes()`],
-    /// [`Self::remove_attributes()`], [`Self::allow_schemes()`],
-    /// [`Self::deny_schemes()`], [`Self::allow_classes()`],
-    /// [`Self::remove_classes()`].
+    /// The list of allowed attributes can be changed with [`Self::allow_attributes()`],
+    /// [`Self::replace_attributes()`], [`Self::remove_attributes()`], [`Self::allow_schemes()`],
+    /// [`Self::deny_schemes()`], [`Self::allow_classes()`], [`Self::remove_classes()`].
     ///
-    /// This is the same as calling
-    /// `SanitizerConfig::with_mode(HtmlSanitizerMode::Compat)`.
+    /// This is the same as calling `SanitizerConfig::with_mode(HtmlSanitizerMode::Compat)`.
     ///
     /// [listed in the Matrix specification]: https://spec.matrix.org/v1.19/client-server-api/#mroommessage-msgtypes
     pub fn compat() -> Self {
@@ -157,12 +140,11 @@ impl SanitizerConfig {
 
     /// Change the list of replaced HTML elements.
     ///
-    /// The given list is added to or replaces the list of replacements of the
-    /// current mode, depending on the [`ListBehavior`].
+    /// The given list is added to or replaces the list of replacements of the current mode,
+    /// depending on the [`ListBehavior`].
     ///
-    /// The replacement occurs before the removal, so the replaced element
-    /// should not be in the allowed list of elements, but the replacement
-    /// element should.
+    /// The replacement occurs before the removal, so the replaced element should not be in
+    /// the allowed list of elements, but the replacement element should.
     ///
     /// # Parameters
     ///
@@ -179,13 +161,12 @@ impl SanitizerConfig {
 
     /// Remove the given HTML elements.
     ///
-    /// When an element is removed, the element and its children are dropped. If
-    /// you want to remove an element but keep its children, use
-    /// [`SanitizerConfig::ignore_elements`] or
+    /// When an element is removed, the element and its children are dropped. If you want to remove
+    /// an element but keep its children, use [`SanitizerConfig::ignore_elements`] or
     /// [`SanitizerConfig::allow_elements`].
     ///
-    /// Removing elements has a higher priority than ignoring or allowing. So if
-    /// an element is in this list, it will always be removed.
+    /// Removing elements has a higher priority than ignoring or allowing. So if an element is in
+    /// this list, it will always be removed.
     ///
     /// # Parameters
     ///
@@ -197,11 +178,11 @@ impl SanitizerConfig {
 
     /// Remove the [rich reply] fallback.
     ///
-    /// Calling this allows to remove the `mx-reply` element in addition to the
-    /// list of elements to remove.
+    /// Calling this allows to remove the `mx-reply` element in addition to the list of elements to
+    /// remove.
     ///
-    /// Removing elements has a higher priority than ignoring or allowing. So if
-    /// this settings is set, `mx-reply` will always be removed.
+    /// Removing elements has a higher priority than ignoring or allowing. So if this settings is
+    /// set, `mx-reply` will always be removed.
     ///
     /// [rich reply]: https://spec.matrix.org/v1.19/client-server-api/#rich-replies
     pub fn remove_reply_fallback(mut self) -> Self {
@@ -211,12 +192,10 @@ impl SanitizerConfig {
 
     /// Ignore the given HTML elements.
     ///
-    /// When an element is ignored, the element is dropped and replaced by its
-    /// children. If you want to drop an element and its children, use
-    /// [`SanitizerConfig::remove_elements`].
+    /// When an element is ignored, the element is dropped and replaced by its children. If you want
+    /// to drop an element and its children, use [`SanitizerConfig::remove_elements`].
     ///
-    /// Removing elements has a lower priority than removing but a higher
-    /// priority than allowing.
+    /// Removing elements has a lower priority than removing but a higher priority than allowing.
     ///
     /// # Parameters
     ///
@@ -228,11 +207,11 @@ impl SanitizerConfig {
 
     /// Change the list of allowed HTML elements.
     ///
-    /// The given list is added to or replaces the list of allowed elements of
-    /// the current mode, depending on the [`ListBehavior`].
+    /// The given list is added to or replaces the list of allowed elements of the current
+    /// mode, depending on the [`ListBehavior`].
     ///
-    /// If an element is not allowed, it is ignored. If no mode is set and no
-    /// elements are explicitly allowed, all elements are allowed.
+    /// If an element is not allowed, it is ignored. If no mode is set and no elements are
+    /// explicitly allowed, all elements are allowed.
     ///
     /// # Parameters
     ///
@@ -249,15 +228,14 @@ impl SanitizerConfig {
 
     /// Change the list of replaced attributes per HTML element.
     ///
-    /// The given list is added to or replaces the list of replacements of the
-    /// current mode, depending on the [`ListBehavior`].
+    /// The given list is added to or replaces the list of replacements of the current mode,
+    /// depending on the [`ListBehavior`].
     ///
-    /// The replacement occurs before the removal, so the replaced attribute
-    /// should not be in the list of allowed attributes, but the replacement
-    /// attribute should. Attribute replacement occurs before element
-    /// replacement, so if you want to replace an attribute on an element
-    /// that is set to be replaced, you must use the replaced element's name,
-    /// not the name of its replacement.
+    /// The replacement occurs before the removal, so the replaced attribute should not be in the
+    /// list of allowed attributes, but the replacement attribute should. Attribute replacement
+    /// occurs before element replacement, so if you want to replace an attribute on an element
+    /// that is set to be replaced, you must use the replaced element's name, not the name of its
+    /// replacement.
     ///
     /// # Parameters
     ///
@@ -274,13 +252,13 @@ impl SanitizerConfig {
 
     /// Remove the given attributes per HTML element.
     ///
-    /// Removing attributes has a higher priority than allowing. So if an
-    /// attribute is in this list, it will always be removed.
+    /// Removing attributes has a higher priority than allowing. So if an attribute is in
+    /// this list, it will always be removed.
     ///
     /// # Parameters
     ///
-    /// * `attrs`: The list of attributes per element. The value of `parent` is
-    ///   the element name, and `properties` contains attribute names.
+    /// * `attrs`: The list of attributes per element. The value of `parent` is the element name,
+    ///   and `properties` contains attribute names.
     pub fn remove_attributes<'a>(
         mut self,
         attrs: impl IntoIterator<Item = PropertiesNames<'a>>,
@@ -291,16 +269,16 @@ impl SanitizerConfig {
 
     /// Change the list of allowed attributes per HTML element.
     ///
-    /// The given list is added to or replaces the list of allowed attributes of
-    /// the current mode, depending on the [`ListBehavior`].
+    /// The given list is added to or replaces the list of allowed attributes of the current
+    /// mode, depending on the [`ListBehavior`].
     ///
-    /// If an attribute is not allowed, it is removed. If no mode is set and no
-    /// attributes are explicitly allowed, all attributes are allowed.
+    /// If an attribute is not allowed, it is removed. If no mode is set and no attributes are
+    /// explicitly allowed, all attributes are allowed.
     ///
     /// # Parameters
     ///
-    /// * `attrs`: The list of attributes per element. The value of `parent` is
-    ///   the element name, and `properties` contains attribute names.
+    /// * `attrs`: The list of attributes per element. The value of `parent` is the element name,
+    ///   and `properties` contains attribute names.
     pub fn allow_attributes<'a>(
         mut self,
         attrs: impl IntoIterator<Item = PropertiesNames<'a>>,
@@ -313,11 +291,11 @@ impl SanitizerConfig {
 
     /// Deny the given URI schemes per attribute per HTML element.
     ///
-    /// Denying schemes has a higher priority than allowing. So if a scheme is
-    /// in this list, it will always be denied.
+    /// Denying schemes has a higher priority than allowing. So if a scheme is in
+    /// this list, it will always be denied.
     ///
-    /// If a scheme is denied, its element is removed, because it is deemed that
-    /// the element will not be usable without it URI.
+    /// If a scheme is denied, its element is removed, because it is deemed that the element will
+    /// not be usable without it URI.
     ///
     /// # Parameters
     ///
@@ -332,13 +310,12 @@ impl SanitizerConfig {
 
     /// Change the list of allowed schemes per attribute per HTML element.
     ///
-    /// The given list is added to or replaces the list of allowed schemes of
-    /// the current mode, depending on the [`ListBehavior`].
+    /// The given list is added to or replaces the list of allowed schemes of the current
+    /// mode, depending on the [`ListBehavior`].
     ///
-    /// If a scheme is not allowed, it is denied. If a scheme is denied, its
-    /// element is ignored, because it is deemed that the element will not
-    /// be usable without it URI. If no mode is set and no schemes are
-    /// explicitly allowed, all schemes are allowed.
+    /// If a scheme is not allowed, it is denied. If a scheme is denied, its element is ignored,
+    /// because it is deemed that the element will not be usable without it URI. If no mode is set
+    /// and no schemes are explicitly allowed, all schemes are allowed.
     ///
     /// # Parameters
     ///
@@ -355,21 +332,19 @@ impl SanitizerConfig {
 
     /// Deny the given classes per HTML element.
     ///
-    /// Removing classes has a higher priority than allowing. So if a class is
-    /// in this list, it will always be removed.
+    /// Removing classes has a higher priority than allowing. So if a class is in
+    /// this list, it will always be removed.
     ///
-    /// If all the classes of a `class` attribute are removed, the whole
-    /// attribute is removed.
+    /// If all the classes of a `class` attribute are removed, the whole attribute is removed.
     ///
-    /// In the list of classes, the names must match the full class name. `*`
-    /// can be used as a wildcard for any number of characters. So
-    /// `language` will only match a class named `language`, and
-    /// `language-*` will match any class name starting with `language-`.
+    /// In the list of classes, the names must match the full class name. `*` can be used as a
+    /// wildcard for any number of characters. So `language` will only match a class named
+    /// `language`, and `language-*` will match any class name starting with `language-`.
     ///
     /// # Parameters
     ///
-    /// * `attrs`: The list of classes per element. The value of `parent` is the
-    ///   element name, and `properties` contains classes.
+    /// * `attrs`: The list of classes per element. The value of `parent` is the element name, and
+    ///   `properties` contains classes.
     pub fn remove_classes<'a>(
         mut self,
         classes: impl IntoIterator<Item = PropertiesNames<'a>>,
@@ -380,23 +355,21 @@ impl SanitizerConfig {
 
     /// Change the list of allowed classes per HTML element.
     ///
-    /// The given list is added, removed or replaces the list of allowed classes
-    /// of the current mode, depending on the [`ListBehavior`].
+    /// The given list is added, removed or replaces the list of allowed classes of the current
+    /// mode, depending on the [`ListBehavior`].
     ///
-    /// If a class is not allowed, it is removed. If all the classes of a
-    /// `class` attribute are removed, the whole attribute is removed. If no
-    /// mode is set and no classes are explicitly allowed, all classes are
-    /// allowed.
+    /// If a class is not allowed, it is removed. If all the classes of a `class` attribute are
+    /// removed, the whole attribute is removed. If no mode is set and no classes are explicitly
+    /// allowed, all classes are allowed.
     ///
-    /// In the list of classes, the names must match the full class name. `*`
-    /// can be used as a wildcard for any number of characters. So
-    /// `language` will only match a class named `language`, and
-    /// `language-*` will match any class name starting with `language-`.
+    /// In the list of classes, the names must match the full class name. `*` can be used as a
+    /// wildcard for any number of characters. So `language` will only match a class named
+    /// `language`, and `language-*` will match any class name starting with `language-`.
     ///
     /// # Parameters
     ///
-    /// * `attrs`: The list of classes per element. The value of `parent` is the
-    ///   element name, and `properties` contains classes.
+    /// * `attrs`: The list of classes per element. The value of `parent` is the element name, and
+    ///   `properties` contains classes.
     pub fn allow_classes<'a>(
         mut self,
         classes: impl IntoIterator<Item = PropertiesNames<'a>>,
@@ -411,9 +384,8 @@ impl SanitizerConfig {
     ///
     /// This overrides the maximum depth set by the mode, if one is set.
     ///
-    /// All elements that are deeper than the maximum depth will be removed. If
-    /// no mode is set and no maximum depth is explicitly set, elements are
-    /// not filtered by their nesting level.
+    /// All elements that are deeper than the maximum depth will be removed. If no mode is set and
+    /// no maximum depth is explicitly set, elements are not filtered by their nesting level.
     ///
     /// # Parameters
     ///
@@ -450,8 +422,7 @@ pub enum ListBehavior {
     /// If no mode is set, this is the full allow list.
     Override,
 
-    /// The list is added to the default list of the current mode, if one is
-    /// set.
+    /// The list is added to the default list of the current mode, if one is set.
     ///
     /// If no mode is set, this is the full allow list.
     Add,
@@ -515,8 +486,7 @@ pub struct ElementAttributesSchemes<'a> {
     pub element: &'static str,
     /// The list of allowed URI schemes per attribute name.
     ///
-    /// The value of the `parent` is the attribute name and the properties are
-    /// schemes.
+    /// The value of the `parent` is the attribute name and the properties are schemes.
     pub attr_schemes: &'a [PropertiesNames<'a>],
 }
 

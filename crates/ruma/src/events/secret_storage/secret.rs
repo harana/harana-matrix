@@ -2,9 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-
 use crate::serde::{Base64, JsonCastable, Raw};
+use serde::{Deserialize, Serialize};
 
 /// A secret and its encrypted contents.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -12,8 +11,7 @@ use crate::serde::{Base64, JsonCastable, Raw};
 pub struct SecretEventContent {
     /// Map from key ID to the encrypted data.
     ///
-    /// The exact format for the encrypted data is dependent on the key
-    /// algorithm.
+    /// The exact format for the encrypted data is dependent on the key algorithm.
     pub encrypted: BTreeMap<String, Raw<SecretEncryptedData>>,
 }
 
@@ -26,21 +24,20 @@ impl SecretEventContent {
 
 /// Encrypted data for a secret storage encryption algorithm.
 ///
-/// This type cannot be constructed, it is only used for its semantic value and
-/// is meant to be used with the `Raw::cast()` and `Raw::deserialize_as()` APIs.
+/// This type cannot be constructed, it is only used for its semantic value and is meant to be used
+/// with the `Raw::cast()` and `Raw::deserialize_as()` APIs.
 ///
 /// It can be cast to or from the following types:
 ///
 /// * [`AesHmacSha2EncryptedData`]
 ///
-/// Convenience methods are also available for casting encrypted data from or to
-/// known compatible types.
+/// Convenience methods are also available for casting encrypted data from or to known compatible
+/// types.
 #[non_exhaustive]
 pub struct SecretEncryptedData;
 
 impl SecretEncryptedData {
-    /// Construct a `Raw<SecretEncryptedData>` by casting the given serialized
-    /// encrypted data.
+    /// Construct a `Raw<SecretEncryptedData>` by casting the given serialized encrypted data.
     pub fn new<T: JsonCastable<Self>>(encrypted_data: Raw<T>) -> Raw<Self> {
         encrypted_data.cast()
     }
@@ -52,8 +49,7 @@ impl SecretEncryptedData {
         Raw::new(encrypted_data).map(Raw::cast)
     }
 
-    /// Deserialize the given data encrypted with the
-    /// `m.secret_storage.v1.aes-hmac-sha2` algorithm.
+    /// Deserialize the given data encrypted with the `m.secret_storage.v1.aes-hmac-sha2` algorithm.
     pub fn deserialize_as_aes_hmac_sha2(
         encrypted_data: &Raw<Self>,
     ) -> Result<AesHmacSha2EncryptedData, serde_json::Error> {
@@ -76,8 +72,7 @@ pub struct AesHmacSha2EncryptedData {
 }
 
 impl AesHmacSha2EncryptedData {
-    /// Construct a new `` with the given initialization vector, ciphertext and
-    /// MAC.
+    /// Construct a new `` with the given initialization vector, ciphertext and MAC.
     pub fn new(iv: Base64, ciphertext: Base64, mac: Base64) -> Self {
         Self { iv, ciphertext, mac }
     }
@@ -92,10 +87,10 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches2::assert_matches;
+    use crate::{canonical_json::assert_to_canonical_json_eq, serde::Base64};
     use serde_json::{from_value as from_json_value, json};
 
     use super::{AesHmacSha2EncryptedData, SecretEncryptedData, SecretEventContent};
-    use crate::{canonical_json::assert_to_canonical_json_eq, serde::Base64};
 
     #[test]
     fn test_secret_serialization() {

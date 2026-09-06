@@ -24,6 +24,9 @@ use std::{
 
 use futures_util::future::join_all;
 use itertools::Itertools;
+use sdk_common::{
+    deserialized_responses::WithheldCode, executor::spawn, locks::RwLock as StdRwLock,
+};
 #[cfg(feature = "experimental-encrypted-state-events")]
 use ruma::events::AnyStateEventContent;
 use ruma::{
@@ -32,9 +35,6 @@ use ruma::{
     events::{AnyMessageLikeEventContent, AnyToDeviceEventContent, ToDeviceEventType},
     serde::Raw,
     to_device::DeviceIdOrAllDevices,
-};
-use sdk_common::{
-    deserialized_responses::WithheldCode, executor::spawn, locks::RwLock as StdRwLock,
 };
 use serde::Serialize;
 pub use share_strategy::CollectStrategy;
@@ -1165,6 +1165,8 @@ mod tests {
     };
 
     use assert_matches2::assert_let;
+    use sdk_common::deserialized_responses::{ProcessedToDeviceEvent, WithheldCode};
+    use sdk_test::{async_test, ruma_response_from_json};
     use ruma::{
         DeviceId, OneTimeKeyAlgorithm, OwnedMxcUri, TransactionId, UInt, UserId,
         api::client::{
@@ -1177,8 +1179,6 @@ mod tests {
         to_device::DeviceIdOrAllDevices,
         user_id,
     };
-    use sdk_common::deserialized_responses::{ProcessedToDeviceEvent, WithheldCode};
-    use sdk_test::{async_test, ruma_response_from_json};
     use serde_json::{Value, json};
 
     use crate::{

@@ -9,9 +9,11 @@ pub mod v1 {
 
     use crate::{
         OwnedRoomAliasId, OwnedRoomId, OwnedServerName,
-        api::{federation::authentication::ServerSignatures, request, response},
+        api::{request, response},
         metadata,
     };
+
+    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,

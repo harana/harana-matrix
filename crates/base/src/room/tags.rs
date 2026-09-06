@@ -70,14 +70,14 @@ bitflags! {
 mod tests {
     use std::ops::Not;
 
+    use sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use sdk_test::async_test;
     use ruma::{
         events::tag::{TagInfo, TagName, Tags},
         room_id,
         serde::Raw,
         user_id,
     };
-    use sdk_common::cross_process_lock::CrossProcessLockConfig;
-    use sdk_test::async_test;
     use serde_json::json;
     use stream_assert::{assert_pending, assert_ready};
 

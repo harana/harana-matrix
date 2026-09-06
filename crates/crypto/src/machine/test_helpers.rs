@@ -18,6 +18,8 @@
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 use as_variant::as_variant;
+use sdk_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
+use sdk_test::{ruma_response_from_json, test_json};
 use ruma::{
     DeviceId, OwnedOneTimeKeyId, TransactionId, UserId,
     api::client::keys::{
@@ -31,8 +33,6 @@ use ruma::{
     serde::Raw,
     user_id,
 };
-use sdk_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
-use sdk_test::{ruma_response_from_json, test_json};
 use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;

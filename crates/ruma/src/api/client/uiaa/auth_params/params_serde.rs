@@ -1,5 +1,4 @@
-//! Custom Serialize / Deserialize implementations for the authentication
-//! parameters types.
+//! Custom Serialize / Deserialize implementations for the authentication parameters types.
 
 use std::{collections::BTreeMap, fmt};
 
@@ -10,9 +9,8 @@ use serde::{
 
 use super::{PolicyDefinition, PolicyTranslation};
 
-// Custom implementation because the translations are at the root of the object,
-// but we want to ignore fields whose value fails to deserialize because they
-// might be custom fields.
+// Custom implementation because the translations are at the root of the object, but we want to
+// ignore fields whose value fails to deserialize because they might be custom fields.
 impl<'de> Deserialize<'de> for PolicyDefinition {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

@@ -23,6 +23,7 @@ use std::{
     time::Duration,
 };
 
+use eyeball::SharedObservable;
 use base::{
     RoomInfoNotableUpdateReasons,
     deserialized_responses::{AmbiguityChange, ThreadSummary},
@@ -30,7 +31,6 @@ use base::{
     read_receipts::ReadReceipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
 };
-use eyeball::SharedObservable;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
     RoomId, UInt,
@@ -792,6 +792,7 @@ mod tests {
         event_cache::Event,
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
     };
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         RoomId, event_id,
         events::{
@@ -801,7 +802,6 @@ mod tests {
         },
         room_id, user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
 
     use crate::test_utils::logged_in_client;
 
@@ -1177,6 +1177,8 @@ mod timed_tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
+    use eyeball_im::VectorDiff;
+    use futures_util::FutureExt;
     use base::{
         RoomState,
         event_cache::{
@@ -1190,8 +1192,8 @@ mod timed_tests {
         store::StoreConfig,
         sync::{JoinedRoomUpdate, Timeline},
     };
-    use eyeball_im::VectorDiff;
-    use futures_util::FutureExt;
+    use sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use sdk_test::{ALICE, BOB, async_test, event_factory::EventFactory};
     use ruma::{
         EventId, MilliSecondsSinceUnixEpoch, event_id,
         events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent},
@@ -1199,8 +1201,6 @@ mod timed_tests {
         serde::Raw,
         user_id,
     };
-    use sdk_common::cross_process_lock::CrossProcessLockConfig;
-    use sdk_test::{ALICE, BOB, async_test, event_factory::EventFactory};
     use serde_json::json;
     use tokio::task::yield_now;
 

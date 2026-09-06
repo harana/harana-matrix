@@ -14,6 +14,8 @@
 
 use std::{collections::BTreeSet, iter::empty};
 
+use eyeball::SharedObservable;
+use eyeball_im::VectorDiff;
 use base::{
     RoomInfoNotableUpdateReasons, apply_redaction,
     deserialized_responses::{ThreadSummary, ThreadSummaryStatus},
@@ -25,8 +27,7 @@ use base::{
     serde_helpers::extract_redaction_target,
     sync::Timeline,
 };
-use eyeball::SharedObservable;
-use eyeball_im::VectorDiff;
+use sdk_common::executor::spawn;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     events::{
@@ -35,7 +36,6 @@ use ruma::{
     },
     room_version_rules::RoomVersionRules,
 };
-use sdk_common::executor::spawn;
 use tokio::sync::broadcast::Sender;
 use tracing::{debug, error, instrument, trace, warn};
 
@@ -1073,8 +1073,8 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
 #[cfg(test)]
 mod tests {
     use base::RoomState;
-    use ruma::{event_id, room_id, user_id};
     use sdk_test::{async_test, event_factory::EventFactory};
+    use ruma::{event_id, room_id, user_id};
 
     use crate::test_utils::logged_in_client;
 

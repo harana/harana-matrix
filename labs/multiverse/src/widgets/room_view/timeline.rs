@@ -6,11 +6,11 @@ use matrix::ruma::{
     OwnedUserId,
     events::{receipt::Receipt, room::message::MessageType},
 };
-use ratatui::{prelude::*, widgets::*};
 use ui::timeline::{
     MembershipChange, Message, MsgLikeContent, MsgLikeKind, RoomMembershipChange, ThreadSummary,
     TimelineDetails, TimelineItem, TimelineItemContent, TimelineItemKind, VirtualTimelineItem,
 };
+use ratatui::{prelude::*, widgets::*};
 
 use crate::{ALT_ROW_COLOR, NORMAL_ROW_COLOR, SELECTED_STYLE_FG, TEXT_COLOR};
 

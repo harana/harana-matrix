@@ -9,9 +9,6 @@ pub mod unstable_msc4108 {
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/4108
 
     use http::header::{CONTENT_TYPE, ETAG, EXPIRES, LAST_MODIFIED};
-    use url::Url;
-    use web_time::SystemTime;
-
     #[cfg(feature = "client")]
     use crate::api::{BytesBody, error::DeserializationError};
     use crate::{
@@ -21,6 +18,8 @@ pub mod unstable_msc4108 {
         },
         metadata,
     };
+    use url::Url;
+    use web_time::SystemTime;
 
     metadata! {
         method: POST,
@@ -31,8 +30,7 @@ pub mod unstable_msc4108 {
         }
     }
 
-    /// Request type for the `POST` `rendezvous` endpoint from the 2024 version
-    /// of MSC4108.
+    /// Request type for the `POST` `rendezvous` endpoint from the 2024 version of MSC4108.
     #[derive(Debug, Default, Clone)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct Request {
@@ -52,7 +50,6 @@ pub mod unstable_msc4108 {
             considering: std::borrow::Cow<'_, crate::api::SupportedVersions>,
         ) -> Result<http::Request<BytesBody>, crate::api::error::IntoHttpError> {
             use http::header::CONTENT_LENGTH;
-
             use crate::api::Metadata;
 
             let url = Self::make_endpoint_url(considering, base_url, &[], "")?;
@@ -117,8 +114,7 @@ pub mod unstable_msc4108 {
         }
     }
 
-    /// Response type for the `POST` `rendezvous` endpoint from the 2024 version
-    /// of MSC4108.
+    /// Response type for the `POST` `rendezvous` endpoint from the 2024 version of MSC4108.
     #[derive(Debug, Clone)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct Response {
@@ -187,7 +183,6 @@ pub mod unstable_msc4108 {
             self,
         ) -> Result<http::Response<Self::Body>, crate::api::error::IntoHttpError> {
             use http::header::{CACHE_CONTROL, PRAGMA};
-
             use crate::http_headers::system_time_to_http_date;
 
             let body = ResponseBody { url: self.url };

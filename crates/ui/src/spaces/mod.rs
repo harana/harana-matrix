@@ -254,11 +254,11 @@ impl SpaceService {
     /// ```no_run
     /// use futures_util::StreamExt;
     /// use matrix::Client;
-    /// use ruma::owned_room_id;
     /// use ui::{
     ///     room_list_service::{RoomListService, filters},
     ///     spaces::SpaceService,
     /// };
+    /// use ruma::owned_room_id;
     ///
     /// # async {
     /// # let client: Client = todo!();
@@ -431,10 +431,9 @@ impl SpaceService {
         }
 
         if let Some(child_room) = self.client.get_room(&child_id) {
-            let power_levels = child_room
-                .power_levels()
-                .await
-                .map_err(|error| Error::UpdateInverseRelationship(matrix::Error::from(error)))?;
+            let power_levels = child_room.power_levels().await.map_err(|error| {
+                Error::UpdateInverseRelationship(matrix::Error::from(error))
+            })?;
 
             if power_levels.user_can_send_state(user_id, StateEventType::SpaceParent)
                 && let Ok(Some(_)) = child_room
@@ -719,12 +718,14 @@ mod tests {
     use eyeball_im::VectorDiff;
     use futures_util::{StreamExt, pin_mut};
     use matrix::{room::ParentSpace, test_utils::mocks::MatrixMockServer};
+    use sdk_test::{
+        JoinedRoomBuilder, LeftRoomBuilder, async_test, event_factory::EventFactory,
+    };
     use proptest::prelude::*;
     use ruma::{
         MilliSecondsSinceUnixEpoch, OwnedSpaceChildOrder, RoomVersionId, UserId, event_id,
         owned_room_id, room_id, serde::Raw,
     };
-    use sdk_test::{JoinedRoomBuilder, LeftRoomBuilder, async_test, event_factory::EventFactory};
     use serde_json::json;
     use stream_assert::{assert_next_eq, assert_pending};
 

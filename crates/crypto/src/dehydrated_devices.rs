@@ -406,6 +406,7 @@ mod tests {
     use std::{collections::BTreeMap, iter};
 
     use js_option::JsOption;
+    use sdk_test::async_test;
     use ruma::{
         DeviceId, RoomId, TransactionId, UserId,
         api::client::{
@@ -419,7 +420,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::async_test;
 
     use crate::{
         DecryptionSettings, EncryptionSettings, OlmMachine, TrustRequirement,

@@ -21,6 +21,7 @@ use std::{
     },
 };
 
+use sdk_common::locks::RwLock;
 use ruma::{
     DeviceId, DeviceKeyAlgorithm, DeviceKeyId, MilliSecondsSinceUnixEpoch, OwnedDeviceId,
     OwnedDeviceKeyId, UInt, UserId,
@@ -28,7 +29,6 @@ use ruma::{
     events::{AnyToDeviceEventContent, key::verification::VerificationMethod},
     serde::Raw,
 };
-use sdk_common::locks::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{instrument, trace};

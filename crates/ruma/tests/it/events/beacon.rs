@@ -3,14 +3,11 @@
 use assert_matches2::assert_matches;
 use js_int::uint;
 use ruma::{
-    MilliSecondsSinceUnixEpoch,
-    canonical_json::assert_to_canonical_json_eq,
-    events::{
-        AnyMessageLikeEvent, MessageLikeEvent, beacon::BeaconEventContent, relation::Reference,
-    },
-    owned_event_id, room_id,
-    serde::CanBeEmpty,
-    user_id,
+    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
+    room_id, serde::CanBeEmpty, user_id,
+};
+use ruma::events::{
+    AnyMessageLikeEvent, MessageLikeEvent, beacon::BeaconEventContent, relation::Reference,
 };
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 

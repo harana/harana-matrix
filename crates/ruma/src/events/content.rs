@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::serde::{CanBeEmpty, Raw};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{from_str as from_json_str, value::RawValue as RawJsonValue};
 
@@ -7,12 +8,10 @@ use super::{
     EphemeralRoomEventType, GlobalAccountDataEventType, MessageLikeEventType,
     RoomAccountDataEventType, StateEventType, ToDeviceEventType,
 };
-use crate::serde::{CanBeEmpty, Raw};
 
 /// Extension trait for [`Raw<T>`].
 pub trait RawExt<T: EventContentFromType> {
-    /// Try to deserialize the JSON as an event's content with the given event
-    /// type.
+    /// Try to deserialize the JSON as an event's content with the given event type.
     fn deserialize_with_type(&self, event_type: &str) -> serde_json::Result<T>;
 }
 
@@ -27,25 +26,23 @@ where
 
 /// An event content type with a statically-known event `type` value.
 ///
-/// Note that the `TYPE` might not be the full event type. If `IsPrefix` is set
-/// to `True`, it only contains the statically-known prefix of the event type.
+/// Note that the `TYPE` might not be the full event type. If `IsPrefix` is set to `True`, it only
+/// contains the statically-known prefix of the event type.
 ///
-/// To only support full event types, the bound `StaticEventContent<IsPrefix =
-/// False>` can be used.
+/// To only support full event types, the bound `StaticEventContent<IsPrefix = False>` can be used.
 pub trait StaticEventContent: Sized {
     /// The statically-known part of the event type.
     ///
-    /// If this is only the prefix of the event type, it should end with `.`,
-    /// which is usually used a separator in Matrix event types.
+    /// If this is only the prefix of the event type, it should end with `.`, which is usually used
+    /// a separator in Matrix event types.
     const TYPE: &'static str;
     /// Whether the statically-known part of the event type is the prefix.
     ///
     /// Should be set to the [`True`] or [`False`] types.
     ///
-    /// Ideally this should be a boolean associated constant, but [associated
-    /// constant equality is unstable], so this field could not be used as a
-    /// bound. Instead we use an associated type so we can rely on
-    /// associated type equality.
+    /// Ideally this should be a boolean associated constant, but [associated constant equality is
+    /// unstable], so this field could not be used as a bound. Instead we use an associated type so
+    /// we can rely on associated type equality.
     ///
     /// If this is set to [`False`], the `TYPE` is the full event type.
     ///
@@ -118,8 +115,7 @@ pub trait StateEventContent: Sized + Serialize {
     fn event_type(&self) -> StateEventType;
 }
 
-/// Content of a non-redacted state event with a corresponding possibly-redacted
-/// type.
+/// Content of a non-redacted state event with a corresponding possibly-redacted type.
 pub trait StaticStateEventContent: StateEventContent {
     /// The possibly redacted form of the event's content.
     type PossiblyRedacted: PossiblyRedactedStateEventContent;

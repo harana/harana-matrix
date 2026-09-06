@@ -3,13 +3,13 @@ use matrix::{
     EditValidityError, check_validity_of_replacement_events,
     deserialized_responses::{AlgorithmInfo, EncryptionInfo, VerificationState},
 };
+use sdk_test::event_factory::EventFactory;
 use ruma::{
     event_id,
     events::{AnySyncTimelineEvent, room::message::RoomMessageEventContentWithoutRelation},
     serde::Raw,
     user_id,
 };
-use sdk_test::event_factory::EventFactory;
 use serde_json::json;
 
 fn original_event() -> Raw<AnySyncTimelineEvent> {

@@ -10,10 +10,10 @@ pub mod v1 {
     use crate::{
         OwnedRoomOrAliasId, OwnedServerName,
         api::{auth_scheme::AccessTokenOptional, request},
-        events::room::member::MembershipState,
         metadata,
         room::RoomSummary,
     };
+    use crate::events::room::member::MembershipState;
 
     metadata! {
         method: GET,
@@ -32,8 +32,7 @@ pub mod v1 {
         #[ruma_api(path)]
         pub room_id_or_alias: OwnedRoomOrAliasId,
 
-        /// A list of servers the homeserver should attempt to use to peek at
-        /// the room.
+        /// A list of servers the homeserver should attempt to use to peek at the room.
         ///
         /// Defaults to an empty `Vec`.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -42,8 +41,7 @@ pub mod v1 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given room or alias ID and via
-        /// server names.
+        /// Creates a new `Request` with the given room or alias ID and via server names.
         pub fn new(room_id_or_alias: OwnedRoomOrAliasId, via: Vec<OwnedServerName>) -> Self {
             Self { room_id_or_alias, via }
         }
@@ -58,10 +56,9 @@ pub mod v1 {
 
         /// The current membership of this user in the room.
         ///
-        /// This field will not be present when called unauthenticated, but is
-        /// required when called authenticated. It should be `leave` if
-        /// the server doesn't know about the room, since for all other
-        /// membership states the server would know about the room already.
+        /// This field will not be present when called unauthenticated, but is required when called
+        /// authenticated. It should be `leave` if the server doesn't know about the room, since
+        /// for all other membership states the server would know about the room already.
         pub membership: Option<MembershipState>,
     }
 
@@ -94,9 +91,8 @@ pub mod v1 {
         where
             D: serde::Deserializer<'de>,
         {
-            use serde_json::value::RawValue as RawJsonValue;
-
             use crate::serde::from_raw_json_value;
+            use serde_json::value::RawValue as RawJsonValue;
 
             #[derive(serde::Deserialize)]
             struct ResponseBodyDeHelper {
@@ -142,10 +138,11 @@ pub mod v1 {
 
 #[cfg(all(test, feature = "client"))]
 mod tests {
+    use crate::api::IncomingResponseExt as _;
+    use crate::events::room::member::MembershipState;
     use serde_json::json;
 
     use super::v1::Response;
-    use crate::{api::IncomingResponseExt as _, events::room::member::MembershipState};
 
     #[test]
     fn deserialize_response() {

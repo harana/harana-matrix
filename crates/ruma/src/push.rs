@@ -5,9 +5,8 @@
 //! ## Understanding the types of this module
 //!
 //! Push rules are grouped in `RuleSet`s, and are grouped in five kinds (for
-//! more details about the different kind of rules, see the `Ruleset`
-//! documentation, or the specification). These five kinds are, by order of
-//! priority:
+//! more details about the different kind of rules, see the `Ruleset` documentation,
+//! or the specification). These five kinds are, by order of priority:
 //!
 //! - override rules
 //! - content rules
@@ -54,27 +53,25 @@ pub use self::{
 
 /// A push ruleset scopes a set of rules according to some criteria.
 ///
-/// For example, some rules may only be applied for messages from a particular
-/// sender, a particular room, or by default. The push ruleset contains the
-/// entire set of scopes and rules.
+/// For example, some rules may only be applied for messages from a particular sender, a particular
+/// room, or by default. The push ruleset contains the entire set of scopes and rules.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Ruleset {
-    /// These rules configure behavior for (unencrypted) messages that match
-    /// certain patterns.
+    /// These rules configure behavior for (unencrypted) messages that match certain patterns.
     #[serde(default, skip_serializing_if = "IndexSet::is_empty")]
     pub content: IndexSet<PatternedPushRule>,
 
-    /// These rules are identical to override rules, but have a lower priority
-    /// than `room` and `sender` rules.
+    /// These rules are identical to override rules, but have a lower priority than `room` and
+    /// `sender` rules.
     #[cfg(feature = "unstable-msc4306")]
     #[serde(default, skip_serializing_if = "IndexSet::is_empty")]
     pub postcontent: IndexSet<ConditionalPushRule>,
 
     /// These user-configured rules are given the highest priority.
     ///
-    /// This field is named `override_` instead of `override` because the latter
-    /// is a reserved keyword in Rust.
+    /// This field is named `override_` instead of `override` because the latter is a reserved
+    /// keyword in Rust.
     #[serde(rename = "override", default, skip_serializing_if = "IndexSet::is_empty")]
     pub override_: IndexSet<ConditionalPushRule>,
 
@@ -82,13 +79,12 @@ pub struct Ruleset {
     #[serde(default, skip_serializing_if = "IndexSet::is_empty")]
     pub room: IndexSet<SimplePushRule<OwnedRoomId>>,
 
-    /// These rules configure notification behavior for messages from a specific
-    /// Matrix user ID.
+    /// These rules configure notification behavior for messages from a specific Matrix user ID.
     #[serde(default, skip_serializing_if = "IndexSet::is_empty")]
     pub sender: IndexSet<SimplePushRule<OwnedUserId>>,
 
-    /// These rules are identical to override rules, but have a lower priority
-    /// than `content`, `room` and `sender` rules.
+    /// These rules are identical to override rules, but have a lower priority than `content`,
+    /// `room` and `sender` rules.
     #[serde(default, skip_serializing_if = "IndexSet::is_empty")]
     pub underride: IndexSet<ConditionalPushRule>,
 }
@@ -110,10 +106,9 @@ impl Ruleset {
     ///
     /// If a rule with the same kind and `rule_id` exists, it will be replaced.
     ///
-    /// If `after` or `before` is set, the rule will be moved relative to the
-    /// rule with the given ID. If both are set, the rule will become the
-    /// next-most important rule with respect to `before`. If neither are
-    /// set, and the rule is newly inserted, it will become the rule with
+    /// If `after` or `before` is set, the rule will be moved relative to the rule with the given
+    /// ID. If both are set, the rule will become the next-most important rule with respect to
+    /// `before`. If neither are set, and the rule is newly inserted, it will become the rule with
     /// the highest priority of its kind.
     ///
     /// Returns an error if the parameters are invalid.
@@ -148,8 +143,8 @@ impl Ruleset {
                     rule.enabled = prev_rule.enabled;
                 }
 
-                // `m.rule.master` should always be the rule with the highest priority, so we
-                // insert this one at most at the second place.
+                // `m.rule.master` should always be the rule with the highest priority, so we insert
+                // this one at most at the second place.
                 let default_position = 1;
 
                 insert_and_move_rule(&mut self.override_, rule, default_position, after, before)
@@ -203,8 +198,7 @@ impl Ruleset {
         }
     }
 
-    /// Get the rule from the given kind and with the given `rule_id` in the
-    /// rule set.
+    /// Get the rule from the given kind and with the given `rule_id` in the rule set.
     pub fn get(&self, kind: RuleKind, rule_id: impl AsRef<str>) -> Option<AnyPushRuleRef<'_>> {
         let rule_id = rule_id.as_ref();
 
@@ -220,8 +214,8 @@ impl Ruleset {
         }
     }
 
-    /// Set whether the rule from the given kind and with the given `rule_id` in
-    /// the rule set is enabled.
+    /// Set whether the rule from the given kind and with the given `rule_id` in the rule set is
+    /// enabled.
     ///
     /// Returns an error if the rule can't be found.
     pub fn set_enabled(
@@ -270,8 +264,8 @@ impl Ruleset {
         Ok(())
     }
 
-    /// Set the actions of the rule from the given kind and with the given
-    /// `rule_id` in the rule set.
+    /// Set the actions of the rule from the given kind and with the given `rule_id` in the rule
+    /// set.
     ///
     /// Returns an error if the rule can't be found.
     pub fn set_actions(
@@ -325,8 +319,7 @@ impl Ruleset {
     /// # Arguments
     ///
     /// * `event` - The raw JSON of a room message event.
-    /// * `context` - The context of the message and room at the time of the
-    ///   event.
+    /// * `context` - The context of the message and room at the time of the event.
     #[instrument(skip_all, fields(context.room_id = %context.room_id))]
     pub async fn get_match<T>(
         &self,
@@ -363,10 +356,13 @@ impl Ruleset {
     /// # Arguments
     ///
     /// * `event` - The raw JSON of a room message event.
-    /// * `context` - The context of the message and room at the time of the
-    ///   event.
+    /// * `context` - The context of the message and room at the time of the event.
     #[instrument(skip_all, fields(context.room_id = %context.room_id))]
-    pub async fn get_actions<T>(&self, event: &Raw<T>, context: &PushConditionRoomCtx) -> &[Action]
+    pub async fn get_actions<T>(
+        &self,
+        event: &Raw<T>,
+        context: &PushConditionRoomCtx,
+    ) -> &[Action]
     where
         T: crate::SyncOutsideWasm,
     {
@@ -419,21 +415,18 @@ impl Ruleset {
     }
 }
 
-/// A push rule is a single rule that states under what conditions an event
-/// should be passed onto a push gateway and how the notification should be
-/// presented.
+/// A push rule is a single rule that states under what conditions an event should be passed onto a
+/// push gateway and how the notification should be presented.
 ///
-/// These rules are stored on the user's homeserver. They are manually
-/// configured by the user, who can create and view them via the Client/Server
-/// API.
+/// These rules are stored on the user's homeserver. They are manually configured by the user, who
+/// can create and view them via the Client/Server API.
 ///
-/// To create an instance of this type, first create a `SimplePushRuleInit` and
-/// convert it via `SimplePushRule::from` / `.into()`.
+/// To create an instance of this type, first create a `SimplePushRuleInit` and convert it via
+/// `SimplePushRule::from` / `.into()`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct SimplePushRule<T> {
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this rule.
     pub actions: Vec<Action>,
 
     /// Whether this is a default rule, or has been set explicitly.
@@ -450,14 +443,12 @@ pub struct SimplePushRule<T> {
 
 /// Initial set of fields of `SimplePushRule`.
 ///
-/// This struct will not be updated even if additional fields are added to
-/// `SimplePushRule` in a new (non-breaking) release of the Matrix
-/// specification.
+/// This struct will not be updated even if additional fields are added to `SimplePushRule` in a new
+/// (non-breaking) release of the Matrix specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct SimplePushRuleInit<T> {
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this rule.
     pub actions: Vec<Action>,
 
     /// Whether this is a default rule, or has been set explicitly.
@@ -515,13 +506,12 @@ where
 ///
 /// Only applicable to underride and override rules.
 ///
-/// To create an instance of this type, first create a `ConditionalPushRuleInit`
-/// and convert it via `ConditionalPushRule::from` / `.into()`.
+/// To create an instance of this type, first create a `ConditionalPushRuleInit` and convert it via
+/// `ConditionalPushRule::from` / `.into()`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct ConditionalPushRule {
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this rule.
     pub actions: Vec<Action>,
 
     /// Whether this is a default rule, or has been set explicitly.
@@ -533,8 +523,8 @@ pub struct ConditionalPushRule {
     /// The ID of this rule.
     pub rule_id: String,
 
-    /// The conditions that must hold true for an event in order for a rule to
-    /// be applied to an event.
+    /// The conditions that must hold true for an event in order for a rule to be applied to an
+    /// event.
     ///
     /// A rule with no conditions always matches.
     #[serde(default)]
@@ -561,10 +551,9 @@ impl ConditionalPushRule {
                 && self.rule_id != PredefinedOverrideRuleId::RoomNotif.as_ref()
                 && self.rule_id != PredefinedOverrideRuleId::ContainsDisplayName.as_ref()
             {
-                // Push rules which don't specify a `room_version_supports` condition are
-                // assumed to not support extensible events and are therefore
-                // expected to be treated as disabled when a room version does
-                // support extensible events.
+                // Push rules which don't specify a `room_version_supports` condition are assumed
+                // to not support extensible events and are therefore expected to be treated as
+                // disabled when a room version does support extensible events.
                 let room_supports_ext_ev =
                     context.supported_features.contains(&RoomVersionFeature::ExtensibleEvents);
                 let rule_has_room_version_supports = self.conditions.iter().any(|condition| {
@@ -597,14 +586,12 @@ impl ConditionalPushRule {
 
 /// Initial set of fields of `ConditionalPushRule`.
 ///
-/// This struct will not be updated even if additional fields are added to
-/// `ConditionalPushRule` in a new (non-breaking) release of the Matrix
-/// specification.
+/// This struct will not be updated even if additional fields are added to `ConditionalPushRule` in
+/// a new (non-breaking) release of the Matrix specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct ConditionalPushRuleInit {
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this rule.
     pub actions: Vec<Action>,
 
     /// Whether this is a default rule, or has been set explicitly.
@@ -616,8 +603,8 @@ pub struct ConditionalPushRuleInit {
     /// The ID of this rule.
     pub rule_id: String,
 
-    /// The conditions that must hold true for an event in order for a rule to
-    /// be applied to an event.
+    /// The conditions that must hold true for an event in order for a rule to be applied to an
+    /// event.
     ///
     /// A rule with no conditions always matches.
     pub conditions: Vec<PushCondition>,
@@ -657,13 +644,12 @@ impl Equivalent<ConditionalPushRule> for str {
 ///
 /// Only applicable to content rules.
 ///
-/// To create an instance of this type, first create a `PatternedPushRuleInit`
-/// and convert it via `PatternedPushRule::from` / `.into()`.
+/// To create an instance of this type, first create a `PatternedPushRuleInit` and convert it via
+/// `PatternedPushRule::from` / `.into()`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct PatternedPushRule {
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this rule.
     pub actions: Vec<Action>,
 
     /// Whether this is a default rule, or has been set explicitly.
@@ -710,14 +696,12 @@ impl PatternedPushRule {
 
 /// Initial set of fields of `PatternedPushRule`.
 ///
-/// This struct will not be updated even if additional fields are added to
-/// `PatternedPushRule` in a new (non-breaking) release of the Matrix
-/// specification.
+/// This struct will not be updated even if additional fields are added to `PatternedPushRule` in a
+/// new (non-breaking) release of the Matrix specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct PatternedPushRuleInit {
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this rule.
     pub actions: Vec<Action>,
 
     /// Whether this is a default rule, or has been set explicitly.
@@ -788,9 +772,8 @@ impl HttpPusherData {
     }
 }
 
-/// A special format that the homeserver should use when sending notifications
-/// to a Push Gateway. Currently, only `event_id_only` is supported, see the
-/// [Push Gateway API][spec].
+/// A special format that the homeserver should use when sending notifications to a Push Gateway.
+/// Currently, only `event_id_only` is supported, see the [Push Gateway API][spec].
 ///
 /// [spec]: https://spec.matrix.org/v1.19/push-gateway-api/#homeserver-behaviour
 #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc/string_enum.md"))]
@@ -896,8 +879,8 @@ pub struct NewSimplePushRule<T> {
     /// This is generally the Matrix ID of the entity that it applies to.
     pub rule_id: T,
 
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this
+    /// rule.
     pub actions: Vec<Action>,
 }
 
@@ -925,8 +908,8 @@ pub struct NewPatternedPushRule {
     /// The glob-style pattern to match against.
     pub pattern: String,
 
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this
+    /// rule.
     pub actions: Vec<Action>,
 }
 
@@ -951,21 +934,20 @@ pub struct NewConditionalPushRule {
     /// The ID of this rule.
     pub rule_id: String,
 
-    /// The conditions that must hold true for an event in order for a rule to
-    /// be applied to an event.
+    /// The conditions that must hold true for an event in order for a rule to be applied to an
+    /// event.
     ///
     /// A rule with no conditions always matches.
     #[serde(default)]
     pub conditions: Vec<PushCondition>,
 
-    /// Actions to determine if and how a notification is delivered for events
-    /// matching this rule.
+    /// Actions to determine if and how a notification is delivered for events matching this
+    /// rule.
     pub actions: Vec<Action>,
 }
 
 impl NewConditionalPushRule {
-    /// Creates a `NewConditionalPushRule` with the given ID, conditions and
-    /// actions.
+    /// Creates a `NewConditionalPushRule` with the given ID, conditions and actions.
     pub fn new(rule_id: String, conditions: Vec<PushCondition>, actions: Vec<Action>) -> Self {
         Self { rule_id, conditions, actions }
     }
@@ -978,13 +960,11 @@ impl From<NewConditionalPushRule> for ConditionalPushRule {
     }
 }
 
-/// The error type returned when trying to insert a user-defined push rule into
-/// a `Ruleset`.
+/// The error type returned when trying to insert a user-defined push rule into a `Ruleset`.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum InsertPushRuleError {
-    /// The rule ID starts with a dot (`.`), which is reserved for
-    /// server-default rules.
+    /// The rule ID starts with a dot (`.`), which is reserved for server-default rules.
     #[error("rule IDs starting with a dot are reserved for server-default rules")]
     ServerDefaultRuleId,
 
@@ -992,8 +972,7 @@ pub enum InsertPushRuleError {
     #[error("invalid rule ID")]
     InvalidRuleId,
 
-    /// The rule is being placed relative to a server-default rule, which is
-    /// forbidden.
+    /// The rule is being placed relative to a server-default rule, which is forbidden.
     #[error("can't place rule relative to server-default rule")]
     RelativeToServerDefaultRule,
 
@@ -1006,8 +985,7 @@ pub enum InsertPushRuleError {
     BeforeHigherThanAfter,
 }
 
-/// The error type returned when trying modify a push rule that could not be
-/// found in a `Ruleset`.
+/// The error type returned when trying modify a push rule that could not be found in a `Ruleset`.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 #[error("The rule could not be found")]
@@ -1051,8 +1029,7 @@ where
     Ok(())
 }
 
-/// The error type returned when trying to remove a user-defined push rule from
-/// a `Ruleset`.
+/// The error type returned when trying to remove a user-defined push rule from a `Ruleset`.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum RemovePushRuleError {

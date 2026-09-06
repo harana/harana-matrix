@@ -8,7 +8,6 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv1mediaconfig
 
     use js_int::UInt;
-
     use crate::{
         api::{auth_scheme::AccessToken, request, response},
         metadata,

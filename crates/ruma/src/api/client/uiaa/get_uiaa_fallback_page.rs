@@ -8,9 +8,11 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#fallback
 
     use crate::{
-        api::{auth_scheme::NoAccessToken, client::uiaa::AuthType, request},
+        api::{auth_scheme::NoAccessToken, request},
         metadata,
     };
+
+    use crate::api::client::uiaa::AuthType;
 
     metadata! {
         method: GET,
@@ -25,8 +27,7 @@ pub mod v3 {
     /// Request type for the `authorize_fallback` endpoint.
     #[request]
     pub struct Request {
-        /// The type name (`m.login.dummy`, etc.) of the UIAA stage to get a
-        /// fallback page for.
+        /// The type name (`m.login.dummy`, etc.) of the UIAA stage to get a fallback page for.
         #[ruma_api(path)]
         pub auth_type: AuthType,
 
@@ -152,9 +153,9 @@ pub mod v3 {
     mod tests_client {
         use assert_matches2::assert_let;
         use http::header::{CONTENT_TYPE, LOCATION};
+        use crate::api::IncomingResponseExt as _;
 
         use super::Response;
-        use crate::api::IncomingResponseExt as _;
 
         #[test]
         fn incoming_redirect() {
@@ -190,9 +191,9 @@ pub mod v3 {
     #[cfg(all(test, feature = "server"))]
     mod tests_server {
         use http::header::{CONTENT_TYPE, LOCATION};
+        use crate::api::OutgoingResponseExt as _;
 
         use super::Response;
-        use crate::api::OutgoingResponseExt as _;
 
         #[test]
         fn outgoing_redirect() {

@@ -1,7 +1,6 @@
 //! `GET /_matrix/federation/*/openid/userinfo`
 //!
-//! Exchange an OpenID access token for information about the user who generated
-//! the token.
+//! Exchange an OpenID access token for information about the user who generated the token.
 
 pub mod v1 {
     //! `/v1/` ([spec])

@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use base::RoomInfoNotableUpdateReasons;
 use matrix::{CallIntentConsensus, EncryptionState, RoomState};
+use base::RoomInfoNotableUpdateReasons;
 use tracing::warn;
 
 use crate::{

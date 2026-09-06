@@ -19,11 +19,11 @@ use std::{
 
 use assert_matches::assert_matches;
 use matrix::{assert_next_matches_with_timeout, test_utils::mocks::MatrixMockServer};
-use ruma::presence::PresenceState;
 use sdk_test::async_test;
+use ui::sync_service::{State, SyncService};
+use ruma::presence::PresenceState;
 use serde_json::json;
 use stream_assert::{assert_next_matches, assert_pending};
-use ui::sync_service::{State, SyncService};
 use wiremock::{Match as _, Mock, MockGuard, MockServer, Request, ResponseTemplate};
 
 use crate::sliding_sync::{

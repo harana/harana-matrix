@@ -13,9 +13,9 @@ use crate::{
 
 /// A chunk of a room list response, describing one room.
 ///
-/// To create an instance of this type, first create a [`PublicRoomsChunkInit`]
-/// and convert it via `PublicRoomsChunk::from` / `.into()`. It is also possible
-/// to construct this type from or convert it to a [`RoomSummary`].
+/// To create an instance of this type, first create a [`PublicRoomsChunkInit`] and convert it via
+/// `PublicRoomsChunk::from` / `.into()`. It is also possible to construct this type from or convert
+/// it to a [`RoomSummary`].
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct PublicRoomsChunk {
@@ -46,15 +46,13 @@ pub struct PublicRoomsChunk {
 
     /// Whether guest users may join the room and participate in it.
     ///
-    /// If they can, they will be subject to ordinary power level rules like any
-    /// other user.
+    /// If they can, they will be subject to ordinary power level rules like any other user.
     pub guest_can_join: bool,
 
     /// The URL for the room's avatar, if one is set.
     ///
-    /// If you activate the `compat-empty-string-null` feature, this field being
-    /// an empty string in JSON will result in `None` here during
-    /// deserialization.
+    /// If you activate the `compat-empty-string-null` feature, this field being an empty string in
+    /// JSON will result in `None` here during deserialization.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "compat-empty-string-null",
@@ -73,9 +71,8 @@ pub struct PublicRoomsChunk {
 
 /// Initial set of mandatory fields of `PublicRoomsChunk`.
 ///
-/// This struct will not be updated even if additional fields are added to
-/// `PublicRoomsChunk` in a new (non-breaking) release of the Matrix
-/// specification.
+/// This struct will not be updated even if additional fields are added to `PublicRoomsChunk` in a
+/// new (non-breaking) release of the Matrix specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct PublicRoomsChunkInit {
@@ -90,8 +87,7 @@ pub struct PublicRoomsChunkInit {
 
     /// Whether guest users may join the room and participate in it.
     ///
-    /// If they can, they will be subject to ordinary power level rules like any
-    /// other user.
+    /// If they can, they will be subject to ordinary power level rules like any other user.
     pub guest_can_join: bool,
 }
 
@@ -182,8 +178,7 @@ impl From<PublicRoomsChunk> for RoomSummary {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Filter {
-    /// A string to search for in the room metadata, e.g. name, topic, canonical
-    /// alias etc.
+    /// A string to search for in the room metadata, e.g. name, topic, canonical alias etc.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generic_search_term: Option<String>,
 
@@ -191,8 +186,8 @@ pub struct Filter {
     ///
     /// Includes all room types if it is empty.
     ///
-    /// If the `compat-null` feature is enabled, a `null` value is allowed in
-    /// deserialization, and treated the same way as an empty list.
+    /// If the `compat-null` feature is enabled, a `null` value is allowed in deserialization, and
+    /// treated the same way as an empty list.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[cfg_attr(feature = "compat-null", serde(deserialize_with = "crate::serde::none_as_default"))]
     pub room_types: Vec<RoomTypeFilter>,
@@ -228,12 +223,12 @@ pub enum RoomNetwork {
 
 /// An enum of possible room types to filter.
 ///
-/// This type can hold an arbitrary string. To build this with a custom value,
-/// convert it from an `Option<string>` with `::from()` / `.into()`.
-/// [`RoomTypeFilter::Default`] can be constructed from `None`.
+/// This type can hold an arbitrary string. To build this with a custom value, convert it from an
+/// `Option<string>` with `::from()` / `.into()`. [`RoomTypeFilter::Default`] can be constructed
+/// from `None`.
 ///
-/// To check for values that are not available as a documented variant here, use
-/// its string representation, obtained through [`.as_str()`](Self::as_str()).
+/// To check for values that are not available as a documented variant here, use its string
+/// representation, obtained through [`.as_str()`](Self::as_str()).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RoomTypeFilter {

@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
+use sdk_common::locks::Mutex;
 use ruma::{
     api::client::backup::{EncryptedSessionDataInit, KeyBackupData, KeyBackupDataInit},
     serde::Base64,
 };
-use sdk_common::locks::Mutex;
 use vodozemac::{Curve25519PublicKey, pk_encryption::PkEncryption};
 use zeroize::Zeroizing;
 

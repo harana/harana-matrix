@@ -16,12 +16,12 @@
 
 use std::fmt;
 
+pub use sdk_common::debug::*;
+use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use ruma::{
     api::client::sync::sync_events::v3::{InvitedRoom, KnockedRoom},
     serde::Raw,
 };
-pub use sdk_common::debug::*;
-use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 
 /// A wrapper around a slice of `Raw` events that implements `Debug` in a way
 /// that only prints the event type of each item.

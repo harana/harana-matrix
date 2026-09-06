@@ -15,12 +15,12 @@
 use std::{borrow::Cow, sync::Arc};
 
 use as_variant::as_variant;
-use base::crypto::types::events::UtdCause;
 use indexmap::IndexMap;
 use matrix::{
     deserialized_responses::{EncryptionInfo, UnableToDecryptInfo},
     send_queue::SendHandle,
 };
+use base::crypto::types::events::UtdCause;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId,
     TransactionId,

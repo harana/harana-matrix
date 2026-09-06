@@ -176,11 +176,11 @@ mod tests {
     };
 
     use base::{StateStore, StateStoreDataKey, StateStoreDataValue};
-    use sdk_test::async_test;
     use store_encryption::{
         CodecError, CreatedStoreCipher, JsonCodec, StoreCipher, StoreCipherBackend,
         StoreCipherProvider, StoreCodec,
     };
+    use sdk_test::async_test;
     use tempfile::tempdir;
 
     use super::*;

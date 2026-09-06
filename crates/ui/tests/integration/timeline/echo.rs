@@ -19,15 +19,15 @@ use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix::{assert_let_timeout, executor::spawn, test_utils::mocks::MatrixMockServer};
+use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{EventSendState, RoomExt};
 use ruma::{
     event_id,
     events::room::message::{MessageType, RoomMessageEventContent},
     room_id, user_id,
 };
-use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use stream_assert::{assert_next_matches, assert_pending};
 use tokio::task::yield_now;
-use ui::timeline::{EventSendState, RoomExt};
 
 #[async_test]
 async fn test_echo() {

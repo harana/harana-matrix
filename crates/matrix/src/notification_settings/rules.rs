@@ -329,18 +329,18 @@ pub(crate) fn get_predefined_underride_poll_start_rule_id(
 #[cfg(test)]
 pub(crate) mod tests {
     use imbl::HashSet;
+    use sdk_test::{
+        async_test,
+        notification_settings::{
+            build_ruleset, get_server_default_ruleset, server_default_ruleset_with_legacy_mentions,
+        },
+    };
     use ruma::{
         OwnedRoomId, RoomId,
         push::{
             Action, EventMatchConditionData, NewConditionalPushRule, NewPushRule,
             PredefinedContentRuleId, PredefinedOverrideRuleId, PredefinedUnderrideRuleId,
             PushCondition, RuleKind,
-        },
-    };
-    use sdk_test::{
-        async_test,
-        notification_settings::{
-            build_ruleset, get_server_default_ruleset, server_default_ruleset_with_legacy_mentions,
         },
     };
 

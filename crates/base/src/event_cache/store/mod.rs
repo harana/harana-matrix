@@ -27,12 +27,12 @@ pub mod integration_tests;
 mod memory_store;
 mod traits;
 
-use ruma::{OwnedEventId, events::AnySyncTimelineEvent, serde::Raw};
 use sdk_common::cross_process_lock::{
     CrossProcessLock, CrossProcessLockConfig, CrossProcessLockError, CrossProcessLockGeneration,
     CrossProcessLockGuard, MappedCrossProcessLockState, TryLock,
 };
 pub use store_encryption::Error as StoreEncryptionError;
+use ruma::{OwnedEventId, events::AnySyncTimelineEvent, serde::Raw};
 use tracing::trace;
 
 #[cfg(any(test, feature = "testing"))]

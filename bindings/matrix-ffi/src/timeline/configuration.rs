@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use ruma::{
-    EventId,
-    events::{AnySyncTimelineEvent, MessageLikeEventType, StateEventType, TimelineEventType},
-};
 use ui::timeline::{
     TimelineEventFocusThreadMode, TimelineReadReceiptTracking,
     event_filter::{
         MembershipChangeFilter, TimelineEventCondition,
         TimelineEventFilter as InnerTimelineEventFilter,
     },
+};
+use ruma::{
+    EventId,
+    events::{AnySyncTimelineEvent, MessageLikeEventType, StateEventType, TimelineEventType},
 };
 
 use super::FocusEventError;
@@ -145,7 +145,9 @@ pub enum TimelineFocus {
 impl TryFrom<TimelineFocus> for ui::timeline::TimelineFocus {
     type Error = ClientError;
 
-    fn try_from(value: TimelineFocus) -> Result<ui::timeline::TimelineFocus, Self::Error> {
+    fn try_from(
+        value: TimelineFocus,
+    ) -> Result<ui::timeline::TimelineFocus, Self::Error> {
         match value {
             TimelineFocus::Live { hide_threaded_events } => Ok(Self::Live { hide_threaded_events }),
             TimelineFocus::Event { event_id, num_context_events, thread_mode } => {

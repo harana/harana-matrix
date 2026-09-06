@@ -14,11 +14,15 @@
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::ThreadingSupport;
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use imbl::vector;
 use matrix::{assert_next_with_timeout, test_utils::mocks::MatrixMockServer};
+use base::ThreadingSupport;
+use sdk_test::{
+    ALICE, BOB, CAROL, JoinedRoomBuilder, async_test,
+    event_factory::{EventFactory, PreviousMembership},
+};
 use ruma::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::{
@@ -32,10 +36,6 @@ use ruma::{
         },
     },
     mxc_uri, owned_event_id, owned_mxc_uri, room_id, user_id,
-};
-use sdk_test::{
-    ALICE, BOB, CAROL, JoinedRoomBuilder, async_test,
-    event_factory::{EventFactory, PreviousMembership},
 };
 use stream_assert::{assert_next_matches, assert_pending};
 

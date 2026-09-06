@@ -18,6 +18,7 @@ use std::{
     time::Duration,
 };
 
+use sdk_common::{failures_cache::FailuresCache, locks::RwLock as StdRwLock};
 use ruma::{
     DeviceId, OneTimeKeyAlgorithm, OwnedDeviceId, OwnedOneTimeKeyId, OwnedServerName,
     OwnedTransactionId, OwnedUserId, SecondsSinceUnixEpoch, ServerName, TransactionId, UserId,
@@ -27,7 +28,6 @@ use ruma::{
     assign,
     events::dummy::ToDeviceDummyEventContent,
 };
-use sdk_common::{failures_cache::FailuresCache, locks::RwLock as StdRwLock};
 use tracing::{debug, error, info, instrument, warn};
 use vodozemac::Curve25519PublicKey;
 
@@ -596,13 +596,13 @@ impl SessionManager {
 mod tests {
     use std::{collections::BTreeMap, iter, ops::Deref, sync::Arc, time::Duration};
 
+    use sdk_common::{executor::spawn, locks::RwLock as StdRwLock};
+    use sdk_test::{async_test, ruma_response_from_json};
     use ruma::{
         DeviceId, OwnedUserId, UserId,
         api::client::keys::claim_keys::v3::Response as KeyClaimResponse, device_id,
         owned_server_name, user_id,
     };
-    use sdk_common::{executor::spawn, locks::RwLock as StdRwLock};
-    use sdk_test::{async_test, ruma_response_from_json};
     use serde_json::json;
     use tokio::sync::Mutex;
     use tracing::info;

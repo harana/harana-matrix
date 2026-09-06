@@ -5,6 +5,8 @@ use eyeball_im::VectorDiff;
 use matrix::deserialized_responses::{
     AlgorithmInfo, DecryptedRoomEvent, EncryptionInfo, VerificationState,
 };
+use sdk_common::deserialized_responses::TimelineEvent;
+use sdk_test::{ALICE, DEFAULT_TEST_ROOM_ID, async_test, event_factory::EventFactory};
 use ruma::{
     event_id,
     events::{
@@ -17,8 +19,6 @@ use ruma::{
         },
     },
 };
-use sdk_common::deserialized_responses::TimelineEvent;
-use sdk_test::{ALICE, DEFAULT_TEST_ROOM_ID, async_test, event_factory::EventFactory};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use crate::timeline::{

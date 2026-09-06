@@ -30,6 +30,12 @@ use std::{
     time::Duration,
 };
 
+use eyeball::{SharedObservable, Subscriber};
+use futures_core::Stream;
+use futures_util::{
+    future::try_join,
+    stream::{self, StreamExt},
+};
 #[cfg(feature = "experimental-send-custom-to-device")]
 use base::crypto::CollectStrategy;
 use base::{
@@ -51,11 +57,9 @@ use base::{
     sleep::sleep,
     timeout::timeout,
 };
-use eyeball::{SharedObservable, Subscriber};
-use futures_core::Stream;
-use futures_util::{
-    future::try_join,
-    stream::{self, StreamExt},
+use sdk_common::{
+    executor::{spawn, spawn_blocking},
+    locks::Mutex as StdMutex,
 };
 use ruma::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId, TransactionId, UserId,
@@ -84,10 +88,6 @@ use ruma::{
 };
 #[cfg(feature = "experimental-send-custom-to-device")]
 use ruma::{events::AnyToDeviceEventContent, serde::Raw, to_device::DeviceIdOrAllDevices};
-use sdk_common::{
-    executor::{spawn, spawn_blocking},
-    locks::Mutex as StdMutex,
-};
 use serde::{Deserialize, de::Error as _};
 use tasks::{BundleReceiverTask, RecoveryStateUpdateTask};
 use tokio::sync::{Mutex, RwLockReadGuard};
@@ -2477,14 +2477,14 @@ mod tests {
         },
     };
 
+    use sdk_test::{
+        DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, async_test,
+        event_factory::EventFactory,
+    };
     use ruma::{
         event_id,
         events::{reaction::ReactionEventContent, relation::Annotation},
         user_id,
-    };
-    use sdk_test::{
-        DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, async_test,
-        event_factory::EventFactory,
     };
     use serde_json::json;
     use wiremock::{

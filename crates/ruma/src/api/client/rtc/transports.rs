@@ -8,9 +8,11 @@ pub mod v1 {
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/4143
 
     use crate::{
-        api::{auth_scheme::AccessToken, client::rtc::RtcTransport, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::rtc::RtcTransport;
 
     metadata! {
         method: GET,

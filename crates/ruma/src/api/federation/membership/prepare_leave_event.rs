@@ -1,20 +1,21 @@
 //! `GET /_matrix/federation/*/make_leave/{roomId}/{userId}`
 //!
-//! Asks the receiving server to return information that the sending server will
-//! need to prepare a leave event to get out of the room.
+//! Asks the receiving server to return information that the sending server will need to prepare a
+//! leave event to get out of the room.
 
 pub mod v1 {
     //! `/v1/` ([spec])
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1make_leaveroomiduserid
 
-    use serde_json::value::RawValue as RawJsonValue;
-
     use crate::{
         OwnedRoomId, OwnedUserId, RoomVersionId,
-        api::{federation::authentication::ServerSignatures, request, response},
+        api::{request, response},
         metadata,
     };
+    use serde_json::value::RawValue as RawJsonValue;
+
+    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,
@@ -40,15 +41,13 @@ pub mod v1 {
     pub struct Response {
         /// The version of the room where the server is trying to leave.
         ///
-        /// If not provided, the room version is assumed to be either "1" or
-        /// "2".
+        /// If not provided, the room version is assumed to be either "1" or "2".
         pub room_version: Option<RoomVersionId>,
 
         /// An unsigned template event.
         ///
-        /// Note that events have a different format depending on the room
-        /// version - check the room version specification for precise
-        /// event formats.
+        /// Note that events have a different format depending on the room version - check the room
+        /// version specification for precise event formats.
         pub event: Box<RawJsonValue>,
     }
 

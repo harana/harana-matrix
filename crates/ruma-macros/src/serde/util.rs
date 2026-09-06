@@ -43,8 +43,8 @@ pub(super) struct VariantWithSingleField {
 }
 
 impl VariantWithSingleField {
-    /// Generate the code to extract or set the inner value of this variant into
-    /// or from a variable called `inner`.
+    /// Generate the code to extract or set the inner value of this variant into or from a variable
+    /// called `inner`.
     ///
     /// The generated code looks like:
     ///
@@ -67,8 +67,8 @@ impl VariantWithSingleField {
     }
 }
 
-/// The transformations to apply to all unit variants without a custom string
-/// representation in an enum.
+/// The transformations to apply to all unit variants without a custom string representation in an
+/// enum.
 #[derive(Default)]
 pub(super) struct RenameAll {
     /// The prefix to add to the variants.
@@ -91,8 +91,7 @@ impl RenameAll {
     }
 }
 
-/// The different ways to change the string representation of unit variants in
-/// an enum.
+/// The different ways to change the string representation of unit variants in an enum.
 #[derive(Copy, Clone, Default, PartialEq)]
 pub(super) enum RenameRule {
     /// Don't apply a default rename rule.
@@ -119,8 +118,7 @@ pub(super) enum RenameRule {
 }
 
 impl RenameRule {
-    /// Split the given variant name at the uppercase letters by adding the
-    /// given separator.
+    /// Split the given variant name at the uppercase letters by adding the given separator.
     ///
     /// The uppercase letters are transformed to lowercase.
     fn split_variant_name(variant: &str, separator: char) -> String {

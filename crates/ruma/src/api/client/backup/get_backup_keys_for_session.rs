@@ -9,10 +9,12 @@ pub mod v3 {
 
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AccessToken, client::backup::KeyBackupData, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
         serde::Raw,
     };
+
+    use crate::api::client::backup::KeyBackupData;
 
     metadata! {
         method: GET,
@@ -50,8 +52,7 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given version, room_id and
-        /// session_id.
+        /// Creates a new `Request` with the given version, room_id and session_id.
         pub fn new(version: String, room_id: OwnedRoomId, session_id: String) -> Self {
             Self { version, room_id, session_id }
         }

@@ -21,13 +21,13 @@ use std::{
 
 use futures_util::future::join_all;
 use itertools::Itertools;
+use sdk_common::{executor::spawn, failures_cache::FailuresCache};
 #[cfg(feature = "experimental-x509-identity-verification")]
 use ruma::api::client::keys::upload_signatures::v3::Request as SignatureUploadRequest;
 use ruma::{
     OwnedDeviceId, OwnedServerName, OwnedTransactionId, OwnedUserId, ServerName, TransactionId,
     UserId, api::client::keys::get_keys::v3::Response as KeysQueryResponse, serde::Raw,
 };
-use sdk_common::{executor::spawn, failures_cache::FailuresCache};
 use tokio::sync::Mutex;
 use tracing::{Level, debug, enabled, info, instrument, trace, warn};
 
@@ -1300,11 +1300,11 @@ fn debug_log_keys_query_response(
 pub(crate) mod testing {
     use std::sync::Arc;
 
+    use sdk_test::ruma_response_from_json;
     use ruma::{
         DeviceId, UserId, api::client::keys::get_keys::v3::Response as KeyQueryResponse, device_id,
         user_id,
     };
-    use sdk_test::ruma_response_from_json;
     use serde_json::json;
     use tokio::sync::Mutex;
 
@@ -1607,11 +1607,11 @@ pub(crate) mod tests {
     use std::sync::Arc;
 
     use futures_util::pin_mut;
+    use sdk_test::{async_test, ruma_response_from_json, test_json};
     use ruma::{
         TransactionId, api::client::keys::get_keys::v3::Response as KeysQueryResponse, device_id,
         user_id,
     };
-    use sdk_test::{async_test, ruma_response_from_json, test_json};
     use serde_json::json;
     use stream_assert::{assert_closed, assert_pending, assert_ready};
     #[cfg(feature = "experimental-x509-identity-verification")]
@@ -2684,8 +2684,8 @@ pub(crate) mod tests {
 
     mod update_sender_data {
         use assert_matches::assert_matches;
-        use ruma::room_id;
         use sdk_test::async_test;
+        use ruma::room_id;
 
         use super::{device_id, manager_test_helper};
         use crate::{

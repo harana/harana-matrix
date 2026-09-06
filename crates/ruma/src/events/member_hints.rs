@@ -6,27 +6,26 @@
 
 use std::collections::BTreeSet;
 
+use crate::OwnedUserId;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::{OwnedUserId, events::EmptyStateKey};
+use crate::events::EmptyStateKey;
 
 /// The content for an `m.member_hints` state event.
 ///
-/// Any users (service members) listed in the content should not be considered
-/// when computing the room name or avatar based on the member list.
+/// Any users (service members) listed in the content should not be considered when computing the
+/// room name or avatar based on the member list.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, EventContent, PartialEq)]
 #[ruma_event(type = "io.element.functional_members", kind = State, state_key_type = EmptyStateKey)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct MemberHintsEventContent {
-    /// The list of user IDs that should be considered a service member of the
-    /// room.
+    /// The list of user IDs that should be considered a service member of the room.
     pub service_members: BTreeSet<OwnedUserId>,
 }
 
 impl MemberHintsEventContent {
-    /// Create a new [`MemberHintsEventContent`] with the given set of service
-    /// members.
+    /// Create a new [`MemberHintsEventContent`] with the given set of service members.
     pub fn new(service_members: BTreeSet<OwnedUserId>) -> Self {
         Self { service_members }
     }
@@ -37,10 +36,11 @@ mod test {
     use std::collections::BTreeSet;
 
     use assert_matches2::assert_matches;
+    use crate::user_id;
     use serde_json::{from_value as from_json_value, json};
 
     use super::*;
-    use crate::{events::AnyStateEvent, user_id};
+    use crate::events::AnyStateEvent;
 
     #[test]
     fn deserialize() {

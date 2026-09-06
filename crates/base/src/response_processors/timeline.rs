@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use sdk_common::{deserialized_responses::TimelineEvent, timer};
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::SyncMessageLikeEvent;
 use ruma::{
@@ -19,7 +20,6 @@ use ruma::{
     events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent},
     push::{Action, PushConditionRoomCtx},
 };
-use sdk_common::{deserialized_responses::TimelineEvent, timer};
 use tracing::{instrument, trace, warn};
 
 use super::{Context, notification};

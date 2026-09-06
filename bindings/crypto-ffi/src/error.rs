@@ -5,8 +5,8 @@ use crypto::{
     SignatureError as InnerSignatureError,
     store::{CryptoStoreError as InnerStoreError, DehydrationError as InnerDehydrationError},
 };
-use ruma::{IdParseError, OwnedUserId};
 use sqlite::OpenStoreError;
+use ruma::{IdParseError, OwnedUserId};
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
@@ -107,7 +107,9 @@ pub enum SecretsBundleExportError {
 impl From<crypto::store::SecretsBundleExportError> for SecretsBundleExportError {
     fn from(value: crypto::store::SecretsBundleExportError) -> Self {
         match value {
-            crypto::store::SecretsBundleExportError::Store(e) => Self::CryptoStore(e.into()),
+            crypto::store::SecretsBundleExportError::Store(e) => {
+                Self::CryptoStore(e.into())
+            }
             crypto::store::SecretsBundleExportError::MissingCrossSigningKey(_)
             | crypto::store::SecretsBundleExportError::MissingCrossSigningKeys => {
                 Self::MissingCrossSigningKeys

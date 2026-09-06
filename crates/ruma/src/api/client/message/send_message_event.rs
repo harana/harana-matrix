@@ -7,17 +7,16 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
 
-    use serde_json::value::to_raw_value as to_raw_json_value;
-
-    #[cfg(feature = "unstable-msc4354")]
-    use crate::events::sticky::StickyDurationMs;
     use crate::{
         MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId,
         api::{auth_scheme::AccessToken, request, response},
-        events::{AnyMessageLikeEventContent, MessageLikeEventContent, MessageLikeEventType},
         metadata,
         serde::Raw,
     };
+    #[cfg(feature = "unstable-msc4354")]
+    use crate::events::sticky::StickyDurationMs;
+    use crate::events::{AnyMessageLikeEventContent, MessageLikeEventContent, MessageLikeEventType};
+    use serde_json::value::to_raw_value as to_raw_json_value;
 
     metadata! {
         method: PUT,
@@ -59,11 +58,9 @@ pub mod v3 {
 
         /// Timestamp to use for the `origin_server_ts` of the event.
         ///
-        /// This is called [timestamp massaging] and can only be used by
-        /// Appservices.
+        /// This is called [timestamp massaging] and can only be used by Appservices.
         ///
-        /// Note that this does not change the position of the event in the
-        /// timeline.
+        /// Note that this does not change the position of the event in the timeline.
         ///
         /// [timestamp massaging]: https://spec.matrix.org/v1.19/application-service-api/#timestamp-massaging
         #[ruma_api(query)]
@@ -73,12 +70,11 @@ pub mod v3 {
         /// The duration to stick the event for.
         ///
         /// Valid values are the integer range 0-3600000 (1 hour).
-        /// The presence of this field indicates that the event should be
-        /// sticky, this will give this event additional delivery
-        /// guarantees.
+        /// The presence of this field indicates that the event should be sticky, this
+        /// will give this event additional delivery guarantees.
         ///
-        /// Caller must first check that the server supports sticky events (via
-        /// `/versions`), or it will be no-op.
+        /// Caller must first check that the server supports sticky events (via `/versions`),
+        /// or it will be no-op.
         ///
         /// See [MSC4354 sticky events](https://github.com/matrix-org/matrix-spec-proposals/pull/4354).
         #[cfg(feature = "unstable-msc4354")]
@@ -98,14 +94,12 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given room id, transaction id and
-        /// event content.
+        /// Creates a new `Request` with the given room id, transaction id and event content.
         ///
         /// # Errors
         ///
-        /// Since `Request` stores the request body in serialized form, this
-        /// function can fail if `T`s [`Serialize`][serde::Serialize]
-        /// implementation can fail.
+        /// Since `Request` stores the request body in serialized form, this function can fail if
+        /// `T`s [`Serialize`][serde::Serialize] implementation can fail.
         pub fn new<T>(
             room_id: OwnedRoomId,
             txn_id: OwnedTransactionId,
@@ -125,8 +119,8 @@ pub mod v3 {
             })
         }
 
-        /// Creates a new `Request` with the given room id, transaction id,
-        /// event type and raw event content.
+        /// Creates a new `Request` with the given room id, transaction id, event type and raw event
+        /// content.
         pub fn new_raw(
             room_id: OwnedRoomId,
             txn_id: OwnedTransactionId,
@@ -157,16 +151,15 @@ pub mod v3 {
 mod tests {
     use std::borrow::Cow;
 
-    use serde_json::json;
-
     use crate::{
         api::{
             MatrixVersion, OutgoingRequestExt as _, SupportedVersions, auth_scheme::SendAccessToken,
         },
-        events::{MessageLikeEventType, sticky::StickyDurationMs},
         owned_room_id,
         serde::Raw,
     };
+    use crate::events::{MessageLikeEventType, sticky::StickyDurationMs};
+    use serde_json::json;
 
     #[test]
     fn test_sticky_send_message_request() {

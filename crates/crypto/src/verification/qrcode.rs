@@ -892,10 +892,10 @@ mod tests {
 
     use assert_matches::assert_matches;
     use qrcode::QrVerificationData;
+    use sdk_test::async_test;
     use ruma::{
         DeviceId, UserId, device_id, owned_event_id, owned_room_id, owned_user_id, user_id,
     };
-    use sdk_test::async_test;
     use tokio::sync::Mutex;
 
     use crate::{

@@ -81,8 +81,8 @@ impl EventEnum<'_> {
             ));
         }
 
-        // We cache the `Any*EventContent` enums needed by `EventEnumVariation` to
-        // generate them later.
+        // We cache the `Any*EventContent` enums needed by `EventEnumVariation` to generate them
+        // later.
         let mut event_content_enums = EventContentEnums::new(self);
 
         // Generate the `Any*Event` enums for all the variations.
@@ -333,10 +333,10 @@ impl<'a> EventEnumVariation<'a> {
     ///
     /// The code that is generated depends on the (kind, variation) tuple:
     ///
-    /// * `pub fn original_content(&self) -> Option<ContentEnum>` and `pub fn
-    ///   is_redacted(&self)` -> bool` for kinds and variations that return
-    ///   `true` in [`maybe_redacted()`](Self::maybe_redacted). It also
-    ///   generates `pub fn content(&self) -> FullContentEnum` for state events.
+    /// * `pub fn original_content(&self) -> Option<ContentEnum>` and `pub fn is_redacted(&self)` ->
+    ///   bool` for kinds and variations that return `true` in
+    ///   [`maybe_redacted()`](Self::maybe_redacted). It also generates `pub fn content(&self) ->
+    ///   FullContentEnum` for state events.
     /// * An empty `TokenStream` for the stripped variation.
     /// * `pub fn content(&self) -> ContentEnum` for the others.
     fn expand_content_accessors(
@@ -347,9 +347,8 @@ impl<'a> EventEnumVariation<'a> {
             .get_or_create(self.variation)?
             .expand_content_accessors(self.variation, &self.event_struct);
 
-        // Generate the `AnyPossiblyRedactedStateEventContent` and
-        // `AnyStateEventContentChange` accessors for state enums that contain
-        // `Original` and `Redacted` variants.
+        // Generate the `AnyPossiblyRedactedStateEventContent` and `AnyStateEventContentChange`
+        // accessors for state enums that contain `Original` and `Redacted` variants.
         if matches!(self.kind, EventEnumKind::State) && self.maybe_redacted() {
             tokens.extend(event_content_enums.get_or_create(EventVariation::Stripped).map(
                 |event_content_enum| {
@@ -366,8 +365,7 @@ impl<'a> EventEnumVariation<'a> {
         Some(tokens)
     }
 
-    /// Generate accessors for the [`EventField`]s that are present for this
-    /// enum.
+    /// Generate accessors for the [`EventField`]s that are present for this enum.
     fn expand_event_field_accessors(&self) -> impl Iterator<Item = TokenStream> {
         CommonEventField::ALL
             .iter()
@@ -383,8 +381,8 @@ impl<'a> EventEnumVariation<'a> {
                 let (field_type, is_ref) = field.ty(self.ruma_events);
                 let ampersand = is_ref.then(|| quote! { & });
 
-                // If this content might be redacted, the field is available through an accessor
-                // on the inner content enum.
+                // If this content might be redacted, the field is available through an accessor on
+                // the inner content enum.
                 let call_parens = self.maybe_redacted().then(|| quote! { () });
 
                 quote! {
@@ -402,8 +400,7 @@ impl<'a> EventEnumVariation<'a> {
             })
     }
 
-    /// Generate an accessor for the `state_key` field for this enum, if
-    /// present.
+    /// Generate an accessor for the `state_key` field for this enum, if present.
     fn expand_state_key_accessor(&self) -> Option<TokenStream> {
         if self.kind != EventEnumKind::State {
             return None;
@@ -412,8 +409,8 @@ impl<'a> EventEnumVariation<'a> {
         let variants = &self.variants;
         let variant_attrs = &self.variant_attrs;
 
-        // If this content might be redacted, the field is available through an accessor
-        // on the inner content enum.
+        // If this content might be redacted, the field is available through an accessor on
+        // the inner content enum.
         let call_parens = self.maybe_redacted().then(|| quote! { () });
 
         Some(quote! {
@@ -430,8 +427,7 @@ impl<'a> EventEnumVariation<'a> {
         })
     }
 
-    /// Generate an accessor for the `unsigned.relations` field for this enum,
-    /// if present.
+    /// Generate an accessor for the `unsigned.relations` field for this enum, if present.
     fn expand_relations_accessor(&self) -> Option<TokenStream> {
         if self.kind != EventEnumKind::MessageLike {
             return None;
@@ -467,8 +463,7 @@ impl<'a> EventEnumVariation<'a> {
         })
     }
 
-    /// Generate an accessor for the `unsigned.transaction_id` field for this
-    /// enum, if present.
+    /// Generate an accessor for the `unsigned.transaction_id` field for this enum, if present.
     fn expand_transaction_id_accessor(&self) -> Option<TokenStream> {
         if !self.maybe_redacted() {
             return None;
@@ -496,8 +491,8 @@ impl<'a> EventEnumVariation<'a> {
         })
     }
 
-    /// Implement `From<Any*Event>` and `.into_full_event()` for this enum, if
-    /// this is a sync variation.
+    /// Implement `From<Any*Event>` and `.into_full_event()` for this enum, if this is a sync
+    /// variation.
     fn expand_from_sync_into_full(&self) -> Option<TokenStream> {
         // Only sync events can be converted to full events.
         if !self.variation.is_sync()

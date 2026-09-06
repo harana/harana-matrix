@@ -24,6 +24,11 @@ use matrix::{
         MatrixMockServer, RoomContextResponseTemplate, RoomRelationsResponseTemplate,
     },
 };
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{
+    EventSendState, RoomExt as _, TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode,
+    TimelineEventItemId, TimelineFocus, VirtualTimelineItem,
+};
 use ruma::{
     MilliSecondsSinceUnixEpoch, RoomId,
     api::client::receipt::create_receipt::v3::ReceiptType as SendReceiptType,
@@ -46,13 +51,8 @@ use ruma::{
     },
     owned_event_id, owned_mxc_uri, room_id, user_id,
 };
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use stream_assert::assert_pending;
 use tokio::task::yield_now;
-use ui::timeline::{
-    EventSendState, RoomExt as _, TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode,
-    TimelineEventItemId, TimelineFocus, VirtualTimelineItem,
-};
 
 async fn client_with_threading_support(server: &MatrixMockServer) -> Client {
     server

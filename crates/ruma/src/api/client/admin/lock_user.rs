@@ -2,12 +2,11 @@
 //!
 //! Sets the locked status of a particular server-local user.
 //!
-//! The user calling this endpoint MUST be a server admin. The client SHOULD
-//! check that the user is allowed to lock other users at the `GET
-//! /capabilities` endpoint prior to using this endpoint.
+//! The user calling this endpoint MUST be a server admin. The client SHOULD check that the user is
+//! allowed to lock other users at the `GET /capabilities` endpoint prior to using this endpoint.
 //!
-//! In order to prevent user enumeration, servers MUST ensure that authorization
-//! is checked prior to trying to do account lookups.
+//! In order to prevent user enumeration, servers MUST ensure that authorization is checked prior to
+//! trying to do account lookups.
 
 pub mod v1 {
     //! `/v1/` ([spec])

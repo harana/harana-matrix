@@ -12,13 +12,12 @@ pub fn validate(s: &str) -> Result<(), Error> {
     Ok(())
 }
 
-/// Validate a [user ID] to follow the spec recommendations when generating
-/// them.
+/// Validate a [user ID] to follow the spec recommendations when generating them.
 ///
 /// [user ID]: https://spec.matrix.org/v1.19/appendices/#user-identifiers
 pub fn validate_strict(s: &str) -> Result<(), Error> {
-    // Since the length check can be disabled with `compat-arbitrary-length-ids`,
-    // check it again here.
+    // Since the length check can be disabled with `compat-arbitrary-length-ids`, check it again
+    // here.
     if s.len() > ID_MAX_BYTES {
         return Err(Error::MaximumLengthExceeded);
     }
@@ -35,8 +34,8 @@ pub fn validate_strict(s: &str) -> Result<(), Error> {
 
 /// Check whether the given [user ID] localpart is valid and fully conforming.
 ///
-/// Returns an `Err` for invalid user ID localparts, `Ok(false)` for historical
-/// user ID localparts and `Ok(true)` for fully conforming user ID localparts.
+/// Returns an `Err` for invalid user ID localparts, `Ok(false)` for historical user ID localparts
+/// and `Ok(true)` for fully conforming user ID localparts.
 ///
 /// [user ID]: https://spec.matrix.org/v1.19/appendices/#user-identifiers
 pub fn localpart_is_fully_conforming(localpart: &str) -> Result<bool, Error> {
@@ -50,9 +49,9 @@ pub fn localpart_is_fully_conforming(localpart: &str) -> Result<bool, Error> {
         .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'z' | b'-' | b'.' | b'=' | b'_' | b'/' | b'+'));
 
     if !is_fully_conforming {
-        // If it's not fully conforming, check if it contains characters that are also
-        // disallowed for historical user IDs, or is empty. If that's the case,
-        // return an error. See https://spec.matrix.org/v1.19/appendices/#historical-user-ids
+        // If it's not fully conforming, check if it contains characters that are also disallowed
+        // for historical user IDs, or is empty. If that's the case, return an error.
+        // See https://spec.matrix.org/v1.19/appendices/#historical-user-ids
         let is_invalid_historical = localpart.bytes().any(|b| b < 0x21 || b == b':' || b > 0x7E);
 
         if is_invalid_historical {

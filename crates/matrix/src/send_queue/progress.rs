@@ -16,13 +16,13 @@
 
 use std::ops::Add;
 
+use eyeball::SharedObservable;
 use base::{
     media::MediaRequestParameters,
     store::{DependentQueuedRequestKind, SentMediaItem},
 };
-use eyeball::SharedObservable;
-use ruma::{TransactionId, events::room::MediaSource};
 use sdk_common::executor::spawn;
+use ruma::{TransactionId, events::room::MediaSource};
 use tokio::sync::broadcast;
 use tracing::warn;
 

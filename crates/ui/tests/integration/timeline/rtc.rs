@@ -1,14 +1,16 @@
 use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
 use matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
+use sdk_test::{
+    ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
+};
+use ui::timeline::{RoomExt, TimelineItemContent};
 use ruma::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::rtc::notification::{CallIntent, NotificationType},
     room_id,
 };
-use sdk_test::{ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use tokio_stream::StreamExt;
-use ui::timeline::{RoomExt, TimelineItemContent};
 
 #[async_test]
 async fn test_decline_call() {

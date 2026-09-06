@@ -12,12 +12,10 @@ use pkcs8::{
     der::zeroize::Zeroizing,
 };
 use rand::TryCryptoRng;
+use crate::{SigningKeyAlgorithm, SigningKeyId};
 use thiserror::Error;
 
-use crate::{
-    SigningKeyAlgorithm, SigningKeyId,
-    signatures::{KeyPair, Signature, verify::Verifier},
-};
+use crate::signatures::{KeyPair, Signature, verify::Verifier};
 
 /// An Ed25519 key pair.
 pub struct Ed25519KeyPair {
@@ -63,20 +61,20 @@ impl Ed25519KeyPair {
     ///
     /// # Parameters
     ///
-    /// * `document`: PKCS#8 v1/v2 DER-formatted document containing the private
-    ///   (and optionally public) key.
-    /// * `version`: The "version" of the key used for this signature. Versions
-    ///   are used as an identifier to distinguish signatures generated from
-    ///   different keys but using the same algorithm on the same homeserver.
+    /// * `document`: PKCS#8 v1/v2 DER-formatted document containing the private (and optionally
+    ///   public) key.
+    /// * `version`: The "version" of the key used for this signature. Versions are used as an
+    ///   identifier to distinguish signatures generated from different keys but using the same
+    ///   algorithm on the same homeserver.
     ///
     /// # Errors
     ///
-    /// Returns an error if the public and private keys provided are invalid for
-    /// the implementing algorithm.
+    /// Returns an error if the public and private keys provided are invalid for the implementing
+    /// algorithm.
     ///
-    /// Returns an error when the PKCS#8 document had a public key, but it
-    /// doesn't match the one generated from the private key. This is a
-    /// fallback and extra validation against corruption or
+    /// Returns an error when the PKCS#8 document had a public key, but it doesn't match the one
+    /// generated from the private key. This is a fallback and extra validation against
+    /// corruption or
     pub fn from_der(document: &[u8], version: String) -> Result<Self, Ed25519KeyPairParseError> {
         Ok(Self { signing_key: SigningKey::from_pkcs8_der(document)?, version })
     }
@@ -113,8 +111,7 @@ impl Ed25519KeyPair {
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<u8>` representing a DER-encoded PKCS#8 v2 document (with
-    /// public key).
+    /// Returns a `Vec<u8>` representing a DER-encoded PKCS#8 v2 document (with public key).
     ///
     /// # Panics
     ///
@@ -165,16 +162,13 @@ impl fmt::Debug for Ed25519KeyPair {
     }
 }
 
-/// An error encountered when constructing an [`Ed25519KeyPair`] from its
-/// constituent parts.
+/// An error encountered when constructing an [`Ed25519KeyPair`] from its constituent parts.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Ed25519KeyPairParseError {
-    /// The ASN.1 Object Identifier on a PKCS#8 document doesn't match the
-    /// expected one.
+    /// The ASN.1 Object Identifier on a PKCS#8 document doesn't match the expected one.
     ///
-    /// This can happen when the document describes a RSA key, while an ed25519
-    /// key was expected.
+    /// This can happen when the document describes a RSA key, while an ed25519 key was expected.
     #[error("algorithm OID does not match ed25519 algorithm: expected {expected}, found {found}")]
     InvalidOid {
         /// The expected OID.
@@ -194,8 +188,8 @@ pub enum Ed25519KeyPairParseError {
         found: usize,
     },
 
-    /// The public key found in a PKCS#8 v2 document doesn't match the public
-    /// key derived from its private key.
+    /// The public key found in a PKCS#8 v2 document doesn't match the public key derived from its
+    /// private key.
     #[error("PKCS#8 Document public key does not match public key derived from private key: derived {0:X?} (len {}), parsed {1:X?} (len {})", .derived.len(), .parsed.len())]
     PublicKeyMismatch {
         /// The key derived from the private key.
@@ -294,4 +288,5 @@ mod tests {
 
         assert_eq!(keypair.public_key(), WELL_FORMED_PUBKEY);
     }
+
 }

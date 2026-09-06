@@ -7,13 +7,14 @@ pub mod v1 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1eventeventid
 
-    use serde_json::value::RawValue as RawJsonValue;
-
     use crate::{
         MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedServerName,
-        api::{federation::authentication::ServerSignatures, request, response},
+        api::{request, response},
         metadata,
     };
+    use serde_json::value::RawValue as RawJsonValue;
+
+    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,
@@ -52,8 +53,7 @@ pub mod v1 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given server name, timestamp, and
-        /// event.
+        /// Creates a new `Response` with the given server name, timestamp, and event.
         pub fn new(
             origin: OwnedServerName,
             origin_server_ts: MilliSecondsSinceUnixEpoch,

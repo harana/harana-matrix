@@ -23,12 +23,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use growable_bloom_filter::{GrowableBloom, GrowableBloomBuilder};
+use matrix::{Client, sleep::sleep, task_monitor::BackgroundTaskHandle};
 use base::{
     SendOutsideWasm, StateStoreDataKey, StateStoreDataValue, StoreError, SyncOutsideWasm,
     crypto::types::events::UtdCause,
 };
-use growable_bloom_filter::{GrowableBloom, GrowableBloomBuilder};
-use matrix::{Client, sleep::sleep, task_monitor::BackgroundTaskHandle};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedServerName, UserId,
     time::{Duration, Instant},
@@ -447,8 +447,8 @@ impl Drop for UtdHookManager {
 #[cfg(test)]
 mod tests {
     use matrix::test_utils::{logged_in_client, no_retry_test_client};
-    use ruma::{event_id, owned_server_name, server_name, user_id};
     use sdk_test::async_test;
+    use ruma::{event_id, owned_server_name, server_name, user_id};
 
     use super::*;
 

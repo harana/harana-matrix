@@ -18,11 +18,11 @@ use base64::{
     Engine, alphabet,
     engine::{GeneralPurpose, general_purpose},
 };
-use crypto::CryptoStoreError;
 use gloo_utils::format::JsValueSerdeExt;
 use indexed_db_futures::KeyRange;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use crypto::CryptoStoreError;
 use store_encryption::{EncryptedValueBase64, StoreCipher};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use wasm_bindgen::JsValue;
 use zeroize::Zeroizing;
 
@@ -355,10 +355,10 @@ mod tests {
     use std::{collections::BTreeMap, sync::Arc};
 
     use gloo_utils::format::JsValueSerdeExt;
+    use store_encryption::StoreCipher;
     use sdk_test::async_test;
     use serde::{Deserialize, Serialize};
     use serde_json::json;
-    use store_encryption::StoreCipher;
     use wasm_bindgen::JsValue;
 
     use super::SafeEncodeSerializer;

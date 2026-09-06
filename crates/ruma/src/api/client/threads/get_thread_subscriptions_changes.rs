@@ -10,13 +10,12 @@ pub mod unstable {
     use std::collections::BTreeMap;
 
     use js_int::UInt;
-    use serde::{Deserialize, Serialize};
-
     use crate::{
         OwnedEventId, OwnedRoomId,
         api::{Direction, auth_scheme::AccessToken, request, response},
         metadata,
     };
+    use serde::{Deserialize, Serialize};
 
     metadata! {
         method: GET,
@@ -32,8 +31,8 @@ pub mod unstable {
     pub struct Request {
         /// The direction to use for pagination.
         ///
-        /// Only `Direction::Backward` is meant to be supported, which is why
-        /// this field is private for now (as of 2025-08-21).
+        /// Only `Direction::Backward` is meant to be supported, which is why this field is private
+        /// for now (as of 2025-08-21).
         #[ruma_api(query)]
         // Because this field is private, it is never read.
         #[allow(dead_code)]
@@ -41,9 +40,8 @@ pub mod unstable {
 
         /// A token to continue pagination from.
         ///
-        /// This token can be acquired from a previous `/thread_subscriptions`
-        /// response, or the `prev_batch` in a sliding sync response's
-        /// `thread_subscriptions` field.
+        /// This token can be acquired from a previous `/thread_subscriptions` response, or the
+        /// `prev_batch` in a sliding sync response's `thread_subscriptions` field.
         ///
         /// The token is opaque and has no client-discernible meaning.
         ///
@@ -54,17 +52,15 @@ pub mod unstable {
 
         /// A token used to limit the pagination.
         ///
-        /// The token can be set to the value of a sliding sync `pos` field used
-        /// in a request that returned new thread subscriptions with a
-        /// `prev_batch` token.
+        /// The token can be set to the value of a sliding sync `pos` field used in a request that
+        /// returned new thread subscriptions with a `prev_batch` token.
         #[ruma_api(query)]
         #[serde(skip_serializing_if = "Option::is_none")]
         pub to: Option<String>,
 
         /// A maximum number of thread subscriptions to fetch in one response.
         ///
-        /// Defaults to 100, if not provided. Servers may impose a smaller limit
-        /// than requested.
+        /// Defaults to 100, if not provided. Servers may impose a smaller limit than requested.
         #[ruma_api(query)]
         #[serde(skip_serializing_if = "Option::is_none")]
         pub limit: Option<UInt>,
@@ -74,12 +70,11 @@ pub mod unstable {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ThreadSubscription {
-        /// Whether the subscription was made automatically by a client, not by
-        /// manual user choice.
+        /// Whether the subscription was made automatically by a client, not by manual user choice.
         pub automatic: bool,
 
-        /// The bump stamp of the thread subscription, to be used to compare
-        /// with other changes related to the same thread.
+        /// The bump stamp of the thread subscription, to be used to compare with other changes
+        /// related to the same thread.
         pub bump_stamp: UInt,
     }
 
@@ -94,8 +89,8 @@ pub mod unstable {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ThreadUnsubscription {
-        /// The bump stamp of the thread subscription, to be used to compare
-        /// with other changes related to the same thread.
+        /// The bump stamp of the thread subscription, to be used to compare with other changes
+        /// related to the same thread.
         pub bump_stamp: UInt,
     }
 
@@ -117,8 +112,8 @@ pub mod unstable {
         #[serde(skip_serializing_if = "BTreeMap::is_empty")]
         pub unsubscribed: BTreeMap<OwnedRoomId, BTreeMap<OwnedEventId, ThreadUnsubscription>>,
 
-        /// If there are still more results to fetch, this is the token to use
-        /// as the next `from` value.
+        /// If there are still more results to fetch, this is the token to use as the next `from`
+        /// value.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub end: Option<String>,
     }

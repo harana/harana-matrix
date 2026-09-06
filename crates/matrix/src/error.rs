@@ -17,6 +17,7 @@
 use std::{io::Error as IoError, sync::Arc, time::Duration};
 
 use as_variant::as_variant;
+use http::StatusCode;
 #[cfg(feature = "qrcode")]
 use base::crypto::ScanError;
 #[cfg(feature = "e2e-encryption")]
@@ -29,7 +30,6 @@ use base::{
     cross_process_lock::CrossProcessLockUnobtained, event_cache::store::EventCacheStoreError,
     media::store::MediaStoreError,
 };
-use http::StatusCode;
 #[cfg(feature = "reqwest-transport")]
 use reqwest::Error as ReqwestError;
 use ruma::{

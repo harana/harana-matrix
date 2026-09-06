@@ -21,6 +21,8 @@ use matrix::{
     linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
     test_utils::mocks::MatrixMockServer,
 };
+use sdk_test::{BOB, async_test, event_factory::EventFactory};
+use ui::timeline::RoomExt;
 use ruma::{
     event_id,
     events::room::encrypted::{
@@ -28,10 +30,8 @@ use ruma::{
     },
     room_id,
 };
-use sdk_test::{BOB, async_test, event_factory::EventFactory};
 use stream_assert::assert_pending;
 use tempfile::NamedTempFile;
-use ui::timeline::RoomExt;
 
 /// The event cache can store Unable To Decrypt event
 /// ([`TimelineEventKind::UnableToDecrypt`]). If such event is part of the

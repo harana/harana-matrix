@@ -19,8 +19,8 @@ use std::{fmt, time::Duration};
 
 use async_channel::{Receiver, Sender};
 use futures_util::StreamExt;
-use ruma::api::client::delayed_events::DelayParameters;
 use sdk_common::executor::spawn;
+use ruma::api::client::delayed_events::DelayParameters;
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio_stream::wrappers::UnboundedReceiverStream;

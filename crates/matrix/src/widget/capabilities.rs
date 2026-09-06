@@ -17,11 +17,11 @@
 
 use std::{fmt, future::Future};
 
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use ruma::{
     DeviceId, UserId,
     events::{MessageLikeEventType, StateEventType},
 };
-use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeSeq};
 use tracing::{debug, warn};
 

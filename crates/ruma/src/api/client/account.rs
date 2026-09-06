@@ -19,9 +19,10 @@ pub mod request_registration_token_via_msisdn;
 pub mod unbind_3pid;
 pub mod whoami;
 
+use crate::serde::StringEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::{api::client::PrivOwnedStr, serde::StringEnum};
+use crate::api::client::PrivOwnedStr;
 
 /// Additional authentication information for requestToken endpoints.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -36,8 +37,7 @@ pub struct IdentityServerInfo {
 }
 
 impl IdentityServerInfo {
-    /// Creates a new `IdentityServerInfo` with the given server name and access
-    /// token.
+    /// Creates a new `IdentityServerInfo` with the given server name and access token.
     pub fn new(id_server: String, id_access_token: String) -> Self {
         Self { id_server, id_access_token }
     }
@@ -49,8 +49,8 @@ impl IdentityServerInfo {
 #[ruma_enum(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum ThirdPartyIdRemovalStatus {
-    /// Either the homeserver couldn't determine the right identity server to
-    /// contact, or the identity server refused the operation.
+    /// Either the homeserver couldn't determine the right identity server to contact, or the
+    /// identity server refused the operation.
     NoSupport,
 
     /// Success.

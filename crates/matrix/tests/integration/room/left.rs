@@ -1,16 +1,16 @@
 use std::time::Duration;
 
 use assert_matches2::assert_matches;
-use base::{RoomInfoNotableUpdateReasons, RoomState};
 use matrix::{config::SyncSettings, linked_chunk::LinkedChunkId};
+use base::{RoomInfoNotableUpdateReasons, RoomState};
+use sdk_test::{
+    DEFAULT_TEST_ROOM_ID, LeftRoomBuilder, SyncResponseBuilder, async_test,
+    event_factory::EventFactory, test_json,
+};
 use ruma::{
     OwnedRoomOrAliasId,
     events::direct::{DirectEventContent, DirectUserIdentifier},
     user_id,
-};
-use sdk_test::{
-    DEFAULT_TEST_ROOM_ID, LeftRoomBuilder, SyncResponseBuilder, async_test,
-    event_factory::EventFactory, test_json,
 };
 use serde_json::json;
 use tokio::task::yield_now;

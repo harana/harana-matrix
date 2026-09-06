@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use crate::serde::JsonObject;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value as JsonValue;
 
@@ -7,7 +8,6 @@ use super::{
     AudioMessageEventContent, FileMessageEventContent, FormattedBody, ImageMessageEventContent,
     VideoMessageEventContent,
 };
-use crate::serde::JsonObject;
 
 /// The payload for a gallery message.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -66,17 +66,17 @@ impl GalleryItemType {
     /// Creates a new `GalleryItemType`.
     ///
     /// The `itemtype` and `body` are required fields.
-    /// Additionally it's possible to add arbitrary key/value pairs to the event
-    /// content for custom item types through the `data` map.
+    /// Additionally it's possible to add arbitrary key/value pairs to the event content for custom
+    /// item types through the `data` map.
     ///
-    /// Prefer to use the public variants of `GalleryItemType` where possible;
-    /// this constructor is meant be used for unsupported item types only
-    /// and does not allow setting arbitrary data for supported ones.
+    /// Prefer to use the public variants of `GalleryItemType` where possible; this constructor is
+    /// meant be used for unsupported item types only and does not allow setting arbitrary data
+    /// for supported ones.
     ///
     /// # Errors
     ///
-    /// Returns an error if the `itemtype` is known and serialization of `data`
-    /// to the corresponding `GalleryItemType` variant fails.
+    /// Returns an error if the `itemtype` is known and serialization of `data` to the corresponding
+    /// `GalleryItemType` variant fails.
     pub fn new(itemtype: &str, body: String, data: JsonObject) -> serde_json::Result<Self> {
         fn deserialize_variant<T: DeserializeOwned>(
             body: String,
@@ -123,12 +123,11 @@ impl GalleryItemType {
 
     /// Returns the associated data.
     ///
-    /// The returned JSON object won't contain the `itemtype` and `body` fields,
-    /// use [`.itemtype()`][Self::itemtype] / [`.body()`](Self::body) to
-    /// access those.
+    /// The returned JSON object won't contain the `itemtype` and `body` fields, use
+    /// [`.itemtype()`][Self::itemtype] / [`.body()`](Self::body) to access those.
     ///
-    /// Prefer to use the public variants of `GalleryItemType` where possible;
-    /// this method is meant to be used for custom message types only.
+    /// Prefer to use the public variants of `GalleryItemType` where possible; this method is meant
+    /// to be used for custom message types only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("item type serialization to succeed") {

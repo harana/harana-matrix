@@ -48,7 +48,10 @@ pub struct DeviceUpdates {
 }
 
 impl DeviceUpdates {
-    pub(crate) fn new(client: Client, updates: base::crypto::store::types::DeviceUpdates) -> Self {
+    pub(crate) fn new(
+        client: Client,
+        updates: base::crypto::store::types::DeviceUpdates,
+    ) -> Self {
         let map_devices = |(user_id, devices)| {
             // For some reason we need to tell Rust the type of `devices`.
             let devices: BTreeMap<_, _> = devices;

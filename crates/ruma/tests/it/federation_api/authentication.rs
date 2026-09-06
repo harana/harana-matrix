@@ -3,21 +3,19 @@
 use js_int::uint;
 use ruma::{
     MilliSecondsSinceUnixEpoch,
-    api::{
-        OutgoingRequestExt as _,
-        auth_scheme::AuthScheme,
-        federation::{
-            authentication::{ServerSignatures, ServerSignaturesInput},
-            transactions::send_transaction_message,
-        },
-    },
+    api::{OutgoingRequestExt as _, auth_scheme::AuthScheme},
     owned_server_name,
     serde::Base64,
     server_name,
-    signatures::{Ed25519KeyPair, PublicKeyMap, PublicKeySet},
 };
+use ruma::api::federation::{
+    authentication::{ServerSignatures, ServerSignaturesInput},
+    transactions::send_transaction_message,
+};
+use ruma::signatures::{Ed25519KeyPair, PublicKeyMap, PublicKeySet};
 
-static PKCS8_ED25519_DER: &[u8] = include_bytes!("../signatures/keys/ed25519.der");
+static PKCS8_ED25519_DER: &[u8] =
+    include_bytes!("../signatures/keys/ed25519.der");
 
 #[test]
 fn server_signatures_roundtrip() {

@@ -8,6 +8,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use deadpool::managed::PoolConfig;
 use base::{
     MinimalRoomMemberEvent, ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK, RoomInfo,
     RoomMemberships, RoomState, StateChanges, StateStore, StateStoreDataKey, StateStoreDataValue,
@@ -18,7 +19,6 @@ use base::{
         StoredThreadSubscription, ThreadSubscriptionStatus, migration_helpers::RoomInfoV1,
     },
 };
-use deadpool::managed::PoolConfig;
 use ruma::{
     CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
     OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt, UserId,
@@ -2696,7 +2696,9 @@ mod tests {
     /// so it can't live in `statestore_integration_tests!`.
     #[sdk_test::async_test]
     async fn test_stripped_data_is_dropped_once_the_room_is_joined() {
-        use base::{RoomInfo, RoomMemberships, RoomState, StateChanges, store::StateStoreExt};
+        use base::{
+            RoomInfo, RoomMemberships, RoomState, StateChanges, store::StateStoreExt,
+        };
         use ruma::{
             events::{
                 StateEventType,
@@ -2859,6 +2861,7 @@ mod migration_tests {
         },
         sync::UnreadNotificationsCount,
     };
+    use sdk_test::async_test;
     use ruma::{
         EventId, MilliSecondsSinceUnixEpoch, OwnedTransactionId, RoomId, TransactionId, UserId,
         events::{
@@ -2868,7 +2871,6 @@ mod migration_tests {
         room_id, server_name, user_id,
     };
     use rusqlite::Transaction;
-    use sdk_test::async_test;
     use serde::{Deserialize, Serialize};
     use serde_json::json;
     use tempfile::{TempDir, tempdir};

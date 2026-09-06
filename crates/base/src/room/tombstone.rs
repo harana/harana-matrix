@@ -189,10 +189,10 @@ mod tests {
     use std::ops::Not;
 
     use assert_matches::assert_matches;
-    use ruma::{RoomVersionId, room_id, server_name, user_id};
     use sdk_test::{
         JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
+    use ruma::{RoomVersionId, room_id, server_name, user_id};
 
     use crate::{RoomState, test_utils::logged_in_base_client};
 

@@ -27,8 +27,8 @@ use std::{
     },
 };
 
-use ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
 use sdk_common::locks::RwLock as StdRwLock;
+use ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, MutexGuard, OwnedRwLockReadGuard, RwLock};
 use tracing::{Span, field::display, instrument, trace};
@@ -402,8 +402,8 @@ impl Deref for StoreCacheGuard {
 
 #[cfg(test)]
 mod tests {
-    use proptest::prelude::*;
     use sdk_test::async_test;
+    use proptest::prelude::*;
 
     use super::{DeviceStore, SequenceNumber, SessionStore};
     use crate::{

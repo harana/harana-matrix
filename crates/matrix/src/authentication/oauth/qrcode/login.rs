@@ -14,19 +14,19 @@
 
 use std::future::IntoFuture;
 
+use eyeball::SharedObservable;
+use futures_core::Stream;
 use base::{
     SessionMeta, boxed_into_future,
     crypto::types::qr_login::{QrCodeData, QrCodeIntent},
     store::RoomLoadSettings,
 };
-use eyeball::SharedObservable;
-use futures_core::Stream;
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use oauth2::{DeviceCodeErrorResponseType, StandardDeviceAuthorizationResponse};
 use ruma::{
     OwnedDeviceId,
     api::client::discovery::get_authorization_server_metadata::v1::AuthorizationServerMetadata,
 };
-use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use tracing::trace;
 use vodozemac::Curve25519PublicKey;
 #[cfg(doc)]
@@ -488,11 +488,11 @@ mod test {
     use std::time::Duration;
 
     use assert_matches2::{assert_let, assert_matches};
+    use futures_util::StreamExt;
     use base::crypto::types::{
         SecretsBundle,
         qr_login::{Msc4108IntentData, QrCodeIntentData},
     };
-    use futures_util::StreamExt;
     use sdk_common::executor::spawn;
     use sdk_test::async_test;
     use serde_json::json;

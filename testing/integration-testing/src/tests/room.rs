@@ -31,9 +31,9 @@ use matrix::{
     test_utils::assert_event_matches_msg,
 };
 use sdk_test::TestResult;
+use ui::{sync_service::SyncService, timeline::TimelineBuilder};
 use tokio::{spawn, time::sleep};
 use tracing::{debug, error, warn};
-use ui::{sync_service::SyncService, timeline::TimelineBuilder};
 
 use crate::helpers::{TestClientBuilder, wait_for_room, wait_until_some};
 

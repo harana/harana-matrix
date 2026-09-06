@@ -119,9 +119,9 @@ pub(in crate::timeline) async fn spawn_crypto_tasks(
 mod tests {
     use std::{collections::BTreeMap, sync::Arc, time::SystemTime};
 
-    use base::crypto::types::events::UtdCause;
     use imbl::vector;
     use matrix::deserialized_responses::{AlgorithmInfo, EncryptionInfo, VerificationState};
+    use base::crypto::types::events::UtdCause;
     use ruma::{
         MilliSecondsSinceUnixEpoch, OwnedTransactionId,
         events::room::{

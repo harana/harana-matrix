@@ -21,6 +21,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use deadpool::managed::PoolConfig;
 use base::cross_process_lock::CrossProcessLockGeneration;
 use crypto::{
     Account, DeviceData, GossipRequest, GossippedSecret, SecretInfo, TrackedUser, UserIdentityData,
@@ -37,7 +38,6 @@ use crypto::{
         },
     },
 };
-use deadpool::managed::PoolConfig;
 use ruma::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedRoomId, RoomId, TransactionId,
     UserId, events::secret::request::SecretName,
@@ -1706,7 +1706,10 @@ impl CryptoStore for SqliteCryptoStore {
             .transpose()?)
     }
 
-    async fn is_message_known(&self, message_hash: &crypto::olm::OlmMessageHash) -> Result<bool> {
+    async fn is_message_known(
+        &self,
+        message_hash: &crypto::olm::OlmMessageHash,
+    ) -> Result<bool> {
         let value = rmp_serde::to_vec(message_hash)?;
         Ok(self.read().await?.has_olm_hash(value).await?)
     }
@@ -1980,14 +1983,14 @@ impl CryptoStore for SqliteCryptoStore {
 mod tests {
     use std::{path::Path, sync::LazyLock};
 
+    use sdk_common::deserialized_responses::WithheldCode;
     use crypto::{
         cryptostore_integration_tests, cryptostore_integration_tests_time,
         olm::SenderDataType,
         store::{CryptoStore, types::Changes},
     };
-    use ruma::{device_id, room_id, user_id};
-    use sdk_common::deserialized_responses::WithheldCode;
     use sdk_test::async_test;
+    use ruma::{device_id, room_id, user_id};
     use similar_asserts::assert_eq;
     use tempfile::{TempDir, tempdir};
 

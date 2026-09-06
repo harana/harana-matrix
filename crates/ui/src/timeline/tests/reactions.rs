@@ -20,11 +20,11 @@ use futures_core::Stream;
 use futures_util::{FutureExt as _, StreamExt as _};
 use imbl::vector;
 use matrix::assert_next_matches_with_timeout;
+use sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, event_id,
     events::AnyMessageLikeEventContent, server_name, uint,
 };
-use sdk_test::{ALICE, BOB, async_test};
 use stream_assert::{assert_next_matches, assert_pending};
 use tokio::time::timeout;
 

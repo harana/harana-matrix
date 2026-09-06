@@ -16,13 +16,13 @@ use std::sync::Arc;
 
 use assert_matches::assert_matches;
 use matrix::test_utils::mocks::MatrixMockServer;
-use ruma::events::room::member::MembershipState;
 use sdk_common::executor::spawn;
 use sdk_test::{
     ALICE, BOB, CAROL, DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, async_test,
     event_factory::{EventFactory, PreviousMembership},
 };
 use ui::timeline::{RoomExt, TimelineDetails};
+use ruma::events::room::member::MembershipState;
 
 #[async_test]
 async fn test_user_profile_after_being_banned() {

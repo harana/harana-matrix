@@ -14,8 +14,8 @@ use super::{
 
 /// A key algorithm and key name delimited by a colon.
 ///
-/// Examples of the use of this struct are [`DeviceKeyId`], which identifies a
-/// Ed25519 or Curve25519 [device key](https://spec.matrix.org/v1.19/client-server-api/#device-keys), and
+/// Examples of the use of this struct are [`DeviceKeyId`], which identifies a Ed25519 or Curve25519
+/// [device key](https://spec.matrix.org/v1.19/client-server-api/#device-keys), and
 /// [`CrossSigningKeyId`], which identifies a user's
 /// [cross signing key](https://spec.matrix.org/v1.19/client-server-api/#cross-signing).
 ///
@@ -23,9 +23,8 @@ use super::{
 /// [signed JSON](https://spec.matrix.org/v1.19/appendices/#signing-details)
 /// where it is referred to as a "signing key identifier".
 ///
-/// This struct is rarely used directly - instead you should expect to use one
-/// of the type aliases that rely on it like [`CrossSigningKeyId`] or
-/// [`DeviceSigningKeyId`].
+/// This struct is rarely used directly - instead you should expect to use one of the type aliases
+/// that rely on it like [`CrossSigningKeyId`] or [`DeviceSigningKeyId`].
 ///
 /// # Examples
 ///
@@ -44,10 +43,7 @@ use super::{
 /// ```
 /// use ruma::{DeviceKeyAlgorithm, DeviceKeyId};
 ///
-/// let k = DeviceKeyId::from_parts(
-///     DeviceKeyAlgorithm::Curve25519,
-///     "MYDEVICE".into(),
-/// );
+/// let k = DeviceKeyId::from_parts(DeviceKeyAlgorithm::Curve25519, "MYDEVICE".into());
 /// assert_eq!(k.as_str(), "curve25519:MYDEVICE");
 /// ```
 #[repr(transparent)]
@@ -71,8 +67,7 @@ impl<A: KeyAlgorithm, K: KeyName + ?Sized> KeyId<A, K> {
         OwnedKeyId::from_string_unchecked(res)
     }
 
-    /// Returns key algorithm of the key ID - the part that comes before the
-    /// colon.
+    /// Returns key algorithm of the key ID - the part that comes before the colon.
     ///
     /// # Example
     ///
@@ -86,8 +81,7 @@ impl<A: KeyAlgorithm, K: KeyName + ?Sized> KeyId<A, K> {
         A::from(&self.as_str()[..self.colon_idx()])
     }
 
-    /// Returns the key name of the key ID - the part that comes after the
-    /// colon.
+    /// Returns the key name of the key ID - the part that comes after the colon.
     ///
     /// # Example
     ///
@@ -213,8 +207,8 @@ impl KeyAlgorithm for OneTimeKeyAlgorithm {}
 
 /// An opaque identifier type to use with [`KeyId`].
 ///
-/// This type has no semantic value and no validation is done. It is meant to be
-/// able to use the [`KeyId`] API without validating the key name.
+/// This type has no semantic value and no validation is done. It is meant to be able to use the
+/// [`KeyId`] API without validating the key name.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, IdDst)]
 pub struct AnyKeyName(str);
 

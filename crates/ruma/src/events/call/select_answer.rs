@@ -2,10 +2,9 @@
 //!
 //! [`m.call.select_answer`]: https://spec.matrix.org/v1.19/client-server-api/#mcallselect_answer
 
+use crate::{OwnedVoipId, VoipVersionId};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
-
-use crate::{OwnedVoipId, VoipVersionId};
 
 /// **Added in VoIP version 1.** The content of an `m.call.select_answer` event.
 ///
@@ -19,8 +18,7 @@ pub struct CallSelectAnswerEventContent {
 
     /// A unique ID for this session for the duration of the call.
     ///
-    /// Must be the same as the one sent by the previous invite from this
-    /// session.
+    /// Must be the same as the one sent by the previous invite from this session.
     pub party_id: OwnedVoipId,
 
     /// The party ID of the selected answer to the previously sent invite.
@@ -33,8 +31,8 @@ pub struct CallSelectAnswerEventContent {
 }
 
 impl CallSelectAnswerEventContent {
-    /// Creates a `CallSelectAnswerEventContent` with the given call ID, VoIP
-    /// version, party ID and selected party ID.
+    /// Creates a `CallSelectAnswerEventContent` with the given call ID, VoIP version, party ID and
+    /// selected party ID.
     pub fn new(
         call_id: OwnedVoipId,
         party_id: OwnedVoipId,
@@ -44,8 +42,8 @@ impl CallSelectAnswerEventContent {
         Self { call_id, party_id, selected_party_id, version }
     }
 
-    /// Convenience method to create a version 1 `CallSelectAnswerEventContent`
-    /// with all the required fields.
+    /// Convenience method to create a version 1 `CallSelectAnswerEventContent` with all the
+    /// required fields.
     pub fn version_1(
         call_id: OwnedVoipId,
         party_id: OwnedVoipId,

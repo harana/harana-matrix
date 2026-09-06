@@ -1,27 +1,24 @@
-//! Types to work with HTML elements and attributes [suggested by the Matrix
-//! Specification][spec].
+//! Types to work with HTML elements and attributes [suggested by the Matrix Specification][spec].
 //!
 //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#mroommessage-msgtypes
 
 use std::collections::BTreeSet;
 
 use html5ever::{Attribute, QualName, ns, tendril::StrTendril};
-
 use crate::{
     IdParseError, MatrixToError, MatrixToUri, MatrixUri, MatrixUriError, MxcUri, OwnedMxcUri,
-    html::sanitizer_config::clean::{compat, spec},
 };
+
+use crate::html::sanitizer_config::clean::{compat, spec};
 
 const CLASS_LANGUAGE_PREFIX: &str = "language-";
 
 /// The data of a Matrix HTML element.
 ///
-/// This is a helper type to work with elements [suggested by the Matrix
-/// Specification][spec].
+/// This is a helper type to work with elements [suggested by the Matrix Specification][spec].
 ///
-/// This performs a lossless conversion from [`ElementData`]. Unsupported
-/// elements are represented by [`MatrixElement::Other`] and unsupported
-/// attributes are listed in the `attrs` field.
+/// This performs a lossless conversion from [`ElementData`]. Unsupported elements are represented
+/// by [`MatrixElement::Other`] and unsupported attributes are listed in the `attrs` field.
 ///
 /// [`ElementData`]: crate::html::ElementData
 /// [spec]: https://spec.matrix.org/v1.19/client-server-api/#mroommessage-msgtypes
@@ -36,8 +33,7 @@ pub struct MatrixElementData {
 }
 
 impl MatrixElementData {
-    /// Parse a `MatrixElementData` from the given qualified name and
-    /// attributes.
+    /// Parse a `MatrixElementData` from the given qualified name and attributes.
     #[allow(clippy::mutable_key_type)]
     pub(super) fn parse(name: &QualName, attrs: &BTreeSet<Attribute>) -> Self {
         let (element, attrs) = MatrixElement::parse(name, attrs);
@@ -47,11 +43,10 @@ impl MatrixElementData {
 
 /// A Matrix HTML element.
 ///
-/// All the elements [suggested by the Matrix Specification][spec] have a
-/// variant. The others are handled by the fallback `Other` variant.
+/// All the elements [suggested by the Matrix Specification][spec] have a variant. The others are
+/// handled by the fallback `Other` variant.
 ///
-/// Suggested attributes are represented as optional fields on the variants
-/// structs.
+/// Suggested attributes are represented as optional fields on the variants structs.
 ///
 /// [spec]: https://spec.matrix.org/v1.19/client-server-api/#mroommessage-msgtypes
 #[derive(Debug, Clone)]
@@ -229,8 +224,8 @@ pub enum MatrixElement {
 impl MatrixElement {
     /// Parse a `MatrixElement` from the given qualified name and attributes.
     ///
-    /// Returns a tuple containing the constructed `Element` and the list of
-    /// remaining unsupported attributes.
+    /// Returns a tuple containing the constructed `Element` and the list of remaining unsupported
+    /// attributes.
     #[allow(clippy::mutable_key_type)]
     fn parse(name: &QualName, attrs: &BTreeSet<Attribute>) -> (Self, BTreeSet<Attribute>) {
         if name.ns != ns!(html) {
@@ -316,8 +311,8 @@ impl HeadingData {
 
 /// The level of a heading element.
 ///
-/// The supported levels range from 1 (highest) to 6 (lowest). Other levels
-/// cannot construct this and do not use the [`MatrixElement::H`] variant.
+/// The supported levels range from 1 (highest) to 6 (lowest). Other levels cannot construct this
+/// and do not use the [`MatrixElement::H`] variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeadingLevel(u8);
 
@@ -355,8 +350,7 @@ impl AnchorData {
 
     /// Parse the given attributes to construct a new `AnchorData`.
     ///
-    /// Returns a tuple containing the constructed data and the remaining
-    /// unsupported attributes.
+    /// Returns a tuple containing the constructed data and the remaining unsupported attributes.
     #[allow(clippy::mutable_key_type)]
     fn parse(attrs: &BTreeSet<Attribute>) -> (Self, BTreeSet<Attribute>) {
         let mut data = Self::new();
@@ -393,9 +387,8 @@ impl AnchorData {
 ///
 /// This is a helper type that recognizes `matrix:` and `https://matrix.to` URIs to detect mentions.
 ///
-/// If the URI is an invalid Matrix URI or does not use one of the suggested
-/// schemes, the `href` attribute will be in the `attrs` list of
-/// [`MatrixElementData`].
+/// If the URI is an invalid Matrix URI or does not use one of the suggested schemes, the `href`
+/// attribute will be in the `attrs` list of [`MatrixElementData`].
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum AnchorUri {
@@ -455,8 +448,8 @@ impl AnchorUri {
 pub struct OrderedListData {
     /// An integer to start counting from for the list items.
     ///
-    /// If parsing the integer from a string fails, the attribute will be in the
-    /// `attrs` list of [`MatrixElementData`].
+    /// If parsing the integer from a string fails, the attribute will be in the `attrs` list of
+    /// [`MatrixElementData`].
     pub start: Option<i64>,
 }
 
@@ -468,8 +461,7 @@ impl OrderedListData {
 
     /// Parse the given attributes to construct a new `OrderedListData`.
     ///
-    /// Returns a tuple containing the constructed data and the remaining
-    /// unsupported attributes.
+    /// Returns a tuple containing the constructed data and the remaining unsupported attributes.
     #[allow(clippy::mutable_key_type)]
     fn parse(attrs: &BTreeSet<Attribute>) -> (Self, BTreeSet<Attribute>) {
         let mut data = Self::new();
@@ -505,11 +497,11 @@ impl OrderedListData {
 pub struct CodeData {
     /// The language of the code, for syntax highlighting.
     ///
-    /// This corresponds to the `class` attribute with a value that starts with
-    /// the `language-` prefix. The prefix is stripped from the value.
+    /// This corresponds to the `class` attribute with a value that starts with the
+    /// `language-` prefix. The prefix is stripped from the value.
     ///
-    /// If there are other classes in the `class` attribute, the whole attribute
-    /// will be in the `attrs` list of [`MatrixElementData`].
+    /// If there are other classes in the `class` attribute, the whole attribute will be in the
+    /// `attrs` list of [`MatrixElementData`].
     pub language: Option<StrTendril>,
 }
 
@@ -521,8 +513,7 @@ impl CodeData {
 
     /// Parse the given attributes to construct a new `CodeData`.
     ///
-    /// Returns a tuple containing the constructed data and the remaining
-    /// unsupported attributes.
+    /// Returns a tuple containing the constructed data and the remaining unsupported attributes.
     #[allow(clippy::mutable_key_type)]
     fn parse(attrs: &BTreeSet<Attribute>) -> (Self, BTreeSet<Attribute>) {
         let mut data = Self::new();
@@ -600,8 +591,8 @@ pub struct SpanData {
 
     /// `data-mx-spoiler`, a Matrix [spoiler message].
     ///
-    /// The value is the reason of the spoiler. If the string is empty, this is
-    /// a spoiler without a reason.
+    /// The value is the reason of the spoiler. If the string is empty, this is a spoiler
+    /// without a reason.
     ///
     /// [spoiler message]: https://spec.matrix.org/v1.19/client-server-api/#spoiler-messages
     pub spoiler: Option<StrTendril>,
@@ -610,8 +601,8 @@ pub struct SpanData {
     ///
     /// The value is the mathematical notation in [LaTeX] format.
     ///
-    /// If this attribute is present, the content of the span is the fallback
-    /// representation of the mathematical notation.
+    /// If this attribute is present, the content of the span is the fallback representation of the
+    /// mathematical notation.
     ///
     /// [mathematical message]: https://spec.matrix.org/v1.19/client-server-api/#mathematical-messages
     /// [LaTeX]: https://www.latex-project.org/
@@ -641,8 +632,7 @@ impl SpanData {
 
     /// Parse the given attributes to construct a new `SpanData`.
     ///
-    /// Returns a tuple containing the constructed data and the remaining
-    /// unsupported attributes.
+    /// Returns a tuple containing the constructed data and the remaining unsupported attributes.
     #[allow(clippy::mutable_key_type)]
     fn parse(attrs: &BTreeSet<Attribute>) -> (Self, BTreeSet<Attribute>) {
         let mut data = Self::new();
@@ -685,14 +675,14 @@ impl SpanData {
 pub struct ImageData {
     /// The intrinsic width of the image, in pixels.
     ///
-    /// If parsing the integer from a string fails, the attribute will be in the
-    /// `attrs` list of `MatrixElementData`.
+    /// If parsing the integer from a string fails, the attribute will be in the `attrs` list of
+    /// `MatrixElementData`.
     pub width: Option<i64>,
 
     /// The intrinsic height of the image, in pixels.
     ///
-    /// If parsing the integer from a string fails, the attribute will be in the
-    /// `attrs` list of [`MatrixElementData`].
+    /// If parsing the integer from a string fails, the attribute will be in the `attrs` list of
+    /// [`MatrixElementData`].
     pub height: Option<i64>,
 
     /// Text that can replace the image.
@@ -703,8 +693,8 @@ pub struct ImageData {
 
     /// The image URL.
     ///
-    /// It this is not a valid `mxc:` URI, the attribute will be in the `attrs`
-    /// list of [`MatrixElementData`].
+    /// It this is not a valid `mxc:` URI, the attribute will be in the `attrs` list of
+    /// [`MatrixElementData`].
     pub src: Option<OwnedMxcUri>,
 }
 
@@ -716,8 +706,7 @@ impl ImageData {
 
     /// Parse the given attributes to construct a new `ImageData`.
     ///
-    /// Returns a tuple containing the constructed data and the remaining
-    /// unsupported attributes.
+    /// Returns a tuple containing the constructed data and the remaining unsupported attributes.
     #[allow(clippy::mutable_key_type)]
     fn parse(attrs: &BTreeSet<Attribute>) -> (Self, BTreeSet<Attribute>) {
         let mut data = Self::new();
@@ -772,8 +761,8 @@ pub struct DivData {
     ///
     /// The value is the mathematical notation in [LaTeX] format.
     ///
-    /// If this attribute is present, the content of the div is the fallback
-    /// representation of the mathematical notation.
+    /// If this attribute is present, the content of the div is the fallback representation of the
+    /// mathematical notation.
     ///
     /// [mathematical message]: https://spec.matrix.org/v1.19/client-server-api/#mathematical-messages
     /// [LaTeX]: https://www.latex-project.org/
@@ -788,8 +777,7 @@ impl DivData {
 
     /// Parse the given attributes to construct a new `SpanData`.
     ///
-    /// Returns a tuple containing the constructed data and the remaining
-    /// unsupported attributes.
+    /// Returns a tuple containing the constructed data and the remaining unsupported attributes.
     #[allow(clippy::mutable_key_type)]
     fn parse(attrs: &BTreeSet<Attribute>) -> (Self, BTreeSet<Attribute>) {
         let mut data = Self::new();

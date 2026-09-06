@@ -13,14 +13,12 @@ use crate::serde::{
 
 /// A base64-encoded public key from an [identity server].
 ///
-/// This type supports both standard and URL-safe base64, for [compatibility
-/// with Sydent].
+/// This type supports both standard and URL-safe base64, for [compatibility with Sydent].
 ///
-/// No validation is done on the inner string during deserialization, this type
-/// is used for its semantic value and for providing a helper to decode it.
+/// No validation is done on the inner string during deserialization, this type is used for its
+/// semantic value and for providing a helper to decode it.
 ///
-/// The key can be decoded by calling
-/// [`IdentityServerBase64PublicKey::decode()`].
+/// The key can be decoded by calling [`IdentityServerBase64PublicKey::decode()`].
 ///
 /// [identity server]: https://spec.matrix.org/v1.19/identity-service-api/
 /// [compatibility with Sydent]: https://github.com/matrix-org/sydent/issues/593
@@ -29,8 +27,8 @@ use crate::serde::{
 pub struct IdentityServerBase64PublicKey(pub String);
 
 impl IdentityServerBase64PublicKey {
-    /// Construct a new `IdentityServerBase64PublicKey` by encoding the given
-    /// key using unpadded standard base64.
+    /// Construct a new `IdentityServerBase64PublicKey` by encoding the given key using unpadded
+    /// standard base64.
     pub fn new(bytes: &[u8]) -> Self {
         Self(Base64::<Standard, &[u8]>::new(bytes).encode())
     }

@@ -7,8 +7,8 @@
 #[cfg(feature = "e2e-encryption")]
 use base::to_device_token;
 use base::{StateStore, StoreError, event_cache::store::EventCacheStoreLockGuard};
-use ruma::UserId;
 use sdk_common::{cross_process_lock::MappedCrossProcessLockState, timer};
+use ruma::UserId;
 use tracing::{trace, warn};
 
 use super::{FrozenSlidingSyncList, SlidingSync, SlidingSyncPositionMarkers};

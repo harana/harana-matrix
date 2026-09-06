@@ -18,7 +18,6 @@ use std::{
 };
 
 use as_variant::as_variant;
-use base::deserialized_responses::ShieldStateCode;
 use indexmap::IndexMap;
 use matrix::{
     Error, Room, TransmissionProgress,
@@ -26,6 +25,7 @@ use matrix::{
     media::{MediaEventContent, MediaFormat},
     send_queue::{SendHandle, SendReactionHandle},
 };
+use base::deserialized_responses::ShieldStateCode;
 #[cfg(feature = "unstable-msc4426")]
 use ruma::profile::{CallProfileField, StatusProfileField};
 use ruma::{

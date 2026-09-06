@@ -14,15 +14,15 @@
 
 use std::collections::BTreeMap;
 
+use sdk_common::deserialized_responses::{
+    ProcessedToDeviceEvent, ToDeviceUnableToDecryptInfo, ToDeviceUnableToDecryptReason,
+};
 use crypto::{DecryptionSettings, EncryptionSyncChanges, OlmMachine};
 use ruma::{
     OneTimeKeyAlgorithm, UInt,
     api::client::sync::sync_events::{DeviceLists, v3, v5},
     events::AnyToDeviceEvent,
     serde::Raw,
-};
-use sdk_common::deserialized_responses::{
-    ProcessedToDeviceEvent, ToDeviceUnableToDecryptInfo, ToDeviceUnableToDecryptReason,
 };
 
 use crate::Result;

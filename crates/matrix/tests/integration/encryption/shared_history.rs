@@ -1,10 +1,13 @@
-use base::crypto::types::events::room::encrypted::EncryptedToDeviceEvent;
 use futures_util::{FutureExt, StreamExt};
 use matrix::{
     Client, assert_decrypted_message_eq, assert_next_matches_with_timeout,
     deserialized_responses::{TimelineEvent, UnableToDecryptInfo, UnableToDecryptReason},
     encryption::EncryptionSettings,
     test_utils::mocks::MatrixMockServer,
+};
+use base::crypto::types::events::room::encrypted::EncryptedToDeviceEvent;
+use sdk_test::{
+    InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory,
 };
 use ruma::{
     OwnedEventId, RoomVersionId, device_id, event_id,
@@ -19,7 +22,6 @@ use ruma::{
     serde::Raw,
     user_id,
 };
-use sdk_test::{InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 #[cfg(feature = "sqlite")]
 use tempfile::tempdir;
 

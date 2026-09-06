@@ -26,8 +26,7 @@ pub mod msc3723 {
     #[response]
     #[derive(Default)]
     pub struct Response {
-        /// A list of Matrix Server API protocol versions supported by the
-        /// homeserver.
+        /// A list of Matrix Server API protocol versions supported by the homeserver.
         pub versions: Vec<String>,
     }
 

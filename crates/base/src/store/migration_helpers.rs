@@ -16,6 +16,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
+use sdk_common::deserialized_responses::TimelineEvent;
 use ruma::{
     OwnedRoomId, OwnedUserId, RoomId,
     events::{
@@ -33,7 +34,6 @@ use ruma::{
         },
     },
 };
-use sdk_common::deserialized_responses::TimelineEvent;
 use serde::{Deserialize, Serialize};
 
 use crate::{

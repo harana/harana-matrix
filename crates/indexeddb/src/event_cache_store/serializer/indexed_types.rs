@@ -27,8 +27,8 @@
 //! These types mimic the structure of the object stores and indices created in
 //! [`crate::event_cache_store::migrations`].
 
-use base::linked_chunk::{ChunkIdentifier, LinkedChunkId};
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
+use base::linked_chunk::{ChunkIdentifier, LinkedChunkId};
 use crypto::CryptoStoreError;
 use ruma::{EventId, RoomId, events::relation::RelationType};
 use serde::{Deserialize, Serialize};

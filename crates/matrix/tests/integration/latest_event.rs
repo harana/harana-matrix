@@ -4,8 +4,8 @@ use matrix::{
     linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
     test_utils::mocks::MatrixMockServer,
 };
-use ruma::{event_id, owned_room_id, user_id};
 use sdk_test::{async_test, event_factory::EventFactory};
+use ruma::{event_id, owned_room_id, user_id};
 use tokio::task::yield_now;
 
 #[async_test]
@@ -143,8 +143,8 @@ async fn test_an_event_from_an_ignored_user_is_not_a_latest_event() {
     // In some configurations, this makes the test non-flaky.
     yield_now().await;
 
-    // Bob's event is still cached, but it is not suitable as a latest event:
-    // Alice's event is the one shown by a room list.
+    // Bob's event is still cached, but it is not suitable as a latest event: Alice's
+    // event is the one shown by a room list.
     assert_matches!(
         latest_event_stream.next_now().await,
         LatestEventValue::Remote(event) => {

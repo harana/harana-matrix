@@ -51,10 +51,10 @@ pub fn new_filter(expected_category: RoomCategory) -> impl Filter {
 mod tests {
     use std::ops::Not;
 
-    use base::DmRoomDefinition;
     use matrix::{Client, test_utils::mocks::MatrixMockServer};
-    use ruma::{UserId, room_id};
+    use base::DmRoomDefinition;
     use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+    use ruma::{UserId, room_id};
 
     use crate::room_list_service::{
         RoomListItem,

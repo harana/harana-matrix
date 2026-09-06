@@ -2,11 +2,8 @@ use std::time::Duration;
 
 use assert_matches2::assert_matches;
 use js_int::uint;
-use ruma::{
-    MilliSecondsSinceUnixEpoch,
-    events::{AnyMessageLikeEvent, MessageLikeEvent, sticky::StickyDurationMs},
-    serde::CanBeEmpty,
-};
+use ruma::{MilliSecondsSinceUnixEpoch, serde::CanBeEmpty};
+use ruma::events::{AnyMessageLikeEvent, MessageLikeEvent, sticky::StickyDurationMs};
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

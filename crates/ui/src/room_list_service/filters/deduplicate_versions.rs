@@ -82,10 +82,10 @@ pub fn new_filter() -> impl Filter {
 mod tests {
     use std::ops::Not;
 
-    use base::RoomState;
     use matrix::test_utils::mocks::MatrixMockServer;
-    use ruma::room_id;
+    use base::RoomState;
     use sdk_test::async_test;
+    use ruma::room_id;
 
     use super::{super::new_rooms, *};
 

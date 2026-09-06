@@ -17,11 +17,11 @@ use assert_matches2::assert_let;
 use chrono::{Datelike, TimeZone, Utc};
 use eyeball_im::VectorDiff;
 use futures_util::{FutureExt, StreamExt as _};
+use sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
     owned_event_id,
 };
-use sdk_test::{ALICE, BOB, async_test};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;

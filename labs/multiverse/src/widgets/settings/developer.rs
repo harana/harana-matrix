@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
 use matrix::Client;
+use ui::sync_service::{self, SyncService};
 use ratatui::{
     prelude::*,
     widgets::{HighlightSpacing, *},
 };
-use ui::sync_service::{self, SyncService};
 
 // TODO: This replicates a lot of the logic the details view has, we should make
 // a generic tab popout widget to share a bit of logic here.

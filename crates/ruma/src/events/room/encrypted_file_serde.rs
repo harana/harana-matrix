@@ -1,6 +1,7 @@
 use std::{borrow::Cow, collections::BTreeMap};
 
 use as_variant::as_variant;
+use crate::serde::{Base64, JsonObject};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser::SerializeMap};
 use serde_json::{Value as JsonValue, from_value as from_json_value};
 
@@ -8,7 +9,6 @@ use super::{
     CustomEncryptedFileHash, CustomEncryptedFileInfo, EncryptedFileHash,
     EncryptedFileHashAlgorithm, EncryptedFileHashes, EncryptedFileInfo, V2EncryptedFileInfo,
 };
-use crate::serde::{Base64, JsonObject};
 
 impl<'de> Deserialize<'de> for EncryptedFileInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -101,8 +101,7 @@ struct V2EncryptedFileInfoSerdeHelper<'a> {
     #[serde(borrow)]
     key: JsonWebKey<'a>,
 
-    /// The 128-bit unique counter block used by AES-CTR, encoded as unpadded
-    /// base64.
+    /// The 128-bit unique counter block used by AES-CTR, encoded as unpadded base64.
     #[serde(borrow)]
     iv: Cow<'a, str>,
 }

@@ -8,16 +8,15 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3roomsroomidmessages
 
     use js_int::{UInt, uint};
-
     use crate::{
         OwnedRoomId,
-        api::{
-            Direction, auth_scheme::AccessToken, client::filter::RoomEventFilter, request, response,
-        },
-        events::{AnyStateEvent, AnyTimelineEvent},
+        api::{Direction, auth_scheme::AccessToken, request, response},
         metadata,
         serde::Raw,
     };
+    use crate::events::{AnyStateEvent, AnyTimelineEvent};
+
+    use crate::api::client::filter::RoomEventFilter;
 
     metadata! {
         method: GET,
@@ -38,21 +37,20 @@ pub mod v3 {
 
         /// The token to start returning events from.
         ///
-        /// This token can be obtained from a `prev_batch` token returned for
-        /// each room by the sync endpoint, or from a `start` or `end`
-        /// token returned by a previous request to this endpoint.
+        /// This token can be obtained from a `prev_batch` token returned for each room by the
+        /// sync endpoint, or from a `start` or `end` token returned by a previous request to
+        /// this endpoint.
         ///
-        /// If this is `None`, the server will return messages from the start or
-        /// end of the history visible to the user, depending on the
-        /// value of [`dir`][Self::dir].
+        /// If this is `None`, the server will return messages from the start or end of the
+        /// history visible to the user, depending on the value of [`dir`][Self::dir].
         #[ruma_api(query)]
         pub from: Option<String>,
 
         /// The token to stop returning events at.
         ///
-        /// This token can be obtained from a `prev_batch` token returned for
-        /// each room by the sync endpoint, or from a `start` or `end`
-        /// token returned by a previous request to this endpoint.
+        /// This token can be obtained from a `prev_batch` token returned for each room by the
+        /// sync endpoint, or from a `start` or `end` token returned by a previous request to
+        /// this endpoint.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub to: Option<String>,
@@ -113,12 +111,10 @@ pub mod v3 {
             }
         }
 
-        /// Creates a new `Request` with the given room ID and `dir` set to
-        /// `Backward`.
+        /// Creates a new `Request` with the given room ID and `dir` set to `Backward`.
         ///
-        /// If the returned request is sent without `from` being set, pagination
-        /// will start at the end of (the accessible part of) the room
-        /// timeline.
+        /// If the returned request is sent without `from` being set, pagination will start at the
+        /// end of (the accessible part of) the room timeline.
         ///
         /// # Example
         ///
@@ -126,19 +122,16 @@ pub mod v3 {
         /// # use ruma::api::client::message::get_message_events;
         /// # let room_id = ruma::owned_room_id!("!a:example.org");
         /// # let token = "prev_batch token".to_owned();
-        /// let request =
-        ///     get_message_events::v3::Request::backward(room_id).from(token);
+        /// let request = get_message_events::v3::Request::backward(room_id).from(token);
         /// ```
         pub fn backward(room_id: OwnedRoomId) -> Self {
             Self::new(room_id, Direction::Backward)
         }
 
-        /// Creates a new `Request` with the given room ID and `dir` set to
-        /// `Forward`.
+        /// Creates a new `Request` with the given room ID and `dir` set to `Forward`.
         ///
-        /// If the returned request is sent without `from` being set, pagination
-        /// will start at the beginning of (the accessible part of) the
-        /// room timeline.
+        /// If the returned request is sent without `from` being set, pagination will start at the
+        /// beginning of (the accessible part of) the room timeline.
         ///
         /// # Example
         ///
@@ -152,12 +145,10 @@ pub mod v3 {
             Self::new(room_id, Direction::Forward)
         }
 
-        /// Creates a new `Request` from `self` with the `from` field set to the
-        /// given value.
+        /// Creates a new `Request` from `self` with the `from` field set to the given value.
         ///
-        /// Since the field is public, you can also assign to it directly. This
-        /// method merely acts as a shorthand for that, because it is
-        /// very common to set this field.
+        /// Since the field is public, you can also assign to it directly. This method merely acts
+        /// as a shorthand for that, because it is very common to set this field.
         pub fn from(self, from: impl Into<Option<String>>) -> Self {
             Self { from: from.into(), ..self }
         }
@@ -185,16 +176,16 @@ pub mod v3 {
         use std::borrow::Cow;
 
         use js_int::uint;
-
-        use super::Request;
         use crate::{
             api::{
                 Direction, MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
                 auth_scheme::SendAccessToken,
-                client::filter::{LazyLoadOptions, RoomEventFilter},
             },
             owned_room_id,
         };
+
+        use super::Request;
+        use crate::api::client::filter::{LazyLoadOptions, RoomEventFilter};
 
         #[test]
         fn serialize_some_room_event_filter() {

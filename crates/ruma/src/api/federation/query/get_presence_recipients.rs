@@ -5,12 +5,13 @@ pub mod msc4495 {
     //! [MSC4495]: https://github.com/matrix-org/matrix-spec-proposals/pull/4495
 
     use js_int::Int;
-
     use crate::{
         OwnedUserId,
-        api::{federation::authentication::ServerSignatures, request, response},
+        api::{request, response},
         metadata,
     };
+
+    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,

@@ -7,17 +7,18 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3roomsroomidstateeventtypestatekey
 
-    use serde_json::value::RawValue as RawJsonValue;
-
     #[cfg(feature = "client")]
     use crate::api::EmptyBody;
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AccessToken, client::PrivOwnedStr, error::Error, response},
-        events::{AnyStateEvent, AnyStateEventContent, StateEventType},
+        api::{auth_scheme::AccessToken, error::Error, response},
         metadata,
         serde::{Raw, StringEnum},
     };
+    use crate::events::{AnyStateEvent, AnyStateEventContent, StateEventType};
+    use serde_json::value::RawValue as RawJsonValue;
+
+    use crate::api::client::PrivOwnedStr;
 
     metadata! {
         method: GET,
@@ -47,8 +48,7 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given room ID, event type and state
-        /// key.
+        /// Creates a new `Request` with the given room ID, event type and state key.
         pub fn new(room_id: OwnedRoomId, event_type: StateEventType, state_key: String) -> Self {
             Self { room_id, event_type, state_key, format: StateEventFormat::default() }
         }
@@ -62,26 +62,23 @@ pub mod v3 {
     pub enum StateEventFormat {
         /// Will return only the content of the state event.
         ///
-        /// This is the default value if the format is unspecified in the
-        /// request.
+        /// This is the default value if the format is unspecified in the request.
         #[default]
         Content,
 
-        /// Will return the entire event in the usual format suitable for
-        /// clients, including fields like event ID, sender and
-        /// timestamp.
+        /// Will return the entire event in the usual format suitable for clients, including fields
+        /// like event ID, sender and timestamp.
         Event,
 
         #[doc(hidden)]
         _Custom(PrivOwnedStr),
     }
 
-    /// Response type for the `get_state_events_for_key` endpoint, either the
-    /// `Raw` `AnyStateEvent` or `AnyStateEventContent`.
+    /// Response type for the `get_state_events_for_key` endpoint, either the `Raw` `AnyStateEvent`
+    /// or `AnyStateEventContent`.
     ///
-    /// While it's possible to access the raw value directly, it's recommended
-    /// you use the provided helper methods to access it, and `From` to
-    /// create it.
+    /// While it's possible to access the raw value directly, it's recommended you use the
+    /// provided helper methods to access it, and `From` to create it.
     #[response]
     pub struct Response {
         /// The full event (content) of the state event.
@@ -109,21 +106,20 @@ pub mod v3 {
 
         /// Returns an unchecked `Raw<AnyStateEvent>`.
         ///
-        /// This method should only be used if you specified the `format` in the
-        /// request to be `StateEventFormat::Event`
+        /// This method should only be used if you specified the `format` in the request to be
+        /// `StateEventFormat::Event`
         pub fn into_event(self) -> Raw<AnyStateEvent> {
             Raw::from_json(self.event_or_content)
         }
 
         /// Returns an unchecked `Raw<AnyStateEventContent>`.
         ///
-        /// This method should only be used if you did not specify the `format`
-        /// in the request, or set it to be `StateEventFormat::Content`
+        /// This method should only be used if you did not specify the `format` in the request, or
+        /// set it to be `StateEventFormat::Content`
         ///
-        /// Since the inner type of the `Raw` does not implement `Deserialize`,
-        /// you need to use `.deserialize_as_unchecked::<T>()` or
-        /// `.cast_ref_unchecked::<T>().deserialize_with_type()` to deserialize
-        /// it.
+        /// Since the inner type of the `Raw` does not implement `Deserialize`, you need to use
+        /// `.deserialize_as_unchecked::<T>()` or
+        /// `.cast_ref_unchecked::<T>().deserialize_with_type()` to deserialize it.
         pub fn into_content(self) -> Raw<AnyStateEventContent> {
             Raw::from_json(self.event_or_content)
         }
@@ -173,8 +169,8 @@ pub mod v3 {
         {
             Self::check_request_method(request.method())?;
 
-            // FIXME: find a way to make this if-else collapse with serde recognizing
-            // trailing Option
+            // FIXME: find a way to make this if-else collapse with serde recognizing trailing
+            // Option
             let (room_id, event_type, state_key): (OwnedRoomId, StateEventType, String) =
                 if path_args.len() == 3 {
                     serde::Deserialize::deserialize(serde::de::value::SeqDeserializer::<
@@ -215,10 +211,11 @@ pub mod v3 {
 
 #[cfg(all(test, feature = "client"))]
 mod tests {
+    use crate::api::IncomingResponseExt as _;
+    use crate::events::room::name::RoomNameEventContent;
     use serde_json::json;
 
     use super::v3::Response;
-    use crate::{api::IncomingResponseExt as _, events::room::name::RoomNameEventContent};
 
     #[test]
     fn deserialize_response() {

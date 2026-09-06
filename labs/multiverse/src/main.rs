@@ -9,7 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard};
 use clap::Parser;
 use color_eyre::Result;
 use crossterm::{
@@ -31,8 +30,15 @@ use matrix::{
     ruma::{OwnedRoomId, api::client::room::create_room::v3::Request as CreateRoomRequest},
     search_index::{SearchIndexGuard, SearchIndexStoreKind},
 };
-use ratatui::{DefaultTerminal, prelude::*, style::palette::tailwind, widgets::*};
+use base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard};
 use sdk_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex};
+use ui::{
+    Timeline as SdkTimeline,
+    room_list_service::{self, State, filters::new_filter_non_left},
+    sync_service::SyncService,
+    timeline::{RoomExt as _, TimelineFocus, TimelineItem},
+};
+use ratatui::{DefaultTerminal, prelude::*, style::palette::tailwind, widgets::*};
 use throbber_widgets_tui::{Throbber, ThrobberState};
 use tokio::{
     spawn,
@@ -42,12 +48,6 @@ use tokio::{
 };
 use tracing::{debug, error, warn};
 use tracing_subscriber::EnvFilter;
-use ui::{
-    Timeline as SdkTimeline,
-    room_list_service::{self, State, filters::new_filter_non_left},
-    sync_service::SyncService,
-    timeline::{RoomExt as _, TimelineFocus, TimelineItem},
-};
 use widgets::{
     recovery::create_centered_throbber_area, room_view::RoomView, settings::SettingsView,
 };

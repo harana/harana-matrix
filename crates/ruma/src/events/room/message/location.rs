@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-
 #[cfg(feature = "unstable-msc3488")]
 use crate::MilliSecondsSinceUnixEpoch;
+use serde::{Deserialize, Serialize};
+
 use crate::events::room::{MediaSource, ThumbnailInfo};
 #[cfg(feature = "unstable-msc3488")]
 use crate::events::{
@@ -20,9 +20,8 @@ use crate::events::{
     )
 )]
 pub struct LocationMessageEventContent {
-    /// A description of the location e.g. "Big Ben, London, UK", or some kind
-    /// of content description for accessibility, e.g. "location
-    /// attachment".
+    /// A description of the location e.g. "Big Ben, London, UK", or some kind of content
+    /// description for accessibility, e.g. "location attachment".
     pub body: String,
 
     /// A geo URI representing the location.
@@ -54,8 +53,7 @@ pub struct LocationMessageEventContent {
 }
 
 impl LocationMessageEventContent {
-    /// Creates a new `LocationMessageEventContent` with the given body and geo
-    /// URI.
+    /// Creates a new `LocationMessageEventContent` with the given body and geo URI.
     pub fn new(body: String, geo_uri: String) -> Self {
         Self {
             #[cfg(feature = "unstable-msc3488")]

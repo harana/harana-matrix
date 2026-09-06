@@ -14,7 +14,6 @@
 
 use std::{collections::HashMap, error::Error, fmt, fmt::Display};
 
-use contentscanner::ContentScannerError;
 use matrix::{
     HttpError, IdParseError, NotificationSettingsError as SdkNotificationSettingsError,
     QueueWedgeError as SdkQueueWedgeError, StoreError,
@@ -25,11 +24,12 @@ use matrix::{
     room::{calls::CallError, edit::EditError},
     send_queue::RoomSendQueueError,
 };
+use contentscanner::ContentScannerError;
+use ui::{encryption_sync_service, notification_client, spaces, sync_service, timeline};
 use ruma::{
     MilliSecondsSinceUnixEpoch,
     api::error::{ErrorBody, ErrorKind as RumaApiErrorKind, RetryAfter, StandardErrorBody},
 };
-use ui::{encryption_sync_service, notification_client, spaces, sync_service, timeline};
 use uniffi::UnexpectedUniFFICallbackError;
 
 use crate::{room_list::RoomListError, timeline::FocusEventError};

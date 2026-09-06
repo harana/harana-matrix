@@ -23,8 +23,8 @@
 
 use std::num::NonZeroUsize;
 
-use ruma::OwnedEventId;
 use sdk_common::ring_buffer::RingBuffer;
+use ruma::OwnedEventId;
 use serde::{Deserialize, Serialize};
 
 /// The latest read receipt known for a room.

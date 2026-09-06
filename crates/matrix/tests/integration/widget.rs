@@ -21,7 +21,6 @@ use std::{
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::crypto::CollectStrategy;
 use futures_util::FutureExt;
 use matrix::{
     Client,
@@ -32,6 +31,11 @@ use matrix::{
         Capabilities, CapabilitiesProvider, WidgetDriver, WidgetDriverHandle, WidgetSettings,
     },
 };
+use base::crypto::CollectStrategy;
+use sdk_common::{
+    deserialized_responses::EncryptionInfo, executor::spawn, locks::Mutex, timeout::timeout,
+};
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
     OwnedRoomId,
     api::client::to_device::send_event_to_device::v3::Messages,
@@ -45,10 +49,6 @@ use ruma::{
     to_device::DeviceIdOrAllDevices,
     user_id,
 };
-use sdk_common::{
-    deserialized_responses::EncryptionInfo, executor::spawn, locks::Mutex, timeout::timeout,
-};
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde::Serialize;
 use serde_json::{Value as JsonValue, Value, json};
 use tracing::error;

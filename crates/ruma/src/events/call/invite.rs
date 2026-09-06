@@ -5,13 +5,13 @@
 use std::collections::BTreeMap;
 
 use js_int::UInt;
+use crate::{OwnedUserId, OwnedVoipId, VoipVersionId};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "unstable-msc2747")]
 use super::CallCapabilities;
 use super::{SessionDescription, StreamMetadata};
-use crate::{OwnedUserId, OwnedVoipId, VoipVersionId};
 
 /// The content of an `m.call.invite` event.
 ///
@@ -23,15 +23,14 @@ pub struct CallInviteEventContent {
     /// A unique identifier for the call.
     pub call_id: OwnedVoipId,
 
-    /// **Required in VoIP version 1.** A unique ID for this session for the
-    /// duration of the call.
+    /// **Required in VoIP version 1.** A unique ID for this session for the duration of the call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub party_id: Option<OwnedVoipId>,
 
     /// The time in milliseconds that the invite is valid for.
     ///
-    /// Once the invite age exceeds this value, clients should discard it. They
-    /// should also no longer show the call as awaiting an answer in the UI.
+    /// Once the invite age exceeds this value, clients should discard it. They should also no
+    /// longer show the call as awaiting an answer in the UI.
     pub lifetime: UInt,
 
     /// The session description object.
@@ -47,16 +46,13 @@ pub struct CallInviteEventContent {
 
     /// **Added in VoIP version 1.** The intended target of the invite, if any.
     ///
-    /// If this is `None`, the invite is intended for any member of the room,
-    /// except the sender.
+    /// If this is `None`, the invite is intended for any member of the room, except the sender.
     ///
-    /// The invite should be ignored if the invitee is set and doesn't match the
-    /// user's ID.
+    /// The invite should be ignored if the invitee is set and doesn't match the user's ID.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub invitee: Option<OwnedUserId>,
 
-    /// **Added in VoIP version 1.** Metadata describing the streams that will
-    /// be sent.
+    /// **Added in VoIP version 1.** Metadata describing the streams that will be sent.
     ///
     /// This is a map of stream ID to metadata about the stream.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -64,8 +60,8 @@ pub struct CallInviteEventContent {
 }
 
 impl CallInviteEventContent {
-    /// Creates a new `CallInviteEventContent` with the given call ID, lifetime,
-    /// offer and VoIP version.
+    /// Creates a new `CallInviteEventContent` with the given call ID, lifetime, offer and VoIP
+    /// version.
     pub fn new(
         call_id: OwnedVoipId,
         lifetime: UInt,
@@ -85,14 +81,14 @@ impl CallInviteEventContent {
         }
     }
 
-    /// Convenience method to create a version 0 `CallInviteEventContent` with
-    /// all the required fields.
+    /// Convenience method to create a version 0 `CallInviteEventContent` with all the required
+    /// fields.
     pub fn version_0(call_id: OwnedVoipId, lifetime: UInt, offer: SessionDescription) -> Self {
         Self::new(call_id, lifetime, offer, VoipVersionId::V0)
     }
 
-    /// Convenience method to create a version 1 `CallInviteEventContent` with
-    /// all the required fields.
+    /// Convenience method to create a version 1 `CallInviteEventContent` with all the required
+    /// fields.
     pub fn version_1(
         call_id: OwnedVoipId,
         party_id: OwnedVoipId,

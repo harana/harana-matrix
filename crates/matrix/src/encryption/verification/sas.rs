@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base::crypto::{AcceptSettings, CancelInfo, DeviceData, Emoji, Sas as BaseSas, SasState};
 use futures_core::Stream;
+use base::crypto::{
+    AcceptSettings, CancelInfo, DeviceData, Emoji, Sas as BaseSas, SasState,
+};
 use ruma::{RoomId, UserId, events::key::verification::cancel::CancelCode};
 
 use crate::{Client, error::Result};

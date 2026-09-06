@@ -191,8 +191,12 @@ impl Visit for FieldVisitor {
 #[matrix_ffi_macros::export]
 pub fn set_logger(logger: Box<dyn Logger>) {
     let filter = EnvFilter::from_default_env()
-        .add_directive("crypto=trace".parse().expect("Can't parse logging filter directive"))
-        .add_directive("sqlite=debug".parse().expect("Can't parse logging filter directive"));
+        .add_directive(
+            "crypto=trace".parse().expect("Can't parse logging filter directive"),
+        )
+        .add_directive(
+            "sqlite=debug".parse().expect("Can't parse logging filter directive"),
+        );
 
     let layer = LoggerLayer { inner: Arc::from(logger) };
 

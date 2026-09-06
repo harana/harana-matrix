@@ -1,5 +1,5 @@
-//! The `PathBuilder` trait used to construct the path used to query endpoints
-//! and the types that implement it.
+//! The `PathBuilder` trait used to construct the path used to query endpoints and the types that
+//! implement it.
 
 use std::{
     borrow::Cow,
@@ -14,11 +14,10 @@ use tracing::warn;
 use super::{FeatureFlag, MatrixVersion, SupportedVersions, error::IntoHttpError};
 use crate::percent_encode::PATH_PERCENT_ENCODE_SET;
 
-/// Trait implemented by types providing a method to construct the path used to
-/// query an endpoint.
+/// Trait implemented by types providing a method to construct the path used to query an endpoint.
 ///
-/// Types implementing this must enforce that all possible paths returned from
-/// `select_path()` must contain the same number of variables.
+/// Types implementing this must enforce that all possible paths returned from `select_path()` must
+/// contain the same number of variables.
 pub trait PathBuilder: Sized {
     /// The input necessary to generate the endpoint URL.
     type Input<'a>;
@@ -33,23 +32,19 @@ pub trait PathBuilder: Sized {
     /// ## Arguments
     ///
     /// * `input` - The input necessary to select the path.
-    /// * `base_url` - The base URL (i.e. the scheme and host) to which the
-    ///   endpoint path will be appended. Since all paths begin with a slash, it
-    ///   is not necessary for the this to have a trailing slash. If it has one
-    ///   however, it will be ignored.
-    /// * `path_args` - The values of the variables in the endpoint's path. The
-    ///   order and number must match the order and number of the variables in
-    ///   the path.
+    /// * `base_url` - The base URL (i.e. the scheme and host) to which the endpoint path will be
+    ///   appended. Since all paths begin with a slash, it is not necessary for the this to have a
+    ///   trailing slash. If it has one however, it will be ignored.
+    /// * `path_args` - The values of the variables in the endpoint's path. The order and number
+    ///   must match the order and number of the variables in the path.
     /// * `query_string` - The serialized query string to append to the URL.
     ///
     /// ## Errors
     ///
-    /// Returns an error if the `PathBuilder::select_path()` implementation
-    /// returns an error.
+    /// Returns an error if the `PathBuilder::select_path()` implementation returns an error.
     ///
-    /// Panics if the number of `path_args` doesn't match the number of
-    /// variables in the path returned by `PathBuilder::select_path()`  must
-    /// contain the same variables.
+    /// Panics if the number of `path_args` doesn't match the number of variables in the path
+    /// returned by `PathBuilder::select_path()`  must contain the same variables.
     fn make_endpoint_url(
         &self,
         input: Self::Input<'_>,
@@ -102,19 +97,17 @@ pub trait PathBuilder: Sized {
     fn _path_parameters(&self) -> Vec<&'static str>;
 }
 
-/// The complete history of this endpoint as far as Ruma knows, together with
-/// all variants on versions stable and unstable.
+/// The complete history of this endpoint as far as Ruma knows, together with all variants on
+/// versions stable and unstable.
 ///
-/// The amount and positioning of path variables are the same over all path
-/// variants.
+/// The amount and positioning of path variables are the same over all path variants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::exhaustive_structs)]
 pub struct VersionHistory {
-    /// A list of unstable paths over this endpoint's history, mapped to
-    /// optional unstable features.
+    /// A list of unstable paths over this endpoint's history, mapped to optional unstable
+    /// features.
     ///
-    /// For endpoint querying purposes, the last item will be used as a
-    /// fallback.
+    /// For endpoint querying purposes, the last item will be used as a fallback.
     unstable_paths: &'static [(Option<&'static str>, &'static str)],
 
     /// A list of stable paths, mapped to selectors.
@@ -126,45 +119,38 @@ pub struct VersionHistory {
     ///
     /// Deprecation often precedes one Matrix version before removal.
     ///
-    /// This will make
-    /// [`try_into_http_request`](super::OutgoingRequest::try_into_http_request)
-    /// emit a warning, see the corresponding documentation for more
-    /// information.
+    /// This will make [`try_into_http_request`](super::OutgoingRequest::try_into_http_request)
+    /// emit a warning, see the corresponding documentation for more information.
     deprecated: Option<MatrixVersion>,
 
     /// The Matrix version that removed this endpoint.
     ///
-    /// This will make
-    /// [`try_into_http_request`](super::OutgoingRequest::try_into_http_request)
+    /// This will make [`try_into_http_request`](super::OutgoingRequest::try_into_http_request)
     /// emit an error, see the corresponding documentation for more information.
     removed: Option<MatrixVersion>,
 }
 
 impl VersionHistory {
-    /// Constructs an instance of [`VersionHistory`], erroring on compilation if
-    /// it does not pass invariants.
+    /// Constructs an instance of [`VersionHistory`], erroring on compilation if it does not
+    /// pass invariants.
     ///
     /// Specifically, this checks the following invariants:
     ///
-    /// * Path arguments are equal (in order, amount, and argument name) in all
-    ///   path strings
+    /// * Path arguments are equal (in order, amount, and argument name) in all path strings
     /// * In `stable_paths`:
     ///   * Matrix versions are in ascending order
     ///   * No matrix version is referenced twice
-    /// * `deprecated`'s version comes after the latest version mentioned in
-    ///   `stable_paths`, except for version 1.0, and only if any stable path is
-    ///   defined
-    /// * `removed` comes after `deprecated`, or after the latest referenced
-    ///   `stable_paths`, like `deprecated`
+    /// * `deprecated`'s version comes after the latest version mentioned in `stable_paths`, except
+    ///   for version 1.0, and only if any stable path is defined
+    /// * `removed` comes after `deprecated`, or after the latest referenced `stable_paths`, like
+    ///   `deprecated`
     ///
     /// ## Arguments
     ///
-    /// * `unstable_paths` - List of unstable paths for the endpoint, mapped to
-    ///   optional unstable features.
-    /// * `stable_paths` - List of stable paths for the endpoint, mapped to
-    ///   selectors.
-    /// * `deprecated` - The Matrix version that deprecated the endpoint, if
-    ///   any.
+    /// * `unstable_paths` - List of unstable paths for the endpoint, mapped to optional unstable
+    ///   features.
+    /// * `stable_paths` - List of stable paths for the endpoint, mapped to selectors.
+    /// * `deprecated` - The Matrix version that deprecated the endpoint, if any.
     /// * `removed` - The Matrix version that removed the endpoint, if any.
     pub const fn new(
         unstable_paths: &'static [(Option<&'static str>, &'static str)],
@@ -279,17 +265,14 @@ impl VersionHistory {
         Self { unstable_paths, stable_paths, deprecated, removed }
     }
 
-    /// Whether the homeserver advertises support for a path in this
-    /// [`VersionHistory`].
+    /// Whether the homeserver advertises support for a path in this [`VersionHistory`].
     ///
-    /// Returns `true` if any version or feature in the given
-    /// [`SupportedVersions`] matches a path in this history, unless the
-    /// endpoint was removed.
+    /// Returns `true` if any version or feature in the given [`SupportedVersions`] matches a path
+    /// in this history, unless the endpoint was removed.
     ///
-    /// Note that this is likely to return false negatives, since some endpoints
-    /// don't specify a stable or unstable feature, and homeservers should
-    /// not advertise support for a Matrix version unless they support all
-    /// of its features.
+    /// Note that this is likely to return false negatives, since some endpoints don't specify a
+    /// stable or unstable feature, and homeservers should not advertise support for a Matrix
+    /// version unless they support all of its features.
     pub fn is_supported(&self, considering: &SupportedVersions) -> bool {
         match self.versioning_decision_for(&considering.versions) {
             VersioningDecision::Removed => false,
@@ -298,19 +281,17 @@ impl VersionHistory {
         }
     }
 
-    /// Decide which kind of endpoint to use given the supported versions of a
-    /// homeserver.
+    /// Decide which kind of endpoint to use given the supported versions of a homeserver.
     ///
     /// Returns:
     ///
     /// - `Removed` if the endpoint is removed in all supported versions.
-    /// - `Version` if the endpoint is stable or deprecated in at least one
-    ///   supported version.
-    /// - `Feature` in all other cases, to look if a feature path is supported,
-    ///   or use the last unstable path as a fallback.
+    /// - `Version` if the endpoint is stable or deprecated in at least one supported version.
+    /// - `Feature` in all other cases, to look if a feature path is supported, or use the last
+    ///   unstable path as a fallback.
     ///
-    /// If resulting [`VersioningDecision`] is `Stable`, it will also detail if
-    /// any version denoted deprecation or removal.
+    /// If resulting [`VersioningDecision`] is `Stable`, it will also detail if any version denoted
+    /// deprecation or removal.
     pub fn versioning_decision_for(
         &self,
         versions: &BTreeSet<MatrixVersion>,
@@ -361,31 +342,27 @@ impl VersionHistory {
         self.unstable_paths.last().map(|(_, path)| *path)
     }
 
-    /// Returns all unstable path variants in canon form, with optional
-    /// corresponding feature.
+    /// Returns all unstable path variants in canon form, with optional corresponding feature.
     pub fn unstable_paths(&self) -> impl Iterator<Item = (Option<&'static str>, &'static str)> {
         self.unstable_paths.iter().copied()
     }
 
-    /// Returns all version path variants in canon form, with corresponding
-    /// selector.
+    /// Returns all version path variants in canon form, with corresponding selector.
     pub fn stable_paths(&self) -> impl Iterator<Item = (StablePathSelector, &'static str)> {
         self.stable_paths.iter().copied()
     }
 
-    /// The path that should be used to query the endpoint, given a set of
-    /// supported versions.
+    /// The path that should be used to query the endpoint, given a set of supported versions.
     ///
     /// Picks the latest path that the versions accept.
     ///
     /// Returns an endpoint in the following format;
     /// - `/_matrix/client/versions`
-    /// - `/_matrix/client/hello/{world}` (`{world}` is a path replacement
-    ///   parameter)
+    /// - `/_matrix/client/hello/{world}` (`{world}` is a path replacement parameter)
     ///
     /// Note: This doesn't handle endpoint removals, check with
-    /// [`versioning_decision_for`](VersionHistory::versioning_decision_for) to
-    /// see if this endpoint is still available.
+    /// [`versioning_decision_for`](VersionHistory::versioning_decision_for) to see if this endpoint
+    /// is still available.
     pub fn version_path(&self, versions: &BTreeSet<MatrixVersion>) -> Option<&'static str> {
         let version_paths = self
             .stable_paths
@@ -394,8 +371,7 @@ impl VersionHistory {
 
         // Reverse the iterator, to check the "latest" version first.
         for (ver, path) in version_paths.rev() {
-            // Check if any of the versions are equal or greater than the version the path
-            // needs.
+            // Check if any of the versions are equal or greater than the version the path needs.
             if versions.iter().any(|v| v.is_superset_of(ver)) {
                 return Some(path);
             }
@@ -404,8 +380,7 @@ impl VersionHistory {
         None
     }
 
-    /// The path that should be used to query the endpoint, given a list of
-    /// supported features.
+    /// The path that should be used to query the endpoint, given a list of supported features.
     pub fn feature_path(&self, supported_features: &BTreeSet<FeatureFlag>) -> Option<&'static str> {
         let unstable_feature_paths = self
             .unstable_paths
@@ -436,11 +411,11 @@ impl PathBuilder for VersionHistory {
     /// This will fail if, for every version in `input`;
     /// - The endpoint is too old, and has been removed in all versions.
     ///   ([`EndpointRemoved`](super::error::IntoHttpError::EndpointRemoved))
-    /// - The endpoint is too new, and no unstable path is known for this
-    ///   endpoint. ([`NoUnstablePath`](super::error::IntoHttpError::NoUnstablePath))
+    /// - The endpoint is too new, and no unstable path is known for this endpoint.
+    ///   ([`NoUnstablePath`](super::error::IntoHttpError::NoUnstablePath))
     ///
-    /// Finally, this will emit a warning through [`tracing`] if it detects that
-    /// any version in `input` has deprecated this endpoint.
+    /// Finally, this will emit a warning through [`tracing`] if it detects that any version in
+    /// `input` has deprecated this endpoint.
     fn select_path(
         &self,
         input: Cow<'_, SupportedVersions>,
@@ -532,8 +507,7 @@ pub enum StablePathSelector {
     /// The path was added in the given Matrix version.
     Version(MatrixVersion),
 
-    /// The path is available via a stable feature and was added in a Matrix
-    /// version.
+    /// The path is available via a stable feature and was added in a Matrix version.
     FeatureAndVersion {
         /// The stable feature that adds support for the path.
         feature: &'static str,
@@ -568,8 +542,8 @@ impl From<MatrixVersion> for StablePathSelector {
 
 /// The endpoint has a single path.
 ///
-/// This means that the endpoint has no path history, or the Matrix spec has no
-/// way to manage path history in the API that it is a part of.
+/// This means that the endpoint has no path history, or the Matrix spec has no way to manage path
+/// history in the API that it is a part of.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::exhaustive_structs)]
 pub struct SinglePath(&'static str);
@@ -625,15 +599,14 @@ const fn check_path_is_valid(path: &'static str) {
 ///
 /// The supported syntax for an endpoint path segment variable is `{var}`.
 ///
-/// Returns the name of the variable if one was found in the segment, `None` if
-/// no variable was found.
+/// Returns the name of the variable if one was found in the segment, `None` if no variable was
+/// found.
 ///
 /// Panics if:
 ///
 /// * The segment begins with `{` but doesn't end with `}`.
 /// * The segment ends with `}` but doesn't begin with `{`.
-/// * The segment begins with `:`, which matches the old syntax for endpoint
-///   path segment variables.
+/// * The segment begins with `:`, which matches the old syntax for endpoint path segment variables.
 pub const fn extract_endpoint_path_segment_variable(segment: &str) -> Option<&str> {
     if string::starts_with(segment, ':') {
         panic!("endpoint paths syntax has changed and segment variables must be wrapped by `{{}}`");
@@ -681,8 +654,7 @@ mod tests {
         }
     }
 
-    // TODO add test that can hook into tracing and verify the deprecation warning
-    // is emitted
+    // TODO add test that can hook into tracing and verify the deprecation warning is emitted
 
     #[test]
     fn make_simple_endpoint_url() {

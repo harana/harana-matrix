@@ -985,11 +985,11 @@ impl TryFrom<&DecryptedForwardedRoomKeyEvent> for InboundGroupSession {
 mod tests {
     use assert_matches2::assert_let;
     use insta::{assert_json_snapshot, with_settings};
+    use sdk_test::async_test;
     use ruma::{
         DeviceId, UserId, device_id, events::room::history_visibility::HistoryVisibility,
         owned_room_id, room_id, user_id,
     };
-    use sdk_test::async_test;
     use serde_json::json;
     use similar_asserts::assert_eq;
     use vodozemac::{

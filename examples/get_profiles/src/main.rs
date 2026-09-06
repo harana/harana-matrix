@@ -56,7 +56,11 @@ async fn get_profile_authenticated(client: Client) -> MatrixResult<UserProfile> 
     Ok(user_profile)
 }
 
-async fn login(homeserver_url: String, username: &str, password: &str) -> matrix::Result<Client> {
+async fn login(
+    homeserver_url: String,
+    username: &str,
+    password: &str,
+) -> matrix::Result<Client> {
     let homeserver_url = Url::parse(&homeserver_url).expect("Couldn't parse the homeserver URL");
     let client = Client::new(homeserver_url).await.unwrap();
 

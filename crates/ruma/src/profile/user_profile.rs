@@ -27,9 +27,9 @@ impl UserProfile {
 
     /// Returns the value of the given [`StaticProfileField`].
     ///
-    /// Returns `Ok(Some(_))` if the field is present and the value was
-    /// deserialized successfully, `Ok(None)` if the field is not set, or an
-    /// error if deserialization of the value failed.
+    /// Returns `Ok(Some(_))` if the field is present and the value was deserialized
+    /// successfully, `Ok(None)` if the field is not set, or an error if deserialization of the
+    /// value failed.
     pub fn get_static<F: StaticProfileField>(&self) -> Result<Option<F::Value>, serde_json::Error> {
         self.0.get(F::NAME).map(|value| serde_json::from_value(value.clone())).transpose()
     }

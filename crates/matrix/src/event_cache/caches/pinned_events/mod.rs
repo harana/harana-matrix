@@ -21,6 +21,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use eyeball_im::VectorDiff;
+use futures_util::{StreamExt as _, stream};
 use base::{
     apply_redaction,
     event_cache::{Event, Gap},
@@ -29,14 +31,12 @@ use base::{
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
     task_monitor::BackgroundTaskHandle,
 };
-use eyeball_im::VectorDiff;
-use futures_util::{StreamExt as _, stream};
+use sdk_common::executor::spawn;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId,
     events::{relation::RelationType, room::redaction::SyncRoomRedactionEvent},
     room_version_rules::RoomVersionRules,
 };
-use sdk_common::executor::spawn;
 use tokio::sync::{broadcast::Sender, mpsc};
 use tracing::{debug, instrument, trace, warn};
 
@@ -983,9 +983,9 @@ mod timed_tests {
     use std::ops::Not;
 
     use base::event_cache::store::{EventCacheStoreLock, MemoryStore};
-    use ruma::{event_id, room_id, room_version_rules::RoomVersionRules};
     use sdk_common::cross_process_lock::CrossProcessLockConfig;
     use sdk_test::{ALICE, async_test, event_factory::EventFactory};
+    use ruma::{event_id, room_id, room_version_rules::RoomVersionRules};
     use tokio::sync::broadcast::Sender;
 
     use super::*;

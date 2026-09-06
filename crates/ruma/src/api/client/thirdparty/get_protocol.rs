@@ -1,7 +1,6 @@
 //! `GET /_matrix/client/*/thirdparty/protocol/{protocol}`
 //!
-//! Fetches the metadata from the homeserver about a particular third party
-//! protocol.
+//! Fetches the metadata from the homeserver about a particular third party protocol.
 
 pub mod v3 {
     //! `/v3/` ([spec])

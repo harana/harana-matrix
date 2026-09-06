@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use as_variant::as_variant;
+use sdk_common::timer;
 use ruma::{
     JsOption, OwnedRoomId, RoomId, UserId,
     api::client::sync::sync_events::{
@@ -32,7 +33,6 @@ use ruma::{
     },
     serde::Raw,
 };
-use sdk_common::timer;
 
 #[cfg(feature = "e2e-encryption")]
 use super::super::e2ee;

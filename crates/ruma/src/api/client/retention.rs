@@ -1,13 +1,12 @@
 //! Endpoints for managing message retention periods
 
-use serde::{
-    Deserialize, Deserializer,
-    de::{self, Unexpected},
-};
-
 use crate::{
     OwnedRoomId,
     serde::{DisplayAsRefStr, SerializeAsRefStr},
+};
+use serde::{
+    Deserialize, Deserializer,
+    de::{self, Unexpected},
 };
 
 pub mod get_retention_configuration;
@@ -26,9 +25,8 @@ pub enum RoomIdOrAllRooms {
 impl RoomIdOrAllRooms {
     /// Get the string representation of [`RoomIdOrAllRooms`].
     ///
-    /// Returns the string representation of the room ID for the
-    /// [`RoomIdOrAllRooms::RoomId`] variant, or "*" for the
-    /// [`RoomIdOrAllRooms::AllRooms`] variant.
+    /// Returns the string representation of the room ID for the [`RoomIdOrAllRooms::RoomId`]
+    /// variant, or "*" for the [`RoomIdOrAllRooms::AllRooms`] variant.
     pub fn as_str(&self) -> &str {
         match self {
             Self::RoomId(room_id) => room_id.as_str(),

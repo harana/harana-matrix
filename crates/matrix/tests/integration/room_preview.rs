@@ -1,11 +1,15 @@
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use base::{RequestedRequiredStates, RoomState};
 use js_int::uint;
 use matrix::{
     config::SyncSettings,
     test_utils::{logged_in_client_with_server, mocks::MatrixMockServer},
+};
+use base::{RequestedRequiredStates, RoomState};
+use sdk_test::{
+    InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, SyncResponseBuilder, async_test,
+    event_factory::EventFactory,
 };
 use ruma::{
     RoomId,
@@ -15,10 +19,6 @@ use ruma::{
     owned_user_id,
     room::JoinRuleKind,
     room_id, user_id,
-};
-use sdk_test::{
-    InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, SyncResponseBuilder, async_test,
-    event_factory::EventFactory,
 };
 use serde_json::json;
 use wiremock::{

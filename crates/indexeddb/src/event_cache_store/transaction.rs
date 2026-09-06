@@ -14,11 +14,11 @@
 
 use std::ops::Deref;
 
+use indexed_db_futures::transaction as inner;
 use base::{
     event_cache::{Event as RawEvent, Gap as RawGap},
     linked_chunk::{ChunkContent, ChunkIdentifier, LinkedChunkId, RawChunk},
 };
-use indexed_db_futures::transaction as inner;
 use ruma::{EventId, RoomId, events::relation::RelationType};
 use serde::{Serialize, de::DeserializeOwned};
 

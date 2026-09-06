@@ -1,7 +1,7 @@
 //! The Latest Event basic types.
 
-use ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
 use sdk_common::deserialized_responses::TimelineEvent;
+use ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
 use serde::{Deserialize, Serialize};
 
 use crate::store::SerializableEventContent;

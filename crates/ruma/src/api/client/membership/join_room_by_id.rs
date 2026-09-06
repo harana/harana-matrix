@@ -9,9 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AccessToken, client::membership::ThirdPartySigned, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::membership::ThirdPartySigned;
 
     metadata! {
         method: POST,
@@ -30,9 +32,8 @@ pub mod v3 {
         #[ruma_api(path)]
         pub room_id: OwnedRoomId,
 
-        /// The signature of a `m.third_party_invite` token to prove that this
-        /// user owns a third party identity which has been invited to
-        /// the room.
+        /// The signature of a `m.third_party_invite` token to prove that this user owns a third
+        /// party identity which has been invited to the room.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub third_party_signed: Option<ThirdPartySigned>,
 

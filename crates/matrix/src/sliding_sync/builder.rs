@@ -6,8 +6,8 @@ use std::{
 };
 
 use cfg_if::cfg_if;
-use ruma::{OwnedRoomId, api::client::sync::sync_events::v5 as http};
 use sdk_common::timer;
+use ruma::{OwnedRoomId, api::client::sync::sync_events::v5 as http};
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock, broadcast::channel};
 
 use super::{

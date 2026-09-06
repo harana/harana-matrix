@@ -14,8 +14,8 @@ use crate::events::{EmptyStateKey, PossiblyRedactedStateEventContent, StateEvent
 
 /// The content of an `m.room.retention` state event.
 ///
-/// The `m.room.retention` state event lets room admins or moderators set or
-/// modify the history retention behaviour for a given room.
+/// The `m.room.retention` state event lets room admins or moderators set or modify the history
+/// retention behaviour for a given room.
 ///
 /// This event uses the unstable prefix defined in [MSC1763].
 ///
@@ -36,10 +36,8 @@ pub struct RoomRetentionEventContent {
 impl RoomRetentionEventContent {
     /// Create a new [`RoomRetentionEventContent`] with no retention limits set.
     ///
-    /// This method can be combined with the
-    /// [`RoomRetentionEventContent::at_least`] and
-    /// [`RoomRetentionEventContent::at_most`] methods to configure the
-    /// individual limits.
+    /// This method can be combined with the [`RoomRetentionEventContent::at_least`] and
+    /// [`RoomRetentionEventContent::at_most`] methods to configure the individual limits.
     ///
     /// # Examples
     ///
@@ -57,19 +55,16 @@ impl RoomRetentionEventContent {
         Self::default()
     }
 
-    /// Create a new [`RoomRetentionEventContent`] with the given maximum and
-    /// minimum limits.
+    /// Create a new [`RoomRetentionEventContent`] with the given maximum and minimum limits.
     ///
-    /// This will return `None` if the duration of one of the limits, expressed
-    /// as milliseconds, doesn't fall into the [0, (2^53)-1] range, or if
-    /// `max_lifetime` < `min_lifetime`.
+    /// This will return `None` if the duration of one of the limits, expressed as milliseconds,
+    /// doesn't fall into the [0, (2^53)-1] range, or if `max_lifetime` < `min_lifetime`.
     fn new_impl(min_lifetime: Option<Duration>, max_lifetime: Option<Duration>) -> Option<Self> {
-        // The lifetimes are defined as a duration in milliseconds represented as an
-        // integer in the range [0, (2^53)-1], this range is the same as what
-        // our UInt type enforces.
+        // The lifetimes are defined as a duration in milliseconds represented as an integer in the
+        // range [0, (2^53)-1], this range is the same as what our UInt type enforces.
 
-        // First convert the duration into milliseconds, then attempt to convert the
-        // number of milliseconds into an UInt.
+        // First convert the duration into milliseconds, then attempt to convert the number of
+        // milliseconds into an UInt.
         let max_lifetime = max_lifetime.map(|l| UInt::try_from(l.as_millis())).transpose().ok()?;
         let min_lifetime = min_lifetime.map(|l| UInt::try_from(l.as_millis())).transpose().ok()?;
 
@@ -82,10 +77,9 @@ impl RoomRetentionEventContent {
 
     /// Create a new [`RoomRetentionEventContent`] from a range.
     ///
-    /// Returns `None` if the duration of one of the limits, expressed as
-    /// milliseconds, doesn't fall into the [0, (2^53)-1] range, or if the
-    /// lower bound of the range is bigger than the upper bound, i.e.
-    /// `10..0`.
+    /// Returns `None` if the duration of one of the limits, expressed as milliseconds, doesn't
+    /// fall into the [0, (2^53)-1] range, or if the lower bound of the range is bigger than the
+    /// upper bound, i.e. `10..0`.
     ///
     /// # Examples
     ///
@@ -115,23 +109,19 @@ impl RoomRetentionEventContent {
         Self::new_impl(min_lifetime, max_lifetime)
     }
 
-    /// Set the maximum amount of time a message should be kept on the
-    /// homeserver.
+    /// Set the maximum amount of time a message should be kept on the homeserver.
     ///
-    /// Returns `None` if the given limit, expressed as milliseconds, doesn't
-    /// fall into the [0, (2^53)-1] range, or if the limits don't adhere to
-    /// the `max` < `min` constraint.
+    /// Returns `None` if the given limit, expressed as milliseconds, doesn't fall into the [0,
+    /// (2^53)-1] range, or if the limits don't adhere to the `max` < `min` constraint.
     pub fn at_most(self, max: Duration) -> Option<Self> {
         let min = self.min_lifetime();
         Self::new_impl(min, Some(max))
     }
 
-    /// Set the minimum amount of time a message should be kept on the
-    /// homeserver.
+    /// Set the minimum amount of time a message should be kept on the homeserver.
     ///
-    /// Returns `None` if the given limit, expressed as milliseconds, doesn't
-    /// fall into the [0, (2^53)-1] range, or if the limits don't adhere to
-    /// the `max` < `min` constraint.
+    /// Returns `None` if the given limit, expressed as milliseconds, doesn't fall into the [0,
+    /// (2^53)-1] range, or if the limits don't adhere to the `max` < `min` constraint.
     pub fn at_least(self, min: Duration) -> Option<Self> {
         let max = self.max_lifetime();
         Self::new_impl(Some(min), max)
@@ -150,8 +140,8 @@ impl RoomRetentionEventContent {
 
 /// Validate a retention lifetime pair.
 ///
-/// Returns false if both lifetimes are defined and the max lifetime is smaller
-/// than the min lifetime.
+/// Returns false if both lifetimes are defined and the max lifetime is smaller than the min
+/// lifetime.
 pub fn is_valid_lifetime_combination(
     min_lifetime: Option<UInt>,
     max_lifetime: Option<UInt>,
@@ -188,8 +178,8 @@ impl<'de> Deserialize<'de> for RoomRetentionEventContent {
 
 /// The PossiblyRedacted version of [`RoomRetentionEventContent`].
 ///
-/// Since the event has only optional fields it's already compatible with the
-/// redacted version of the state event content.
+/// Since the event has only optional fields it's already compatible with the redacted version of
+/// the state event content.
 pub type PossiblyRedactedRoomRetentionEventContent = RoomRetentionEventContent;
 
 impl PossiblyRedactedStateEventContent for PossiblyRedactedRoomRetentionEventContent {
@@ -209,10 +199,11 @@ impl From<RedactedRoomRetentionEventContent> for PossiblyRedactedRoomRetentionEv
 #[cfg(test)]
 mod tests {
     use js_int::uint;
+    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
     use super::*;
-    use crate::{canonical_json::assert_to_canonical_json_eq, events::OriginalStateEvent};
+    use crate::events::OriginalStateEvent;
 
     fn raw_json(
         min_lifetime: impl Into<Option<UInt>>,

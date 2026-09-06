@@ -1,7 +1,10 @@
 use std::collections::BTreeSet;
 
-use base::{RequestedRequiredStates, ThreadSubscriptionCatchupToken, sync::SyncResponse, timer};
 use futures_util::future::try_join_all;
+use base::{
+    RequestedRequiredStates, ThreadSubscriptionCatchupToken, sync::SyncResponse, timer,
+};
+use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use ruma::{
     OwnedRoomId,
     api::{
@@ -10,7 +13,6 @@ use ruma::{
     },
     events::GlobalAccountDataEventType,
 };
-use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use tokio::sync::MutexGuard;
 use tracing::error;
 
@@ -375,11 +377,11 @@ mod tests {
         RequestedRequiredStates, RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons, RoomState,
         notification_settings::RoomNotificationMode,
     };
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         api::client::discovery::get_supported_versions, assign, event_id, room_id, serde::Raw,
         user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
     use tokio::task::yield_now;
 

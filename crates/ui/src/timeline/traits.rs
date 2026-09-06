@@ -14,7 +14,6 @@
 
 use std::future::Future;
 
-use base::{RoomInfo, crypto::types::events::CryptoContextInfo};
 use eyeball::Subscriber;
 use indexmap::IndexMap;
 use matrix::{
@@ -22,6 +21,7 @@ use matrix::{
     deserialized_responses::TimelineEvent,
     paginators::{PaginableRoom, thread::PaginableThread},
 };
+use base::{RoomInfo, crypto::types::events::CryptoContextInfo};
 use ruma::{
     EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId,
     events::{

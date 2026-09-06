@@ -6,11 +6,13 @@ use matrix::{
     assert_let_timeout, live_locations_observer::LiveLocationShare,
     test_utils::mocks::MatrixMockServer,
 };
+use sdk_test::{
+    DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, async_test, event_factory::EventFactory,
+};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, event_id, events::location::AssetType, owned_event_id,
     user_id,
 };
-use sdk_test::{DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde_json::json;
 
 #[async_test]

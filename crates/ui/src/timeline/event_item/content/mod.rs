@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use as_variant::as_variant;
-use base::crypto::types::events::UtdCause;
 use matrix::{
     Room,
     deserialized_responses::{TimelineEvent, TimelineEventKind},
 };
+use base::crypto::types::events::UtdCause;
 use ruma::{
     OwnedDeviceId, OwnedEventId, OwnedMxcUri, OwnedUserId, UserId,
     events::{
@@ -1000,6 +1000,7 @@ impl OtherState {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
+    use sdk_test::ALICE;
     use ruma::{
         assign,
         events::{
@@ -1010,7 +1011,6 @@ mod tests {
         },
         room_version_rules::RedactionRules,
     };
-    use sdk_test::ALICE;
     use serde_json::json;
 
     use super::{

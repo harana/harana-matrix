@@ -107,10 +107,10 @@ impl KnockRequestMemberInfo {
 // The http mocking library is not supported for wasm32
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
+    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
         EventId, event_id, events::room::member::MembershipState, owned_user_id, room_id, user_id,
     };
-    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 
     use crate::{
         Room,

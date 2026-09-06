@@ -19,16 +19,16 @@ use std::{
 };
 
 use async_trait::async_trait;
-use ruma::{
-    DeviceId, OwnedDeviceId, OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId,
-    UserId, events::secret::request::SecretName,
-};
 use sdk_common::{
     cross_process_lock::{
         CrossProcessLockGeneration,
         memory_store_helper::{Lease, try_take_leased_lock},
     },
     locks::RwLock as StdRwLock,
+};
+use ruma::{
+    DeviceId, OwnedDeviceId, OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId,
+    UserId, events::secret::request::SecretName,
 };
 use tokio::sync::{Mutex, RwLock};
 use tracing::warn;
@@ -875,8 +875,8 @@ impl CryptoStore for MemoryStore {
 mod tests {
     use std::collections::HashMap;
 
-    use ruma::{RoomId, room_id, user_id};
     use sdk_test::async_test;
+    use ruma::{RoomId, room_id, user_id};
     use vodozemac::{Curve25519PublicKey, Ed25519PublicKey};
 
     use super::SessionId;
@@ -1369,10 +1369,10 @@ mod integration_tests {
     };
 
     use async_trait::async_trait;
+    use sdk_common::cross_process_lock::CrossProcessLockGeneration;
     use ruma::{
         DeviceId, OwnedDeviceId, RoomId, TransactionId, UserId, events::secret::request::SecretName,
     };
-    use sdk_common::cross_process_lock::CrossProcessLockGeneration;
     use vodozemac::Curve25519PublicKey;
     use zeroize::Zeroizing;
 

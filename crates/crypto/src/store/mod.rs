@@ -105,13 +105,13 @@ pub mod integration_tests;
 
 pub(crate) use crypto_store_wrapper::CryptoStoreWrapper;
 pub use error::{CryptoStoreError, Result};
-pub use memorystore::MemoryStore;
 use sdk_common::{
     SyncOutsideWasm,
     cross_process_lock::{CrossProcessLock, CrossProcessLockConfig, CrossProcessLockGeneration},
     deserialized_responses::WithheldCode,
     timeout::timeout,
 };
+pub use memorystore::MemoryStore;
 pub use traits::{CryptoStore, DynCryptoStore, IntoCryptoStore};
 
 use self::caches::{SequenceNumber, StoreCache, StoreCacheGuard, UsersForKeyQuery};
@@ -2205,13 +2205,13 @@ mod tests {
     use assert_matches2::{assert_let, assert_matches};
     use futures_util::StreamExt;
     use insta::{_macro_support::Content, assert_json_snapshot, internals::ContentPath};
+    use sdk_test::async_test;
     use rand::RngExt;
     use ruma::{
         RoomId, device_id,
         events::room::{EncryptedFile, EncryptedFileHashes, V2EncryptedFileInfo},
         owned_device_id, owned_mxc_uri, room_id, user_id,
     };
-    use sdk_test::async_test;
     use serde_json::json;
     use vodozemac::{Ed25519Keypair, megolm::SessionKey};
 

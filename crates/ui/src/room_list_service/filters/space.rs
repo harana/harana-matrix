@@ -29,8 +29,8 @@ pub fn new_filter() -> impl Filter {
 #[cfg(test)]
 mod tests {
     use matrix::test_utils::mocks::MatrixMockServer;
-    use ruma::room_id;
     use sdk_test::async_test;
+    use ruma::room_id;
 
     use super::{super::new_rooms, *};
 

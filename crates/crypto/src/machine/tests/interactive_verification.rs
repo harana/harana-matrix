@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use sdk_test::async_test;
 use ruma::{
     api::client::to_device::send_event_to_device::v3::Response as ToDeviceResponse,
     events::key::verification::VerificationMethod,
 };
-use sdk_test::async_test;
 
 use crate::{
     machine::{test_helpers::get_machine_pair_with_setup_sessions_test_helper, tests},

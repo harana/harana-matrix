@@ -22,6 +22,9 @@ use std::{
 
 use hkdf::Hkdf;
 use js_option::JsOption;
+use sdk_common::deserialized_responses::{
+    AlgorithmInfo, DeviceLinkProblem, EncryptionInfo, VerificationLevel, VerificationState,
+};
 use ruma::{
     CanonicalJsonValue, DeviceId, DeviceKeyAlgorithm, DeviceKeyId, MilliSecondsSinceUnixEpoch,
     OneTimeKeyAlgorithm, OneTimeKeyId, OwnedDeviceId, OwnedDeviceKeyId, OwnedOneTimeKeyId,
@@ -34,9 +37,6 @@ use ruma::{
     events::{AnyToDeviceEvent, room::history_visibility::HistoryVisibility},
     serde::Raw,
     uint,
-};
-use sdk_common::deserialized_responses::{
-    AlgorithmInfo, DeviceLinkProblem, EncryptionInfo, VerificationLevel, VerificationState,
 };
 use serde::{Deserialize, Serialize, de::Error};
 use serde_json::value::{RawValue as RawJsonValue, to_raw_value};
@@ -2050,11 +2050,11 @@ mod tests {
     };
 
     use anyhow::Result;
+    use sdk_test::async_test;
     use ruma::{
         DeviceId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OneTimeKeyId, UserId, device_id,
         events::room::history_visibility::HistoryVisibility, room_id, user_id,
     };
-    use sdk_test::async_test;
     use serde_json::json;
 
     use super::Account;

@@ -10,13 +10,11 @@ pub mod v1 {
     use std::time::Duration;
 
     use crate::{
-        api::{
-            auth_scheme::AccessToken,
-            client::uiaa::{AuthData, UiaaResponse},
-            request, response,
-        },
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::uiaa::{AuthData, UiaaResponse};
 
     metadata! {
         method: POST,
@@ -32,8 +30,7 @@ pub mod v1 {
     #[request(error = UiaaResponse)]
     #[derive(Default)]
     pub struct Request {
-        /// Additional authentication information for the user-interactive
-        /// authentication API.
+        /// Additional authentication information for the user-interactive authentication API.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub auth: Option<AuthData>,
     }
@@ -41,8 +38,8 @@ pub mod v1 {
     /// Response type for the `login` endpoint.
     #[response(error = UiaaResponse)]
     pub struct Response {
-        /// The time remaining in milliseconds until the homeserver will no
-        /// longer accept the token.
+        /// The time remaining in milliseconds until the homeserver will no longer accept the
+        /// token.
         ///
         /// 2 minutes is recommended as a default.
         #[serde(with = "crate::serde::duration::ms", rename = "expires_in_ms")]
@@ -60,14 +57,12 @@ pub mod v1 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given expiration duration and
-        /// login token.
+        /// Creates a new `Response` with the given expiration duration and login token.
         pub fn new(expires_in: Duration, login_token: String) -> Self {
             Self { expires_in, login_token }
         }
 
-        /// Creates a new `Response` with the default expiration duration and
-        /// the given login token.
+        /// Creates a new `Response` with the default expiration duration and the given login token.
         pub fn with_default_expiration_duration(login_token: String) -> Self {
             Self::new(Self::default_expiration_duration(), login_token)
         }

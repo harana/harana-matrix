@@ -37,21 +37,18 @@ pub enum RoomType {
 
 /// The rule used for users wishing to join this room.
 ///
-/// This type can hold an arbitrary join rule. To check for values that are not
-/// available as a documented variant here, get its kind with
-/// [`.kind()`](Self::kind) or its string representation
-/// with [`.as_str()`](Self::as_str), and its associated data with
-/// [`.data()`](Self::data).
+/// This type can hold an arbitrary join rule. To check for values that are not available as a
+/// documented variant here, get its kind with [`.kind()`](Self::kind) or its string representation
+/// with [`.as_str()`](Self::as_str), and its associated data with [`.data()`](Self::data).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "join_rule", rename_all = "snake_case")]
 pub enum JoinRule {
-    /// A user who wishes to join the room must first receive an invite to the
-    /// room from someone already inside of the room.
+    /// A user who wishes to join the room must first receive an invite to the room from someone
+    /// already inside of the room.
     Invite,
 
-    /// Users can join the room if they are invited, or they can request an
-    /// invite to the room.
+    /// Users can join the room if they are invited, or they can request an invite to the room.
     ///
     /// They can be allowed (invited) or denied (kicked/banned) access.
     Knock,
@@ -59,13 +56,12 @@ pub enum JoinRule {
     /// Reserved but not yet implemented by the Matrix specification.
     Private,
 
-    /// Users can join the room if they are invited, or if they meet any of the
-    /// conditions described in a set of [`AllowRule`]s.
+    /// Users can join the room if they are invited, or if they meet any of the conditions
+    /// described in a set of [`AllowRule`]s.
     Restricted(Restricted),
 
-    /// Users can join the room if they are invited, or if they meet any of the
-    /// conditions described in a set of [`AllowRule`]s, or they can request
-    /// an invite to the room.
+    /// Users can join the room if they are invited, or if they meet any of the conditions
+    /// described in a set of [`AllowRule`]s, or they can request an invite to the room.
     KnockRestricted(Restricted),
 
     /// Anyone can join the room without any prior action.
@@ -110,8 +106,8 @@ impl JoinRule {
     /// The returned JSON object won't contain the `join_rule` field, use
     /// [`.kind()`](Self::kind) or [`.as_str()`](Self::as_str) to access those.
     ///
-    /// Prefer to use the public variants of `JoinRule` where possible; this
-    /// method is meant to be used for custom join rules only.
+    /// Prefer to use the public variants of `JoinRule` where possible; this method is meant to
+    /// be used for custom join rules only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("join rule serialization should succeed") {
@@ -205,8 +201,7 @@ impl Restricted {
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(untagged)]
 pub enum AllowRule {
-    /// Joining is allowed if a user is already a member of the room with the id
-    /// `room_id`.
+    /// Joining is allowed if a user is already a member of the room with the id `room_id`.
     RoomMembership(RoomMembership),
 
     #[doc(hidden)]
@@ -214,8 +209,7 @@ pub enum AllowRule {
 }
 
 impl AllowRule {
-    /// Constructs an `AllowRule` with membership of the room with the given id
-    /// as its predicate.
+    /// Constructs an `AllowRule` with membership of the room with the given id as its predicate.
     pub fn room_membership(room_id: OwnedRoomId) -> Self {
         Self::RoomMembership(RoomMembership::new(room_id))
     }
@@ -233,8 +227,8 @@ impl AllowRule {
     /// The returned JSON object won't contain the `type` field, use
     /// [`Self::rule_type`] to access that.
     ///
-    /// Prefer to use the public variants of `AllowRule` where possible; this
-    /// method is meant to be used for custom allow rules only.
+    /// Prefer to use the public variants of `AllowRule` where possible; this method is meant to
+    /// be used for custom allow rules only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("join rule serialization should succeed") {
@@ -250,14 +244,12 @@ impl AllowRule {
     }
 }
 
-/// Allow rule which grants permission to join based on the membership of
-/// another room.
+/// Allow rule which grants permission to join based on the membership of another room.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "type", rename = "m.room_membership")]
 pub struct RoomMembership {
-    /// The id of the room which being a member of grants permission to join
-    /// another room.
+    /// The id of the room which being a member of grants permission to join another room.
     pub room_id: OwnedRoomId,
 }
 
@@ -320,12 +312,11 @@ impl<'de> Deserialize<'de> for AllowRule {
 #[ruma_enum(rename_all = "snake_case")]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum JoinRuleKind {
-    /// A user who wishes to join the room must first receive an invite to the
-    /// room from someone already inside of the room.
+    /// A user who wishes to join the room must first receive an invite to the room from someone
+    /// already inside of the room.
     Invite,
 
-    /// Users can join the room if they are invited, or they can request an
-    /// invite to the room.
+    /// Users can join the room if they are invited, or they can request an invite to the room.
     ///
     /// They can be allowed (invited) or denied (kicked/banned) access.
     Knock,
@@ -333,13 +324,12 @@ pub enum JoinRuleKind {
     /// Reserved but not yet implemented by the Matrix specification.
     Private,
 
-    /// Users can join the room if they are invited, or if they meet any of the
-    /// conditions described in a set of rules.
+    /// Users can join the room if they are invited, or if they meet any of the conditions
+    /// described in a set of rules.
     Restricted,
 
-    /// Users can join the room if they are invited, or if they meet any of the
-    /// conditions described in a set of rules, or they can request an
-    /// invite to the room.
+    /// Users can join the room if they are invited, or if they meet any of the conditions
+    /// described in a set of rules, or they can request an invite to the room.
     KnockRestricted,
 
     /// Anyone can join the room without any prior action.
@@ -373,9 +363,8 @@ pub struct RoomSummary {
 
     /// The canonical alias of the room, if any.
     ///
-    /// If the `compat-empty-string-null` cargo feature is enabled, this field
-    /// being an empty string in JSON will result in `None` here during
-    /// deserialization.
+    /// If the `compat-empty-string-null` cargo feature is enabled, this field being an empty
+    /// string in JSON will result in `None` here during deserialization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canonical_alias: Option<OwnedRoomAliasId>,
 
@@ -389,9 +378,8 @@ pub struct RoomSummary {
 
     /// The URL for the room's avatar, if one is set.
     ///
-    /// If you activate the `compat-empty-string-null` feature, this field being
-    /// an empty string in JSON will result in `None` here during
-    /// deserialization.
+    /// If you activate the `compat-empty-string-null` feature, this field being an empty string in
+    /// JSON will result in `None` here during deserialization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<OwnedMxcUri>,
 
@@ -411,8 +399,7 @@ pub struct RoomSummary {
 
     /// Whether guest users may join the room and participate in it.
     ///
-    /// If they can, they will be subject to ordinary power level rules like any
-    /// other user.
+    /// If they can, they will be subject to ordinary power level rules like any other user.
     pub guest_can_join: bool,
 
     /// If the room is encrypted, the algorithm used for this room.
@@ -455,8 +442,8 @@ impl<'de> Deserialize<'de> for RoomSummary {
     where
         D: de::Deserializer<'de>,
     {
-        /// Helper type to deserialize [`RoomSummary`] because using `flatten`
-        /// on `join_rule` returns an error.
+        /// Helper type to deserialize [`RoomSummary`] because using `flatten` on `join_rule`
+        /// returns an error.
         #[derive(Deserialize)]
         struct RoomSummaryDeHelper {
             room_id: OwnedRoomId,
@@ -515,28 +502,26 @@ impl<'de> Deserialize<'de> for RoomSummary {
 
 /// The rule used for users wishing to join a room.
 ///
-/// In contrast to the regular [`JoinRule`], this enum holds only simplified
-/// conditions for joining restricted rooms.
+/// In contrast to the regular [`JoinRule`], this enum holds only simplified conditions for joining
+/// restricted rooms.
 ///
-/// This type can hold an arbitrary join rule. To check for values that are not
-/// available as a documented variant here, get its kind with `.kind()` or use
-/// its string representation, obtained through `.as_str()`.
+/// This type can hold an arbitrary join rule. To check for values that are not available as a
+/// documented variant here, get its kind with `.kind()` or use its string representation, obtained
+/// through `.as_str()`.
 ///
-/// Because this type contains a few neighbouring fields instead of a whole
-/// object, and it is not possible to know which fields to parse for unknown
-/// variants, this type will fail to serialize if it doesn't match one of the
-/// documented variants. It is only possible to construct an undocumented
-/// variant by deserializing it, so do not re-serialize this type.
+/// Because this type contains a few neighbouring fields instead of a whole object, and it is not
+/// possible to know which fields to parse for unknown variants, this type will fail to serialize if
+/// it doesn't match one of the documented variants. It is only possible to construct an
+/// undocumented variant by deserializing it, so do not re-serialize this type.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "join_rule", rename_all = "snake_case")]
 pub enum JoinRuleSummary {
-    /// A user who wishes to join the room must first receive an invite to the
-    /// room from someone already inside of the room.
+    /// A user who wishes to join the room must first receive an invite to the room from someone
+    /// already inside of the room.
     Invite,
 
-    /// Users can join the room if they are invited, or they can request an
-    /// invite to the room.
+    /// Users can join the room if they are invited, or they can request an invite to the room.
     ///
     /// They can be allowed (invited) or denied (kicked/banned) access.
     Knock,
@@ -544,13 +529,12 @@ pub enum JoinRuleSummary {
     /// Reserved but not yet implemented by the Matrix specification.
     Private,
 
-    /// Users can join the room if they are invited, or if they meet one of the
-    /// conditions described in the [`RestrictedSummary`].
+    /// Users can join the room if they are invited, or if they meet one of the conditions
+    /// described in the [`RestrictedSummary`].
     Restricted(RestrictedSummary),
 
-    /// Users can join the room if they are invited, or if they meet one of the
-    /// conditions described in the [`RestrictedSummary`], or they can
-    /// request an invite to the room.
+    /// Users can join the room if they are invited, or if they meet one of the conditions
+    /// described in the [`RestrictedSummary`], or they can request an invite to the room.
     KnockRestricted(RestrictedSummary),
 
     /// Anyone can join the room without any prior action.
@@ -673,13 +657,14 @@ impl From<Restricted> for RestrictedSummary {
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
     use js_int::uint;
+    use crate::{OwnedRoomId, owned_room_id};
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
     use super::{
         AllowRule, CustomAllowRule, JoinRule, JoinRuleSummary, Restricted, RestrictedSummary,
         RoomMembership, RoomSummary,
     };
-    use crate::{OwnedRoomId, assert_to_canonical_json_eq, owned_room_id, serde::JsonObject};
+    use crate::{assert_to_canonical_json_eq, serde::JsonObject};
 
     #[test]
     fn deserialize_summary_no_join_rule() {

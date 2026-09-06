@@ -6,17 +6,14 @@ use syn::{
     Attribute, Field, Ident, LitStr, meta::ParseNestedMeta, punctuated::Punctuated, visit::Visit,
 };
 
-/// The path to the `ruma` crate, which holds the types that used to live in
-/// `ruma-common`.
+/// The path to the `ruma` crate, which holds the types that used to live in `ruma-common`.
 ///
-/// To access a reexported crate, prefer to use the
-/// [`reexported()`](Self::reexported) method.
+/// To access a reexported crate, prefer to use the [`reexported()`](Self::reexported) method.
 pub(crate) struct RumaCommon(TokenStream);
 
 /// The path to use for imports from the `ruma` crate.
 ///
-/// `ruma` declares `extern crate self as ruma;` so this also works inside
-/// `ruma` itself.
+/// `ruma` declares `extern crate self as ruma;` so this also works inside `ruma` itself.
 fn ruma_crate_path() -> TokenStream {
     match crate_name("ruma") {
         Ok(FoundCrate::Itself) => quote! { ::ruma },
@@ -91,8 +88,8 @@ impl ToTokens for RumaCommonReexport {
 
 /// The path to use for imports from the ruma-events crate.
 ///
-/// To access a reexported crate, prefer to use
-/// [`reexported()`](Self::reexported) or one of the other methods.
+/// To access a reexported crate, prefer to use [`reexported()`](Self::reexported) or one of the
+/// other methods.
 pub(crate) struct RumaEvents(TokenStream);
 
 impl RumaEvents {
@@ -107,8 +104,7 @@ impl RumaEvents {
         quote! { #self::exports::#reexport }
     }
 
-    /// The path to use for imports from the crate root, where the common types
-    /// live.
+    /// The path to use for imports from the crate root, where the common types live.
     pub(crate) fn ruma_common(&self) -> RumaCommon {
         RumaCommon::new()
     }
@@ -152,8 +148,8 @@ pub(crate) fn to_camel_case(name: &Ident) -> Ident {
     Ident::new(&s, span)
 }
 
-/// Splits the given string on `.` and `_` removing the `m.` then camel casing
-/// to give a Rust type name.
+/// Splits the given string on `.` and `_` removing the `m.` then camel casing to give a Rust type
+/// name.
 pub(crate) fn m_prefix_name_to_type_name(name: &LitStr) -> syn::Result<Ident> {
     let span = name.span();
     let name = name.value();
@@ -316,15 +312,14 @@ pub(crate) trait StructFieldExt {
     /// Get the `#[cfg]` attributes on this field.
     fn cfg_attrs(&self) -> impl Iterator<Item = &'_ Attribute>;
 
-    /// Get the serde meta items on this field, if it has `#[serde(…)]`
-    /// attributes.
+    /// Get the serde meta items on this field, if it has `#[serde(…)]` attributes.
     fn serde_meta_items(&self) -> impl Iterator<Item = syn::Meta>;
 
     /// Whether this field has a `#[serde(…)]` containing the given meta item.
     fn has_serde_meta_item(&self, meta: SerdeMetaItem) -> bool;
 
-    /// If this field has a `#[serde(default = "…")]` attribute, get the
-    /// expression in the literal string.
+    /// If this field has a `#[serde(default = "…")]` attribute, get the expression in the
+    /// literal string.
     fn serde_default_expr(&self) -> Option<syn::ExprPath>;
 }
 

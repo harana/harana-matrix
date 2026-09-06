@@ -1,6 +1,7 @@
 //! `Deserialize` implementation for RoomMessageEventContent and MessageType.
 
 use as_variant::as_variant;
+use crate::serde::{JsonObject, from_raw_json_value};
 use serde::{Deserialize, de};
 use serde_json::{Value as JsonValue, value::RawValue as RawJsonValue};
 
@@ -12,10 +13,7 @@ use super::{
 };
 #[cfg(feature = "unstable-msc4471")]
 use crate::events::stream::StreamDescriptor;
-use crate::{
-    events::{Mentions, room::message::CustomMessageContent},
-    serde::{JsonObject, from_raw_json_value},
-};
+use crate::events::{Mentions, room::message::CustomMessageContent};
 
 impl<'de> Deserialize<'de> for RoomMessageEventContent {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -156,19 +154,16 @@ impl<'de> Deserialize<'de> for GalleryItemType {
 #[allow(unreachable_pub)] // https://github.com/rust-lang/rust/issues/112615
 #[cfg(feature = "unstable-msc3488")]
 pub(in super::super) mod msc3488 {
+    use crate::MilliSecondsSinceUnixEpoch;
     use serde::{Deserialize, Serialize};
 
-    use crate::{
-        MilliSecondsSinceUnixEpoch,
-        events::{
-            location::{AssetContent, LocationContent},
-            message::historical_serde::MessageContentBlock,
-            room::message::{LocationInfo, LocationMessageEventContent},
-        },
+    use crate::events::{
+        location::{AssetContent, LocationContent},
+        message::historical_serde::MessageContentBlock,
+        room::message::{LocationInfo, LocationMessageEventContent},
     };
 
-    /// Deserialize helper type for `LocationMessageEventContent` with unstable
-    /// fields from msc3488.
+    /// Deserialize helper type for `LocationMessageEventContent` with unstable fields from msc3488.
     #[derive(Serialize, Deserialize)]
     pub(in super::super) struct LocationMessageEventContentSerDeHelper {
         pub body: String,

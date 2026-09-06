@@ -16,18 +16,18 @@ use std::{sync::Arc, time::Duration};
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::store::QueueWedgeError;
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix::{Error, assert_let_timeout, test_utils::mocks::MatrixMockServer};
+use base::store::QueueWedgeError;
+use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{EventItemOrigin, EventSendState, RoomExt};
 use ruma::{
     MilliSecondsSinceUnixEpoch, event_id, events::room::message::RoomMessageEventContent, room_id,
 };
-use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde_json::json;
 use stream_assert::{assert_next_matches, assert_pending};
 use tokio::{task::yield_now, time::sleep};
-use ui::timeline::{EventItemOrigin, EventSendState, RoomExt};
 
 #[async_test]
 async fn test_message_order() {

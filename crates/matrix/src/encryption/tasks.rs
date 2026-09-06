@@ -14,20 +14,22 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use base::crypto::store::types::{RoomKeyBundleInfo, RoomPendingKeyBundleDetails};
-#[cfg(feature = "experimental-encrypted-state-events")]
-use base::crypto::types::events::room::encrypted::{EncryptedEvent, RoomEventEncryptionScheme};
 use futures_core::Stream;
 use futures_util::{StreamExt, pin_mut};
+use base::crypto::store::types::{RoomKeyBundleInfo, RoomPendingKeyBundleDetails};
+#[cfg(feature = "experimental-encrypted-state-events")]
+use base::crypto::types::events::room::encrypted::{
+    EncryptedEvent, RoomEventEncryptionScheme,
+};
+use sdk_common::{
+    failures_cache::FailuresCache,
+    task_monitor::{BackgroundTaskHandle, TaskMonitor},
+};
 #[cfg(not(feature = "experimental-encrypted-state-events"))]
 use ruma::events::room::encrypted::{EncryptedEventScheme, OriginalSyncRoomEncryptedEvent};
 #[cfg(feature = "experimental-encrypted-state-events")]
 use ruma::serde::JsonCastable;
 use ruma::{OwnedEventId, OwnedRoomId, serde::Raw};
-use sdk_common::{
-    failures_cache::FailuresCache,
-    task_monitor::{BackgroundTaskHandle, TaskMonitor},
-};
 use tokio::{
     select,
     sync::{Mutex, mpsc},
@@ -690,10 +692,10 @@ impl BundleReceiverTask {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod test {
+    use sdk_test::async_test;
     #[cfg(not(feature = "experimental-encrypted-state-events"))]
     use ruma::events::room::encrypted::OriginalSyncRoomEncryptedEvent;
     use ruma::{event_id, room_id};
-    use sdk_test::async_test;
     use serde_json::json;
     use wiremock::MockServer;
 

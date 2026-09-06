@@ -1,8 +1,7 @@
 //! (De)serialization helpers for other Ruma crates.
 //!
-//! Part of that is a fork of [serde_urlencoded], with support for sequences in
-//! `Deserialize` / `Serialize` structs (e.g. `Vec<Something>`) that are
-//! (de)serialized as `field=val1&field=val2`.
+//! Part of that is a fork of [serde_urlencoded], with support for sequences in `Deserialize` /
+//! `Serialize` structs (e.g. `Vec<Something>`) that are (de)serialized as `field=val1&field=val2`.
 //!
 //! [serde_urlencoded]: https://github.com/nox/serde_urlencoded
 
@@ -80,8 +79,7 @@ where
     serde_json::from_str(val.get()).map_err(E::custom)
 }
 
-/// Helper function for returning a default value if deserialization of the type
-/// fails.
+/// Helper function for returning a default value if deserialization of the type fails.
 ///
 /// Assumes that the content being deserialized is JSON.
 ///
@@ -105,8 +103,8 @@ where
     }))
 }
 
-/// Helper function for ignoring invalid items in a `Vec`, instead letting them
-/// cause the entire `Vec` to fail deserialization
+/// Helper function for ignoring invalid items in a `Vec`, instead letting them cause the entire
+/// `Vec` to fail deserialization
 pub fn ignore_invalid_vec_items<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,
@@ -145,13 +143,11 @@ where
     deserializer.deserialize_seq(SkipInvalid(PhantomData))
 }
 
-/// Deserialize a `Raw<T>` and reject any value whose top-level JSON shape is
-/// not an object.
+/// Deserialize a `Raw<T>` and reject any value whose top-level JSON shape is not an object.
 ///
-/// Use as `#[serde(deserialize_with = "crate::serde::deserialize_raw_object")]`
-/// wherever the Matrix spec mandates an object (e.g., `Raw<EventContent>` on
-/// the body of `/_matrix/client/.../send` endpoints, or on inner fields,
-/// response fields, etc.).
+/// Use as `#[serde(deserialize_with = "crate::serde::deserialize_raw_object")]` wherever
+/// the Matrix spec mandates an object (e.g., `Raw<EventContent>` on the body of
+/// `/_matrix/client/.../send` endpoints, or on inner fields, response fields, etc.).
 pub fn deserialize_raw_object<'de, T, D>(deserializer: D) -> Result<Raw<T>, D::Error>
 where
     D: Deserializer<'de>,

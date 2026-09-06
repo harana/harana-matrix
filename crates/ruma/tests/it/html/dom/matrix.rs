@@ -285,8 +285,7 @@ fn code_attributes() {
     // `class` is in unsupported attributes.
     assert_eq!(element.attrs.len(), 1);
 
-    // Third `<code>` element, with several classes beginning with `language-`
-    // class.
+    // Third `<code>` element, with several classes beginning with `language-` class.
     let node = html_children.next().unwrap();
     let element = node.as_element().unwrap().to_matrix();
 
@@ -295,8 +294,7 @@ fn code_attributes() {
     // Because it contains other classes, `class` is also in unsupported attributes.
     assert_eq!(element.attrs.len(), 1);
 
-    // Fourth `<code>` element, with several classes not beginning with `language-`
-    // class.
+    // Fourth `<code>` element, with several classes not beginning with `language-` class.
     let node = html_children.next().unwrap();
     let element = node.as_element().unwrap().to_matrix();
 

@@ -1,6 +1,5 @@
 use std::{ops::Not as _, sync::Arc};
 
-use base::event_cache::store::MemoryStore;
 use matrix::{
     Room,
     linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
@@ -9,9 +8,10 @@ use matrix::{
     test_utils::mocks::{MatrixMockServer, RoomRelationsResponseTemplate},
     timeout::timeout,
 };
-use ruma::{EventId, event_id, owned_event_id, room_id, user_id};
+use base::event_cache::store::MemoryStore;
 use sdk_common::cross_process_lock::CrossProcessLockConfig;
 use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ruma::{EventId, event_id, owned_event_id, room_id, user_id};
 use serde_json::json;
 use tokio::time::Duration;
 use wiremock::{

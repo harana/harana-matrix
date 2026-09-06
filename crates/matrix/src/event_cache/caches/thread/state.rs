@@ -14,6 +14,7 @@
 
 use std::{collections::BTreeSet, iter::empty};
 
+use eyeball_im::VectorDiff;
 use base::{
     apply_redaction, check_validity_of_replacement_events,
     deserialized_responses::ThreadSummary,
@@ -24,7 +25,7 @@ use base::{
     serde_helpers::extract_redaction_target,
     sync::Timeline,
 };
-use eyeball_im::VectorDiff;
+use sdk_common::executor::spawn;
 use ruma::{
     EventId, OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     events::{
@@ -33,7 +34,6 @@ use ruma::{
     },
     room_version_rules::RoomVersionRules,
 };
-use sdk_common::executor::spawn;
 use tokio::sync::broadcast::Sender;
 use tracing::{debug, error, instrument, trace};
 

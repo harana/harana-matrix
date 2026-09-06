@@ -646,12 +646,12 @@ pub fn normalize_power_level(power_level: Int, max_power_level: i64) -> Int {
 
 #[cfg(test)]
 mod tests {
+    use sdk_common::ROOM_VERSION_RULES_FALLBACK;
+    use sdk_test::event_factory::EventFactory;
     use proptest::prelude::*;
     #[cfg(feature = "unstable-msc4426")]
     use ruma::{SecondsSinceUnixEpoch, profile::ProfileFieldValue};
     use ruma::{events::room::power_levels::RoomPowerLevelsSource, mxc_uri, user_id};
-    use sdk_common::ROOM_VERSION_RULES_FALLBACK;
-    use sdk_test::event_factory::EventFactory;
 
     use super::*;
 

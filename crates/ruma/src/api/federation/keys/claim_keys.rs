@@ -11,11 +11,13 @@ pub mod v1 {
 
     use crate::{
         OneTimeKeyAlgorithm, OwnedDeviceId, OwnedOneTimeKeyId, OwnedUserId,
-        api::{federation::authentication::ServerSignatures, request, response},
+        api::{request, response},
         encryption::OneTimeKey,
         metadata,
         serde::Raw,
     };
+
+    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: POST,

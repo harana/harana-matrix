@@ -1,11 +1,7 @@
 use assert_matches2::{assert_let, assert_matches};
 use js_int::uint;
-use ruma::{
-    MilliSecondsSinceUnixEpoch,
-    events::{AnyStateEvent, AnySyncStateEvent, AnyTimelineEvent, StateEvent, SyncStateEvent},
-    mxc_uri,
-    serde::CanBeEmpty,
-};
+use ruma::{MilliSecondsSinceUnixEpoch, mxc_uri, serde::CanBeEmpty};
+use ruma::events::{AnyStateEvent, AnySyncStateEvent, AnyTimelineEvent, StateEvent, SyncStateEvent};
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

@@ -1,8 +1,6 @@
 //! Endpoints for push notifications.
 use std::{error::Error, fmt};
 
-use serde::{Deserialize, Serialize};
-
 pub use crate::push::RuleKind;
 use crate::{
     push::{
@@ -12,6 +10,7 @@ use crate::{
     },
     serde::JsonObject,
 };
+use serde::{Deserialize, Serialize};
 
 pub mod delete_pushrule;
 pub mod get_notifications;
@@ -27,8 +26,8 @@ pub mod set_pushrule;
 pub mod set_pushrule_actions;
 pub mod set_pushrule_enabled;
 
-/// Like `SimplePushRule`, but may represent any kind of push rule thanks to
-/// `pattern` and `conditions` being optional.
+/// Like `SimplePushRule`, but may represent any kind of push rule thanks to `pattern` and
+/// `conditions` being optional.
 ///
 /// To create an instance of this type, use one of its `From` implementations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -46,11 +45,10 @@ pub struct PushRule {
     /// The ID of this rule.
     pub rule_id: String,
 
-    /// The conditions that must hold true for an event in order for a rule to
-    /// be applied to an event.
+    /// The conditions that must hold true for an event in order for a rule to be applied to an
+    /// event.
     ///
-    /// A rule with no conditions always matches. Only applicable to underride
-    /// and override rules.
+    /// A rule with no conditions always matches. Only applicable to underride and override rules.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<PushCondition>>,
 
@@ -113,8 +111,8 @@ impl From<PatternedPushRuleInit> for PushRule {
 
 impl From<AnyPushRule> for PushRule {
     fn from(push_rule: AnyPushRule) -> Self {
-        // The catch-all is unreachable if the "ruma_unstable_exhaustive_types" cfg
-        // setting is enabled.
+        // The catch-all is unreachable if the "ruma_unstable_exhaustive_types" cfg setting is
+        // enabled.
         #[allow(unreachable_patterns)]
         match push_rule {
             AnyPushRule::Override(r) => r.into(),
@@ -205,8 +203,8 @@ pub enum PusherKind {
 
 /// Defines a pusher.
 ///
-/// To create an instance of this type, first create a `PusherInit` and convert
-/// it via `Pusher::from` / `.into()`.
+/// To create an instance of this type, first create a `PusherInit` and convert it via
+/// `Pusher::from` / `.into()`.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Pusher {
@@ -218,27 +216,24 @@ pub struct Pusher {
     #[serde(flatten)]
     pub kind: PusherKind,
 
-    /// A string that will allow the user to identify what application owns this
-    /// pusher.
+    /// A string that will allow the user to identify what application owns this pusher.
     pub app_display_name: String,
 
-    /// A string that will allow the user to identify what device owns this
-    /// pusher.
+    /// A string that will allow the user to identify what device owns this pusher.
     pub device_display_name: String,
 
     /// Determines which set of device specific rules this pusher executes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile_tag: Option<String>,
 
-    /// The preferred language for receiving notifications (e.g. 'en' or
-    /// 'en-US')
+    /// The preferred language for receiving notifications (e.g. 'en' or 'en-US')
     pub lang: String,
 }
 
 /// Initial set of fields of `Pusher`.
 ///
-/// This struct will not be updated even if additional fields are added to
-/// `Pusher` in a new (non-breaking) release of the Matrix specification.
+/// This struct will not be updated even if additional fields are added to `Pusher` in a new
+/// (non-breaking) release of the Matrix specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct PusherInit {
@@ -248,19 +243,16 @@ pub struct PusherInit {
     /// The kind of the pusher.
     pub kind: PusherKind,
 
-    /// A string that will allow the user to identify what application owns this
-    /// pusher.
+    /// A string that will allow the user to identify what application owns this pusher.
     pub app_display_name: String,
 
-    /// A string that will allow the user to identify what device owns this
-    /// pusher.
+    /// A string that will allow the user to identify what device owns this pusher.
     pub device_display_name: String,
 
     /// Determines which set of device-specific rules this pusher executes.
     pub profile_tag: Option<String>,
 
-    /// The preferred language for receiving notifications (e.g. 'en' or
-    /// 'en-US').
+    /// The preferred language for receiving notifications (e.g. 'en' or 'en-US').
     pub lang: String,
 }
 

@@ -9,14 +9,13 @@ pub mod v3 {
 
     use std::collections::btree_map;
 
-    use serde_json::Value as JsonValue;
-
     use crate::{
         OwnedUserId,
         api::{auth_scheme::NoAccessToken, request, response},
         metadata,
         profile::{ProfileFieldName, ProfileFieldValue, StaticProfileField, UserProfile},
     };
+    use serde_json::Value as JsonValue;
 
     metadata! {
         method: GET,
@@ -65,9 +64,9 @@ pub mod v3 {
 
         /// Returns the value of the given [`StaticProfileField`].
         ///
-        /// Returns `Ok(Some(_))` if the field is present and the value was
-        /// deserialized successfully, `Ok(None)` if the field is not
-        /// set, or an error if deserialization of the value failed.
+        /// Returns `Ok(Some(_))` if the field is present and the value was deserialized
+        /// successfully, `Ok(None)` if the field is not set, or an error if deserialization of the
+        /// value failed.
         pub fn get_static<F: StaticProfileField>(
             &self,
         ) -> Result<Option<F::Value>, serde_json::Error> {
@@ -146,9 +145,10 @@ mod tests {
     #[test]
     #[cfg(feature = "server")]
     fn serialize_response() {
+        use crate::{
+            api::OutgoingResponseExt as _, owned_mxc_uri, profile::ProfileFieldValue,
+        };
         use serde_json::{Value as JsonValue, from_slice as from_json_slice};
-
-        use crate::{api::OutgoingResponseExt as _, owned_mxc_uri, profile::ProfileFieldValue};
 
         let response = [
             ProfileFieldValue::AvatarUrl(owned_mxc_uri!("mxc://localhost/abcdef")),
@@ -173,10 +173,9 @@ mod tests {
     #[test]
     #[cfg(feature = "client")]
     fn deserialize_response() {
-        use crate::api::{
-            IncomingResponseExt as _,
-            client::profile::{AvatarUrl, DisplayName},
-        };
+        use crate::api::IncomingResponseExt as _;
+
+        use crate::api::client::profile::{AvatarUrl, DisplayName};
 
         // Values are set.
         let body = json!({

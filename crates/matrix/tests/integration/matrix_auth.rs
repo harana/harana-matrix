@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 
 use assert_matches::assert_matches;
-use base::SessionMeta;
 use matrix::{
     AuthApi, AuthSession, Client, HttpError, SessionTokens,
     authentication::matrix::MatrixSession,
@@ -11,6 +10,8 @@ use matrix::{
         logged_in_client_with_server, mocks::MatrixMockServer, no_retry_test_client_with_server,
     },
 };
+use base::SessionMeta;
+use sdk_test::{async_test, test_json};
 use ruma::{
     OwnedUserId,
     api::{
@@ -29,7 +30,6 @@ use ruma::{
     serde::Raw,
     user_id,
 };
-use sdk_test::{async_test, test_json};
 use serde_json::{from_value as from_json_value, json, to_value as to_json_value};
 use url::Url;
 use wiremock::{

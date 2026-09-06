@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use base::{SessionMeta, StateStore as _, store::MemoryStore};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use matrix::{
     Client, RoomInfo, RoomState, SessionTokens, StateChanges,
     authentication::matrix::MatrixSession, config::StoreConfig,
     cross_process_lock::CrossProcessLockConfig,
 };
-use ruma::{OwnedRoomId, RoomId, owned_device_id, owned_user_id};
-use sdk_test::base64_sha256_hash;
+use base::{SessionMeta, StateStore as _, store::MemoryStore};
 use sqlite::SqliteStateStore;
+use sdk_test::base64_sha256_hash;
+use ruma::{OwnedRoomId, RoomId, owned_device_id, owned_user_id};
 use tokio::runtime::Builder;
 
 /// Number of joined rooms in the benchmark.

@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use eyeball::SharedObservable;
+use sdk_common::timer;
 use ruma::{
     events::{GlobalAccountDataEventType, ignored_user_list::IgnoredUserListEvent},
     serde::Raw,
 };
-use sdk_common::timer;
 use tokio::sync::MutexGuard;
 use tracing::{error, instrument, trace};
 

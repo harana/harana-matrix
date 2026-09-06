@@ -17,8 +17,8 @@ use std::{fmt::Debug, sync::Arc};
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix::room_directory_search::RoomDirectorySearch as SdkRoomDirectorySearch;
-use ruma::ServerName;
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
+use ruma::ServerName;
 use tokio::sync::RwLock;
 
 use crate::{error::ClientError, runtime::get_runtime_handle, task_handle::TaskHandle};

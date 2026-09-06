@@ -368,7 +368,9 @@ impl LogTarget {
             LogTarget::BaseStoreAmbiguityMap => "base::store::ambiguity_map",
             LogTarget::BaseResponseProcessors => "base::response_processors",
             LogTarget::SdkCommonCrossProcessLock => "sdk_common::cross_process_lock",
-            LogTarget::SdkCommonDeserializedResponses => "sdk_common::deserialized_responses",
+            LogTarget::SdkCommonDeserializedResponses => {
+                "sdk_common::deserialized_responses"
+            }
             LogTarget::Matrix => "matrix",
             LogTarget::MatrixClient => "matrix::client",
             LogTarget::Crypto => "crypto",
@@ -427,11 +429,11 @@ const DEFAULT_TARGET_LOG_LEVELS: &[(LogTarget, LogLevel)] = &[
 ];
 
 const IMMUTABLE_LOG_TARGETS: &[LogTarget] = &[
-    LogTarget::Hyper,                     // Too verbose
-    LogTarget::Matrix,                    // Too generic
-    LogTarget::MatrixFfi,                 // Too verbose
+    LogTarget::Hyper,                           // Too verbose
+    LogTarget::Matrix,                       // Too generic
+    LogTarget::MatrixFfi,                    // Too verbose
     LogTarget::SdkCommonCrossProcessLock, // Too verbose
-    LogTarget::BaseStoreAmbiguityMap,     // Too verbose
+    LogTarget::BaseStoreAmbiguityMap,  // Too verbose
 ];
 
 /// A log pack can be used to set the trace log level for a group of multiple

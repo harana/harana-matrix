@@ -40,8 +40,10 @@ pub mod integration_tests;
 mod observable_map;
 mod traits;
 
+use sdk_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex as SyncMutex};
 #[cfg(feature = "e2e-encryption")]
 use crypto::store::{DynCryptoStore, IntoCryptoStore};
+pub use store_encryption::Error as StoreEncryptionError;
 use observable_map::ObservableMap;
 use ruma::{
     OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
@@ -63,9 +65,7 @@ use ruma::{
     room_version_rules::RedactionRules,
     serde::Raw,
 };
-use sdk_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex as SyncMutex};
 use serde::de::DeserializeOwned;
-pub use store_encryption::Error as StoreEncryptionError;
 use tokio::sync::{Mutex, RwLock, broadcast};
 use tracing::warn;
 pub use traits::compare_thread_subscription_bump_stamps;
@@ -896,11 +896,11 @@ mod tests {
     use std::{ops::Not, sync::Arc};
 
     use assert_matches::assert_matches;
+    use sdk_test::async_test;
     use ruma::{
         events::room::redaction::SyncRoomRedactionEvent, owned_device_id, owned_event_id,
         owned_user_id, room_id, room_version_rules::RedactionRules, serde::Raw, user_id,
     };
-    use sdk_test::async_test;
     use serde_json::json;
 
     use super::{BaseStateStore, MemoryStore, RoomLoadSettings};

@@ -2,10 +2,9 @@
 //!
 //! [`m.space_order`]: https://github.com/matrix-org/matrix-spec-proposals/pull/3230
 
+use crate::OwnedSpaceChildOrder;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
-
-use crate::OwnedSpaceChildOrder;
 
 /// The content of an `m.space_order` event.
 ///
@@ -31,14 +30,11 @@ impl SpaceOrderEventContent {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
+    use crate::{SpaceChildOrder, canonical_json::assert_to_canonical_json_eq};
     use serde_json::{from_value as from_json_value, json};
 
     use super::SpaceOrderEventContent;
-    use crate::{
-        SpaceChildOrder,
-        canonical_json::assert_to_canonical_json_eq,
-        events::{AnyRoomAccountDataEvent, RoomAccountDataEvent},
-    };
+    use crate::events::{AnyRoomAccountDataEvent, RoomAccountDataEvent};
 
     #[test]
     fn deserialize() {

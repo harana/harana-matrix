@@ -234,8 +234,8 @@ mod tests {
         io::Cursor,
     };
 
-    use ruma::{room_id, user_id};
     use sdk_test::async_test;
+    use ruma::{room_id, user_id};
 
     use super::{
         base64_decode, decrypt_helper, decrypt_room_key_export, encrypt_helper,

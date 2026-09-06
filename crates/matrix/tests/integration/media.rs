@@ -4,13 +4,13 @@ use matrix::{
     media::{MediaFormat, MediaRequestParameters, MediaThumbnailSettings},
     test_utils::mocks::MatrixMockServer,
 };
+use sdk_test::async_test;
 use ruma::{
     api::client::media::get_content_thumbnail::v3::Method,
     assign,
     events::room::{ImageInfo, MediaSource, message::ImageMessageEventContent},
     owned_mxc_uri, uint,
 };
-use sdk_test::async_test;
 
 #[async_test]
 async fn test_get_media_content_no_auth() {

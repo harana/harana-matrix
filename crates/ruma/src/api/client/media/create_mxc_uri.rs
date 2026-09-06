@@ -34,8 +34,7 @@ pub mod v1 {
         /// The MXC URI for the about to be uploaded content.
         pub content_uri: OwnedMxcUri,
 
-        /// The time at which the URI will expire if an upload has not been
-        /// started.
+        /// The time at which the URI will expire if an upload has not been started.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub unused_expires_at: Option<MilliSecondsSinceUnixEpoch>,
     }

@@ -14,6 +14,7 @@
 
 use std::{collections::HashMap, ops::Deref};
 
+use sdk_common::BoxFuture;
 use ruma::{
     OwnedUserId, UserId,
     events::{
@@ -21,7 +22,6 @@ use ruma::{
         room::member::{MembershipState, SyncRoomMemberEvent},
     },
 };
-use sdk_common::BoxFuture;
 
 use super::UserIdentity;
 use crate::store::types::IdentityUpdates;
@@ -327,12 +327,12 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
+    use sdk_common::BoxFuture;
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         OwnedUserId, UserId, device_id, events::room::member::MembershipState, owned_user_id,
         user_id,
     };
-    use sdk_common::BoxFuture;
-    use sdk_test::{async_test, event_factory::EventFactory};
 
     use super::{IdentityState, RoomIdentityChange, RoomIdentityProvider, RoomIdentityState};
     use crate::{

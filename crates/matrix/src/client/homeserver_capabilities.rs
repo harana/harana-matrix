@@ -311,6 +311,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use base::sleep::sleep;
+    use sdk_test::async_test;
     #[allow(deprecated)]
     use ruma::api::{
         MatrixVersion,
@@ -318,7 +319,6 @@ mod tests {
             SetAvatarUrlCapability, SetDisplayNameCapability,
         },
     };
-    use sdk_test::async_test;
 
     use super::*;
     use crate::test_utils::mocks::MatrixMockServer;

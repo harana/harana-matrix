@@ -32,12 +32,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use assert_matches2::assert_let;
-use base::crypto::store::types::DehydratedDeviceKey;
 use futures::StreamExt;
 use matrix::{
     encryption::{EncryptionSettings, dehydrated_devices::DehydratedDeviceEvent},
     timeout::timeout,
 };
+use base::crypto::store::types::DehydratedDeviceKey;
 use tracing::{info, warn};
 
 use crate::helpers::TestClientBuilder;

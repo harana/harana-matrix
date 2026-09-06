@@ -15,8 +15,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use as_variant::as_variant;
-use ruma::{DeviceId, OwnedTransactionId, OwnedUserId, TransactionId, UserId};
 use sdk_common::locks::RwLock as StdRwLock;
+use ruma::{DeviceId, OwnedTransactionId, OwnedUserId, TransactionId, UserId};
 #[cfg(feature = "qrcode")]
 use tracing::debug;
 use tracing::{trace, warn};
@@ -41,7 +41,10 @@ unsafe impl Sync for VerificationCache {}
 #[test]
 // See https://github.com/matrix-org/matrix-rust-sdk/pull/3749#issuecomment-2312939823.
 fn test_send_sync_for_room() {
-    fn assert_send_sync<T: sdk_common::SendOutsideWasm + sdk_common::SyncOutsideWasm>() {}
+    fn assert_send_sync<
+        T: sdk_common::SendOutsideWasm + sdk_common::SyncOutsideWasm,
+    >() {
+    }
 
     assert_send_sync::<VerificationCache>();
 }

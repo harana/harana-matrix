@@ -17,7 +17,6 @@ use std::{future::ready, ops::Deref, sync::Arc};
 use async_cell::sync::AsyncCell;
 use async_rx::StreamExt as _;
 use async_stream::stream;
-use base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons};
 use eyeball::{SharedObservable, Subscriber};
 use eyeball_im::{Vector, VectorDiff};
 use eyeball_im_util::vector::VectorObserverExt;
@@ -26,6 +25,7 @@ use matrix::{
     Client, Room, RoomRecencyStamp, RoomState, SlidingSync, SlidingSyncList,
     task_monitor::BackgroundTaskHandle,
 };
+use base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons};
 use ruma::{MilliSecondsSinceUnixEpoch, OwnedRoomId};
 use tokio::{
     select,
@@ -505,12 +505,12 @@ impl Deref for RoomListItem {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons};
     use eyeball_im::{Vector, VectorDiff};
     use futures_util::{StreamExt as _, pin_mut, stream};
     use matrix::test_utils::mocks::MatrixMockServer;
-    use ruma::{room_id, user_id};
+    use base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons};
     use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+    use ruma::{room_id, user_id};
     use tokio::sync::broadcast;
 
     use super::{RoomListItem, merge_stream_and_receiver};

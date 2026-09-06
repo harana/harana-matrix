@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::GossippedSecret;
 use indexed_db_futures::{
     Build, error::OpenDbError, prelude::QuerySource, transaction::TransactionMode,
 };
+use crypto::GossippedSecret;
 use wasm_bindgen::JsValue;
 
 use super::{MigrationDb, old_keys};

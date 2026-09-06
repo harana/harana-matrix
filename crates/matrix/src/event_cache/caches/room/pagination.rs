@@ -24,13 +24,13 @@ use std::{
     task::{Context, Poll},
 };
 
+use eyeball::{SharedObservable, Subscriber};
+use eyeball_im::VectorDiff;
+use futures_core::{Stream, ready};
 use base::{
     event_cache::{Event, Gap},
     linked_chunk::{ChunkContent, LinkedChunkId, Update},
 };
-use eyeball::{SharedObservable, Subscriber};
-use eyeball_im::VectorDiff;
-use futures_core::{Stream, ready};
 use pin_project_lite::pin_project;
 use ruma::api::Direction;
 use tracing::{error, trace};

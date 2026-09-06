@@ -583,6 +583,7 @@ fn heroes_filter<'a>(
 mod tests {
     use std::{collections::BTreeSet, sync::Arc};
 
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         UserId,
         api::client::sync::sync_events::v3::RoomSummary as RumaSummary,
@@ -601,7 +602,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
 
     use super::{Room, RoomDisplayName, compute_display_name_from_heroes};

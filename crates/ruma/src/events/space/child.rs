@@ -4,24 +4,23 @@
 
 use std::{cmp::Ordering, ops::Deref};
 
-use ruma_macros::{Event, EventContent};
-use serde::{Deserialize, Serialize};
-
 use crate::{
     MilliSecondsSinceUnixEpoch, OwnedRoomId, OwnedServerName, OwnedSpaceChildOrder, OwnedUserId,
     RoomId, SpaceChildOrder,
-    events::{StateEvent, SyncStateEvent},
     serde::{JsonCastable, JsonObject},
 };
+use ruma_macros::{Event, EventContent};
+use serde::{Deserialize, Serialize};
+
+use crate::events::{StateEvent, SyncStateEvent};
 
 /// The content of an `m.space.child` event.
 ///
-/// The admins of a space can advertise rooms and subspaces for their space by
-/// setting `m.space.child` state events.
+/// The admins of a space can advertise rooms and subspaces for their space by setting
+/// `m.space.child` state events.
 ///
-/// The `state_key` is the ID of a child room or space, and the content must
-/// contain a `via` key which gives a list of candidate servers that can be used
-/// to join the room.
+/// The `state_key` is the ID of a child room or space, and the content must contain a `via` key
+/// which gives a list of candidate servers that can be used to join the room.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.space.child", kind = State, state_key_type = OwnedRoomId)]
@@ -31,15 +30,13 @@ pub struct SpaceChildEventContent {
 
     /// Provide a default ordering of siblings in the room list.
     ///
-    /// Rooms are sorted based on a lexicographic ordering of the Unicode
-    /// codepoints of the characters in `order` values. Rooms with no
-    /// `order` come last, in ascending numeric order
-    /// of the origin_server_ts of their m.room.create events, or ascending
-    /// lexicographic order of their room_ids in case of equal
-    /// `origin_server_ts`. `order`s which are not strings, or do
-    /// not consist solely of ascii characters in the range `\x20` (space) to
-    /// `\x7E` (`~`), or consist of more than 50 characters, are forbidden
-    /// and the field should be ignored if received.
+    /// Rooms are sorted based on a lexicographic ordering of the Unicode codepoints of the
+    /// characters in `order` values. Rooms with no `order` come last, in ascending numeric order
+    /// of the origin_server_ts of their m.room.create events, or ascending lexicographic order of
+    /// their room_ids in case of equal `origin_server_ts`. `order`s which are not strings, or do
+    /// not consist solely of ascii characters in the range `\x20` (space) to `\x7E` (`~`), or
+    /// consist of more than 50 characters, are forbidden and the field should be ignored if
+    /// received.
     ///
     /// During deserialization, this field is set to `None` if it is invalid.
     #[serde(
@@ -51,10 +48,9 @@ pub struct SpaceChildEventContent {
 
     /// Space admins can mark particular children of a space as "suggested".
     ///
-    /// This mainly serves as a hint to clients that that they can be displayed
-    /// differently, for example by showing them eagerly in the room list. A
-    /// child which is missing the `suggested` property is treated
-    /// identically to a child with `"suggested": false`. A suggested child may
+    /// This mainly serves as a hint to clients that that they can be displayed differently, for
+    /// example by showing them eagerly in the room list. A child which is missing the `suggested`
+    /// property is treated identically to a child with `"suggested": false`. A suggested child may
     /// be a room or a subspace.
     ///
     /// Defaults to `false`.
@@ -70,11 +66,11 @@ impl SpaceChildEventContent {
 }
 
 impl PossiblyRedactedSpaceChildEventContent {
-    /// Whether this `PossiblyRedactedSpaceChildEventContent` is valid according
-    /// to the Matrix specification.
+    /// Whether this `PossiblyRedactedSpaceChildEventContent` is valid according to the Matrix
+    /// specification.
     ///
-    /// The room in the state key of the event should only be considered a child
-    /// of this space if this returns `true`.
+    /// The room in the state key of the event should only be considered a child of this space
+    /// if this returns `true`.
     ///
     /// Returns `false` if the `via` field is `None`.
     pub fn is_valid(&self) -> bool {
@@ -82,8 +78,8 @@ impl PossiblyRedactedSpaceChildEventContent {
     }
 }
 
-/// An `m.space.child` event represented as a Stripped State Event with an added
-/// `origin_server_ts` key.
+/// An `m.space.child` event represented as a Stripped State Event with an added `origin_server_ts`
+/// key.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct HierarchySpaceChildEvent {
@@ -96,8 +92,7 @@ pub struct HierarchySpaceChildEvent {
     /// The room ID of the child.
     pub state_key: OwnedRoomId,
 
-    /// Timestamp in milliseconds on originating homeserver when this event was
-    /// sent.
+    /// Timestamp in milliseconds on originating homeserver when this event was sent.
     pub origin_server_ts: MilliSecondsSinceUnixEpoch,
 }
 
@@ -131,20 +126,19 @@ impl JsonCastable<HierarchySpaceChildEvent> for OriginalSyncSpaceChildEvent {}
 
 impl JsonCastable<JsonObject> for HierarchySpaceChildEvent {}
 
-/// Helper trait to sort `m.space.child` events using using the algorithm for
-/// [ordering children within a space].
+/// Helper trait to sort `m.space.child` events using using the algorithm for [ordering children
+/// within a space].
 ///
-/// This trait can be used to sort a slice using
-/// `.sort_by(SpaceChildOrd::cmp_space_child)`. It is also possible to use
-/// [`SpaceChildOrdHelper`] to sort the events in a `BTreeMap` or a `BTreeSet`.
+/// This trait can be used to sort a slice using `.sort_by(SpaceChildOrd::cmp_space_child)`. It is
+/// also possible to use [`SpaceChildOrdHelper`] to sort the events in a `BTreeMap` or a `BTreeSet`.
 ///
 /// [ordering children within a space]: https://spec.matrix.org/v1.19/client-server-api/#ordering-of-children-within-a-space
 pub trait SpaceChildOrd {
     #[doc(hidden)]
     fn space_child_ord_fields(&self) -> SpaceChildOrdFields<'_>;
 
-    /// Return an [`Ordering`] between `self` and `other`, using the algorithm
-    /// for [ordering children within a space].
+    /// Return an [`Ordering`] between `self` and `other`, using the algorithm for [ordering
+    /// children within a space].
     ///
     /// [ordering children within a space]: https://spec.matrix.org/v1.19/client-server-api/#ordering-of-children-within-a-space
     fn cmp_space_child(&self, other: &impl SpaceChildOrd) -> Ordering {
@@ -152,8 +146,8 @@ pub trait SpaceChildOrd {
     }
 }
 
-/// Fields necessary to implement `Ord` for space child events using the
-/// algorithm for [ordering children within a space].
+/// Fields necessary to implement `Ord` for space child events using the algorithm for [ordering
+/// children within a space].
 ///
 /// [ordering children within a space]: https://spec.matrix.org/v1.19/client-server-api/#ordering-of-children-within-a-space
 #[doc(hidden)]
@@ -266,11 +260,10 @@ impl SpaceChildOrd for HierarchySpaceChildEvent {
     }
 }
 
-/// Helper type to sort `m.space.child` events using using the algorithm for
-/// [ordering children within a space].
+/// Helper type to sort `m.space.child` events using using the algorithm for [ordering children
+/// within a space].
 ///
-/// This type can be use with `BTreeMap` or `BTreeSet` to order space child
-/// events.
+/// This type can be use with `BTreeMap` or `BTreeSet` to order space child events.
 ///
 /// [ordering children within a space]: https://spec.matrix.org/v1.19/client-server-api/#ordering-of-children-within-a-space
 #[derive(Debug, Clone)]
@@ -310,15 +303,15 @@ mod tests {
     use std::{collections::BTreeSet, iter::repeat_n};
 
     use js_int::{UInt, uint};
-    use serde_json::{from_value as from_json_value, json};
-
-    use super::{
-        HierarchySpaceChildEvent, SpaceChildEventContent, SpaceChildOrd, SpaceChildOrdHelper,
-    };
     use crate::{
         MilliSecondsSinceUnixEpoch, OwnedRoomId, SpaceChildOrder,
         canonical_json::assert_to_canonical_json_eq, owned_room_id, owned_server_name,
         owned_user_id, server_name,
+    };
+    use serde_json::{from_value as from_json_value, json};
+
+    use super::{
+        HierarchySpaceChildEvent, SpaceChildEventContent, SpaceChildOrd, SpaceChildOrdHelper,
     };
 
     #[test]
@@ -424,8 +417,7 @@ mod tests {
         assert!(!ev.content.suggested);
     }
 
-    /// Construct a [`HierarchySpaceChildEvent`] with the given state key, order
-    /// and timestamp.
+    /// Construct a [`HierarchySpaceChildEvent`] with the given state key, order and timestamp.
     fn hierarchy_space_child_event(
         state_key: OwnedRoomId,
         order: Option<&str>,

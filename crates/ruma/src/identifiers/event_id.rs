@@ -6,26 +6,21 @@ use super::{IdParseError, ServerName};
 
 /// A Matrix [event ID].
 ///
-/// An `EventId` is generated randomly or converted from a string slice, and can
-/// be converted back into a string as needed.
+/// An `EventId` is generated randomly or converted from a string slice, and can be converted back
+/// into a string as needed.
 ///
 /// # Room versions
 ///
-/// Matrix specifies multiple [room versions] and the format of event
-/// identifiers differ between them. The original format used by room versions 1
-/// and 2 uses a short pseudorandom "localpart" followed by the hostname and
-/// port of the originating homeserver. Later room versions change
-/// event identifiers to be a hash of the event encoded with Base64. Some of the
-/// methods provided by `EventId` are only relevant to the original event
-/// format.
+/// Matrix specifies multiple [room versions] and the format of event identifiers differ between
+/// them. The original format used by room versions 1 and 2 uses a short pseudorandom "localpart"
+/// followed by the hostname and port of the originating homeserver. Later room versions change
+/// event identifiers to be a hash of the event encoded with Base64. Some of the methods provided by
+/// `EventId` are only relevant to the original event format.
 ///
 /// ```
 /// # use ruma::{server_name, EventId};
 /// // Room versions 1 and 2
-/// assert_eq!(
-///     <&EventId>::try_from("$h29iv0s8:example.com").unwrap(),
-///     "$h29iv0s8:example.com"
-/// );
+/// assert_eq!(<&EventId>::try_from("$h29iv0s8:example.com").unwrap(), "$h29iv0s8:example.com");
 ///
 /// # #[cfg(feature = "rand")]
 /// # {
@@ -37,25 +32,21 @@ use super::{IdParseError, ServerName};
 ///
 /// // Room version 3
 /// assert_eq!(
-///     <&EventId>::try_from("$acR1l0raoZnm60CBwAVgqbZqoO/mYU81xysh1u7XcJk")
-///         .unwrap(),
+///     <&EventId>::try_from("$acR1l0raoZnm60CBwAVgqbZqoO/mYU81xysh1u7XcJk").unwrap(),
 ///     "$acR1l0raoZnm60CBwAVgqbZqoO/mYU81xysh1u7XcJk"
 /// );
 /// assert_eq!(
-///     EventId::new_v2_or_v3("acR1l0raoZnm60CBwAVgqbZqoO/mYU81xysh1u7XcJk")
-///         .unwrap(),
+///     EventId::new_v2_or_v3("acR1l0raoZnm60CBwAVgqbZqoO/mYU81xysh1u7XcJk").unwrap(),
 ///     "$acR1l0raoZnm60CBwAVgqbZqoO/mYU81xysh1u7XcJk"
 /// );
 ///
 /// // Room version 4 and later
 /// assert_eq!(
-///     <&EventId>::try_from("$Rqnc-F-dvnEYJTyHq_iKxU2bZ1CI92-kuZq3a5lr5Zg")
-///         .unwrap(),
+///     <&EventId>::try_from("$Rqnc-F-dvnEYJTyHq_iKxU2bZ1CI92-kuZq3a5lr5Zg").unwrap(),
 ///     "$Rqnc-F-dvnEYJTyHq_iKxU2bZ1CI92-kuZq3a5lr5Zg"
 /// );
 /// assert_eq!(
-///     EventId::new_v2_or_v3("Rqnc-F-dvnEYJTyHq_iKxU2bZ1CI92-kuZq3a5lr5Zg")
-///         .unwrap(),
+///     EventId::new_v2_or_v3("Rqnc-F-dvnEYJTyHq_iKxU2bZ1CI92-kuZq3a5lr5Zg").unwrap(),
 ///     "$Rqnc-F-dvnEYJTyHq_iKxU2bZ1CI92-kuZq3a5lr5Zg"
 /// );
 /// ```
@@ -68,13 +59,12 @@ use super::{IdParseError, ServerName};
 pub struct EventId(str);
 
 impl EventId {
-    /// Attempts to generate an `OwnedEventId` for the given origin server with
-    /// a localpart consisting of 18 random ASCII characters.
+    /// Attempts to generate an `OwnedEventId` for the given origin server with a localpart
+    /// consisting of 18 random ASCII characters.
     ///
-    /// This generates an event ID matching the [`EventIdFormatVersion::V1`]
-    /// variant of the `event_id_format` field of [`RoomVersionRules`]. To
-    /// construct an event ID matching the [`EventIdFormatVersion::V2`] or
-    /// [`EventIdFormatVersion::V3`] variants, use
+    /// This generates an event ID matching the [`EventIdFormatVersion::V1`] variant of the
+    /// `event_id_format` field of [`RoomVersionRules`]. To construct an event ID matching the
+    /// [`EventIdFormatVersion::V2`] or [`EventIdFormatVersion::V3`] variants, use
     /// [`EventId::new_v2_or_v3()`] instead.
     ///
     /// [`EventIdFormatVersion::V1`]: crate::room_version_rules::EventIdFormatVersion::V1
@@ -94,9 +84,8 @@ impl EventId {
     ///
     /// This generates a room ID matching the [`EventIdFormatVersion::V2`] or
     /// [`EventIdFormatVersion::V3`] variants of the `event_id_format` field of
-    /// [`RoomVersionRules`]. To construct an event ID matching the
-    /// [`EventIdFormatVersion::V1`] variant, use [`EventId::new_v1()`]
-    /// instead.
+    /// [`RoomVersionRules`]. To construct an event ID matching the [`EventIdFormatVersion::V1`]
+    /// variant, use [`EventId::new_v1()`] instead.
     ///
     /// Returns an error if the given string contains a NUL byte or is too long.
     ///
@@ -110,9 +99,9 @@ impl EventId {
 
     /// Returns the event's unique ID.
     ///
-    /// For the original event format as used by Matrix room versions 1 and 2,
-    /// this is the "localpart" that precedes the homeserver. For later
-    /// formats, this is the entire ID without the leading `$` sigil.
+    /// For the original event format as used by Matrix room versions 1 and 2, this is the
+    /// "localpart" that precedes the homeserver. For later formats, this is the entire ID without
+    /// the leading `$` sigil.
     pub fn localpart(&self) -> &str {
         let idx = self.colon_idx().unwrap_or_else(|| self.as_str().len());
         &self.as_str()[1..idx]
@@ -120,8 +109,7 @@ impl EventId {
 
     /// Returns the server name of the event ID.
     ///
-    /// Only applicable to events in the original format as used by Matrix room
-    /// versions 1 and 2.
+    /// Only applicable to events in the original format as used by Matrix room versions 1 and 2.
     pub fn server_name(&self) -> Option<&ServerName> {
         self.colon_idx().map(|idx| ServerName::from_borrowed_unchecked(&self.as_str()[idx + 1..]))
     }

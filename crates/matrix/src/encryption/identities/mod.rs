@@ -87,8 +87,8 @@
 mod devices;
 mod users;
 
-pub use base::crypto::types::MasterPubkey;
 pub use devices::{Device, DeviceUpdates, UserDevices};
+pub use base::crypto::types::MasterPubkey;
 pub use users::{IdentityUpdates, UserIdentity};
 
 /// Error for the manual verification step, when we manually sign users or

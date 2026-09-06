@@ -102,13 +102,14 @@ fn extract_scores(left: &RoomListItem, right: &RoomListItem) -> (Option<Score>, 
 
 #[cfg(test)]
 mod tests {
-    use base::RoomInfoNotableUpdateReasons;
     use matrix::{
         RoomRecencyStamp,
         latest_events::{LatestEventValue, LocalLatestEventValue, RemoteLatestEventValue},
         store::SerializableEventContent,
         test_utils::mocks::MatrixMockServer,
     };
+    use base::RoomInfoNotableUpdateReasons;
+    use sdk_test::async_test;
     use proptest::prelude::*;
     use ruma::{
         MilliSecondsSinceUnixEpoch,
@@ -116,7 +117,6 @@ mod tests {
         room_id,
         serde::Raw,
     };
-    use sdk_test::async_test;
     use serde_json::json;
 
     use super::{super::super::filters::new_rooms, *};

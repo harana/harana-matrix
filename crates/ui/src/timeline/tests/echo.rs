@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use assert_matches::assert_matches;
-use base::store::QueueWedgeError;
 use eyeball_im::VectorDiff;
 use matrix::{assert_next_matches_with_timeout, send_queue::RoomSendQueueUpdate};
+use base::store::QueueWedgeError;
+use sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
     user_id,
 };
-use sdk_test::{ALICE, BOB, async_test};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;

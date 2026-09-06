@@ -18,6 +18,10 @@ use std::{
 };
 
 use assert_matches2::assert_let;
+use sdk_common::deserialized_responses::{
+    ProcessedToDeviceEvent, ToDeviceUnableToDecryptReason,
+};
+use sdk_test::async_test;
 use ruma::{
     DeviceKeyAlgorithm, DeviceKeyId, SecondsSinceUnixEpoch,
     canonical_json::to_canonical_value,
@@ -25,8 +29,6 @@ use ruma::{
     events::{AnyToDeviceEvent, dummy::ToDeviceDummyEventContent},
     user_id,
 };
-use sdk_common::deserialized_responses::{ProcessedToDeviceEvent, ToDeviceUnableToDecryptReason};
-use sdk_test::async_test;
 use serde_json::json;
 use vodozemac::Ed25519SecretKey;
 

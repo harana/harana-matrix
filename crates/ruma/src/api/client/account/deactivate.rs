@@ -8,15 +8,13 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3accountdeactivate
 
     use crate::{
-        api::{
-            auth_scheme::AccessTokenOptional,
-            client::{
-                account::ThirdPartyIdRemovalStatus,
-                uiaa::{AuthData, UiaaResponse},
-            },
-            request, response,
-        },
+        api::{auth_scheme::AccessTokenOptional, request, response},
         metadata,
+    };
+
+    use crate::api::client::{
+        account::ThirdPartyIdRemovalStatus,
+        uiaa::{AuthData, UiaaResponse},
     };
 
     metadata! {
@@ -33,8 +31,7 @@ pub mod v3 {
     #[request(error = UiaaResponse)]
     #[derive(Default)]
     pub struct Request {
-        /// Additional authentication information for the user-interactive
-        /// authentication API.
+        /// Additional authentication information for the user-interactive authentication API.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub auth: Option<AuthData>,
 
@@ -43,8 +40,8 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub id_server: Option<String>,
 
-        /// Whether the user would like their content to be erased as much as
-        /// possible from the server.
+        /// Whether the user would like their content to be erased as much as possible from the
+        /// server.
         ///
         /// Defaults to `false`.
         #[serde(default, skip_serializing_if = "crate::serde::is_default")]

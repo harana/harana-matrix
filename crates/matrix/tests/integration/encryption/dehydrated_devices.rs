@@ -19,15 +19,15 @@ use std::{
 };
 
 use assert_matches2::assert_let;
-use base::crypto::store::types::DehydratedDeviceKey;
 use futures_util::{FutureExt, Stream, StreamExt};
 use matrix::{
     Client,
     encryption::dehydrated_devices::{DehydratedDeviceError, DehydratedDeviceEvent},
     test_utils::mocks::MatrixMockServer,
 };
-use ruma::{OwnedDeviceId, owned_device_id, owned_user_id};
+use base::crypto::store::types::DehydratedDeviceKey;
 use sdk_test::async_test;
+use ruma::{OwnedDeviceId, owned_device_id, owned_user_id};
 use serde_json::{Value, json};
 use wiremock::{
     Request,

@@ -270,8 +270,8 @@ impl BackupDecryptionKey {
 
 #[cfg(test)]
 mod tests {
-    use ruma::api::client::backup::KeyBackupData;
     use sdk_test::async_test;
+    use ruma::api::client::backup::KeyBackupData;
     use serde_json::json;
 
     use super::{BackupDecryptionKey, DecodeError};

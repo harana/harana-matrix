@@ -35,8 +35,7 @@ pub fn expand_enum_as_ref_str(input: &syn::ItemEnum) -> syn::Result<TokenStream>
     })
 }
 
-/// A parsed enum with `ruma_enum` attributes and any [`UnitVariant`] or
-/// [`VariantWithSingleField`].
+/// A parsed enum with `ruma_enum` attributes and any [`UnitVariant`] or [`VariantWithSingleField`].
 pub(crate) struct RumaEnumWithAnyVariants {
     /// The unit variants of the enum.
     unit_variants: Vec<UnitVariant>,
@@ -56,8 +55,8 @@ impl RumaEnumWithAnyVariants {
             .map(|variant| (&variant.ident, variant.string_representation(&self.rename_all)))
     }
 
-    /// Generate the code to extract or set the inner value of the field
-    /// variants into or from a variable called `inner`.
+    /// Generate the code to extract or set the inner value of the field variants into or from a
+    /// variable called `inner`.
     pub(super) fn expand_field_variants_variables(&self) -> impl Iterator<Item = TokenStream> {
         self.field_variants.iter().map(|variant| variant.expand_variable())
     }

@@ -10,13 +10,14 @@ pub mod unstable {
     use std::{collections::BTreeMap, ops::RangeBounds, time::Duration};
 
     use js_int::UInt;
-    use serde::{Deserialize, Serialize};
-
     use crate::{
-        api::{auth_scheme::AccessToken, client::retention::RoomIdOrAllRooms, request, response},
-        events::room::retention::{RoomRetentionEventContent, is_valid_lifetime_combination},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+    use crate::events::room::retention::{RoomRetentionEventContent, is_valid_lifetime_combination};
+    use serde::{Deserialize, Serialize};
+
+    use crate::api::client::retention::RoomIdOrAllRooms;
 
     metadata! {
         method: GET,
@@ -45,8 +46,7 @@ pub mod unstable {
         /// Map between a Room ID and their respective room retention policy.
         pub policies: BTreeMap<RoomIdOrAllRooms, RoomRetentionEventContent>,
 
-        /// Limits to apply to policies defined by m.room.retention state
-        /// events.
+        /// Limits to apply to policies defined by m.room.retention state events.
         pub limits: RetentionLimits,
     }
 
@@ -60,25 +60,21 @@ pub mod unstable {
         }
     }
 
-    /// Struct describing limits to apply to policies defined by
-    /// `m.room.retention` state events.
+    /// Struct describing limits to apply to policies defined by `m.room.retention` state events.
     #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct RetentionLimits {
-        /// Limits to apply to the maximum lifetime of `m.room.retention`
-        /// limits.
+        /// Limits to apply to the maximum lifetime of `m.room.retention` limits.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub max_lifetime: Option<LifetimeLimits>,
 
-        /// Limits to apply to the minimum lifetime of `m.room.retention`
-        /// limits.
+        /// Limits to apply to the minimum lifetime of `m.room.retention` limits.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub min_lifetime: Option<LifetimeLimits>,
     }
 
     impl RetentionLimits {
-        /// Create a new [`RetentionLimits`] object with the given maximum and
-        /// minimum limits.
+        /// Create a new [`RetentionLimits`] object with the given maximum and minimum limits.
         pub fn new(
             min_lifetime: Option<LifetimeLimits>,
             max_lifetime: Option<LifetimeLimits>,
@@ -100,9 +96,8 @@ pub mod unstable {
     impl LifetimeLimits {
         /// Create a new [`LifetimeLimits`] object with no limits set.
         ///
-        /// This method can be combined with the [`LifetimeLimits::at_least`]
-        /// and [`LifetimeLimits::at_most`] methods to configure the
-        /// individual limits.
+        /// This method can be combined with the [`LifetimeLimits::at_least`] and
+        /// [`LifetimeLimits::at_most`] methods to configure the individual limits.
         ///
         /// # Examples
         ///
@@ -120,12 +115,10 @@ pub mod unstable {
             Self::default()
         }
 
-        /// Create a new [`LifetimeLimits`] object with the given maximum and
-        /// minimum limits.
+        /// Create a new [`LifetimeLimits`] object with the given maximum and minimum limits.
         ///
-        /// This will return `None` if the duration of one of the limits,
-        /// expressed as milliseconds, doesn't fall into the [0,
-        /// (2^53)-1] range.
+        /// This will return `None` if the duration of one of the limits, expressed as
+        /// milliseconds, doesn't fall into the [0, (2^53)-1] range.
         fn new_impl(min: Option<Duration>, max: Option<Duration>) -> Option<Self> {
             let max = max.map(|l| UInt::try_from(l.as_millis())).transpose().ok()?;
             let min = min.map(|l| UInt::try_from(l.as_millis())).transpose().ok()?;
@@ -135,9 +128,8 @@ pub mod unstable {
 
         /// Create a new [`LifetimeLimits`] object from a range.
         ///
-        /// Returns `None` if the duration of one of the limits, expressed as
-        /// milliseconds, doesn't fall into the [0, (2^53)-1] range, or
-        /// if the lower bound of the range is bigger than the
+        /// Returns `None` if the duration of one of the limits, expressed as milliseconds, doesn't
+        /// fall into the [0, (2^53)-1] range, or if the lower bound of the range is bigger than the
         /// upper bound, i.e. `10..0`.
         ///
         /// # Examples
@@ -167,23 +159,19 @@ pub mod unstable {
             Self::new_impl(min_lifetime, max_lifetime)
         }
 
-        /// Sets the maximum value that a retention policy limit is allowed to
-        /// have.
+        /// Sets the maximum value that a retention policy limit is allowed to have.
         ///
-        /// Returns `None` if the given limit, expressed as milliseconds,
-        /// doesn't fall into the [0, (2^53)-1] range, or if the limits
-        /// don't adhere to the `max` < `min` constraint.
+        /// Returns `None` if the given limit, expressed as milliseconds, doesn't fall into the [0,
+        /// (2^53)-1] range, or if the limits don't adhere to the `max` < `min` constraint.
         pub fn at_most(self, max: Duration) -> Option<Self> {
             let min = self.min();
             Self::new_impl(min, Some(max))
         }
 
-        /// Sets the minimum value that a retention policy limit is allowed to
-        /// have.
+        /// Sets the minimum value that a retention policy limit is allowed to have.
         ///
-        /// Returns `None` if the given limit, expressed as milliseconds,
-        /// doesn't fall into the [0, (2^53)-1] range, or if the limits
-        /// don't adhere to the `max` < `min` constraint.
+        /// Returns `None` if the given limit, expressed as milliseconds, doesn't fall into the [0,
+        /// (2^53)-1] range, or if the limits don't adhere to the `max` < `min` constraint.
         pub fn at_least(self, min: Duration) -> Option<Self> {
             let max = self.max();
             Self::new_impl(Some(min), max)

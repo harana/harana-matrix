@@ -793,7 +793,10 @@ unsafe impl Sync for Room {}
 #[test]
 // See https://github.com/matrix-org/matrix-rust-sdk/pull/3749#issuecomment-2312939823.
 fn test_send_sync_for_room() {
-    fn assert_send_sync<T: sdk_common::SendOutsideWasm + sdk_common::SyncOutsideWasm>() {}
+    fn assert_send_sync<
+        T: sdk_common::SendOutsideWasm + sdk_common::SyncOutsideWasm,
+    >() {
+    }
 
     assert_send_sync::<Room>();
 }
@@ -811,10 +814,10 @@ pub(crate) enum AccountDataSource {
 
 #[cfg(test)]
 mod tests {
-    use ruma::{room_id, user_id};
     use sdk_test::{
         JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
+    use ruma::{room_id, user_id};
     use serde_json::json;
 
     use super::*;

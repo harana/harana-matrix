@@ -2,7 +2,6 @@ use std::{ops::Not as _, sync::Arc, time::Duration};
 
 use as_variant::as_variant;
 use assert_matches2::{assert_let, assert_matches};
-use base::store::QueuedRequestKind;
 use eyeball_im::VectorDiff;
 #[cfg(feature = "unstable-msc4274")]
 use matrix::attachment::{GalleryConfig, GalleryItemInfo};
@@ -19,6 +18,12 @@ use matrix::{
         SendQueueUpdate,
     },
     test_utils::mocks::{MatrixMock, MatrixMockServer, RoomMessagesResponseTemplate},
+};
+use base::store::QueuedRequestKind;
+use sdk_common::cross_process_lock::CrossProcessLockConfig;
+use sdk_test::{
+    ALICE, InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, LeftRoomBuilder, async_test,
+    event_factory::EventFactory,
 };
 #[cfg(feature = "unstable-msc4274")]
 use ruma::events::room::message::GalleryItemType;
@@ -43,11 +48,6 @@ use ruma::{
     mxc_uri, owned_event_id, owned_mxc_uri, owned_user_id, room_id,
     serde::Raw,
     uint,
-};
-use sdk_common::cross_process_lock::CrossProcessLockConfig;
-use sdk_test::{
-    ALICE, InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, LeftRoomBuilder, async_test,
-    event_factory::EventFactory,
 };
 use serde_json::json;
 use tokio::{

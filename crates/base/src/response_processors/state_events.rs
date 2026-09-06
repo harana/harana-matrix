@@ -572,11 +572,11 @@ async fn decrypt_state_event(
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use ruma::{RoomVersionId, event_id, room_id, user_id};
     use sdk_test::{
         DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, TestResult, async_test,
         event_factory::EventFactory,
     };
+    use ruma::{RoomVersionId, event_id, room_id, user_id};
 
     use crate::test_utils::logged_in_base_client;
 

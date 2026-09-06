@@ -384,8 +384,8 @@ enum AttributeAction {
     Remove(Attribute),
 }
 
-/// Whether the given HTML element has a list of allowed schemes according to
-/// the Matrix specification or the compatibility list.
+/// Whether the given HTML element has a list of allowed schemes according to the Matrix
+/// specification or the compatibility list.
 pub(super) fn has_element_allowed_schemes(element_name: &str) -> bool {
     // Keep in sync with `spec::allowed_schemes` and `compat::allowed_schemes`.
     matches!(element_name, "a" | "img")
@@ -444,8 +444,8 @@ pub(crate) mod spec {
         )
     }
 
-    /// The replacement element for the given HTML element, if it was previously
-    /// allowed in the Matrix specification.
+    /// The replacement element for the given HTML element, if it was previously allowed in the
+    /// Matrix specification.
     pub(super) fn deprecated_element_replacement(element_name: &str) -> Option<&'static str> {
         let replacement = match element_name {
             "font" => "span",
@@ -456,8 +456,8 @@ pub(crate) mod spec {
         Some(replacement)
     }
 
-    /// Whether the given attribute is in the list of allowed attributes for the
-    /// given HTML element according to the Matrix specification.
+    /// Whether the given attribute is in the list of allowed attributes for the given HTML element
+    /// according to the Matrix specification.
     pub(super) fn is_attribute_allowed(element_name: &str, attribute_name: &str) -> bool {
         match element_name {
             "span" => match attribute_name {
@@ -475,15 +475,14 @@ pub(crate) mod spec {
         }
     }
 
-    /// Whether the given HTML element has deprecated attributes in the Matrix
-    /// specification.
+    /// Whether the given HTML element has deprecated attributes in the Matrix specification.
     pub(super) fn has_element_deprecated_attributes(element_name: &str) -> bool {
         // Must be kept in sync with `deprecated_attribute_replacement`.
         matches!(element_name, "font")
     }
 
-    /// The replacement attribute for the given attribute of the given HTML
-    /// element, if it was previously allowed in the Matrix specification.
+    /// The replacement attribute for the given attribute of the given HTML element, if it was
+    /// previously allowed in the Matrix specification.
     pub(super) fn deprecated_attribute_replacement(
         element_name: &str,
         attribute_name: &str,
@@ -498,13 +497,12 @@ pub(crate) mod spec {
         }
     }
 
-    /// The list of allowed URI schemes for the given attribute in the given
-    /// HTML element in the Matrix specification.
+    /// The list of allowed URI schemes for the given attribute in the given HTML element in the
+    /// Matrix specification.
     ///
     /// If `compat` is `true`, a few extra schemes are allowed:
     ///
-    /// * The `matrix` scheme for `a` elements (see
-    ///   [matrix-org/matrix-spec#1108]).
+    /// * The `matrix` scheme for `a` elements (see [matrix-org/matrix-spec#1108]).
     ///
     /// [matrix-org/matrix-spec#1108]: https://github.com/matrix-org/matrix-spec/issues/1108
     pub(crate) fn allowed_schemes(
@@ -521,11 +519,9 @@ pub(crate) mod spec {
         Some(schemes)
     }
 
-    /// Get the allowed CSS classes for the given HTML element in the Matrix
-    /// specification.
+    /// Get the allowed CSS classes for the given HTML element in the Matrix specification.
     ///
-    /// The returned classes use `*` as a wildcard for any number of any
-    /// characters.
+    /// The returned classes use `*` as a wildcard for any number of any characters.
     pub(super) fn allowed_classes(element_name: &str) -> Option<&'static [&'static str]> {
         match element_name {
             "code" => Some(&["language-*"]),
@@ -538,11 +534,10 @@ pub(crate) mod spec {
 pub(crate) mod compat {
     /// Additional allowed URI schemes for improved compatibility.
     ///
-    /// This adds schemes that can be encountered but are not listed in the
-    /// Matrix specification. It consists of:
+    /// This adds schemes that can be encountered but are not listed in the Matrix specification. It
+    /// consists of:
     ///
-    /// * The `matrix` scheme for `a` elements (see
-    ///   [matrix-org/matrix-spec#1108]).
+    /// * The `matrix` scheme for `a` elements (see [matrix-org/matrix-spec#1108]).
     ///
     /// [matrix-org/matrix-spec#1108]: https://github.com/matrix-org/matrix-spec/issues/1108
     pub(crate) fn allowed_schemes(

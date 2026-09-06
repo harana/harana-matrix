@@ -17,6 +17,9 @@ use std::sync::Arc;
 use assert_matches2::assert_matches;
 use eyeball_im::VectorDiff;
 use matrix::assert_next_with_timeout;
+use sdk_test::{
+    ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
+};
 use ruma::{
     OwnedEventId, event_id,
     events::{
@@ -28,7 +31,6 @@ use ruma::{
     room_version_rules::RoomVersionRules,
     uint,
 };
-use sdk_test::{ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use super::{ReadReceiptMap, TestRoomDataProvider};

@@ -51,8 +51,8 @@ impl Event {
             ));
         };
 
-        // We assume that if there are generics, they must be at least for the `content`
-        // type, and its generic should be named `C`.
+        // We assume that if there are generics, they must be at least for the `content` type, and
+        // its generic should be named `C`.
         if !self.generics.params.is_empty() && (!self.generics.params.iter().any(|param| matches!(param, syn::GenericParam::Type(syn::TypeParam { ident, ..}) if *ident == "C")) || !matches!(&content_field.inner.ty, syn::Type::Path(syn::TypePath{ path, ..}) if path.is_ident("C"))) {
             return Err(syn::Error::new(
                 Span::call_site(),
@@ -111,8 +111,8 @@ fn event_ident_to_kind_and_variation(
 impl EventField {
     /// Parse the given field to construct an `EventField`.
     ///
-    /// Returns an error if an unknown `ruma_event` attribute is encountered, or
-    /// if an attribute that accepts a single value appears several times.
+    /// Returns an error if an unknown `ruma_event` attribute is encountered, or if an attribute
+    /// that accepts a single value appears several times.
     fn parse(mut inner: syn::Field) -> syn::Result<Self> {
         let mut field_attrs = EventFieldAttrs::default();
 
@@ -130,12 +130,11 @@ impl EventField {
 /// A parsed attributes of a field of an [`Event`].
 #[derive(Default)]
 struct EventFieldAttrs {
-    /// Whether this field should deserialize to the default value if it is
-    /// missing.
+    /// Whether this field should deserialize to the default value if it is missing.
     default: bool,
 
-    /// Whether this field should deserialize to the default value if an error
-    /// occurs during deserialization.
+    /// Whether this field should deserialize to the default value if an error occurs during
+    /// deserialization.
     default_on_error: bool,
 
     /// The name to use when (de)serializing this field.
@@ -148,8 +147,7 @@ struct EventFieldAttrs {
 }
 
 impl EventFieldAttrs {
-    /// Set that this field should deserialize to the default value if it is
-    /// missing.
+    /// Set that this field should deserialize to the default value if it is missing.
     ///
     /// Returns an error if it is already set.
     fn set_default(&mut self, attr: &syn::Attribute) -> syn::Result<()> {
@@ -164,8 +162,8 @@ impl EventFieldAttrs {
         Ok(())
     }
 
-    /// Set that this field should deserialize to the default value if an error
-    /// occurs during deserialization.
+    /// Set that this field should deserialize to the default value if an error occurs during
+    /// deserialization.
     ///
     /// Returns an error if it is already set.
     fn set_default_on_error(&mut self, attr: &syn::Attribute) -> syn::Result<()> {
@@ -195,11 +193,10 @@ impl EventFieldAttrs {
         Ok(())
     }
 
-    /// Try to parse the given meta item and merge it into this
-    /// `EventFieldAttrs`.
+    /// Try to parse the given meta item and merge it into this `EventFieldAttrs`.
     ///
-    /// Returns an error if an unknown `ruma_event` attribute is encountered, or
-    /// if an attribute that accepts a single value appears several times.
+    /// Returns an error if an unknown `ruma_event` attribute is encountered, or if an attribute
+    /// that accepts a single value appears several times.
     fn try_merge(&mut self, meta: ParseNestedMeta<'_>, attr: &syn::Attribute) -> syn::Result<()> {
         if meta.path.is_ident("default") {
             if meta.has_value() {

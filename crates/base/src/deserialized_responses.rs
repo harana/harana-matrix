@@ -16,6 +16,7 @@
 
 use std::{collections::BTreeMap, fmt, hash::Hash, iter, sync::LazyLock};
 
+pub use sdk_common::deserialized_responses::*;
 use regex::Regex;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, MxcUri, OwnedEventId, OwnedRoomId, OwnedUserId, UInt,
@@ -32,7 +33,6 @@ use ruma::{
     room_version_rules::AuthorizationRules,
     serde::Raw,
 };
-pub use sdk_common::deserialized_responses::*;
 use serde::Serialize;
 use unicode_normalization::UnicodeNormalization;
 

@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, ops::ControlFlow, sync::Arc};
+use std::{
+    collections::HashMap,
+    ops::ControlFlow,
+    sync::Arc,
+};
 
 use base::RoomInfoNotableUpdateReasons;
-use ruma::{EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels};
+use ruma::{
+    EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels,
+};
 use tokio::sync::{OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 use tracing::{debug, error, instrument, warn};
 
@@ -196,7 +202,11 @@ impl RoomLatestEventsWriteGuard {
         // in the background until a suitable event surfaces.
         if matches!(
             for_the_room
-                .update_with_event_cache(room_event_cache, own_user_id, power_levels.as_ref(),)
+                .update_with_event_cache(
+                    room_event_cache,
+                    own_user_id,
+                    power_levels.as_ref(),
+                )
                 .await,
             NeedMoreEvents::Yes
         ) && room.client().event_cache().back_pagination_queue().is_some()
@@ -206,7 +216,11 @@ impl RoomLatestEventsWriteGuard {
 
         for latest_event in per_thread.values_mut() {
             latest_event
-                .update_with_event_cache(room_event_cache, own_user_id, power_levels.as_ref())
+                .update_with_event_cache(
+                    room_event_cache,
+                    own_user_id,
+                    power_levels.as_ref(),
+                )
                 .await;
         }
     }
@@ -353,8 +367,8 @@ mod tests {
         event_cache::Gap,
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Update},
     };
-    use ruma::{event_id, room_id, user_id};
     use sdk_test::{async_test, event_factory::EventFactory};
+    use ruma::{event_id, room_id, user_id};
 
     use super::RoomLatestEvents;
     use crate::{

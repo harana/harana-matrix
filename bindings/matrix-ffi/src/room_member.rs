@@ -34,11 +34,15 @@ impl TryFrom<matrix::ruma::events::room::member::MembershipState> for Membership
         m: matrix::ruma::events::room::member::MembershipState,
     ) -> Result<Self, Self::Error> {
         match m {
-            matrix::ruma::events::room::member::MembershipState::Ban => Ok(MembershipState::Ban),
+            matrix::ruma::events::room::member::MembershipState::Ban => {
+                Ok(MembershipState::Ban)
+            }
             matrix::ruma::events::room::member::MembershipState::Invite => {
                 Ok(MembershipState::Invite)
             }
-            matrix::ruma::events::room::member::MembershipState::Join => Ok(MembershipState::Join),
+            matrix::ruma::events::room::member::MembershipState::Join => {
+                Ok(MembershipState::Join)
+            }
             matrix::ruma::events::room::member::MembershipState::Knock => {
                 Ok(MembershipState::Knock)
             }

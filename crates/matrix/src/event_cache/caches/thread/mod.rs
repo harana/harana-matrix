@@ -401,6 +401,8 @@ mod timed_tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
+    use eyeball_im::VectorDiff;
+    use futures_util::FutureExt as _;
     use base::{
         RoomState, ThreadingSupport,
         cross_process_lock::CrossProcessLockConfig,
@@ -415,14 +417,12 @@ mod timed_tests {
         store::StoreConfig,
         sync::{JoinedRoomUpdate, Timeline},
     };
-    use eyeball_im::VectorDiff;
-    use futures_util::FutureExt as _;
+    use sdk_test::{ALICE, async_test, event_factory::EventFactory};
     use ruma::{
         event_id,
         events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent},
         room_id, user_id,
     };
-    use sdk_test::{ALICE, async_test, event_factory::EventFactory};
     use tokio::task::yield_now;
 
     use super::super::{super::RoomEventCacheGenericUpdate, TimelineVectorDiffs};

@@ -33,8 +33,8 @@ use std::{
     },
 };
 
-use ruma::{DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceKeyId, RoomId, serde::StringEnum};
 use sdk_common::deserialized_responses::PrivOwnedStr;
+use ruma::{DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceKeyId, RoomId, serde::StringEnum};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use vodozemac::{Curve25519PublicKey, Ed25519PublicKey, KeyError};
 use zeroize::{Zeroize, ZeroizeOnDrop};

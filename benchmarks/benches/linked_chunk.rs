@@ -1,16 +1,16 @@
 use std::{sync::Arc, time::Duration};
 
-use base::event_cache::{
-    Event, Gap,
-    store::{DEFAULT_CHUNK_CAPACITY, DynEventCacheStore, IntoEventCacheStore, MemoryStore},
-};
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use matrix::{
     SqliteEventCacheStore,
     linked_chunk::{LinkedChunk, LinkedChunkId, Update, lazy_loader},
 };
-use ruma::room_id;
+use base::event_cache::{
+    Event, Gap,
+    store::{DEFAULT_CHUNK_CAPACITY, DynEventCacheStore, IntoEventCacheStore, MemoryStore},
+};
 use sdk_test::{ALICE, event_factory::EventFactory};
+use ruma::room_id;
 use tempfile::tempdir;
 use tokio::runtime::Builder;
 

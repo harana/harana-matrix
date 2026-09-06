@@ -24,15 +24,16 @@ use std::{
 use as_variant::as_variant;
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::{
-    crypto::{decrypt_room_key_export, types::events::UtdCause},
-    deserialized_responses::{TimelineEvent, UnableToDecryptReason},
-};
 use eyeball_im::VectorDiff;
 use matrix::{
     self, Client, assert_next_matches_with_timeout, assert_next_with_timeout,
     test_utils::mocks::MatrixMockServer,
 };
+use base::{
+    crypto::{decrypt_room_key_export, types::events::UtdCause},
+    deserialized_responses::{TimelineEvent, UnableToDecryptReason},
+};
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
     RoomId, UserId, assign, event_id,
     events::room::encrypted::{
@@ -43,7 +44,6 @@ use ruma::{
     serde::Raw,
     user_id,
 };
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde_json::{json, value::to_raw_value};
 use stream_assert::{assert_next_matches, assert_pending};
 use tokio::time::{sleep, timeout};

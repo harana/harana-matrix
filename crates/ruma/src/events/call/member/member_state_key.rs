@@ -1,11 +1,10 @@
 use std::str::FromStr;
 
+use crate::{OwnedUserId, UserId};
 use serde::{
     Serialize, Serializer,
     de::{self, Deserialize, Deserializer, Unexpected},
 };
-
-use crate::{OwnedUserId, UserId};
 /// A type that can be used as the `state_key` for call member state events.
 /// Those state keys can be a combination of UserId and DeviceId.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -17,28 +16,26 @@ pub struct CallMemberStateKey {
 
 impl CallMemberStateKey {
     /// Constructs a new CallMemberStateKey there are three possible formats:
-    /// - `_{UserId}_{MemberId}` example: `_@test:user.org_DEVICE_m.call`.
-    ///   `member_id: Some(DEVICE_m.call)`, `underscore: true`
-    /// - `{UserId}_{MemberId}` example: `@test:user.org_DEVICE_m.call`.
-    ///   `member_id: Some(DEVICE_m.call)`, `underscore: false`
-    /// - `{UserId}` example: `@test:user.org`. `member_id: None`, underscore is
-    ///   ignored: `underscore: false|true`
+    /// - `_{UserId}_{MemberId}` example: `_@test:user.org_DEVICE_m.call`. `member_id:
+    ///   Some(DEVICE_m.call)`, `underscore: true`
+    /// - `{UserId}_{MemberId}` example: `@test:user.org_DEVICE_m.call`. `member_id:
+    ///   Some(DEVICE_m.call)`, `underscore: false`
+    /// - `{UserId}` example: `@test:user.org`. `member_id: None`, underscore is ignored:
+    ///   `underscore: false|true`
     ///
     /// The MemberId is a combination of the UserId and the session information
     /// (session.application and session.id).
-    /// The session information is an opaque string that should not be parsed
-    /// after creation.
+    /// The session information is an opaque string that should not be parsed after creation.
     pub fn new(user_id: OwnedUserId, member_id: Option<String>, underscore: bool) -> Self {
         CallMemberStateKeyEnum::new(user_id, member_id, underscore).into()
     }
 
     /// Returns the user id in this state key.
-    /// (This is a cheap operations. The id is already type checked on
-    /// initialization. And does only returns a reference to an existing
-    /// OwnedUserId.)
+    /// (This is a cheap operations. The id is already type checked on initialization. And does
+    /// only returns a reference to an existing OwnedUserId.)
     ///
-    /// It is recommended to not use the state key to get the user id, but
-    /// rather use the `sender` field.
+    /// It is recommended to not use the state key to get the user id, but rather use the `sender`
+    /// field.
     pub fn user_id(&self) -> &UserId {
         match &self.key {
             CallMemberStateKeyEnum::UnderscoreMemberId(u, _) => u,
@@ -65,8 +62,8 @@ impl FromStr for CallMemberStateKey {
     type Err = KeyParseError;
 
     fn from_str(state_key: &str) -> Result<Self, Self::Err> {
-        // Intentionally do not use CallMemberStateKeyEnum.into since this would
-        // reconstruct the state key string.
+        // Intentionally do not use CallMemberStateKeyEnum.into since this would reconstruct the
+        // state key string.
         Ok(Self { key: CallMemberStateKeyEnum::from_str(state_key)?, raw: state_key.into() })
     }
 }
@@ -184,8 +181,8 @@ pub enum KeyParseError {
         /// The user Id parse error why if failed to parse it.
         error: crate::IdParseError,
     },
-    /// Uses a leading underscore but no trailing device id. The part after the
-    /// underscore is a valid user id.
+    /// Uses a leading underscore but no trailing device id. The part after the underscore is a
+    /// valid user id.
     #[error(
         "uses a leading underscore but no trailing device id. The part after the underscore is a valid user id."
     )]
@@ -205,10 +202,9 @@ impl de::Expected for KeyParseError {
 mod tests {
     use std::str::FromStr;
 
-    use crate::{
-        events::call::member::{CallMemberStateKey, member_state_key::CallMemberStateKeyEnum},
-        owned_user_id,
-    };
+    use crate::owned_user_id;
+
+    use crate::events::call::member::{CallMemberStateKey, member_state_key::CallMemberStateKeyEnum};
 
     #[test]
     fn convert_state_key_enum_to_state_key() {

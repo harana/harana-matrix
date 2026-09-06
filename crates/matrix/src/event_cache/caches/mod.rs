@@ -16,6 +16,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::{collections::HashMap, ops::Not, sync::Arc};
 
+use eyeball::SharedObservable;
+use eyeball_im::VectorDiff;
 use base::{
     ThreadingSupport,
     event_cache::Event,
@@ -23,8 +25,6 @@ use base::{
     serde_helpers::extract_read_receipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate},
 };
-use eyeball::SharedObservable;
-use eyeball_im::VectorDiff;
 use ruma::{
     OwnedEventId, RoomId,
     events::{AnySyncEphemeralRoomEvent, receipt::ReceiptEventContent},

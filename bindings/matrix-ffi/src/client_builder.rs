@@ -20,12 +20,6 @@ use std::{fs, path::PathBuf};
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
 #[cfg(feature = "experimental-x509-identity-verification")]
-use base::crypto::x509::{RawX509Signature, ValidityError};
-use base::{
-    DmRoomDefinition,
-    crypto::{CollectStrategy, DecryptionSettings, TrustRequirement},
-};
-#[cfg(feature = "experimental-x509-identity-verification")]
 use matrix::encryption::SignatureError;
 #[cfg(not(any(target_family = "wasm")))]
 use matrix::reqwest::Certificate;
@@ -43,6 +37,12 @@ use matrix::{
         Error as MatrixSlidingSyncError, VersionBuilder as MatrixSlidingSyncVersionBuilder,
         VersionBuilderError,
     },
+};
+#[cfg(feature = "experimental-x509-identity-verification")]
+use base::crypto::x509::{RawX509Signature, ValidityError};
+use base::{
+    DmRoomDefinition,
+    crypto::{CollectStrategy, DecryptionSettings, TrustRequirement},
 };
 use ruma::api::error::{DeserializationError, FromHttpResponseError};
 use tracing::debug;

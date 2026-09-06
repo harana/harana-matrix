@@ -25,8 +25,7 @@ pub struct Request {}
 /// Response type for the `discover_homeserver` endpoint.
 #[response]
 pub struct Response {
-    /// The server name to delegate server-server communications to, with
-    /// optional port.
+    /// The server name to delegate server-server communications to, with optional port.
     #[serde(rename = "m.server")]
     pub server: OwnedServerName,
 }

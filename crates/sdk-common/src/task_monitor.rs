@@ -187,7 +187,8 @@ const FAILURE_CHANNEL_CAPACITY: usize = 8;
 /// let _handle = monitor.spawn_infinite_task("worker", async {
 ///     loop {
 ///         // Do work...
-///         sdk_common::sleep::sleep(std::time::Duration::from_secs(1)).await;
+///         sdk_common::sleep::sleep(std::time::Duration::from_secs(1))
+///             .await;
 ///     }
 /// });
 /// ```

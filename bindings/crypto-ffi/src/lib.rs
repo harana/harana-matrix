@@ -26,6 +26,14 @@ use anyhow::Context as _;
 pub use backup_recovery_key::{
     BackupRecoveryKey, DecodeError, MegolmV1BackupKey, PassphraseInfo, PkDecryptionError,
 };
+pub use device::Device;
+pub use error::{
+    CryptoStoreError, DecryptionError, KeyImportError, SecretImportError, SignatureError,
+};
+use js_int::UInt;
+pub use logger::{Logger, set_logger};
+pub use machine::{KeyRequestPair, OlmMachine, SignatureVerification};
+use sdk_common::deserialized_responses::{ShieldState as RustShieldState, ShieldStateCode};
 use crypto::{
     CollectStrategy, EncryptionSettings as RustEncryptionSettings,
     olm::{IdentityKeys, InboundGroupSession, SenderData, Session},
@@ -40,13 +48,7 @@ use crypto::{
         DeviceKey, DeviceKeys, EventEncryptionAlgorithm as RustEventEncryptionAlgorithm, SigningKey,
     },
 };
-pub use device::Device;
-pub use error::{
-    CryptoStoreError, DecryptionError, KeyImportError, SecretImportError, SignatureError,
-};
-use js_int::UInt;
-pub use logger::{Logger, set_logger};
-pub use machine::{KeyRequestPair, OlmMachine, SignatureVerification};
+use sqlite::SqliteCryptoStore;
 pub use responses::{
     BootstrapCrossSigningResult, DeviceLists, KeysImportResult, OutgoingVerificationRequest,
     Request, RequestType, SignatureUploadRequest, UploadSigningKeysRequest,
@@ -56,9 +58,7 @@ use ruma::{
     RoomId, SecondsSinceUnixEpoch, UserId,
     events::room::history_visibility::HistoryVisibility as RustHistoryVisibility,
 };
-use sdk_common::deserialized_responses::{ShieldState as RustShieldState, ShieldStateCode};
 use serde::{Deserialize, Serialize};
-use sqlite::SqliteCryptoStore;
 use tokio::runtime::Runtime;
 pub use users::UserIdentity;
 pub use verification::{

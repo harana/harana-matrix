@@ -24,6 +24,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use deadpool::managed::PoolConfig;
 use base::{
     cross_process_lock::CrossProcessLockGeneration,
     deserialized_responses::TimelineEvent,
@@ -38,7 +39,6 @@ use base::{
     },
     timer,
 };
-use deadpool::managed::PoolConfig;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, RoomId, events::relation::RelationType,
 };
@@ -2117,8 +2117,8 @@ mod tests {
         event_cache_store_integration_tests, event_cache_store_integration_tests_time,
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Update},
     };
-    use ruma::{OwnedEventId, event_id};
     use sdk_test::{DEFAULT_TEST_ROOM_ID, async_test};
+    use ruma::{OwnedEventId, event_id};
     use tempfile::{TempDir, tempdir};
 
     use super::{DATABASE_NAME, SqliteEventCacheStore, keys};
@@ -2336,12 +2336,12 @@ mod encrypted_tests {
         event_cache::store::{EventCacheStore, EventCacheStoreError},
         event_cache_store_integration_tests, event_cache_store_integration_tests_time,
     };
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         event_id,
         events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
         room_id, user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use tempfile::{TempDir, tempdir};
 
     use super::SqliteEventCacheStore;

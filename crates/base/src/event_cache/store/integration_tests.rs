@@ -21,15 +21,6 @@ use std::{
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use ruma::{
-    EventId, RoomId, event_id,
-    events::{
-        AnyMessageLikeEvent, AnyTimelineEvent, relation::RelationType,
-        room::message::RoomMessageEventContentWithoutRelation,
-    },
-    push::Action,
-    room_id,
-};
 use sdk_common::{
     deserialized_responses::{
         AlgorithmInfo, DecryptedRoomEvent, EncryptionInfo, TimelineEvent, TimelineEventKind,
@@ -40,6 +31,15 @@ use sdk_common::{
     },
 };
 use sdk_test::{ALICE, DEFAULT_TEST_ROOM_ID, event_factory::EventFactory};
+use ruma::{
+    EventId, RoomId, event_id,
+    events::{
+        AnyMessageLikeEvent, AnyTimelineEvent, relation::RelationType,
+        room::message::RoomMessageEventContentWithoutRelation,
+    },
+    push::Action,
+    room_id,
+};
 
 use super::{
     super::{Gap, thread::ThreadInfo},

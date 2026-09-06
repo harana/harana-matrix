@@ -18,11 +18,11 @@ use std::{
     sync::{Arc, Weak},
 };
 
+use eyeball::Subscriber;
 use base::{
     event_cache::Event, linked_chunk::OwnedLinkedChunkId,
     serde_helpers::extract_thread_root_from_content, sync::RoomUpdates,
 };
-use eyeball::Subscriber;
 use ruma::{EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId};
 use tokio::{
     select,

@@ -19,14 +19,14 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use sdk_state_res::{Error, Event, StateMap, resolve, utils::event_id_set::EventIdSet};
+use sdk_test_macros::async_test;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt,
     UserId,
     events::{StateEventType, TimelineEventType},
     room_version_rules::RoomVersionRules,
 };
-use sdk_state_res::{Error, Event, StateMap, resolve, utils::event_id_set::EventIdSet};
-use sdk_test_macros::async_test;
 use serde_json::{Value as JsonValue, json, value::RawValue as RawJsonValue};
 
 /// The smallest event a state resolution consumer can hold.

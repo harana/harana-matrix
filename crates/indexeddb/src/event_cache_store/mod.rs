@@ -16,6 +16,7 @@
 
 use std::{collections::HashMap, rc::Rc, time::Duration};
 
+use indexed_db_futures::{Build, database::Database};
 #[cfg(target_family = "wasm")]
 use base::{
     cross_process_lock::{CrossProcessLockGeneration, FIRST_CROSS_PROCESS_LOCK_GENERATION},
@@ -29,7 +30,6 @@ use base::{
     },
     timer,
 };
-use indexed_db_futures::{Build, database::Database};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, RoomId, events::relation::RelationType,
 };

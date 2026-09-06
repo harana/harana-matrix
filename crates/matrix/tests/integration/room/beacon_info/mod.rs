@@ -6,13 +6,13 @@ use matrix::{
     config::{SyncSettings, SyncToken},
     test_utils::mocks::MatrixMockServer,
 };
+use sdk_test::{
+    DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, async_test, event_factory::EventFactory, test_json,
+};
 use ruma::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::{AnySyncStateEvent, StateEventType, location::AssetType},
     user_id,
-};
-use sdk_test::{
-    DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, async_test, event_factory::EventFactory, test_json,
 };
 use serde_json::json;
 use wiremock::{

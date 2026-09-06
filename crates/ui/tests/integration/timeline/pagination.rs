@@ -30,19 +30,19 @@ use matrix::{
     event_cache::PaginationStatus,
     test_utils::mocks::{MatrixMockServer, RoomMessagesResponseTemplate},
 };
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{AnyOtherStateEventContentChange, RoomExt, TimelineItemContent};
 use ruma::{
     EventId, event_id,
     events::{StateEventContentChange, room::message::MessageType},
     room_id, user_id,
 };
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde_json::{Value as JsonValue, json};
 use stream_assert::{assert_next_eq, assert_pending};
 use tokio::{
     spawn,
     time::{sleep, timeout},
 };
-use ui::timeline::{AnyOtherStateEventContentChange, RoomExt, TimelineItemContent};
 use wiremock::ResponseTemplate;
 
 use crate::timeline::sliding_sync::assert_timeline_stream;

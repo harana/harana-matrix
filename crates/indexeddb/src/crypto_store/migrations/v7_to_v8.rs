@@ -15,10 +15,10 @@
 //! Migration code that modifies the data inside inbound_group_sessions2,
 //! ensuring that the keys are correctly encoded for this new store name.
 
-use crypto::olm::InboundGroupSession;
 use indexed_db_futures::{
     Build, error::OpenDbError, query_source::QuerySource, transaction::TransactionMode,
 };
+use crypto::olm::InboundGroupSession;
 use tracing::{debug, info};
 use wasm_bindgen::JsValue;
 
@@ -58,9 +58,10 @@ pub(crate) async fn data_migrate(name: &str, serializer: &SafeEncodeSerializer) 
 
             // Get the old key and session
 
-            let old_key = cursor.key::<JsValue>()?.ok_or(crypto::CryptoStoreError::Backend(
-                "inbound_group_sessions2 cursor has no key".into(),
-            ))?;
+            let old_key =
+                cursor.key::<JsValue>()?.ok_or(crypto::CryptoStoreError::Backend(
+                    "inbound_group_sessions2 cursor has no key".into(),
+                ))?;
 
             let idb_object: v7::InboundGroupSessionIndexedDbObject2 =
                 serde_wasm_bindgen::from_value(value)?;

@@ -3,6 +3,7 @@
 //! [MSC3551]: https://github.com/matrix-org/matrix-spec-proposals/pull/3551
 
 use js_int::UInt;
+use crate::OwnedMxcUri;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
@@ -10,13 +11,11 @@ use super::{
     message::TextContentBlock,
     room::{EncryptedFile, EncryptedFileHashes, EncryptedFileInfo, message::Relation},
 };
-use crate::OwnedMxcUri;
 
 /// The payload for an extensible file message.
 ///
-/// This is the new primary type introduced in [MSC3551] and should only be sent
-/// in rooms with a version that supports it. See the documentation of the
-/// [`message`] module for more information.
+/// This is the new primary type introduced in [MSC3551] and should only be sent in rooms with a
+/// version that supports it. See the documentation of the [`message`] module for more information.
 ///
 /// [MSC3551]: https://github.com/matrix-org/matrix-spec-proposals/pull/3551
 /// [`message`]: super::message
@@ -55,8 +54,8 @@ pub struct FileEventContent {
 }
 
 impl FileEventContent {
-    /// Creates a new non-encrypted `FileEventContent` with the given fallback
-    /// representation, url and file info.
+    /// Creates a new non-encrypted `FileEventContent` with the given fallback representation, url
+    /// and file info.
     pub fn plain(text: TextContentBlock, url: OwnedMxcUri, name: String) -> Self {
         Self {
             text,
@@ -68,8 +67,8 @@ impl FileEventContent {
         }
     }
 
-    /// Creates a new non-encrypted `FileEventContent` with the given plain text
-    /// fallback representation, url and name.
+    /// Creates a new non-encrypted `FileEventContent` with the given plain text fallback
+    /// representation, url and name.
     pub fn plain_with_plain_text(
         plain_text: impl Into<String>,
         url: OwnedMxcUri,
@@ -85,8 +84,8 @@ impl FileEventContent {
         }
     }
 
-    /// Creates a new encrypted `FileEventContent` with the given fallback
-    /// representation, url, name and encryption info.
+    /// Creates a new encrypted `FileEventContent` with the given fallback representation, url,
+    /// name and encryption info.
     pub fn encrypted(
         text: TextContentBlock,
         url: OwnedMxcUri,
@@ -103,8 +102,8 @@ impl FileEventContent {
         }
     }
 
-    /// Creates a new encrypted `FileEventContent` with the given plain text
-    /// fallback representation, url, name and encryption info.
+    /// Creates a new encrypted `FileEventContent` with the given plain text fallback
+    /// representation, url, name and encryption info.
     pub fn encrypted_with_plain_text(
         plain_text: impl Into<String>,
         url: OwnedMxcUri,
@@ -148,14 +147,12 @@ pub struct FileContentBlock {
 }
 
 impl FileContentBlock {
-    /// Creates a new non-encrypted `FileContentBlock` with the given url and
-    /// name.
+    /// Creates a new non-encrypted `FileContentBlock` with the given url and name.
     pub fn plain(url: OwnedMxcUri, name: String) -> Self {
         Self { url, name, mimetype: None, size: None, encryption_info: None }
     }
 
-    /// Creates a new encrypted `FileContentBlock` with the given url, name and
-    /// encryption info.
+    /// Creates a new encrypted `FileContentBlock` with the given url, name and encryption info.
     pub fn encrypted(url: OwnedMxcUri, name: String, encryption_info: EncryptedContent) -> Self {
         Self {
             url,
@@ -172,8 +169,7 @@ impl FileContentBlock {
     }
 }
 
-/// The encryption info of a file sent to a room with end-to-end encryption
-/// enabled.
+/// The encryption info of a file sent to a room with end-to-end encryption enabled.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct EncryptedContent {
@@ -188,8 +184,7 @@ pub struct EncryptedContent {
 }
 
 impl EncryptedContent {
-    /// Construct a new `EncryptedContent` with the given encryption info and
-    /// hashes.
+    /// Construct a new `EncryptedContent` with the given encryption info and hashes.
     pub fn new(info: EncryptedFileInfo, hashes: EncryptedFileHashes) -> Self {
         Self { info, hashes }
     }
@@ -204,11 +199,10 @@ impl From<&EncryptedFile> for EncryptedContent {
 
 /// A block for caption content.
 ///
-/// A caption is usually a text message that should be displayed next to some
-/// media content.
+/// A caption is usually a text message that should be displayed next to some media content.
 ///
-/// To construct a `CaptionContentBlock` with a custom [`TextContentBlock`],
-/// convert it with `CaptionContentBlock::from()` / `.into()`.
+/// To construct a `CaptionContentBlock` with a custom [`TextContentBlock`], convert it with
+/// `CaptionContentBlock::from()` / `.into()`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct CaptionContentBlock {
@@ -228,11 +222,10 @@ impl CaptionContentBlock {
         Self { text: TextContentBlock::html(body, html_body) }
     }
 
-    /// A convenience constructor to create a caption content block from
-    /// Markdown.
+    /// A convenience constructor to create a caption content block from Markdown.
     ///
-    /// The content includes an HTML message if some Markdown formatting was
-    /// detected, otherwise only a plain text message is included.
+    /// The content includes an HTML message if some Markdown formatting was detected, otherwise
+    /// only a plain text message is included.
     #[cfg(feature = "markdown")]
     pub fn markdown(body: impl AsRef<str> + Into<String>) -> Self {
         Self { text: TextContentBlock::markdown(body) }

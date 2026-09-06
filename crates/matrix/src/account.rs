@@ -14,6 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use futures_core::Stream;
+use futures_util::{StreamExt, stream};
+#[cfg(feature = "experimental-element-recent-emojis")]
+use itertools::Itertools;
+#[cfg(feature = "experimental-element-recent-emojis")]
+use js_int::uint;
 #[cfg(feature = "experimental-element-recent-emojis")]
 use base::recent_emojis::RecentEmojisContent;
 use base::{
@@ -21,12 +27,6 @@ use base::{
     media::{MediaFormat, MediaRequestParameters},
     store::StateStoreExt,
 };
-use futures_core::Stream;
-use futures_util::{StreamExt, stream};
-#[cfg(feature = "experimental-element-recent-emojis")]
-use itertools::Itertools;
-#[cfg(feature = "experimental-element-recent-emojis")]
-use js_int::uint;
 use mime::Mime;
 #[cfg(feature = "unstable-msc4426")]
 use ruma::SecondsSinceUnixEpoch;
@@ -928,8 +928,7 @@ impl Account {
     /// # let account = client.account();
     /// use matrix::ruma::events::ignored_user_list::IgnoredUserListEventContent;
     ///
-    /// let maybe_content =
-    ///     account.account_data::<IgnoredUserListEventContent>().await?;
+    /// let maybe_content = account.account_data::<IgnoredUserListEventContent>().await?;
     /// if let Some(raw_content) = maybe_content {
     ///     let content = raw_content.deserialize()?;
     ///     println!("Ignored users:");
@@ -1503,8 +1502,8 @@ mod tests {
 #[cfg(test)]
 #[cfg(feature = "experimental-element-recent-emojis")]
 mod test_recent_emojis {
-    use base::recent_emojis::RecentEmojisContent;
     use js_int::{UInt, uint};
+    use base::recent_emojis::RecentEmojisContent;
     use sdk_test::{async_test, event_factory::EventFactory};
 
     use crate::{

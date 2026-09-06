@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use crypto_channel::*;
 use base::crypto::types::qr_login::{
     Msc4108IntentData, QrCodeData, QrCodeIntent, QrCodeIntentData,
 };
-use crypto_channel::*;
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::{instrument, trace};
 use url::Url;
@@ -285,9 +285,9 @@ pub(super) mod test {
     };
 
     use base::crypto::types::qr_login::QrCodeIntent;
-    use ruma::time::Instant;
     use sdk_common::executor::spawn;
     use sdk_test::async_test;
+    use ruma::time::Instant;
     use serde_json::json;
     use similar_asserts::assert_eq;
     use url::Url;

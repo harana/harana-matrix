@@ -18,11 +18,11 @@ use assert_matches2::{assert_let, assert_matches};
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt as _;
 use matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
-use ruma::{event_id, events::room::message::RoomMessageEventContent, room_id};
 use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{EventSendState, ReactionStatus, RoomExt as _};
+use ruma::{event_id, events::room::message::RoomMessageEventContent, room_id};
 use stream_assert::assert_pending;
 use tokio::time::sleep;
-use ui::timeline::{EventSendState, ReactionStatus, RoomExt as _};
 
 #[async_test]
 async fn test_abort_before_being_sent() {

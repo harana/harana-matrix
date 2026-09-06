@@ -9,11 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName,
-        api::{
-            auth_scheme::AccessToken, client::membership::ThirdPartySigned, error::Error, response,
-        },
+        api::{auth_scheme::AccessToken, error::Error, response},
         metadata,
     };
+
+    use crate::api::client::membership::ThirdPartySigned;
 
     metadata! {
         method: POST,
@@ -32,9 +32,8 @@ pub mod v3 {
         /// The room where the user should be invited.
         pub room_id_or_alias: OwnedRoomOrAliasId,
 
-        /// The signature of a `m.third_party_invite` token to prove that this
-        /// user owns a third party identity which has been invited to
-        /// the room.
+        /// The signature of a `m.third_party_invite` token to prove that this user owns a third
+        /// party identity which has been invited to the room.
         pub third_party_signed: Option<ThirdPartySigned>,
 
         /// Optional reason for joining the room.
@@ -44,11 +43,11 @@ pub mod v3 {
         ///
         /// One of the servers must be participating in the room.
         ///
-        /// When serializing, this field is mapped to both `server_name` and
-        /// `via` with identical values.
+        /// When serializing, this field is mapped to both `server_name` and `via`
+        /// with identical values.
         ///
-        /// When deserializing, the value is read from `via` if it's not missing
-        /// or empty and `server_name` otherwise.
+        /// When deserializing, the value is read from `via` if it's not missing or
+        /// empty and `server_name` otherwise.
         pub via: Vec<OwnedServerName>,
     }
 
@@ -72,9 +71,8 @@ pub mod v3 {
     #[cfg_attr(feature = "client", derive(serde::Serialize, crate::api::OutgoingBodyJson))]
     #[cfg_attr(feature = "server", derive(serde::Deserialize))]
     pub struct RequestBody {
-        /// The signature of a `m.third_party_invite` token to prove that this
-        /// user owns a third party identity which has been invited to
-        /// the room.
+        /// The signature of a `m.third_party_invite` token to prove that this user owns a third
+        /// party identity which has been invited to the room.
         #[serde(skip_serializing_if = "Option::is_none")]
         third_party_signed: Option<ThirdPartySigned>,
 
@@ -96,8 +94,8 @@ pub mod v3 {
         ) -> Result<http::Request<RequestBody>, crate::api::error::IntoHttpError> {
             use crate::api::Metadata;
 
-            // Only send `server_name` if the `via` parameter is not supported by the
-            // server. `via` was introduced in Matrix 1.12.
+            // Only send `server_name` if the `via` parameter is not supported by the server.
+            // `via` was introduced in Matrix 1.12.
             let server_name = if considering
                 .versions
                 .iter()
@@ -197,7 +195,6 @@ pub mod v3 {
     mod tests_client {
         use std::borrow::Cow;
 
-        use super::Request;
         use crate::{
             api::{
                 MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
@@ -205,6 +202,8 @@ pub mod v3 {
             },
             owned_room_id, owned_server_name,
         };
+
+        use super::Request;
 
         #[test]
         fn serialize_request_via_and_server_name() {
@@ -247,8 +246,9 @@ pub mod v3 {
 
     #[cfg(all(test, feature = "server"))]
     mod tests_server {
-        use super::Request;
         use crate::{api::IncomingRequest as _, owned_server_name};
+
+        use super::Request;
 
         #[test]
         fn deserialize_request_wrong_method() {

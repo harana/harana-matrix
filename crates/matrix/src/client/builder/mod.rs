@@ -29,16 +29,23 @@ use std::{
     time::Duration,
 };
 
+#[cfg(feature = "sqlite")]
+use futures_util::try_join;
+use homeserver_config::*;
 #[cfg(feature = "e2e-encryption")]
 use base::crypto::DecryptionSettings;
 #[cfg(feature = "experimental-x509-identity-verification")]
 use base::crypto::x509::{RawX509Signer, RawX509Verifier};
 #[cfg(feature = "e2e-encryption")]
 use base::crypto::{CollectStrategy, TrustRequirement};
-use base::{BaseClient, DmRoomDefinition, ThreadingSupport, store::StoreConfig, ttl::TtlValue};
+use base::{
+    BaseClient, DmRoomDefinition, ThreadingSupport, store::StoreConfig, ttl::TtlValue,
+};
+use sdk_common::cross_process_lock::CrossProcessLockConfig;
+#[cfg(feature = "experimental-search-core")]
+use search::backend::SearchIndexProvider;
 #[cfg(feature = "sqlite")]
-use futures_util::try_join;
-use homeserver_config::*;
+use sqlite::SqliteStoreConfig;
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
 use reqwest::Certificate;
 use ruma::{
@@ -46,11 +53,6 @@ use ruma::{
     api::{MatrixVersion, SupportedVersions, error::FromHttpResponseError},
     presence::PresenceState,
 };
-use sdk_common::cross_process_lock::CrossProcessLockConfig;
-#[cfg(feature = "experimental-search-core")]
-use search::backend::SearchIndexProvider;
-#[cfg(feature = "sqlite")]
-use sqlite::SqliteStoreConfig;
 use thiserror::Error;
 #[cfg(feature = "experimental-search-core")]
 use tokio::sync::Mutex;
@@ -1188,8 +1190,8 @@ pub(crate) mod tests {
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
     use base::store::MemoryStore;
-    use reqwest::dns::{Addrs, Name, Resolve, Resolving};
     use sdk_test::{async_test, test_json};
+    use reqwest::dns::{Addrs, Name, Resolve, Resolving};
     use serde_json::{Value as JsonValue, json_internal};
     use url::Url;
     use wiremock::{

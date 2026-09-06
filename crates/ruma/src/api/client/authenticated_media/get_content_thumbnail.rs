@@ -11,7 +11,6 @@ pub mod v1 {
 
     use http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
     use js_int::UInt;
-
     use crate::{
         IdParseError, MxcUri, OwnedServerName,
         api::{auth_scheme::AccessToken, request, response},
@@ -58,9 +57,8 @@ pub mod v1 {
         #[ruma_api(query)]
         pub height: UInt,
 
-        /// The maximum duration that the client is willing to wait to start
-        /// receiving data, in the case that the content has not yet
-        /// been uploaded.
+        /// The maximum duration that the client is willing to wait to start receiving data, in the
+        /// case that the content has not yet been uploaded.
         ///
         /// The default value is 20 seconds.
         #[ruma_api(query)]
@@ -73,10 +71,9 @@ pub mod v1 {
 
         /// Whether the server should return an animated thumbnail.
         ///
-        /// When `Some(true)`, the server should return an animated thumbnail if
-        /// possible and supported. When `Some(false)`, the server must
-        /// not return an animated thumbnail. When `None`, the server
-        /// should not return an animated thumbnail.
+        /// When `Some(true)`, the server should return an animated thumbnail if possible and
+        /// supported. When `Some(false)`, the server must not return an animated
+        /// thumbnail. When `None`, the server should not return an animated thumbnail.
         #[ruma_api(query)]
         #[serde(skip_serializing_if = "Option::is_none")]
         pub animated: Option<bool>,
@@ -93,9 +90,8 @@ pub mod v1 {
         #[ruma_api(header = CONTENT_TYPE)]
         pub content_type: Option<String>,
 
-        /// The value of the `Content-Disposition` HTTP header, possibly
-        /// containing the name of the file that was previously
-        /// uploaded.
+        /// The value of the `Content-Disposition` HTTP header, possibly containing the name of the
+        /// file that was previously uploaded.
         ///
         /// See [MDN] for the syntax.
         ///
@@ -105,8 +101,8 @@ pub mod v1 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given media ID, server name,
-        /// desired thumbnail width and desired thumbnail height.
+        /// Creates a new `Request` with the given media ID, server name, desired thumbnail width
+        /// and desired thumbnail height.
         pub fn new(
             media_id: String,
             server_name: OwnedServerName,
@@ -124,8 +120,8 @@ pub mod v1 {
             }
         }
 
-        /// Creates a new `Request` with the given URI, desired thumbnail width
-        /// and desired thumbnail height.
+        /// Creates a new `Request` with the given URI, desired thumbnail width and
+        /// desired thumbnail height.
         pub fn from_uri(uri: &MxcUri, width: UInt, height: UInt) -> Result<Self, IdParseError> {
             let (server_name, media_id) = uri.parts()?;
 

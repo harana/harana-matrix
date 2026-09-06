@@ -4,14 +4,15 @@
 //!
 //! Get server admin contact and support page of a homeserver's domain.
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     OwnedUserId,
-    api::{auth_scheme::NoAccessToken, client::PrivOwnedStr, request, response},
+    api::{auth_scheme::NoAccessToken, request, response},
     metadata,
     serde::StringEnum,
 };
+use serde::{Deserialize, Serialize};
+
+use crate::api::client::PrivOwnedStr;
 
 metadata! {
     method: GET,
@@ -30,13 +31,13 @@ pub struct Request {}
 pub struct Response {
     /// Ways to contact the server administrator.
     ///
-    /// At least one of `contacts` or `support_page` is required. If only
-    /// `contacts` is set, it must contain at least one item.
+    /// At least one of `contacts` or `support_page` is required. If only `contacts` is set, it
+    /// must contain at least one item.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub contacts: Vec<Contact>,
 
-    /// The URL of a page to give users help specific to the homeserver, like
-    /// extra login/registration steps.
+    /// The URL of a page to give users help specific to the homeserver, like extra
+    /// login/registration steps.
     ///
     /// At least one of `contacts` or `support_page` is required.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,15 +78,15 @@ pub struct Contact {
 
     /// A Matrix User ID representing the administrator.
     ///
-    /// It could be an account registered on a different homeserver so the
-    /// administrator can be contacted when the homeserver is down.
+    /// It could be an account registered on a different homeserver so the administrator can be
+    /// contacted when the homeserver is down.
     ///
     /// At least one of `matrix_id` or `email_address` is required.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matrix_id: Option<OwnedUserId>,
 
-    /// An optional URI leading to a PGP key that may be used to encrypt
-    /// messages sent to the contact.
+    /// An optional URI leading to a PGP key that may be used to encrypt messages sent to the
+    /// contact.
     ///
     /// This field uses the unstable prefix defined in [MSC4439].
     ///

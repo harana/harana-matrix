@@ -28,14 +28,12 @@ pub(super) enum CommonEventKind {
 
     /// Message-like event.
     ///
-    /// This is an event that can occur in the timeline and that doesn't have a
-    /// state key.
+    /// This is an event that can occur in the timeline and that doesn't have a state key.
     MessageLike,
 
     /// State event.
     ///
-    /// This is an event that can occur in the timeline and that has a state
-    /// key.
+    /// This is an event that can occur in the timeline and that has a state key.
     State,
 
     /// A to-device event.
@@ -45,8 +43,7 @@ pub(super) enum CommonEventKind {
 }
 
 impl CommonEventKind {
-    /// Get the list of variations for an event type (struct or enum) for this
-    /// kind.
+    /// Get the list of variations for an event type (struct or enum) for this kind.
     pub(super) fn event_variations(self) -> &'static [EventVariation] {
         match self {
             Self::GlobalAccountData | Self::RoomAccountData | Self::ToDevice => {
@@ -121,14 +118,14 @@ impl Parse for CommonEventKind {
 pub(super) enum EventVariation {
     /// The full format of an event.
     ///
-    /// Either the event cannot be redacted, or the type contains variants for
-    /// the original and redacted variations.
+    /// Either the event cannot be redacted, or the type contains variants for the original and
+    /// redacted variations.
     None,
 
     /// The sync format of an event.
     ///
-    /// Either the event cannot be redacted, or the type contains variants for
-    /// the original and redacted variations.
+    /// Either the event cannot be redacted, or the type contains variants for the original and
+    /// redacted variations.
     Sync,
 
     /// The full format of an event that can be redacted.
@@ -161,8 +158,7 @@ impl EventVariation {
         matches!(self, Self::Sync | Self::OriginalSync | Self::RedactedSync)
     }
 
-    /// Convert this "sync" variation to one which contains a `room_id`, if
-    /// possible.
+    /// Convert this "sync" variation to one which contains a `room_id`, if possible.
     ///
     /// Returns `None` if this is not a "sync" variation.
     pub(super) fn to_full(self) -> Option<Self> {
@@ -174,11 +170,11 @@ impl EventVariation {
         })
     }
 
-    /// Whether this variation can implement `JsonCastable` for the other
-    /// variation, if both are available for a kind.
+    /// Whether this variation can implement `JsonCastable` for the other variation, if both are
+    /// available for a kind.
     ///
-    /// A variation can be cast to another variation when that other variation
-    /// includes the same fields or less.
+    /// A variation can be cast to another variation when that other variation includes the same
+    /// fields or less.
     pub(super) fn is_json_castable_to(self, other: Self) -> bool {
         match self {
             Self::None | Self::OriginalSync | Self::RedactedSync => {
@@ -261,8 +257,7 @@ impl EventType {
         &self.value
     }
 
-    /// Access the inner string of this event type and remove the final `*` if
-    /// this is a prefix.
+    /// Access the inner string of this event type and remove the final `*` if this is a prefix.
     pub(super) fn without_wildcard(&self) -> &str {
         if self.is_prefix { self.value.trim_end_matches('*') } else { &self.value }
     }
@@ -330,13 +325,11 @@ pub(super) struct EventTypes {
 }
 
 impl EventTypes {
-    /// Try to construct an `EventTypes` from the given default event type and
-    /// aliases.
+    /// Try to construct an `EventTypes` from the given default event type and aliases.
     ///
     /// This performs the following validation on the event types:
     ///
-    /// - `*` cannot be used anywhere in the event type but as a wildcard at the
-    ///   end.
+    /// - `*` cannot be used anywhere in the event type but as a wildcard at the end.
     /// - If one event type ends with `.*`, all event types must end with it.
     pub(super) fn try_from_parts(ev_type: EventType, aliases: Vec<EventType>) -> syn::Result<Self> {
         if ev_type.without_wildcard().contains('*') {

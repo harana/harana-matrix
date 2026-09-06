@@ -9,17 +9,16 @@ pub mod v3 {
 
     use std::borrow::Borrow;
 
-    use serde_json::value::to_raw_value as to_raw_json_value;
-
-    #[cfg(feature = "unstable-msc4354")]
-    use crate::events::sticky::StickyDurationMs;
     use crate::{
         MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
         api::{auth_scheme::AccessToken, error::Error, response},
-        events::{AnyStateEventContent, StateEventContent, StateEventType},
         metadata,
         serde::Raw,
     };
+    #[cfg(feature = "unstable-msc4354")]
+    use crate::events::sticky::StickyDurationMs;
+    use crate::events::{AnyStateEventContent, StateEventContent, StateEventType};
+    use serde_json::value::to_raw_value as to_raw_json_value;
 
     metadata! {
         method: PUT,
@@ -49,11 +48,9 @@ pub mod v3 {
 
         /// Timestamp to use for the `origin_server_ts` of the event.
         ///
-        /// This is called [timestamp massaging] and can only be used by
-        /// Appservices.
+        /// This is called [timestamp massaging] and can only be used by Appservices.
         ///
-        /// Note that this does not change the position of the event in the
-        /// timeline.
+        /// Note that this does not change the position of the event in the timeline.
         ///
         /// [timestamp massaging]: https://spec.matrix.org/v1.19/application-service-api/#timestamp-massaging
         pub timestamp: Option<MilliSecondsSinceUnixEpoch>,
@@ -61,9 +58,8 @@ pub mod v3 {
         /// The duration to stick the event for.
         ///
         /// Valid values are the integer range 0-3600000 (1 hour).
-        /// The presence of this field indicates that the event should be
-        /// sticky, this will give this event additional delivery
-        /// guarantees.
+        /// The presence of this field indicates that the event should be sticky, this
+        /// will give this event additional delivery guarantees.
         ///
         /// See [MSC4354 sticky events](https://github.com/matrix-org/matrix-spec-proposals/pull/4354).
         #[cfg(feature = "unstable-msc4354")]
@@ -71,14 +67,12 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given room id, state key and event
-        /// content.
+        /// Creates a new `Request` with the given room id, state key and event content.
         ///
         /// # Errors
         ///
-        /// Since `Request` stores the request body in serialized form, this
-        /// function can fail if `T`s [`Serialize`][serde::Serialize]
-        /// implementation can fail.
+        /// Since `Request` stores the request body in serialized form, this function can fail if
+        /// `T`s [`Serialize`][serde::Serialize] implementation can fail.
         pub fn new<T, K>(
             room_id: OwnedRoomId,
             state_key: &K,
@@ -100,8 +94,8 @@ pub mod v3 {
             })
         }
 
-        /// Creates a new `Request` with the given room id, event type, state
-        /// key and raw event content.
+        /// Creates a new `Request` with the given room id, event type, state key and raw event
+        /// content.
         pub fn new_raw(
             room_id: OwnedRoomId,
             event_type: StateEventType,
@@ -192,8 +186,8 @@ pub mod v3 {
         {
             Self::check_request_method(request.method())?;
 
-            // FIXME: find a way to make this if-else collapse with serde recognizing
-            // trailing Option
+            // FIXME: find a way to make this if-else collapse with serde recognizing trailing
+            // Option
             let (room_id, event_type, state_key): (OwnedRoomId, StateEventType, String) =
                 if path_args.len() == 3 {
                     serde::Deserialize::deserialize(serde::de::value::SeqDeserializer::<
@@ -257,12 +251,13 @@ mod tests {
 
     use crate::{
         api::{
-            MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
-            auth_scheme::SendAccessToken, client::state::send_state_event::v3::Request,
+            MatrixVersion, OutgoingRequestExt as _, SupportedVersions, auth_scheme::SendAccessToken,
         },
-        events::{EmptyStateKey, room::name::RoomNameEventContent},
         owned_room_id,
     };
+    use crate::events::{EmptyStateKey, room::name::RoomNameEventContent};
+
+    use crate::api::client::state::send_state_event::v3::Request;
 
     #[test]
     fn serialize() {
@@ -271,8 +266,7 @@ mod tests {
             features: Default::default(),
         };
 
-        // This used to panic in make_endpoint_url because of a mismatch in the path
-        // parameter count
+        // This used to panic in make_endpoint_url because of a mismatch in the path parameter count
         let req = Request::new(
             owned_room_id!("!room:server.tld"),
             &EmptyStateKey,
@@ -302,8 +296,7 @@ mod tests {
             features: Default::default(),
         };
 
-        // This used to panic in make_endpoint_url because of a mismatch in the path
-        // parameter count
+        // This used to panic in make_endpoint_url because of a mismatch in the path parameter count
         let mut req = Request::new(
             owned_room_id!("!room:server.tld"),
             &EmptyStateKey,

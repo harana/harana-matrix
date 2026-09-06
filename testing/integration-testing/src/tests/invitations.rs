@@ -1,6 +1,8 @@
 use anyhow::{Result, ensure};
 use assign::assign;
-use matrix::{RoomState, ruma::api::client::room::create_room::v3::Request as CreateRoomRequest};
+use matrix::{
+    RoomState, ruma::api::client::room::create_room::v3::Request as CreateRoomRequest,
+};
 
 use crate::helpers::TestClientBuilder;
 

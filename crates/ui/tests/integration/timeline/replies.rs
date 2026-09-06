@@ -2,10 +2,17 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::timeout::timeout;
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
+use base::timeout::timeout;
+use sdk_test::{
+    ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
+};
+use ui::timeline::{
+    Error as TimelineError, EventSendState, MsgLikeContent, MsgLikeKind, RoomExt, TimelineDetails,
+    TimelineEventItemId, TimelineFocus, TimelineItemContent,
+};
 use ruma::{
     MilliSecondsSinceUnixEpoch, UInt, event_id,
     events::{
@@ -22,14 +29,9 @@ use ruma::{
     },
     owned_event_id, owned_mxc_uri, room_id,
 };
-use sdk_test::{ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde_json::json;
 use stream_assert::{assert_next_matches, assert_pending};
 use tokio::task::yield_now;
-use ui::timeline::{
-    Error as TimelineError, EventSendState, MsgLikeContent, MsgLikeKind, RoomExt, TimelineDetails,
-    TimelineEventItemId, TimelineFocus, TimelineItemContent,
-};
 use wiremock::{
     Mock, Request, ResponseTemplate,
     matchers::{header, method, path_regex},

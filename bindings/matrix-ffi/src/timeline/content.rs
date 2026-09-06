@@ -14,12 +14,12 @@
 
 use std::collections::HashMap;
 
-use base::CallIntentConsensus;
 use matrix::room::power_levels::power_level_user_changes;
+use base::CallIntentConsensus;
+use ui::timeline::RoomPinnedEventsChange;
 use ruma::events::{
     StateEventContentChange, room::history_visibility::HistoryVisibility as RumaHistoryVisibility,
 };
-use ui::timeline::RoomPinnedEventsChange;
 
 use crate::{
     client::JoinRule, event::FfiTimelineEventType, ruma::AssetType,

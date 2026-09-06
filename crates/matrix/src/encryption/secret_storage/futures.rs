@@ -14,8 +14,8 @@
 
 use std::{future::IntoFuture, pin::Pin};
 
-use base::crypto::secret_storage::SecretStorageKey;
 use futures_core::Future;
+use base::crypto::secret_storage::SecretStorageKey;
 use ruma::events::secret_storage::default_key::SecretStorageDefaultKeyEventContent;
 
 use super::{Result, SecretStorage, SecretStore};

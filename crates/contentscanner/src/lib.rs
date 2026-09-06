@@ -25,9 +25,6 @@ use api::{
     },
     public_server_key::PublicServerKeyRequest,
 };
-#[cfg(feature = "e2e-encryption")]
-use crypto::AttachmentDecryptor;
-use crypto::olm::Curve25519PublicKey;
 use matrix::{
     BoxFuture, Client, Error, IdParseError,
     encryption::vodozemac::pk_encryption::Message,
@@ -35,6 +32,9 @@ use matrix::{
     media::{MediaFetcher, MediaRequestParameters},
     ruma::events::room::MediaSource,
 };
+#[cfg(feature = "e2e-encryption")]
+use crypto::AttachmentDecryptor;
+use crypto::olm::Curve25519PublicKey;
 use ruma::{
     events::room::EncryptedFile,
     serde::{Base64, base64::Standard},
@@ -293,6 +293,7 @@ mod tests {
     #[cfg(feature = "e2e-encryption")]
     use matrix::media::{MediaFormat, MediaRequestParameters};
     use matrix::{HttpError, RumaApiError, test_utils::mocks::MatrixMockServer};
+    use sdk_test::async_test;
     use ruma::{
         api::{
             MatrixVersion,
@@ -306,7 +307,6 @@ mod tests {
         owned_mxc_uri,
         serde::Base64,
     };
-    use sdk_test::async_test;
     use serde::Deserialize;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,

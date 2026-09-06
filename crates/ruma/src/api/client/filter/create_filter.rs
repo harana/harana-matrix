@@ -9,9 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedUserId,
-        api::{auth_scheme::AccessToken, client::filter::FilterDefinition, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::filter::FilterDefinition;
 
     metadata! {
         method: POST,
@@ -28,8 +30,7 @@ pub mod v3 {
     pub struct Request {
         /// The ID of the user uploading the filter.
         ///
-        /// The access token must be authorized to make requests for this user
-        /// ID.
+        /// The access token must be authorized to make requests for this user ID.
         #[ruma_api(path)]
         pub user_id: OwnedUserId,
 
@@ -46,8 +47,7 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given user ID and filter
-        /// definition.
+        /// Creates a new `Request` with the given user ID and filter definition.
         pub fn new(user_id: OwnedUserId, filter: FilterDefinition) -> Self {
             Self { user_id, filter }
         }
@@ -65,8 +65,9 @@ pub mod v3 {
         #[cfg(feature = "server")]
         #[test]
         fn deserialize_request() {
-            use super::Request;
             use crate::api::IncomingRequest as _;
+
+            use super::Request;
 
             let req = Request::try_from_http_request(
                 http::Request::builder()
@@ -90,10 +91,12 @@ pub mod v3 {
             use crate::{
                 api::{
                     MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
-                    auth_scheme::SendAccessToken, client::filter::FilterDefinition,
+                    auth_scheme::SendAccessToken,
                 },
                 owned_user_id,
             };
+
+            use crate::api::client::filter::FilterDefinition;
 
             let supported = SupportedVersions {
                 versions: [MatrixVersion::V1_1].into(),

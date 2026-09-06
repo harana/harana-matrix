@@ -100,8 +100,8 @@ mod state;
 mod state_transaction;
 
 pub(super) use aggregations::*;
-use base::{CallIntentConsensus, RoomInfo};
 pub(super) use decryption_retry_task::{CryptoDropHandles, spawn_crypto_tasks};
+use base::{CallIntentConsensus, RoomInfo};
 
 /// The outcome of [`TimelineController::should_send_receipt`].
 pub(super) enum SendReceiptDecision {

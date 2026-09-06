@@ -16,8 +16,8 @@
 use std::ops::Deref;
 
 use base::deserialized_responses::EncryptionInfo;
-use ruma::push::Action;
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
+use ruma::push::Action;
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::{EventHandlerData, EventHandlerHandle};

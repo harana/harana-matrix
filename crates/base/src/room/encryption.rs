@@ -85,6 +85,7 @@ mod tests {
     };
 
     use assert_matches::assert_matches;
+    use sdk_test::{ALICE, event_factory::EventFactory};
     use ruma::{
         EventEncryptionAlgorithm, MilliSecondsSinceUnixEpoch, event_id,
         events::{
@@ -95,7 +96,6 @@ mod tests {
         time::SystemTime,
         user_id,
     };
-    use sdk_test::{ALICE, event_factory::EventFactory};
 
     use super::{EncryptionState, Room};
     use crate::{

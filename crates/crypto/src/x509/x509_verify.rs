@@ -250,9 +250,9 @@ fn get_attribute_value_as_string(value: &AttributeValue) -> Option<&str> {
 pub(crate) mod tests {
 
     use cms::cert::x509::der::Decode;
+    use sdk_test::async_test;
     use rcgen::generate_simple_self_signed;
     use ruma::{DeviceKeyAlgorithm, DeviceKeyId, encryption::KeyUsage, user_id};
-    use sdk_test::async_test;
     use vodozemac::Ed25519SecretKey;
 
     use super::*;

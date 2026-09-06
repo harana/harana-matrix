@@ -23,6 +23,10 @@ use std::{
     time::Duration,
 };
 
+use eyeball::{SharedObservable, Subscriber};
+use eyeball_im::{Vector, VectorDiff};
+use futures_core::Stream;
+use futures_util::{StreamExt, join};
 #[cfg(feature = "e2e-encryption")]
 use base::crypto::{
     DecryptionSettings, store::LockableCryptoStore, store::types::RoomPendingKeyBundleDetails,
@@ -37,10 +41,11 @@ use base::{
     sync::{Notification, RoomUpdates},
     task_monitor::TaskMonitor,
 };
-use eyeball::{SharedObservable, Subscriber};
-use eyeball_im::{Vector, VectorDiff};
-use futures_core::Stream;
-use futures_util::{StreamExt, join};
+use sdk_common::{
+    cross_process_lock::CrossProcessLockConfig,
+    executor::{JoinHandle, spawn},
+    ttl::TtlValue,
+};
 #[cfg(feature = "e2e-encryption")]
 use ruma::events::{InitialStateEvent, room::encryption::RoomEncryptionEventContent};
 use ruma::{
@@ -82,11 +87,6 @@ use ruma::{
     room::RoomType,
     serde::Raw,
     time::Instant,
-};
-use sdk_common::{
-    cross_process_lock::CrossProcessLockConfig,
-    executor::{JoinHandle, spawn},
-    ttl::TtlValue,
 };
 use serde::de::DeserializeOwned;
 use tokio::sync::{Mutex, OnceCell, RwLock, RwLockReadGuard, broadcast};
@@ -4568,13 +4568,13 @@ pub(crate) mod tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
+    use futures_util::{FutureExt, StreamExt, pin_mut};
+    use js_int::{UInt, uint};
     use base::{
         RoomState,
         store::{MemoryStore, StoreConfig},
         ttl::TtlValue,
     };
-    use futures_util::{FutureExt, StreamExt, pin_mut};
-    use js_int::{UInt, uint};
     use sdk_test::{
         DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, async_test,
         event_factory::EventFactory,
@@ -4582,6 +4582,7 @@ pub(crate) mod tests {
     #[cfg(target_family = "wasm")]
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
+    use sdk_common::cross_process_lock::CrossProcessLockConfig;
     use ruma::{
         RoomId, ServerName, UserId,
         api::{
@@ -4605,7 +4606,6 @@ pub(crate) mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_common::cross_process_lock::CrossProcessLockConfig;
     use serde_json::json;
     use stream_assert::{assert_next_matches, assert_pending};
     use tokio::{

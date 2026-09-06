@@ -10,15 +10,12 @@ use crate::RoomOrAliasId;
 
 /// A Matrix [room ID].
 ///
-/// A `RoomId` is generated randomly or converted from a string slice, and can
-/// be converted back into a string as needed.
+/// A `RoomId` is generated randomly or converted from a string slice, and can be converted back
+/// into a string as needed.
 ///
 /// ```
 /// # use ruma::RoomId;
-/// assert_eq!(
-///     <&RoomId>::try_from("!n8f893n9:example.com").unwrap(),
-///     "!n8f893n9:example.com"
-/// );
+/// assert_eq!(<&RoomId>::try_from("!n8f893n9:example.com").unwrap(), "!n8f893n9:example.com");
 /// ```
 ///
 /// [room ID]: https://spec.matrix.org/v1.19/appendices/#room-ids
@@ -28,14 +25,12 @@ use crate::RoomOrAliasId;
 pub struct RoomId(str);
 
 impl RoomId {
-    /// Attempts to generate a `RoomId` for the given origin server with a
-    /// localpart consisting of 18 random ASCII alphanumeric characters, as
-    /// recommended in the spec.
+    /// Attempts to generate a `RoomId` for the given origin server with a localpart consisting of
+    /// 18 random ASCII alphanumeric characters, as recommended in the spec.
     ///
-    /// This generates a room ID matching the [`RoomIdFormatVersion::V1`]
-    /// variant of the `room_id_format` field of [`RoomVersionRules`]. To
-    /// construct a room ID matching the [`RoomIdFormatVersion::V2`]
-    /// variant, use [`RoomId::new_v2()`] instead.
+    /// This generates a room ID matching the [`RoomIdFormatVersion::V1`] variant of the
+    /// `room_id_format` field of [`RoomVersionRules`]. To construct a room ID matching the
+    /// [`RoomIdFormatVersion::V2`] variant, use [`RoomId::new_v2()`] instead.
     ///
     /// [`RoomIdFormatVersion::V1`]: crate::room_version_rules::RoomIdFormatVersion::V1
     /// [`RoomIdFormatVersion::V2`]: crate::room_version_rules::RoomIdFormatVersion::V2
@@ -48,13 +43,12 @@ impl RoomId {
         ))
     }
 
-    /// Construct an `OwnedRoomId` using the reference hash of the
-    /// `m.room.create` event of the room.
+    /// Construct an `OwnedRoomId` using the reference hash of the `m.room.create` event of the
+    /// room.
     ///
-    /// This generates a room ID matching the [`RoomIdFormatVersion::V2`]
-    /// variant of the `room_id_format` field of [`RoomVersionRules`]. To
-    /// construct a room ID matching the [`RoomIdFormatVersion::V1`]
-    /// variant, use [`RoomId::new_v1()`] instead.
+    /// This generates a room ID matching the [`RoomIdFormatVersion::V2`] variant of the
+    /// `room_id_format` field of [`RoomVersionRules`]. To construct a room ID matching the
+    /// [`RoomIdFormatVersion::V1`] variant, use [`RoomId::new_v1()`] instead.
     ///
     /// Returns an error if the given string contains a NUL byte or is too long.
     ///
@@ -67,19 +61,17 @@ impl RoomId {
 
     /// Returns the room ID without the initial `!` sigil.
     ///
-    /// For room versions using [`RoomIdFormatVersion::V2`], this is the
-    /// reference hash of the `m.room.create` event of the room.
+    /// For room versions using [`RoomIdFormatVersion::V2`], this is the reference hash of the
+    /// `m.room.create` event of the room.
     ///
     /// [`RoomIdFormatVersion::V2`]: crate::room_version_rules::RoomIdFormatVersion::V2
     pub fn strip_sigil(&self) -> &str {
         self.as_str().strip_prefix('!').expect("sigil should be checked during construction")
     }
 
-    /// Returns the server name of the room ID, if it has the format
-    /// `!localpart:server_name`.
+    /// Returns the server name of the room ID, if it has the format `!localpart:server_name`.
     ///
-    /// This should only return `Some(_)` for room versions using
-    /// [`RoomIdFormatVersion::V1`].
+    /// This should only return `Some(_)` for room versions using [`RoomIdFormatVersion::V1`].
     ///
     /// [`RoomIdFormatVersion::V1`]: crate::room_version_rules::RoomIdFormatVersion::V1
     pub fn server_name(&self) -> Option<&ServerName> {
@@ -88,9 +80,8 @@ impl RoomId {
 
     /// Create a `matrix.to` URI for this room ID.
     ///
-    /// Note that it is recommended to provide servers that should know the room
-    /// to be able to find it with its room ID. For that use
-    /// [`RoomId::matrix_to_uri_via()`].
+    /// Note that it is recommended to provide servers that should know the room to be able to find
+    /// it with its room ID. For that use [`RoomId::matrix_to_uri_via()`].
     ///
     /// # Example
     ///
@@ -106,14 +97,11 @@ impl RoomId {
         MatrixToUri::new(self.into(), vec![])
     }
 
-    /// Create a `matrix.to` URI for this room ID with a list of servers that
-    /// should know it.
+    /// Create a `matrix.to` URI for this room ID with a list of servers that should know it.
     ///
-    /// To get the list of servers, it is recommended to use the [routing
-    /// algorithm] from the spec.
+    /// To get the list of servers, it is recommended to use the [routing algorithm] from the spec.
     ///
-    /// If you don't have a list of servers, you can use
-    /// [`RoomId::matrix_to_uri()`] instead.
+    /// If you don't have a list of servers, you can use [`RoomId::matrix_to_uri()`] instead.
     ///
     /// # Example
     ///
@@ -139,21 +127,18 @@ impl RoomId {
 
     /// Create a `matrix.to` URI for an event scoped under this room ID.
     ///
-    /// Note that it is recommended to provide servers that should know the room
-    /// to be able to find it with its room ID. For that use
-    /// [`RoomId::matrix_to_event_uri_via()`].
+    /// Note that it is recommended to provide servers that should know the room to be able to find
+    /// it with its room ID. For that use [`RoomId::matrix_to_event_uri_via()`].
     pub fn matrix_to_event_uri(&self, ev_id: impl Into<OwnedEventId>) -> MatrixToUri {
         MatrixToUri::new((self.to_owned(), ev_id.into()).into(), vec![])
     }
 
-    /// Create a `matrix.to` URI for an event scoped under this room ID with a
-    /// list of servers that should know it.
+    /// Create a `matrix.to` URI for an event scoped under this room ID with a list of servers that
+    /// should know it.
     ///
-    /// To get the list of servers, it is recommended to use the [routing
-    /// algorithm] from the spec.
+    /// To get the list of servers, it is recommended to use the [routing algorithm] from the spec.
     ///
-    /// If you don't have a list of servers, you can use
-    /// [`RoomId::matrix_to_event_uri()`] instead.
+    /// If you don't have a list of servers, you can use [`RoomId::matrix_to_event_uri()`] instead.
     ///
     /// [routing algorithm]: https://spec.matrix.org/v1.19/appendices/#routing
     pub fn matrix_to_event_uri_via<T>(&self, ev_id: impl Into<OwnedEventId>, via: T) -> MatrixToUri
@@ -171,9 +156,8 @@ impl RoomId {
     ///
     /// If `join` is `true`, a click on the URI should join the room.
     ///
-    /// Note that it is recommended to provide servers that should know the room
-    /// to be able to find it with its room ID. For that use
-    /// [`RoomId::matrix_uri_via()`].
+    /// Note that it is recommended to provide servers that should know the room to be able to find
+    /// it with its room ID. For that use [`RoomId::matrix_uri_via()`].
     ///
     /// # Example
     ///
@@ -189,14 +173,11 @@ impl RoomId {
         MatrixUri::new(self.into(), vec![], join.then_some(UriAction::Join))
     }
 
-    /// Create a `matrix:` URI for this room ID with a list of servers that
-    /// should know it.
+    /// Create a `matrix:` URI for this room ID with a list of servers that should know it.
     ///
-    /// To get the list of servers, it is recommended to use the [routing
-    /// algorithm] from the spec.
+    /// To get the list of servers, it is recommended to use the [routing algorithm] from the spec.
     ///
-    /// If you don't have a list of servers, you can use
-    /// [`RoomId::matrix_uri()`] instead.
+    /// If you don't have a list of servers, you can use [`RoomId::matrix_uri()`] instead.
     ///
     /// If `join` is `true`, a click on the URI should join the room.
     ///
@@ -231,21 +212,18 @@ impl RoomId {
 
     /// Create a `matrix:` URI for an event scoped under this room ID.
     ///
-    /// Note that it is recommended to provide servers that should know the room
-    /// to be able to find it with its room ID. For that use
-    /// [`RoomId::matrix_event_uri_via()`].
+    /// Note that it is recommended to provide servers that should know the room to be able to find
+    /// it with its room ID. For that use [`RoomId::matrix_event_uri_via()`].
     pub fn matrix_event_uri(&self, ev_id: impl Into<OwnedEventId>) -> MatrixUri {
         MatrixUri::new((self.to_owned(), ev_id.into()).into(), vec![], None)
     }
 
-    /// Create a `matrix:` URI for an event scoped under this room ID with a
-    /// list of servers that should know it.
+    /// Create a `matrix:` URI for an event scoped under this room ID with a list of servers that
+    /// should know it.
     ///
-    /// To get the list of servers, it is recommended to use the [routing
-    /// algorithm] from the spec.
+    /// To get the list of servers, it is recommended to use the [routing algorithm] from the spec.
     ///
-    /// If you don't have a list of servers, you can use
-    /// [`RoomId::matrix_event_uri()`] instead.
+    /// If you don't have a list of servers, you can use [`RoomId::matrix_event_uri()`] instead.
     ///
     /// [routing algorithm]: https://spec.matrix.org/v1.19/appendices/#routing
     pub fn matrix_event_uri_via<T>(&self, ev_id: impl Into<OwnedEventId>, via: T) -> MatrixUri

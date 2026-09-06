@@ -18,10 +18,10 @@ limitations under the License.
 //! "withheld" session data, then migrate the existing data into it, swapping
 //! the key around; finally, we drop the old table.
 
-use crypto::store::types::RoomKeyWithheldEntry;
 use indexed_db_futures::{
     Build, error::OpenDbError, query_source::QuerySource, transaction::TransactionMode,
 };
+use crypto::store::types::RoomKeyWithheldEntry;
 use tracing::{debug, info, warn};
 use wasm_bindgen::JsValue;
 

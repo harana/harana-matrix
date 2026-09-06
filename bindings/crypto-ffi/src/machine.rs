@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+use js_int::UInt;
+use sdk_common::deserialized_responses::AlgorithmInfo;
 use crypto::{
     CollectStrategy, DecryptionSettings, LocalTrust, OlmMachine as InnerMachine, OlmMachineBuilder,
     UserIdentity as SdkUserIdentity,
@@ -19,7 +21,6 @@ use crypto::{
     store::types::{BackupDecryptionKey, Changes},
     types::requests::ToDeviceRequest,
 };
-use js_int::UInt;
 use ruma::{
     DeviceKeyAlgorithm, EventId, OneTimeKeyAlgorithm, OwnedTransactionId, OwnedUserId, RoomId,
     UserId,
@@ -45,7 +46,6 @@ use ruma::{
     serde::Raw,
     to_device::DeviceIdOrAllDevices,
 };
-use sdk_common::deserialized_responses::AlgorithmInfo;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::RawValue};
 use tokio::runtime::Runtime;
@@ -209,8 +209,8 @@ impl OlmMachine {
         let device_id = device_id.as_str().into();
         let runtime = Runtime::new().expect("Couldn't create a tokio runtime");
 
-        let store =
-            runtime.block_on(sqlite::SqliteCryptoStore::open(path, passphrase.as_deref()))?;
+        let store = runtime
+            .block_on(sqlite::SqliteCryptoStore::open(path, passphrase.as_deref()))?;
 
         passphrase.zeroize();
 

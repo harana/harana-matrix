@@ -2,15 +2,15 @@
 //!
 //! [MSC4268]: https://github.com/matrix-org/matrix-spec-proposals/pull/4268
 
+use crate::OwnedRoomId;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::{OwnedRoomId, events::room::EncryptedFile};
+use crate::events::room::EncryptedFile;
 
 /// The content of an `m.room_key_bundle` event.
 ///
-/// Typically encrypted as an `m.room.encrypted` event, then sent as a to-device
-/// event.
+/// Typically encrypted as an `m.room.encrypted` event, then sent as a to-device event.
 ///
 /// This event is defined in [MSC4268](https://github.com/matrix-org/matrix-spec-proposals/pull/4268)
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
@@ -25,9 +25,8 @@ pub struct ToDeviceRoomKeyBundleEventContent {
 }
 
 impl ToDeviceRoomKeyBundleEventContent {
-    /// Creates a new `ToDeviceRoomKeyBundleEventContent` with the given room
-    /// ID, and [`EncryptedFile`] which contains the room keys from the
-    /// bundle.
+    /// Creates a new `ToDeviceRoomKeyBundleEventContent` with the given room ID, and
+    /// [`EncryptedFile`] which contains the room keys from the bundle.
     pub fn new(room_id: OwnedRoomId, file: EncryptedFile) -> Self {
         Self { room_id, file }
     }
@@ -35,15 +34,13 @@ impl ToDeviceRoomKeyBundleEventContent {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq, owned_mxc_uri, owned_room_id, serde::Base64,
+    };
     use serde_json::json;
 
     use super::ToDeviceRoomKeyBundleEventContent;
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq,
-        events::room::{EncryptedFile, EncryptedFileHash, V2EncryptedFileInfo},
-        owned_mxc_uri, owned_room_id,
-        serde::Base64,
-    };
+    use crate::events::room::{EncryptedFile, EncryptedFileHash, V2EncryptedFileInfo};
 
     #[test]
     fn serialization() {

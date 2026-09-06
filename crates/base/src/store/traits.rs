@@ -23,6 +23,7 @@ use std::{
 use as_variant::as_variant;
 use async_trait::async_trait;
 use growable_bloom_filter::GrowableBloom;
+use sdk_common::{AsyncTraitDeps, ttl::TtlValue};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId,
     OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UserId,
@@ -47,7 +48,6 @@ use ruma::{
     profile::UserProfile,
     serde::Raw,
 };
-use sdk_common::{AsyncTraitDeps, ttl::TtlValue};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
@@ -2653,9 +2653,9 @@ mod tests {
         use futures_util::future::{self, Either};
         #[cfg(all(target_family = "wasm", target_os = "unknown"))]
         use gloo_timers::future::sleep;
-        use ruma::room_id;
         use sdk_common::executor::spawn;
         use sdk_test::async_test;
+        use ruma::room_id;
         use tokio::sync::Mutex;
         #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         use tokio::time::sleep;

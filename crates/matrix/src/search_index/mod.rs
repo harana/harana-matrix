@@ -29,8 +29,16 @@
 use std::path::PathBuf;
 use std::{collections::hash_map::HashMap, sync::Arc};
 
-use base::{check_validity_of_replacement_events, deserialized_responses::TimelineEvent};
 use futures_util::future::join_all;
+use base::{
+    check_validity_of_replacement_events, deserialized_responses::TimelineEvent,
+};
+#[cfg(feature = "experimental-search")]
+use search::index::builder::{TantivyIndexLocation, TantivyIndexProvider};
+use search::{
+    backend::{IndexableEvent, RoomIndexOperation, RoomSearchIndex, SearchIndexProvider},
+    error::IndexError,
+};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, RoomId,
     events::{
@@ -46,12 +54,6 @@ use ruma::{
         sticker::SyncStickerEvent,
     },
     room_version_rules::RedactionRules,
-};
-#[cfg(feature = "experimental-search")]
-use search::index::builder::{TantivyIndexLocation, TantivyIndexProvider};
-use search::{
-    backend::{IndexableEvent, RoomIndexOperation, RoomSearchIndex, SearchIndexProvider},
-    error::IndexError,
 };
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, warn};
@@ -578,14 +580,14 @@ async fn parse_timeline_event(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use ruma::{
-        OwnedEventId, RoomId, event_id,
-        events::room::message::RoomMessageEventContentWithoutRelation, room_id, user_id,
-    };
-    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use search::{
         backend::{RoomIndexOperation, RoomSearchIndex, SearchIndexProvider},
         error::IndexError,
+    };
+    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+    use ruma::{
+        OwnedEventId, RoomId, event_id,
+        events::room::message::RoomMessageEventContentWithoutRelation, room_id, user_id,
     };
 
     use crate::test_utils::mocks::MatrixMockServer;

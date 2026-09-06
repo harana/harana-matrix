@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use futures_core::Stream;
 use base::crypto::{
     CancelInfo, DeviceData, QrVerification as BaseQrVerification, QrVerificationState,
     qrcode::{EncodingError, qrcode::QrCode},
 };
-use futures_core::Stream;
 use ruma::{RoomId, UserId};
 
 use crate::{Client, Result};

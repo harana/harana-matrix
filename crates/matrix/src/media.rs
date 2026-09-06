@@ -21,10 +21,13 @@ use std::{fmt, time::Duration};
 #[cfg(not(target_family = "wasm"))]
 use std::{fs::File, path::Path};
 
-use base::media::store::IgnoreMediaRetentionPolicy;
-pub use base::media::{store::MediaRetentionPolicy, *};
 use eyeball::SharedObservable;
 use futures_util::future::try_join;
+use base::media::store::IgnoreMediaRetentionPolicy;
+pub use base::media::{store::MediaRetentionPolicy, *};
+#[cfg(not(target_family = "wasm"))]
+use sdk_common::executor::spawn_blocking;
+use sdk_common::{BoxFuture, SendOutsideWasm, SyncOutsideWasm};
 use mime::Mime;
 use ruma::{
     MilliSecondsSinceUnixEpoch, MxcUri, OwnedMxcUri, TransactionId, UInt,
@@ -35,9 +38,6 @@ use ruma::{
     assign,
     events::room::{MediaSource, ThumbnailInfo},
 };
-#[cfg(not(target_family = "wasm"))]
-use sdk_common::executor::spawn_blocking;
-use sdk_common::{BoxFuture, SendOutsideWasm, SyncOutsideWasm};
 use serde_json::value::RawValue as RawJsonValue;
 #[cfg(not(target_family = "wasm"))]
 use tempfile::{Builder as TempFileBuilder, NamedTempFile, TempDir};

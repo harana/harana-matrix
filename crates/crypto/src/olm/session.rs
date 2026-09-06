@@ -320,10 +320,9 @@ impl Session {
         let now = SecondsSinceUnixEpoch::now();
         let creation_time =
             clamp_timestamp(pickle.creation_time, now, "creation_time", &session_id);
-        let last_use_time =
-            clamp_timestamp(pickle.last_use_time, now, "last_use_time", &session_id)
-                // A session cannot have been used before it existed.
-                .max(creation_time);
+        let last_use_time = clamp_timestamp(pickle.last_use_time, now, "last_use_time", &session_id)
+            // A session cannot have been used before it existed.
+            .max(creation_time);
         let last_decryption_time = pickle
             .last_decryption_time
             .map(|time| clamp_timestamp(time, now, "last_decryption_time", &session_id));
@@ -403,8 +402,8 @@ pub struct PickledSession {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use ruma::{device_id, user_id};
     use sdk_test::async_test;
+    use ruma::{device_id, user_id};
     use serde_json::{self, Value};
     use vodozemac::olm::{OlmMessage, SessionConfig};
 

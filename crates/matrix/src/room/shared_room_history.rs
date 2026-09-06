@@ -320,10 +320,10 @@ pub(crate) async fn maybe_accept_key_bundle(room: &Room, inviter: &UserId) -> Re
 #[cfg(all(test, not(target_family = "wasm")))]
 mod test {
     use base::crypto::store::types::RoomKeyBundleInfo;
-    use ruma::{room_id, user_id};
     use sdk_test::{
         InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory,
     };
+    use ruma::{room_id, user_id};
     use vodozemac::Curve25519PublicKey;
 
     use crate::{room::shared_room_history, test_utils::mocks::MatrixMockServer};

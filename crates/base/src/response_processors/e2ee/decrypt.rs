@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use sdk_common::deserialized_responses::TimelineEvent;
 use crypto::RoomEventDecryptionResult;
 use ruma::RoomId;
-use sdk_common::deserialized_responses::TimelineEvent;
 
 use super::{super::verification, E2EE};
 use crate::Result;

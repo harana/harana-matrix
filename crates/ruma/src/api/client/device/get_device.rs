@@ -9,9 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedDeviceId,
-        api::{auth_scheme::AccessToken, client::device::Device, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::device::Device;
 
     metadata! {
         method: GET,

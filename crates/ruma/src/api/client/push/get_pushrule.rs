@@ -8,13 +8,11 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3pushrulesglobalkindruleid
 
     use crate::{
-        api::{
-            auth_scheme::AccessToken,
-            client::push::{PushRule, RuleKind},
-            request, response,
-        },
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::push::{PushRule, RuleKind};
 
     metadata! {
         method: GET,

@@ -33,7 +33,8 @@ impl crate::HttpSend for NoTransport {
         _request: http::Request<bytes::Bytes>,
         _timeout: Option<std::time::Duration>,
         _send_progress: eyeball::SharedObservable<crate::TransmissionProgress>,
-    ) -> sdk_common::BoxFuture<'a, Result<http::Response<bytes::Bytes>, crate::HttpError>> {
+    ) -> sdk_common::BoxFuture<'a, Result<http::Response<bytes::Bytes>, crate::HttpError>>
+    {
         Box::pin(std::future::ready(Err(crate::HttpError::Transport(
             "this test client was built without an HTTP transport".into(),
         ))))

@@ -82,6 +82,7 @@ mod tests {
     use std::{ops::Sub, sync::Arc, time::Duration};
 
     use assign::assign;
+    use sdk_test::{ALICE, BOB, CAROL, event_factory::EventFactory};
     use ruma::{
         DeviceId, EventId, MilliSecondsSinceUnixEpoch, OwnedUserId, UserId, device_id, event_id,
         events::{
@@ -98,7 +99,6 @@ mod tests {
         time::SystemTime,
         user_id,
     };
-    use sdk_test::{ALICE, BOB, CAROL, event_factory::EventFactory};
     use similar_asserts::assert_eq;
 
     use super::{

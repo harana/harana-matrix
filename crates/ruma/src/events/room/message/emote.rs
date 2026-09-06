@@ -29,8 +29,8 @@ impl EmoteMessageEventContent {
 
     /// A convenience constructor to create a markdown emote.
     ///
-    /// Returns an html emote message if some markdown formatting was detected,
-    /// otherwise returns a plain-text emote.
+    /// Returns an html emote message if some markdown formatting was detected, otherwise returns a
+    /// plain-text emote.
     #[cfg(feature = "markdown")]
     pub fn markdown(body: impl AsRef<str> + Into<String>) -> Self {
         if let Some(formatted) = FormattedBody::markdown(&body) {

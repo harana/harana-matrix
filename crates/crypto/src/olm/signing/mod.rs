@@ -694,8 +694,8 @@ impl PrivateCrossSigningIdentity {
 mod tests {
     use std::sync::Arc;
 
-    use ruma::{CanonicalJsonValue, DeviceKeyAlgorithm, DeviceKeyId, UserId, device_id, user_id};
     use sdk_test::async_test;
+    use ruma::{CanonicalJsonValue, DeviceKeyAlgorithm, DeviceKeyId, UserId, device_id, user_id};
     use serde_json::json;
 
     use super::{PrivateCrossSigningIdentity, pk_signing::Signing};

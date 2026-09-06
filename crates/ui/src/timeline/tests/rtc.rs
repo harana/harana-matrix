@@ -3,13 +3,13 @@
 use std::ops::Add;
 
 use assert_matches::assert_matches;
-use base::CallIntentConsensus;
 use eyeball_im::VectorDiff;
+use base::CallIntentConsensus;
+use sdk_test::{ALICE, BOB, CAROL};
 use ruma::{
     event_id,
     events::rtc::notification::{CallIntent, NotificationType},
 };
-use sdk_test::{ALICE, BOB, CAROL};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use super::*;

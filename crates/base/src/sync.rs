@@ -16,6 +16,10 @@
 
 use std::{collections::BTreeMap, fmt};
 
+use sdk_common::{
+    debug::DebugRawEvent,
+    deserialized_responses::{ProcessedToDeviceEvent, TimelineEvent},
+};
 pub use ruma::api::client::sync::sync_events::v3::{
     InvitedRoom as InvitedRoomUpdate, KnockedRoom as KnockedRoomUpdate,
 };
@@ -28,10 +32,6 @@ use ruma::{
     },
     push::Action,
     serde::Raw,
-};
-use sdk_common::{
-    debug::DebugRawEvent,
-    deserialized_responses::{ProcessedToDeviceEvent, TimelineEvent},
 };
 use serde::{Deserialize, Serialize};
 

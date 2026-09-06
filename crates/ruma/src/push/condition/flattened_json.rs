@@ -65,8 +65,7 @@ impl FlattenedJson {
         self.map.get(path).and_then(|v| v.as_str())
     }
 
-    /// Whether this flattened JSON contains an `m.mentions` property under the
-    /// `content` property.
+    /// Whether this flattened JSON contains an `m.mentions` property under the `content` property.
     pub fn contains_mentions(&self) -> bool {
         self.map
             .keys()
@@ -76,8 +75,7 @@ impl FlattenedJson {
 
 /// Escape a key for path matching.
 ///
-/// This escapes the dots (`.`) and backslashes (`\`) in the key with a
-/// backslash.
+/// This escapes the dots (`.`) and backslashes (`\`) in the key with a backslash.
 fn escape_key(key: &str) -> String {
     key.replace('\\', r"\\").replace('.', r"\.")
 }
@@ -137,8 +135,7 @@ impl ScalarJsonValue {
         as_variant!(self, Self::Integer).copied()
     }
 
-    /// If the `ScalarJsonValue` is a `String`, return a reference to the inner
-    /// value.
+    /// If the `ScalarJsonValue` is a `String`, return a reference to the inner value.
     pub fn as_str(&self) -> Option<&str> {
         as_variant!(self, Self::String)
     }
@@ -256,14 +253,12 @@ impl FlattenedJsonValue {
         as_variant!(self, Self::Integer).copied()
     }
 
-    /// If the `FlattenedJsonValue` is a `String`, return a reference to the
-    /// inner value.
+    /// If the `FlattenedJsonValue` is a `String`, return a reference to the inner value.
     pub fn as_str(&self) -> Option<&str> {
         as_variant!(self, Self::String)
     }
 
-    /// If the `FlattenedJsonValue` is an `Array`, return a reference to the
-    /// inner value.
+    /// If the `FlattenedJsonValue` is an `Array`, return a reference to the inner value.
     pub fn as_array(&self) -> Option<&[ScalarJsonValue]> {
         as_variant!(self, Self::Array)
     }

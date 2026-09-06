@@ -6,8 +6,8 @@ use super::{IdParseError, KeyName};
 
 /// A Matrix device ID.
 ///
-/// Device identifiers in Matrix are completely opaque character sequences. This
-/// type is provided simply for its semantic value.
+/// Device identifiers in Matrix are completely opaque character sequences. This type is provided
+/// simply for its semantic value.
 ///
 /// # Example
 ///

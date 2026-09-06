@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use assert_matches2::assert_matches;
-use ruma::room_id;
 use sdk_test::async_test;
+use ruma::room_id;
 
 use crate::{
     OlmMachine, SetRoomSettingsError, machine::tests, store::types::RoomSettings,

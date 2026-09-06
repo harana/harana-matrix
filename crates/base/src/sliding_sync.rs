@@ -14,13 +14,13 @@
 
 //! Extend `BaseClient` with capabilities to handle MSC4186.
 
+#[cfg(feature = "e2e-encryption")]
+use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
+use sdk_common::timer;
 use ruma::{
     OwnedRoomId, api::client::sync::sync_events::v5 as http, events::receipt::SyncReceiptEvent,
     serde::Raw,
 };
-#[cfg(feature = "e2e-encryption")]
-use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
-use sdk_common::timer;
 use tokio::sync::MutexGuard;
 use tracing::{instrument, trace};
 
@@ -309,6 +309,7 @@ mod tests {
     use std::collections::{BTreeMap, HashSet};
 
     use assert_matches::assert_matches;
+    use sdk_test::async_test;
     use ruma::{
         JsOption, MxcUri, OwnedRoomId, OwnedUserId, RoomAliasId, RoomId, UserId,
         api::client::sync::sync_events::UnreadNotificationsCount,
@@ -331,7 +332,6 @@ mod tests {
         serde::Raw,
         uint, user_id,
     };
-    use sdk_test::async_test;
     use serde_json::json;
     #[cfg(feature = "unstable-msc4426")]
     use stream_assert::{assert_pending, assert_ready};
@@ -369,8 +369,8 @@ mod tests {
         assert!(sync_resp.rooms.invited.contains_key(room_id));
     }
 
-    use ruma::events::AnyStrippedStateEvent;
     use sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use ruma::events::AnyStrippedStateEvent;
 
     fn invite_state_for(
         user_id: &UserId,

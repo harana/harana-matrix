@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use base::{SendOutsideWasm, SyncOutsideWasm, ThreadingSupport};
 use matrix::Room;
+use base::{SendOutsideWasm, SyncOutsideWasm, ThreadingSupport};
 use ruma::{events::AnySyncTimelineEvent, room_version_rules::RoomVersionRules};
 use tracing::{Instrument, Span, info_span, warn};
 

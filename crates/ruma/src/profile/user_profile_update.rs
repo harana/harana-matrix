@@ -14,8 +14,7 @@ pub enum UserProfileUpdate {
     /// The user's profile has been updated with the included changes.
     Updated(UserProfileChanges),
 
-    /// This user no longer needs to be tracked as they have left all shared
-    /// rooms.
+    /// This user no longer needs to be tracked as they have left all shared rooms.
     Dropped,
 }
 
@@ -46,8 +45,8 @@ impl Serialize for UserProfileUpdate {
 /// A collection of changes to be applied to a user's profile.
 ///
 /// This type is not supposed to be used directly, but applied to an existing
-/// [`UserProfile`](super::UserProfile). If a profile doesn't exist, the changes
-/// should be applied to an empty one.
+/// [`UserProfile`](super::UserProfile). If a profile doesn't exist, the changes should be applied
+/// to an empty one.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct UserProfileChanges {
@@ -68,9 +67,9 @@ impl UserProfileChanges {
 
     /// Returns the updated value of the given [`StaticProfileField`].
     ///
-    /// Returns `Ok(Some(_))` if an update to the field is included and the
-    /// value was deserialized successfully, `Ok(None)` if the field update
-    /// is not included, or an error if deserialization of the value failed.
+    /// Returns `Ok(Some(_))` if an update to the field is included and the value was deserialized
+    /// successfully, `Ok(None)` if the field update is not included, or an error if deserialization
+    /// of the value failed.
     pub fn get_updated_static<F: StaticProfileField>(
         &self,
     ) -> Result<Option<F::Value>, serde_json::Error> {

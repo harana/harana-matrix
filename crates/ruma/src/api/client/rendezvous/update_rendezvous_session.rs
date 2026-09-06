@@ -28,8 +28,8 @@ pub mod unstable {
         #[ruma_api(path)]
         pub id: String,
 
-        /// The expected sequence token for the session. If it doesn't match the
-        /// server state then an error is returned.
+        /// The expected sequence token for the session. If it doesn't match the server state then
+        /// an error is returned.
         pub sequence_token: String,
 
         /// Data up to maximum size allowed by the server.

@@ -2,17 +2,15 @@
 //!
 //! [`m.room_key`]: https://spec.matrix.org/v1.19/client-server-api/#mroom_key
 
+use crate::{EventEncryptionAlgorithm, OwnedRoomId};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
-
-use crate::{EventEncryptionAlgorithm, OwnedRoomId};
 
 pub mod withheld;
 
 /// The content of an `m.room_key` event.
 ///
-/// Typically encrypted as an `m.room.encrypted` event, then sent as a to-device
-/// event.
+/// Typically encrypted as an `m.room.encrypted` event, then sent as a to-device event.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room_key", kind = ToDevice)]
@@ -43,8 +41,8 @@ pub struct ToDeviceRoomKeyEventContent {
 }
 
 impl ToDeviceRoomKeyEventContent {
-    /// Creates a new `ToDeviceRoomKeyEventContent` with the given algorithm,
-    /// room ID, session ID and session key.
+    /// Creates a new `ToDeviceRoomKeyEventContent` with the given algorithm, room ID, session ID
+    /// and session key.
     pub fn new(
         algorithm: EventEncryptionAlgorithm,
         room_id: OwnedRoomId,
@@ -57,13 +55,11 @@ impl ToDeviceRoomKeyEventContent {
 
 #[cfg(test)]
 mod tests {
+    use crate::{canonical_json::assert_to_canonical_json_eq, owned_room_id, room_id};
     use serde_json::json;
 
     use super::ToDeviceRoomKeyEventContent;
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq, events::EventEncryptionAlgorithm,
-        owned_room_id, room_id,
-    };
+    use crate::events::EventEncryptionAlgorithm;
 
     #[test]
     fn serialization() {

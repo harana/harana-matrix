@@ -14,8 +14,8 @@
 
 use std::{fmt, time::Duration};
 
-use ruma::{api::client::sync::sync_events, presence::PresenceState};
 use sdk_common::debug::DebugStructExt;
+use ruma::{api::client::sync::sync_events, presence::PresenceState};
 
 const DEFAULT_SYNC_TIMEOUT: Duration = Duration::from_secs(30);
 

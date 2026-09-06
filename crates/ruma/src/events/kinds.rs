@@ -1,4 +1,10 @@
 use as_variant::as_variant;
+use crate::{
+    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
+    encryption::DeviceKeys,
+    room_version_rules::RedactionRules,
+    serde::{JsonCastable, JsonObject, Raw, from_raw_json_value},
+};
 use ruma_macros::Event;
 use serde::{Deserialize, Deserializer, Serialize, ser::SerializeStruct};
 use serde_json::value::RawValue as RawJsonValue;
@@ -13,12 +19,6 @@ use super::{
 };
 #[cfg(feature = "unstable-msc4354")]
 use crate::events::sticky::StickyObject;
-use crate::{
-    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
-    encryption::DeviceKeys,
-    room_version_rules::RedactionRules,
-    serde::{JsonCastable, JsonObject, Raw, from_raw_json_value},
-};
 
 /// A global account data event.
 #[derive(Clone, Debug, Event)]
@@ -125,8 +125,7 @@ pub struct SyncEphemeralRoomEvent<C: EphemeralRoomEventContent> {
 }
 
 impl<C: EphemeralRoomEventContent> SyncEphemeralRoomEvent<C> {
-    /// Construct a new `SyncEphemeralRoomEvent` with the given content and room
-    /// ID.
+    /// Construct a new `SyncEphemeralRoomEvent` with the given content and room ID.
     pub fn new(content: C) -> Self {
         Self { content }
     }
@@ -148,9 +147,8 @@ impl<C: EphemeralRoomEventContent> JsonCastable<JsonObject> for SyncEphemeralRoo
 
 /// An unredacted message-like event.
 ///
-/// `OriginalMessageLikeEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `OriginalMessageLikeEvent` implements the comparison traits using only the `event_id` field, a
+/// sorted list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct OriginalMessageLikeEvent<C: MessageLikeEventContent> {
@@ -173,8 +171,8 @@ pub struct OriginalMessageLikeEvent<C: MessageLikeEventContent> {
     pub unsigned: MessageLikeUnsigned<C>,
 
     /// Message events can be annotated with a new top-level sticky object,
-    /// which MUST have a duration_ms, which is the number of milliseconds for
-    /// the event to be sticky.
+    /// which MUST have a duration_ms, which is the number of milliseconds for the event to be
+    /// sticky.
     #[cfg(feature = "unstable-msc4354")]
     #[ruma_event(default, default_on_error, rename = "msc4354_sticky")]
     pub sticky: Option<StickyObject>,
@@ -203,9 +201,8 @@ impl<C: MessageLikeEventContent> JsonCastable<JsonObject> for OriginalMessageLik
 
 /// An unredacted message-like event without a `room_id`.
 ///
-/// `OriginalSyncMessageLikeEvent` implements the comparison traits using only
-/// the `event_id` field, a sorted list would be sorted lexicographically based
-/// on the event's `EventId`.
+/// `OriginalSyncMessageLikeEvent` implements the comparison traits using only the `event_id` field,
+/// a sorted list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct OriginalSyncMessageLikeEvent<C: MessageLikeEventContent> {
@@ -225,8 +222,8 @@ pub struct OriginalSyncMessageLikeEvent<C: MessageLikeEventContent> {
     pub unsigned: MessageLikeUnsigned<C>,
 
     /// Message events can be annotated with a new top-level sticky object,
-    /// which MUST have a duration_ms, which is the number of milliseconds for
-    /// the event to be sticky.
+    /// which MUST have a duration_ms, which is the number of milliseconds for the event to be
+    /// sticky.
     #[cfg(feature = "unstable-msc4354")]
     #[ruma_event(default, default_on_error, rename = "msc4354_sticky")]
     pub sticky: Option<StickyObject>,
@@ -252,9 +249,8 @@ impl<C: MessageLikeEventContent> JsonCastable<JsonObject> for OriginalSyncMessag
 
 /// A redacted message-like event.
 ///
-/// `RedactedMessageLikeEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `RedactedMessageLikeEvent` implements the comparison traits using only the `event_id` field, a
+/// sorted list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct RedactedMessageLikeEvent<C: RedactedMessageLikeEventContent> {
@@ -300,9 +296,8 @@ impl<C: RedactedMessageLikeEventContent> JsonCastable<JsonObject> for RedactedMe
 
 /// A redacted message-like event without a `room_id`.
 ///
-/// `RedactedSyncMessageLikeEvent` implements the comparison traits using only
-/// the `event_id` field, a sorted list would be sorted lexicographically based
-/// on the event's `EventId`.
+/// `RedactedSyncMessageLikeEvent` implements the comparison traits using only the `event_id` field,
+/// a sorted list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct RedactedSyncMessageLikeEvent<C: RedactedMessageLikeEventContent> {
@@ -336,9 +331,8 @@ impl<C: RedactedMessageLikeEventContent> JsonCastable<JsonObject>
 
 /// A possibly-redacted message-like event.
 ///
-/// `MessageLikeEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `MessageLikeEvent` implements the comparison traits using only the `event_id` field, a sorted
+/// list would be sorted lexicographically based on the event's `EventId`.
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Debug)]
 pub enum MessageLikeEvent<C: MessageLikeEventContent + RedactContent>
@@ -366,9 +360,8 @@ impl<C: MessageLikeEventContent + RedactContent> JsonCastable<JsonObject> for Me
 
 /// A possibly-redacted message-like event without a `room_id`.
 ///
-/// `SyncMessageLikeEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `SyncMessageLikeEvent` implements the comparison traits using only the `event_id` field, a
+/// sorted list would be sorted lexicographically based on the event's `EventId`.
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Debug)]
 pub enum SyncMessageLikeEvent<C: MessageLikeEventContent + RedactContent>
@@ -391,9 +384,8 @@ where
 
 /// An unredacted state event.
 ///
-/// `OriginalStateEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `OriginalStateEvent` implements the comparison traits using only the `event_id` field, a sorted
+/// list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct OriginalStateEvent<C: StaticStateEventContent> {
@@ -412,21 +404,20 @@ pub struct OriginalStateEvent<C: StaticStateEventContent> {
     /// The ID of the room associated with this event.
     pub room_id: OwnedRoomId,
 
-    /// A unique key which defines the overwriting semantics for this piece of
-    /// room state.
+    /// A unique key which defines the overwriting semantics for this piece of room state.
     ///
     /// This must be a string type, and is often an empty string.
     ///
-    /// A state event is keyed by its `(type, state_key)` tuple. Sending another
-    /// state event with the same tuple replaces the previous one.
+    /// A state event is keyed by its `(type, state_key)` tuple. Sending another state event with
+    /// the same tuple replaces the previous one.
     pub state_key: C::StateKey,
 
     /// Additional key-value pairs not signed by the homeserver.
     pub unsigned: C::Unsigned,
 
     /// Message events can be annotated with a new top-level sticky object,
-    /// which MUST have a duration_ms, which is the number of milliseconds for
-    /// the event to be sticky.
+    /// which MUST have a duration_ms, which is the number of milliseconds for the event to be
+    /// sticky.
     #[cfg(feature = "unstable-msc4354")]
     #[ruma_event(default, default_on_error, rename = "msc4354_sticky")]
     pub sticky: Option<StickyObject>,
@@ -459,9 +450,8 @@ impl<C: StaticStateEventContent> JsonCastable<JsonObject> for OriginalStateEvent
 
 /// An unredacted state event without a `room_id`.
 ///
-/// `OriginalSyncStateEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `OriginalSyncStateEvent` implements the comparison traits using only the `event_id` field, a
+/// sorted list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct OriginalSyncStateEvent<C: StaticStateEventContent> {
@@ -477,21 +467,20 @@ pub struct OriginalSyncStateEvent<C: StaticStateEventContent> {
     /// Timestamp on the originating homeserver when this event was sent.
     pub origin_server_ts: MilliSecondsSinceUnixEpoch,
 
-    /// A unique key which defines the overwriting semantics for this piece of
-    /// room state.
+    /// A unique key which defines the overwriting semantics for this piece of room state.
     ///
     /// This must be a string type, and is often an empty string.
     ///
-    /// A state event is keyed by its `(type, state_key)` tuple. Sending another
-    /// state event with the same tuple replaces the previous one.
+    /// A state event is keyed by its `(type, state_key)` tuple. Sending another state event with
+    /// the same tuple replaces the previous one.
     pub state_key: C::StateKey,
 
     /// Additional key-value pairs not signed by the homeserver.
     pub unsigned: C::Unsigned,
 
     /// Message events can be annotated with a new top-level sticky object,
-    /// which MUST have a duration_ms, which is the number of milliseconds for
-    /// the event to be sticky.
+    /// which MUST have a duration_ms, which is the number of milliseconds for the event to be
+    /// sticky.
     #[cfg(feature = "unstable-msc4354")]
     #[ruma_event(default, default_on_error, rename = "msc4354_sticky")]
     pub sticky: Option<StickyObject>,
@@ -513,8 +502,7 @@ where
 
 impl<C: StaticStateEventContent> JsonCastable<JsonObject> for OriginalSyncStateEvent<C> {}
 
-/// A stripped-down state event, used for previews of rooms the user has been
-/// invited to.
+/// A stripped-down state event, used for previews of rooms the user has been invited to.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct StrippedStateEvent<C: PossiblyRedactedStateEventContent> {
@@ -524,13 +512,12 @@ pub struct StrippedStateEvent<C: PossiblyRedactedStateEventContent> {
     /// The fully-qualified ID of the user who sent this event.
     pub sender: OwnedUserId,
 
-    /// A unique key which defines the overwriting semantics for this piece of
-    /// room state.
+    /// A unique key which defines the overwriting semantics for this piece of room state.
     ///
     /// This must be a string type, and is often an empty string.
     ///
-    /// A state event is keyed by its `(type, state_key)` tuple. Sending another
-    /// state event with the same tuple replaces the previous one.
+    /// A state event is keyed by its `(type, state_key)` tuple. Sending another state event with
+    /// the same tuple replaces the previous one.
     pub state_key: C::StateKey,
 
     /// Timestamp on the originating homeserver when this event was sent.
@@ -554,31 +541,27 @@ pub struct InitialStateEvent<C: StaticStateEventContent> {
     /// Data specific to the event type.
     pub content: C,
 
-    /// A unique key which defines the overwriting semantics for this piece of
-    /// room state.
+    /// A unique key which defines the overwriting semantics for this piece of room state.
     ///
     /// This must be a string type, and is often an empty string.
     ///
-    /// A state event is keyed by its `(type, state_key)` tuple. Sending another
-    /// state event with the same tuple replaces the previous one.
+    /// A state event is keyed by its `(type, state_key)` tuple. Sending another state event with
+    /// the same tuple replaces the previous one.
     ///
     /// Defaults to the empty string.
     pub state_key: C::StateKey,
 }
 
 impl<C: StaticStateEventContent> InitialStateEvent<C> {
-    /// Create a new `InitialStateEvent` for an event type with the given state
-    /// key.
+    /// Create a new `InitialStateEvent` for an event type with the given state key.
     ///
     /// For cases where the state key is empty,
-    /// [`with_empty_state_key()`](Self::with_empty_state_key) can be used
-    /// instead.
+    /// [`with_empty_state_key()`](Self::with_empty_state_key) can be used instead.
     pub fn new(state_key: C::StateKey, content: C) -> Self {
         Self { content, state_key }
     }
 
-    /// Create a new `InitialStateEvent` for an event type with an empty state
-    /// key.
+    /// Create a new `InitialStateEvent` for an event type with an empty state key.
     ///
     /// For cases where the state key is not empty, use [`new()`](Self::new).
     pub fn with_empty_state_key(content: C) -> Self
@@ -590,24 +573,22 @@ impl<C: StaticStateEventContent> InitialStateEvent<C> {
 
     /// Shorthand for `Raw::new(self).unwrap()`.
     ///
-    /// Since none of the content types in Ruma ever return an error in
-    /// serialization, this will never panic with `C` being a type from
-    /// Ruma. However, if you use a custom content type with a `Serialize`
-    /// implementation that can error (for example because it contains an
-    /// `enum` with one or more variants that use the `#[serde(skip)]`
-    /// attribute), this method can panic.
+    /// Since none of the content types in Ruma ever return an error in serialization, this will
+    /// never panic with `C` being a type from Ruma. However, if you use a custom content type
+    /// with a `Serialize` implementation that can error (for example because it contains an
+    /// `enum` with one or more variants that use the `#[serde(skip)]` attribute), this method
+    /// can panic.
     pub fn to_raw(&self) -> Raw<Self> {
         Raw::new(self).unwrap()
     }
 
     /// Shorthand for `self.to_raw().cast::<AnyInitialStateEvent>()`.
     ///
-    /// Since none of the content types in Ruma ever return an error in
-    /// serialization, this will never panic with `C` being a type from
-    /// Ruma. However, if you use a custom content type with a `Serialize`
-    /// implementation that can error (for example because it contains an
-    /// `enum` with one or more variants that use the `#[serde(skip)]`
-    /// attribute), this method can panic.
+    /// Since none of the content types in Ruma ever return an error in serialization, this will
+    /// never panic with `C` being a type from Ruma. However, if you use a custom content type
+    /// with a `Serialize` implementation that can error (for example because it contains an
+    /// `enum` with one or more variants that use the `#[serde(skip)]` attribute), this method
+    /// can panic.
     pub fn to_raw_any(&self) -> Raw<AnyInitialStateEvent> {
         self.to_raw().cast()
     }
@@ -639,9 +620,8 @@ impl<C: StaticStateEventContent> JsonCastable<JsonObject> for InitialStateEvent<
 
 /// A redacted state event.
 ///
-/// `RedactedStateEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `RedactedStateEvent` implements the comparison traits using only the `event_id` field, a sorted
+/// list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct RedactedStateEvent<C: RedactedStateEventContent> {
@@ -660,13 +640,12 @@ pub struct RedactedStateEvent<C: RedactedStateEventContent> {
     /// The ID of the room associated with this event.
     pub room_id: OwnedRoomId,
 
-    /// A unique key which defines the overwriting semantics for this piece of
-    /// room state.
+    /// A unique key which defines the overwriting semantics for this piece of room state.
     ///
     /// This must be a string type, and is often an empty string.
     ///
-    /// A state event is keyed by its `(type, state_key)` tuple. Sending another
-    /// state event with the same tuple replaces the previous one.
+    /// A state event is keyed by its `(type, state_key)` tuple. Sending another state event with
+    /// the same tuple replaces the previous one.
     pub state_key: C::StateKey,
 
     /// Additional key-value pairs not signed by the homeserver.
@@ -696,9 +675,8 @@ impl<C: RedactedStateEventContent> JsonCastable<JsonObject> for RedactedStateEve
 
 /// A redacted state event without a `room_id`.
 ///
-/// `RedactedSyncStateEvent` implements the comparison traits using only the
-/// `event_id` field, a sorted list would be sorted lexicographically based on
-/// the event's `EventId`.
+/// `RedactedSyncStateEvent` implements the comparison traits using only the `event_id` field, a
+/// sorted list would be sorted lexicographically based on the event's `EventId`.
 #[derive(Clone, Debug, Event)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct RedactedSyncStateEvent<C: RedactedStateEventContent> {
@@ -714,13 +692,12 @@ pub struct RedactedSyncStateEvent<C: RedactedStateEventContent> {
     /// Timestamp on the originating homeserver when this event was sent.
     pub origin_server_ts: MilliSecondsSinceUnixEpoch,
 
-    /// A unique key which defines the overwriting semantics for this piece of
-    /// room state.
+    /// A unique key which defines the overwriting semantics for this piece of room state.
     ///
     /// This must be a string type, and is often an empty string.
     ///
-    /// A state event is keyed by its `(type, state_key)` tuple. Sending another
-    /// state event with the same tuple replaces the previous one.
+    /// A state event is keyed by its `(type, state_key)` tuple. Sending another state event with
+    /// the same tuple replaces the previous one.
     pub state_key: C::StateKey,
 
     /// Additional key-value pairs not signed by the homeserver.
@@ -738,9 +715,8 @@ impl<C: RedactedStateEventContent> JsonCastable<JsonObject> for RedactedSyncStat
 
 /// A possibly-redacted state event.
 ///
-/// `StateEvent` implements the comparison traits using only the `event_id`
-/// field, a sorted list would be sorted lexicographically based on the event's
-/// `EventId`.
+/// `StateEvent` implements the comparison traits using only the `event_id` field, a sorted list
+/// would be sorted lexicographically based on the event's `EventId`.
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Debug)]
 pub enum StateEvent<C: StaticStateEventContent + RedactContent>
@@ -774,9 +750,8 @@ impl<C: StaticStateEventContent + RedactContent> JsonCastable<JsonObject> for St
 
 /// A possibly-redacted state event without a `room_id`.
 ///
-/// `SyncStateEvent` implements the comparison traits using only the `event_id`
-/// field, a sorted list would be sorted lexicographically based on the event's
-/// `EventId`.
+/// `SyncStateEvent` implements the comparison traits using only the `event_id` field, a sorted list
+/// would be sorted lexicographically based on the event's `EventId`.
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Debug)]
 pub enum SyncStateEvent<C: StaticStateEventContent + RedactContent>
@@ -885,8 +860,8 @@ pub struct DecryptedMegolmV1Event<C: MessageLikeEventContent> {
     pub room_id: OwnedRoomId,
 }
 
-/// A possibly-redacted state event content and the corresponding previous
-/// content from the unsigned event data, if available.
+/// A possibly-redacted state event content and the corresponding previous content from the unsigned
+/// event data, if available.
 #[allow(clippy::exhaustive_enums)]
 #[derive(Clone, Debug)]
 pub enum StateEventContentChange<C: StaticStateEventContent + RedactContent> {
@@ -915,14 +890,12 @@ where
         }
     }
 
-    /// Transform `self` into a redacted form (removing most or all fields)
-    /// according to the spec.
+    /// Transform `self` into a redacted form (removing most or all fields) according to the spec.
     ///
-    /// If `self` is already [`Redacted`](Self::Redacted), return the inner data
-    /// unmodified.
+    /// If `self` is already [`Redacted`](Self::Redacted), return the inner data unmodified.
     ///
-    /// A small number of events have room-version specific redaction behavior,
-    /// so a [`RedactionRules`] has to be specified.
+    /// A small number of events have room-version specific redaction behavior, so a
+    /// [`RedactionRules`] has to be specified.
     pub fn redact(self, rules: &RedactionRules) -> C::Redacted {
         match self {
             Self::Original { content, .. } => content.redact(rules),

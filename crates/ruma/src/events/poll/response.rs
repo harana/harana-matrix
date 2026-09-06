@@ -2,20 +2,20 @@
 
 use std::{ops::Deref, vec};
 
+use crate::OwnedEventId;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{PollResponseData, start::PollContentBlock, validate_selections};
-use crate::{OwnedEventId, events::relation::Reference};
+use crate::events::relation::Reference;
 
 /// The payload for a poll response event.
 ///
-/// This is the event content that should be sent for room versions that support
-/// extensible events. As of Matrix 1.7, none of the stable room versions (1
-/// through 10) support extensible events.
+/// This is the event content that should be sent for room versions that support extensible events.
+/// As of Matrix 1.7, none of the stable room versions (1 through 10) support extensible events.
 ///
-/// To send a poll response event for a room version that does not support
-/// extensible events, use [`UnstablePollResponseEventContent`].
+/// To send a poll response event for a room version that does not support extensible events, use
+/// [`UnstablePollResponseEventContent`].
 ///
 /// [`UnstablePollResponseEventContent`]: super::unstable_response::UnstablePollResponseEventContent
 #[derive(Clone, Debug, Serialize, Deserialize, EventContent)]
@@ -41,8 +41,8 @@ pub struct PollResponseEventContent {
 }
 
 impl PollResponseEventContent {
-    /// Creates a new `PollResponseEventContent` that responds to the given poll
-    /// start event ID, with the given poll response content.
+    /// Creates a new `PollResponseEventContent` that responds to the given poll start event ID,
+    /// with the given poll response content.
     pub fn new(selections: SelectionsContentBlock, poll_start_id: OwnedEventId) -> Self {
         Self {
             selections,
@@ -88,8 +88,8 @@ impl SelectionsContentBlock {
 
     /// Validate these selections against the given `PollContentBlock`.
     ///
-    /// Returns the list of valid selections in this `SelectionsContentBlock`,
-    /// or `None` if there is no valid selection.
+    /// Returns the list of valid selections in this `SelectionsContentBlock`, or `None` if there is
+    /// no valid selection.
     pub fn validate<'a>(
         &'a self,
         poll: &PollContentBlock,

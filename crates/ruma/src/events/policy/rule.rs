@@ -1,8 +1,9 @@
 //! Modules and types for events in the `m.policy.rule` namespace.
 
+use crate::serde::StringEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::{events::PrivOwnedStr, serde::StringEnum};
+use crate::events::PrivOwnedStr;
 
 pub mod room;
 pub mod server;
@@ -14,8 +15,8 @@ pub mod user;
 pub struct PolicyRuleEventContent {
     /// The entity affected by this rule.
     ///
-    /// Glob characters `*` and `?` can be used to match zero or more characters
-    /// or exactly one character respectively.
+    /// Glob characters `*` and `?` can be used to match zero or more characters or exactly one
+    /// character respectively.
     pub entity: String,
 
     /// The suggested action to take.
@@ -26,8 +27,7 @@ pub struct PolicyRuleEventContent {
 }
 
 impl PolicyRuleEventContent {
-    /// Creates a new `PolicyRuleEventContent` with the given entity,
-    /// recommendation and reason.
+    /// Creates a new `PolicyRuleEventContent` with the given entity, recommendation and reason.
     pub fn new(entity: String, recommendation: Recommendation, reason: String) -> Self {
         Self { entity, recommendation, reason }
     }
@@ -35,15 +35,14 @@ impl PolicyRuleEventContent {
 
 /// The possibly redacted form of [`PolicyRuleEventContent`].
 ///
-/// This type is used when it's not obvious whether the content is redacted or
-/// not.
+/// This type is used when it's not obvious whether the content is redacted or not.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct PossiblyRedactedPolicyRuleEventContent {
     /// The entity affected by this rule.
     ///
-    /// Glob characters `*` and `?` can be used to match zero or more characters
-    /// or exactly one character respectively.
+    /// Glob characters `*` and `?` can be used to match zero or more characters or exactly one
+    /// character respectively.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entity: Option<String>,
 
@@ -57,8 +56,8 @@ pub struct PossiblyRedactedPolicyRuleEventContent {
 }
 
 impl PossiblyRedactedPolicyRuleEventContent {
-    /// Creates a new `PossiblyRedactedPolicyRuleEventContent` with the given
-    /// entity, recommendation and reason.
+    /// Creates a new `PossiblyRedactedPolicyRuleEventContent` with the given entity, recommendation
+    /// and reason.
     pub fn new(entity: String, recommendation: Recommendation, reason: String) -> Self {
         Self { entity: Some(entity), recommendation: Some(recommendation), reason: Some(reason) }
     }
@@ -81,8 +80,7 @@ impl From<PolicyRuleEventContent> for PossiblyRedactedPolicyRuleEventContent {
 #[derive(Clone, StringEnum)]
 #[non_exhaustive]
 pub enum Recommendation {
-    /// Entities affected by the rule should be banned from participation where
-    /// possible.
+    /// Entities affected by the rule should be banned from participation where possible.
     #[ruma_enum(rename = "m.ban")]
     Ban,
 

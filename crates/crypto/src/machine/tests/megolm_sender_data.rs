@@ -17,12 +17,12 @@ use std::{fmt::Debug, iter, pin::Pin};
 use assert_matches::assert_matches;
 use futures_core::Stream;
 use futures_util::{FutureExt, StreamExt};
+use sdk_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
+use sdk_test::async_test;
 use ruma::{
     DeviceKeyId, RoomId, TransactionId, UserId, canonical_json::to_canonical_value, owned_user_id,
     room_id, user_id,
 };
-use sdk_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
-use sdk_test::async_test;
 use serde::Serialize;
 use serde_json::json;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;

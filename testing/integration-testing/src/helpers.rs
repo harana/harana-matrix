@@ -8,10 +8,6 @@ use std::{
 
 use anyhow::Result;
 use assign::assign;
-use base::crypto::{
-    CollectStrategy, DecryptionSettings, TrustRequirement,
-    x509::{RawX509Signer, RawX509Verifier},
-};
 use matrix::{
     Client, ClientBuilder, Room, ThreadingSupport,
     config::{RequestConfig, SyncSettings},
@@ -25,8 +21,12 @@ use matrix::{
     sync::SyncResponse,
     timeout::ElapsedError,
 };
-use rand::RngExt;
+use base::crypto::{
+    CollectStrategy, DecryptionSettings, TrustRequirement,
+    x509::{RawX509Signer, RawX509Verifier},
+};
 use sdk_common::cross_process_lock::CrossProcessLockConfig;
+use rand::RngExt;
 use tempfile::{TempDir, tempdir};
 use tokio::{sync::Mutex, time::sleep};
 

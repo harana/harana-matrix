@@ -14,11 +14,11 @@
 
 use std::ops::Deref;
 
+use indexed_db_futures::{cursor::CursorDirection, transaction as inner};
 use base::media::{
     MediaRequestParameters,
     store::{IgnoreMediaRetentionPolicy, MediaRetentionPolicy},
 };
-use indexed_db_futures::{cursor::CursorDirection, transaction as inner};
 use ruma::MxcUri;
 use uuid::Uuid;
 

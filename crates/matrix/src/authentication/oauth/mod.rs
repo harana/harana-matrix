@@ -167,14 +167,16 @@ use std::{borrow::Cow, collections::HashMap, fmt, sync::Arc};
 
 use as_variant::as_variant;
 #[cfg(feature = "e2e-encryption")]
-use base::crypto::types::qr_login::QrCodeData;
-use base::{SessionMeta, store::RoomLoadSettings, ttl::TtlValue};
-#[cfg(feature = "e2e-encryption")]
 use error::CrossProcessRefreshLockError;
 use error::{
     OAuthAuthorizationCodeError, OAuthClientRegistrationError, OAuthDiscoveryError,
     OAuthTokenRevocationError, RedirectUriQueryParseError,
 };
+#[cfg(feature = "e2e-encryption")]
+use base::crypto::types::qr_login::QrCodeData;
+use base::{SessionMeta, store::RoomLoadSettings, ttl::TtlValue};
+#[cfg(feature = "e2e-encryption")]
+use sdk_common::cross_process_lock::CrossProcessLockConfig;
 use oauth2::{
     AccessToken, PkceCodeVerifier, RedirectUrl, RefreshToken, RevocationUrl, Scope,
     StandardErrorResponse, StandardRevocableToken, TokenResponse, TokenUrl,
@@ -188,8 +190,6 @@ use ruma::{
     },
     serde::Raw,
 };
-#[cfg(feature = "e2e-encryption")]
-use sdk_common::cross_process_lock::CrossProcessLockConfig;
 use serde::{Deserialize, Serialize};
 use sha2::Digest as _;
 use tokio::sync::Mutex;
@@ -649,9 +649,14 @@ impl OAuth {
     ///     return Err(error.into());
     /// }
     ///
-    /// let response = oauth.register_client(&client_metadata).await?;
+    /// let response = oauth
+    ///     .register_client(&client_metadata)
+    ///     .await?;
     ///
-    /// println!("Registered with client_id: {}", response.client_id.as_str());
+    /// println!(
+    ///     "Registered with client_id: {}",
+    ///     response.client_id.as_str()
+    /// );
     ///
     /// // The API only supports clients without secrets.
     /// let client_id = response.client_id;

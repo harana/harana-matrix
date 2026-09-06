@@ -1,8 +1,7 @@
 use std::fmt;
 
-use serde::de;
-
 use crate::profile::StaticProfileField;
+use serde::de;
 
 /// Helper type to deserialize any type that implements [`StaticProfileField`].
 pub(super) struct StaticProfileFieldVisitor<F: StaticProfileField>(

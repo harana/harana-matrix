@@ -16,8 +16,8 @@ use std::sync::{Arc, Mutex};
 
 use language_tags::LanguageTag;
 use matrix::widget::{MessageLikeEventFilter, StateEventFilter, ToDeviceEventFilter};
-use ruma::UserId;
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
+use ruma::UserId;
 use tracing::error;
 
 use crate::{error::ClientError, room::Room, runtime::get_runtime_handle};

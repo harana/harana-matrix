@@ -227,9 +227,9 @@ mod tests {
         deserialized_responses::TimelineEvent, event_cache::store::EventCacheStoreLock,
         linked_chunk::ChunkIdentifier,
     };
-    use ruma::{EventId, owned_event_id, serde::Raw, user_id};
     use sdk_common::cross_process_lock::CrossProcessLockConfig;
     use sdk_test::{async_test, event_factory::EventFactory};
+    use ruma::{EventId, owned_event_id, serde::Raw, user_id};
 
     use super::*;
 
@@ -483,8 +483,8 @@ mod tests {
             event_cache::store::{EventCacheStore as _, MemoryStore},
             linked_chunk::{ChunkIdentifier, Position, Update},
         };
-        use ruma::{event_id, room_id};
         use sdk_test::{ALICE, BOB};
+        use ruma::{event_id, room_id};
 
         let user_id = user_id!("@user:example.com");
         let room_id = room_id!("!galette:saucisse.bzh");

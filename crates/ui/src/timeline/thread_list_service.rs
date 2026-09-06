@@ -27,8 +27,8 @@ use matrix::{
     room::ListThreadsOptions,
     task_monitor::BackgroundTaskHandle,
 };
-use ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
 use sdk_common::serde_helpers::extract_thread_root;
+use ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::{error, trace, warn};
 
@@ -481,6 +481,7 @@ mod tests {
     use assert_matches::assert_matches;
     use futures_util::pin_mut;
     use matrix::test_utils::mocks::MatrixMockServer;
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         event_id,
         events::{
@@ -496,7 +497,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
     use stream_assert::{assert_next_matches, assert_pending};
     use wiremock::ResponseTemplate;

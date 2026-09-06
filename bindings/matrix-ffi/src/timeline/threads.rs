@@ -19,7 +19,6 @@ use futures_util::StreamExt;
 use matrix::room::{
     ListThreadsOptions as SdkListThreadsOptions, ThreadSubscription as SdkThreadSubscription,
 };
-use ruma::api::client::threads::get_threads::v1::IncludeThreads as SdkIncludeThreads;
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use ui::timeline::{
     RoomExt,
@@ -30,6 +29,7 @@ use ui::timeline::{
         ThreadListServiceError as UIThreadListServiceError,
     },
 };
+use ruma::api::client::threads::get_threads::v1::IncludeThreads as SdkIncludeThreads;
 
 use crate::{
     TaskHandle,

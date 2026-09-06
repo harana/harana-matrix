@@ -23,6 +23,13 @@ use matrix::{
     linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
     test_utils::mocks::{MatrixMockServer, RoomContextResponseTemplate},
 };
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{
+    AnyOtherStateEventContentChange, Error, EventSendState, MsgLikeKind, OtherMessageLike,
+    RedactError, RoomExt, TimelineBuilder, TimelineEventFocusThreadMode, TimelineEventItemId,
+    TimelineEventShieldState, TimelineFocus, TimelineItemContent, VirtualTimelineItem,
+    default_event_filter,
+};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, event_id,
     events::{
@@ -34,15 +41,8 @@ use ruma::{
     },
     owned_event_id, room_id, user_id,
 };
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use sliding_sync::assert_timeline_stream;
 use stream_assert::assert_pending;
-use ui::timeline::{
-    AnyOtherStateEventContentChange, Error, EventSendState, MsgLikeKind, OtherMessageLike,
-    RedactError, RoomExt, TimelineBuilder, TimelineEventFocusThreadMode, TimelineEventItemId,
-    TimelineEventShieldState, TimelineFocus, TimelineItemContent, VirtualTimelineItem,
-    default_event_filter,
-};
 
 mod decryption;
 mod echo;

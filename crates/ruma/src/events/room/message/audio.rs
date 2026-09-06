@@ -1,15 +1,13 @@
 use std::time::Duration;
 
 use js_int::UInt;
+use crate::OwnedMxcUri;
 use serde::{Deserialize, Serialize};
 
 use super::FormattedBody;
-use crate::{
-    OwnedMxcUri,
-    events::room::{
-        EncryptedFile, MediaSource,
-        message::media_caption::{caption, formatted_caption},
-    },
+use crate::events::room::{
+    EncryptedFile, MediaSource,
+    message::media_caption::{caption, formatted_caption},
 };
 
 /// The payload for an audio message.
@@ -18,9 +16,8 @@ use crate::{
 pub struct AudioMessageEventContent {
     /// The textual representation of this message.
     ///
-    /// If the `filename` field is not set or has the same value, this is the
-    /// filename of the uploaded file. Otherwise, this should be interpreted
-    /// as a user-written media caption.
+    /// If the `filename` field is not set or has the same value, this is the filename of the
+    /// uploaded file. Otherwise, this should be interpreted as a user-written media caption.
     pub body: String,
 
     /// Formatted form of the message `body`.
@@ -29,12 +26,10 @@ pub struct AudioMessageEventContent {
     #[serde(flatten)]
     pub formatted: Option<FormattedBody>,
 
-    /// The original filename of the uploaded file as deserialized from the
-    /// event.
+    /// The original filename of the uploaded file as deserialized from the event.
     ///
-    /// It is recommended to use the `filename` method to get the filename which
-    /// automatically falls back to the `body` field when the `filename`
-    /// field is not set.
+    /// It is recommended to use the `filename` method to get the filename which automatically
+    /// falls back to the `body` field when the `filename` field is not set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
 
@@ -79,49 +74,45 @@ impl AudioMessageEventContent {
         }
     }
 
-    /// Creates a new non-encrypted `AudioMessageEventContent` with the given
-    /// body and url.
+    /// Creates a new non-encrypted `AudioMessageEventContent` with the given body and url.
     pub fn plain(body: String, url: OwnedMxcUri) -> Self {
         Self::new(body, MediaSource::Plain(url))
     }
 
-    /// Creates a new encrypted `AudioMessageEventContent` with the given body
-    /// and encrypted file.
+    /// Creates a new encrypted `AudioMessageEventContent` with the given body and encrypted
+    /// file.
     pub fn encrypted(body: String, file: EncryptedFile) -> Self {
         Self::new(body, MediaSource::Encrypted(Box::new(file)))
     }
 
-    /// Creates a new `AudioMessageEventContent` from `self` with the `info`
-    /// field set to the given value.
+    /// Creates a new `AudioMessageEventContent` from `self` with the `info` field set to the given
+    /// value.
     ///
-    /// Since the field is public, you can also assign to it directly. This
-    /// method merely acts as a shorthand for that, because it is very
-    /// common to set this field.
+    /// Since the field is public, you can also assign to it directly. This method merely acts
+    /// as a shorthand for that, because it is very common to set this field.
     pub fn info(self, info: impl Into<Option<Box<AudioInfo>>>) -> Self {
         Self { info: info.into(), ..self }
     }
 
     /// Computes the filename for the audio file as defined by the [spec](https://spec.matrix.org/v1.19/client-server-api/#media-captions).
     ///
-    /// This differs from the `filename` field as this method falls back to the
-    /// `body` field when the `filename` field is not set.
+    /// This differs from the `filename` field as this method falls back to the `body` field when
+    /// the `filename` field is not set.
     pub fn filename(&self) -> &str {
         self.filename.as_deref().unwrap_or(&self.body)
     }
 
     /// Returns the caption for the audio as defined by the [spec](https://spec.matrix.org/v1.19/client-server-api/#media-captions).
     ///
-    /// In short, this is the `body` field if the `filename` field exists and
-    /// has a different value, otherwise the media file does not have a
-    /// caption.
+    /// In short, this is the `body` field if the `filename` field exists and has a different value,
+    /// otherwise the media file does not have a caption.
     pub fn caption(&self) -> Option<&str> {
         caption(&self.body, self.filename.as_deref())
     }
 
     /// Returns the formatted caption for the audio as defined by the [spec](https://spec.matrix.org/v1.19/client-server-api/#media-captions).
     ///
-    /// This is the same as `caption`, but returns the formatted body instead of
-    /// the plain body.
+    /// This is the same as `caption`, but returns the formatted body instead of the plain body.
     pub fn formatted_caption(&self) -> Option<&FormattedBody> {
         formatted_caption(&self.body, self.formatted.as_ref(), self.filename.as_deref())
     }
@@ -165,8 +156,8 @@ impl AudioInfo {
 pub struct UnstableAudioDetailsContentBlock {
     /// The duration of the audio in milliseconds.
     ///
-    /// Note that the MSC says this should be in seconds but for compatibility
-    /// with the Element clients, this uses milliseconds.
+    /// Note that the MSC says this should be in seconds but for compatibility with the Element
+    /// clients, this uses milliseconds.
     #[serde(with = "crate::serde::duration::ms")]
     pub duration: Duration,
 
@@ -179,8 +170,7 @@ pub struct UnstableAudioDetailsContentBlock {
 
 #[cfg(feature = "unstable-msc3245-v1-compat")]
 impl UnstableAudioDetailsContentBlock {
-    /// Creates a new `UnstableAudioDetailsContentBlock ` with the given
-    /// duration and waveform.
+    /// Creates a new `UnstableAudioDetailsContentBlock ` with the given duration and waveform.
     pub fn new(duration: Duration, waveform: Vec<UnstableAmplitude>) -> Self {
         Self { duration, waveform }
     }

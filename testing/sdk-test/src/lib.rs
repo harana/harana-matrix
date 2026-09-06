@@ -1,6 +1,7 @@
 use std::{fmt, sync::LazyLock};
 
 use http::Response;
+pub use sdk_test_macros::async_test;
 use ruma::{
     RoomId, UserId,
     api::{IncomingResponse, IncomingResponseExt as _, OutgoingResponse, OutgoingResponseExt as _},
@@ -8,7 +9,6 @@ use ruma::{
     serde::{Base64, base64::UrlSafe},
     user_id,
 };
-pub use sdk_test_macros::async_test;
 use sha2::{Digest, Sha256};
 
 /// Create a `Raw<AnyMessageLikeEventContent>` from arbitrary JSON.

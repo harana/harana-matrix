@@ -15,6 +15,7 @@ use matrix::{
         mocks::{MatrixMockServer, RoomRelationsResponseTemplate},
     },
 };
+use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
     OwnedEventId, OwnedRoomId, event_id,
     events::{
@@ -25,7 +26,6 @@ use ruma::{
     serde::Raw,
     user_id,
 };
-use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use tokio::sync::broadcast;
 
 /// Small helper for backpagination tests, to wait for initial events to

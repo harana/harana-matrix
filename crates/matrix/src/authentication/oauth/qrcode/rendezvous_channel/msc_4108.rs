@@ -14,12 +14,12 @@
 
 use std::time::Duration;
 
-use base::sleep;
 use bytes::Bytes;
 use http::{
     HeaderMap, HeaderName, Method, StatusCode,
     header::{CONTENT_TYPE, ETAG, EXPIRES, IF_MATCH, IF_NONE_MATCH, LAST_MODIFIED},
 };
+use base::sleep;
 use ruma::api::{
     EndpointError,
     error::{FromHttpResponseError, HeaderDeserializationError, IntoHttpError},

@@ -6,10 +6,10 @@ use futures_util::pin_mut;
 use matrix::{
     assert_next_with_timeout, encryption::EncryptionSettings, test_utils::mocks::MatrixMockServer,
 };
-use ruma::{RoomVersionId, device_id, event_id, room_id, user_id};
 use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use serde_json::{Value, json};
 use ui::timeline::{RoomExt, TimelineItem};
+use ruma::{RoomVersionId, device_id, event_id, room_id, user_id};
+use serde_json::{Value, json};
 
 // Helper function to test the redecryption of different event types.
 async fn test_redecryption(

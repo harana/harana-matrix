@@ -29,8 +29,8 @@ impl ClientBuilder {
 
     /// Set the homeserver URL.
     ///
-    /// The homeserver URL must be set before calling [`build()`][Self::build]
-    /// or [`http_client()`][Self::http_client].
+    /// The homeserver URL must be set before calling [`build()`][Self::build] or
+    /// [`http_client()`][Self::http_client].
     pub fn homeserver_url(self, url: String) -> Self {
         Self { homeserver_url: Some(url), ..self }
     }
@@ -47,22 +47,19 @@ impl ClientBuilder {
 
     /// Set the supported Matrix versions.
     ///
-    /// This method generally *shouldn't* be called. The
-    /// [`build()`][Self::build] or [`http_client()`][Self::http_client]
-    /// method will take care of doing a [`get_supported_versions`] request
-    /// to find out about the supported versions.
+    /// This method generally *shouldn't* be called. The [`build()`][Self::build] or
+    /// [`http_client()`][Self::http_client] method will take care of doing a
+    /// [`get_supported_versions`] request to find out about the supported versions.
     pub fn supported_matrix_versions(self, versions: SupportedVersions) -> Self {
         Self { supported_matrix_versions: Some(versions), ..self }
     }
 
     /// Finish building the [`Client`].
     ///
-    /// Uses [`DefaultConstructibleHttpClient::default()`] to create an HTTP
-    /// client instance. Unless the supported Matrix versions were manually
-    /// set via
-    /// [`supported_matrix_versions`][Self::supported_matrix_versions], this
-    /// will do a [`get_supported_versions`] request to find out about the
-    /// supported versions.
+    /// Uses [`DefaultConstructibleHttpClient::default()`] to create an HTTP client instance.
+    /// Unless the supported Matrix versions were manually set via
+    /// [`supported_matrix_versions`][Self::supported_matrix_versions], this will do a
+    /// [`get_supported_versions`] request to find out about the supported versions.
     pub async fn build<C>(self) -> Result<Client<C>, Error<C::Error, ruma::api::error::Error>>
     where
         C: DefaultConstructibleHttpClient,
@@ -73,9 +70,8 @@ impl ClientBuilder {
     /// Set the HTTP client to finish building the [`Client`].
     ///
     /// Unless the supported Matrix versions were manually set via
-    /// [`supported_matrix_versions`][Self::supported_matrix_versions], this
-    /// will do a [`get_supported_versions`] request to find out about the
-    /// supported versions.
+    /// [`supported_matrix_versions`][Self::supported_matrix_versions], this will do a
+    /// [`get_supported_versions`] request to find out about the supported versions.
     pub async fn http_client<C>(
         self,
         http_client: C,

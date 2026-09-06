@@ -852,11 +852,11 @@ impl IdentityResetHandle {
 #[cfg(all(test, not(target_family = "wasm")))]
 pub(crate) mod tests {
     use assert_matches::assert_matches;
+    use sdk_test::async_test;
     use ruma::{
         events::{secret::request::SecretName, secret_storage::key},
         serde::Base64,
     };
-    use sdk_test::async_test;
     use serde_json::json;
 
     use super::Recovery;

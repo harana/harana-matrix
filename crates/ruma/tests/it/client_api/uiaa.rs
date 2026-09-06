@@ -1,13 +1,10 @@
 use assert_matches2::assert_matches;
 use assign::assign;
+use ruma::api::client::uiaa::{
+    self, AuthData, AuthFlow, AuthType, UiaaInfo, UiaaResponse, UserIdentifier,
+};
 use ruma::{
-    api::{
-        EndpointError, OutgoingResponseExt as _,
-        client::uiaa::{
-            self, AuthData, AuthFlow, AuthType, UiaaInfo, UiaaResponse, UserIdentifier,
-        },
-        error::ErrorKind,
-    },
+    api::{EndpointError, OutgoingResponseExt as _, error::ErrorKind},
     canonical_json::assert_to_canonical_json_eq,
 };
 use serde_json::{

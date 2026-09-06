@@ -19,12 +19,12 @@ use crate::events::PrivOwnedStr;
     type = "m.invite_permission_config",
 )]
 pub struct InvitePermissionConfigEventContent {
-    /// The default action chosen by the user that the homeserver should perform
-    /// automatically when receiving an invitation for this account.
+    /// The default action chosen by the user that the homeserver should perform automatically when
+    /// receiving an invitation for this account.
     ///
-    /// A missing, invalid or unsupported value means that the user wants to
-    /// receive invites as normal. Other parts of the specification might
-    /// still have effects on invites, like [ignoring users].
+    /// A missing, invalid or unsupported value means that the user wants to receive invites as
+    /// normal. Other parts of the specification might still have effects on invites, like
+    /// [ignoring users].
     ///
     /// [ignoring users]: https://spec.matrix.org/v1.19/client-server-api/#ignoring-users
     #[serde(
@@ -51,8 +51,7 @@ pub enum InvitePermissionAction {
     /// Reject the invite.
     Block,
 
-    /// Reject the invite if no non-public rooms are shared between the sender
-    /// and recipient.
+    /// Reject the invite if no non-public rooms are shared between the sender and recipient.
     #[cfg(feature = "unstable-msc4494")]
     #[ruma_enum(rename = "uk.timedout.msc4494.deny_public")]
     DenyPublic,
@@ -61,9 +60,8 @@ pub enum InvitePermissionAction {
     _Custom(PrivOwnedStr),
 }
 
-/// The content of an [`org.matrix.msc4380.invite_permission_config`][MSC4380]
-/// account data, the unstable version of
-/// [`InvitePermissionConfigEventContent`].
+/// The content of an [`org.matrix.msc4380.invite_permission_config`][MSC4380] account data, the
+/// unstable version of [`InvitePermissionConfigEventContent`].
 ///
 /// Controls whether invites to this account are permitted.
 ///
@@ -76,16 +74,15 @@ pub enum InvitePermissionAction {
     type = "org.matrix.msc4380.invite_permission_config",
 )]
 pub struct UnstableInvitePermissionConfigEventContent {
-    /// When set to true, indicates that the user does not wish to receive *any*
-    /// room invites, and they should be blocked.
+    /// When set to true, indicates that the user does not wish to receive *any* room invites, and
+    /// they should be blocked.
     #[serde(default, deserialize_with = "crate::serde::default_on_error")]
     pub block_all: bool,
 }
 
 #[cfg(feature = "unstable-msc4380")]
 impl UnstableInvitePermissionConfigEventContent {
-    /// Creates a new `UnstableInvitePermissionConfigEventContent` from the
-    /// desired boolean state.
+    /// Creates a new `UnstableInvitePermissionConfigEventContent` from the desired boolean state.
     pub fn new(block_all: bool) -> Self {
         Self { block_all }
     }
@@ -112,12 +109,13 @@ impl From<InvitePermissionConfigEventContent> for UnstableInvitePermissionConfig
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
+    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     #[cfg(feature = "unstable-msc4380")]
     use super::UnstableInvitePermissionConfigEventContent;
     use super::{InvitePermissionAction, InvitePermissionConfigEventContent};
-    use crate::{canonical_json::assert_to_canonical_json_eq, events::AnyGlobalAccountDataEvent};
+    use crate::events::AnyGlobalAccountDataEvent;
 
     #[cfg(feature = "unstable-msc4380")]
     #[test]

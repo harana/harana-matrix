@@ -393,7 +393,8 @@ pub(crate) mod tests {
         assert_eq!(call_args.length(), 1, "Expected 1 argument, got {}", call_args.length());
 
         let message_string = call_args.get(0).as_string().unwrap();
-        let expected_prefix = "DEBUG sdk_common::js_tracing::tests: Test message\n    value=1\n";
+        let expected_prefix =
+            "DEBUG sdk_common::js_tracing::tests: Test message\n    value=1\n";
         assert!(
             message_string.starts_with(expected_prefix),
             "Expected log message to start with '{}', but was '{}'",

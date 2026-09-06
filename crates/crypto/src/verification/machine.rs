@@ -14,6 +14,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use sdk_common::locks::RwLock as StdRwLock;
 use ruma::{
     DeviceId, EventId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId, RoomId,
     SecondsSinceUnixEpoch, TransactionId, UInt, UserId,
@@ -29,7 +30,6 @@ use ruma::{
     serde::Raw,
     uint,
 };
-use sdk_common::locks::RwLock as StdRwLock;
 use tokio::sync::Mutex;
 use tracing::{Span, debug, info, instrument, trace, warn};
 
@@ -779,8 +779,8 @@ impl VerificationMachine {
 mod tests {
     use std::sync::Arc;
 
-    use ruma::TransactionId;
     use sdk_test::async_test;
+    use ruma::TransactionId;
     use tokio::sync::Mutex;
 
     use super::{Sas, VerificationMachine};

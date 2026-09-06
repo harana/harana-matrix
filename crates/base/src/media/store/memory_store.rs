@@ -19,7 +19,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use ruma::{MxcUri, OwnedMxcUri, time::SystemTime};
 use sdk_common::{
     cross_process_lock::{
         CrossProcessLockGeneration,
@@ -27,6 +26,7 @@ use sdk_common::{
     },
     ring_buffer::RingBuffer,
 };
+use ruma::{MxcUri, OwnedMxcUri, time::SystemTime};
 
 use super::Result;
 use crate::media::{

@@ -18,6 +18,7 @@ use as_variant::as_variant;
 use eyeball::{ObservableWriteGuard, SharedObservable, WeakObservable};
 use futures_core::Stream;
 use futures_util::StreamExt;
+use sdk_common::SyncOutsideWasm;
 #[cfg(feature = "qrcode")]
 use qrcode::QrVerificationData;
 use ruma::{
@@ -38,7 +39,6 @@ use ruma::{
     time::Instant,
     to_device::DeviceIdOrAllDevices,
 };
-use sdk_common::SyncOutsideWasm;
 #[cfg(feature = "qrcode")]
 use tracing::debug;
 use tracing::{info, trace, warn};
@@ -1664,6 +1664,7 @@ mod tests {
     use assert_matches2::assert_let;
     #[cfg(feature = "qrcode")]
     use qrcode::QrVerificationData;
+    use sdk_test::async_test;
     use ruma::{
         UserId, event_id,
         events::{
@@ -1673,7 +1674,6 @@ mod tests {
         owned_event_id, owned_room_id, room_id,
         to_device::DeviceIdOrAllDevices,
     };
-    use sdk_test::async_test;
 
     use super::VerificationRequest;
     use crate::{

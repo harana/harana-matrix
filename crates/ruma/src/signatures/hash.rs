@@ -1,38 +1,34 @@
 use base64::{Engine, alphabet};
-use sha2::{Digest, Sha256};
-
 use crate::{
     CanonicalJsonObject, CanonicalJsonValue,
     canonical_json::{CanonicalJsonObjectExt, RedactingSerializer},
     room_version_rules::{EventIdFormatVersion, RoomVersionRules},
     serde::{Base64, base64::Standard},
-    signatures::JsonError,
 };
+use sha2::{Digest, Sha256};
+
+use crate::signatures::JsonError;
 
 /// The [maximum size allowed] for a PDU.
 ///
 /// [maximum size allowed]: https://spec.matrix.org/v1.19/client-server-api/#size-limits
 const MAX_PDU_BYTES: usize = 65_535;
 
-/// The fields to remove from a JSON object when creating a content hash of an
-/// event.
+/// The fields to remove from a JSON object when creating a content hash of an event.
 static CONTENT_HASH_FIELDS_TO_REMOVE: &[&str] = &["hashes", "signatures", "unsigned"];
 
-/// The fields to remove from a JSON object when creating a reference hash of an
-/// event.
+/// The fields to remove from a JSON object when creating a reference hash of an event.
 static REFERENCE_HASH_FIELDS_TO_REMOVE: &[&str] = &["signatures", "unsigned"];
 
 /// Compute and add the [content hash] to the given event.
 ///
-/// This adds or overwrites the `sha256` key in the `hashes` object of the
-/// event.
+/// This adds or overwrites the `sha256` key in the `hashes` object of the event.
 ///
 /// This should only be called when creating a new event.
 ///
 /// # Parameters
 ///
-/// * `object`: A JSON object to be hashed according to the Matrix
-///   specification.
+/// * `object`: A JSON object to be hashed according to the Matrix specification.
 ///
 /// # Errors
 ///
@@ -41,7 +37,8 @@ static REFERENCE_HASH_FIELDS_TO_REMOVE: &[&str] = &["signatures", "unsigned"];
 /// # Examples
 ///
 /// ```
-/// use ruma::{CanonicalJsonObject, signatures::add_content_hash_to_event};
+/// use ruma::CanonicalJsonObject;
+/// use ruma::signatures::add_content_hash_to_event;
 ///
 /// // Deserialize an event from JSON.
 /// let mut event = serde_json::from_str(
@@ -96,9 +93,8 @@ pub fn add_content_hash_to_event(object: &mut CanonicalJsonObject) -> Result<(),
 
 /// Computes the [content hash] of the given event.
 ///
-/// The content hash of an event covers the complete event including the
-/// unredacted contents. It is used during federation and is described in the
-/// Matrix server-server specification.
+/// The content hash of an event covers the complete event including the unredacted contents. It is
+/// used during federation and is described in the Matrix server-server specification.
 ///
 /// # Parameters
 ///
@@ -125,21 +121,21 @@ pub fn content_hash(object: &CanonicalJsonObject) -> Result<Base64<Standard, [u8
 
 /// Computes the [reference hash] of the given event.
 ///
-/// The reference hash of an event covers the essential fields of an event,
-/// including content hashes.
+/// The reference hash of an event covers the essential fields of an event, including content
+/// hashes.
 ///
-/// When creating a new event, [`add_content_hash_to_event()`] must be called
-/// before this function to add the content hash.
+/// When creating a new event, [`add_content_hash_to_event()`] must be called before this function
+/// to add the content hash.
 ///
-/// Returns the hash as a base64-encoded string, without padding. The correct
-/// character set is used depending on the room version:
+/// Returns the hash as a base64-encoded string, without padding. The correct character set is used
+/// depending on the room version:
 ///
-/// * For room versions 1 and 2, the standard character set is used for sending
-///   the reference hash of the `auth_events` and `prev_events`.
-/// * For room version 3, the standard character set is used for using the
-///   reference hash as the event ID.
-/// * For newer versions, the URL-safe character set is used for using the
-///   reference hash as the event ID.
+/// * For room versions 1 and 2, the standard character set is used for sending the reference hash
+///   of the `auth_events` and `prev_events`.
+/// * For room version 3, the standard character set is used for using the reference hash as the
+///   event ID.
+/// * For newer versions, the URL-safe character set is used for using the reference hash as the
+///   event ID.
 ///
 /// # Parameters
 ///

@@ -15,6 +15,7 @@
 use std::fmt;
 
 use futures_util::future::join_all;
+use sdk_common::{debug::DebugStructExt as _, deserialized_responses::TimelineEvent};
 use ruma::{
     OwnedEventId, RoomId, UInt,
     api::{
@@ -31,7 +32,6 @@ use ruma::{
     serde::Raw,
     uint,
 };
-use sdk_common::{debug::DebugStructExt as _, deserialized_responses::TimelineEvent};
 
 use super::Room;
 use crate::Result;

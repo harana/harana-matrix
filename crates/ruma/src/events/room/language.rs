@@ -28,13 +28,11 @@ impl RoomLanguageEventContent {
 
 #[cfg(test)]
 mod tests {
+    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::RoomLanguageEventContent;
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq,
-        events::{OriginalStateEvent, room::language::LanguageTag},
-    };
+    use crate::events::{OriginalStateEvent, room::language::LanguageTag};
 
     #[test]
     fn serialization() {

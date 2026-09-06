@@ -4,9 +4,8 @@
 
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
-
 use crate::OwnedDeviceId;
+use serde::{Deserialize, Serialize};
 
 pub mod cancel;
 pub mod subscribe;
@@ -20,8 +19,7 @@ pub mod update;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct StreamDescriptor {
-    /// The publisher device, owned by the sender of the room event containing
-    /// the descriptor.
+    /// The publisher device, owned by the sender of the room event containing the descriptor.
     pub device_id: OwnedDeviceId,
 
     /// The lifetime of the descriptor in milliseconds, counted from the room
@@ -45,15 +43,11 @@ impl StreamDescriptor {
 mod tests {
     use std::time::Duration;
 
+    use crate::{canonical_json::assert_to_canonical_json_eq, owned_device_id, serde::Raw};
     use serde_json::json;
 
     use super::StreamDescriptor;
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq,
-        events::room::message::{RoomMessageEventContent, RoomMessageEventContentWithoutRelation},
-        owned_device_id,
-        serde::Raw,
-    };
+    use crate::events::room::message::{RoomMessageEventContent, RoomMessageEventContentWithoutRelation};
 
     #[test]
     fn descriptor_round_trips_inside_room_message() {

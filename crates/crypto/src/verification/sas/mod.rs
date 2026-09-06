@@ -702,8 +702,8 @@ impl Sas {
     /// # Examples
     ///
     /// ```no_run
-    /// use crypto::{Sas, SasState};
     /// use futures_util::{Stream, StreamExt};
+    /// use crypto::{Sas, SasState};
     ///
     /// # async {
     /// # let sas: Sas = unimplemented!();
@@ -869,12 +869,12 @@ mod tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
+    use sdk_test::async_test;
     use ruma::{
         DeviceId, TransactionId, UserId, device_id,
         events::key::verification::{ShortAuthenticationString, accept::AcceptMethod},
         user_id,
     };
-    use sdk_test::async_test;
     use tokio::sync::Mutex;
 
     use super::Sas;

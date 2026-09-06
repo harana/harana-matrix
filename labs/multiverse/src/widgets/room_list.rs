@@ -2,8 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use imbl::Vector;
 use matrix::{Client, Room, locks::Mutex, ruma::OwnedRoomId};
-use ratatui::{prelude::*, widgets::*};
 use ui::sync_service::SyncService;
+use ratatui::{prelude::*, widgets::*};
 
 use crate::{
     ALT_ROW_COLOR, HEADER_BG, NORMAL_ROW_COLOR, SELECTED_STYLE_FG, TEXT_COLOR,

@@ -2,11 +2,11 @@ use std::{collections::BTreeMap, future, ops::Deref, sync::Arc};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
-use ruma::{DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId};
 use sdk_common::{
     cross_process_lock::{CrossProcessLock, CrossProcessLockConfig},
     locks::RwLock as StdRwLock,
 };
+use ruma::{DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId};
 use tokio::sync::{Mutex, broadcast};
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{debug, trace, warn};
@@ -578,8 +578,8 @@ impl Deref for CryptoStoreWrapper {
 
 #[cfg(test)]
 mod test {
-    use ruma::{SecondsSinceUnixEpoch, UInt, device_id, user_id};
     use sdk_test::async_test;
+    use ruma::{SecondsSinceUnixEpoch, UInt, device_id, user_id};
 
     use super::*;
     use crate::{
@@ -724,8 +724,8 @@ mod test {
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use ruma::{device_id, room_id, user_id};
     use sdk_test::async_test;
+    use ruma::{device_id, room_id, user_id};
 
     use super::CryptoStoreWrapper;
     use crate::store::{

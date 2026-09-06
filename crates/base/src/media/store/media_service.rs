@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use ruma::time::SystemTime;
 use sdk_common::{
     SendOutsideWasm, SyncOutsideWasm,
     executor::{JoinHandle, spawn},
     locks::Mutex,
 };
+use ruma::time::SystemTime;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::error;
 
@@ -384,14 +384,14 @@ mod tests {
     };
 
     use async_trait::async_trait;
+    use sdk_common::locks::Mutex;
+    use sdk_test::async_test;
     use ruma::{
         OwnedMxcUri,
         events::room::MediaSource,
         mxc_uri,
         time::{Duration, SystemTime},
     };
-    use sdk_common::locks::Mutex;
-    use sdk_test::async_test;
 
     use super::{
         IgnoreMediaRetentionPolicy, MediaRetentionPolicy, MediaService, MediaStoreInner,

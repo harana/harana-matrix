@@ -30,8 +30,7 @@ pub mod v3 {
         #[ruma_api(path)]
         pub room_id: OwnedRoomId,
 
-        /// Optional reason to be included as the `reason` on the subsequent
-        /// membership event.
+        /// Optional reason to be included as the `reason` on the subsequent membership event.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub reason: Option<String>,
     }

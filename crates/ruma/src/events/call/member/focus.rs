@@ -13,8 +13,7 @@ use crate::events::PrivOwnedStr;
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Focus {
-    /// LiveKit is one possible type of SFU/Focus that can be used for a
-    /// MatrixRTC session.
+    /// LiveKit is one possible type of SFU/Focus that can be used for a MatrixRTC session.
     Livekit(LivekitFocus),
 }
 
@@ -51,8 +50,7 @@ impl LivekitFocus {
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ActiveFocus {
-    /// LiveKit is one possible type of SFU/Focus that can be used for a
-    /// MatrixRTC session.
+    /// LiveKit is one possible type of SFU/Focus that can be used for a MatrixRTC session.
     Livekit(ActiveLivekitFocus),
 }
 
@@ -60,8 +58,7 @@ pub enum ActiveFocus {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct ActiveLivekitFocus {
-    /// The selection method used to select the LiveKit focus for the rtc
-    /// session.
+    /// The selection method used to select the LiveKit focus for the rtc session.
     pub focus_selection: FocusSelection,
 }
 
@@ -70,8 +67,8 @@ impl ActiveLivekitFocus {
     ///
     /// # Arguments
     ///
-    /// * `focus_selection` - The selection method used to select the LiveKit
-    ///   focus for the rtc session.
+    /// * `focus_selection` - The selection method used to select the LiveKit focus for the rtc
+    ///   session.
     pub fn new() -> Self {
         Self { focus_selection: FocusSelection::OldestMembership }
     }
@@ -83,8 +80,7 @@ impl ActiveLivekitFocus {
 #[ruma_enum(rename_all = "snake_case")]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum FocusSelection {
-    /// Select the active focus by using the oldest membership and the oldest
-    /// focus.
+    /// Select the active focus by using the oldest membership and the oldest focus.
     OldestMembership,
 
     #[doc(hidden)]

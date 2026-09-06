@@ -330,12 +330,9 @@ fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
 fn run_crypto_tests() -> Result<()> {
     let sh = sh();
     cmd!(sh, "rustup run stable cargo clippy -p crypto -- -D warnings").run()?;
-    cmd!(
-        sh,
-        "rustup run stable cargo nextest run -p crypto --no-default-features --features testing"
-    )
-    .run()?;
-    cmd!(sh, "rustup run stable cargo nextest run -p crypto --features=testing").run()?;
+    cmd!(sh, "rustup run stable cargo nextest run -p crypto --no-default-features --features testing").run()?;
+    cmd!(sh, "rustup run stable cargo nextest run -p crypto --features=testing")
+        .run()?;
     cmd!(sh, "rustup run stable cargo test --doc -p crypto --features=testing").run()?;
     cmd!(
         sh,
@@ -345,8 +342,7 @@ fn run_crypto_tests() -> Result<()> {
     cmd!(
         sh,
         "rustup run stable cargo nextest run -p crypto --features=experimental-algorithms,testing"
-    )
-    .run()?;
+    ).run()?;
     cmd!(
         sh,
         "rustup run stable cargo test --doc -p crypto --features=experimental-algorithms,testing"
@@ -356,8 +352,11 @@ fn run_crypto_tests() -> Result<()> {
 
     cmd!(sh, "rustup run stable cargo nextest run -p crypto-ffi").run()?;
 
-    cmd!(sh, "rustup run stable cargo nextest run -p sqlite --features crypto-store,testing")
-        .run()?;
+    cmd!(
+        sh,
+        "rustup run stable cargo nextest run -p sqlite --features crypto-store,testing"
+    )
+    .run()?;
 
     Ok(())
 }

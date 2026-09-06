@@ -6,8 +6,7 @@ use ruma_macros::IdDst;
 
 /// A Matrix-spec compliant [server name].
 ///
-/// It consists of a host and an optional port (separated by a colon if
-/// present).
+/// It consists of a host and an optional port (separated by a colon if present).
 ///
 /// [server name]: https://spec.matrix.org/v1.19/appendices/#server-name
 #[repr(transparent)]
@@ -18,8 +17,8 @@ pub struct ServerName(str);
 impl ServerName {
     /// Returns the host of the server name.
     ///
-    /// That is: Return the part of the server name before `:<port>` or the full
-    /// server name if there is no port.
+    /// That is: Return the part of the server name before `:<port>` or the full server name if
+    /// there is no port.
     pub fn host(&self) -> &str {
         if let Some(end_of_ipv6) = self.0.find(']') {
             &self.0[..=end_of_ipv6]

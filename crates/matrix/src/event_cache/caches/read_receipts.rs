@@ -111,6 +111,10 @@ use base::{
     serde_helpers::extract_relation,
     store::DynStateStore,
 };
+use sdk_common::{
+    SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent,
+    ring_buffer::RingBuffer, serde_helpers::extract_thread_root,
+};
 use ruma::{
     EventId, OwnedEventId, OwnedUserId, RoomId, UserId,
     events::{
@@ -119,10 +123,6 @@ use ruma::{
         relation::RelationType,
     },
     serde::Raw,
-};
-use sdk_common::{
-    SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent,
-    ring_buffer::RingBuffer, serde_helpers::extract_thread_root,
 };
 use tracing::{debug, instrument, trace, warn};
 
@@ -736,6 +736,8 @@ mod tests {
     use std::{num::NonZeroUsize, ops::Not as _};
 
     use base::{read_receipts::ReadReceipts, store::MemoryStore};
+    use sdk_common::{deserialized_responses::TimelineEvent, ring_buffer::RingBuffer};
+    use sdk_test::{ALICE, event_factory::EventFactory};
     use ruma::{
         EventId, RoomId, UserId, event_id,
         events::{
@@ -749,8 +751,6 @@ mod tests {
         push::{Action, HighlightTweakValue, Tweak},
         room_id, user_id,
     };
-    use sdk_common::{deserialized_responses::TimelineEvent, ring_buffer::RingBuffer};
-    use sdk_test::{ALICE, event_factory::EventFactory};
 
     use super::{
         EventFilter, ReadReceiptsExt as _, RoomReadReceiptEventFilter, marks_as_unread,

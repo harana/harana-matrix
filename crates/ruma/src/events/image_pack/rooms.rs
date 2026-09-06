@@ -4,10 +4,9 @@
 
 use std::collections::BTreeMap;
 
+use crate::OwnedRoomId;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
-
-use crate::OwnedRoomId;
 
 /// The content of an [`m.image_pack.rooms`] event.
 ///
@@ -18,16 +17,16 @@ use crate::OwnedRoomId;
 pub struct ImagePackRoomsEventContent {
     /// A map of room ID to a map of state key to an empty object.
     ///
-    /// Each entry references a specific [`m.room.image_pack`] state event that
-    /// the user has enabled globally.
+    /// Each entry references a specific [`m.room.image_pack`] state event that the user has
+    /// enabled globally.
     ///
     /// [`m.room.image_pack`]: https://spec.matrix.org/v1.19/client-server-api/#mroomimage_pack
     pub rooms: BTreeMap<OwnedRoomId, BTreeMap<String, RoomImagePackMeta>>,
 }
 
 impl ImagePackRoomsEventContent {
-    /// Creates a new `ImagePackRoomsEventContent` with the given map of enabled
-    /// image packs in each room.
+    /// Creates a new `ImagePackRoomsEventContent` with the given map of enabled image packs in each
+    /// room.
     pub fn new(rooms: BTreeMap<OwnedRoomId, BTreeMap<String, RoomImagePackMeta>>) -> Self {
         Self { rooms }
     }

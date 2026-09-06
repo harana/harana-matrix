@@ -2,7 +2,9 @@
 //!
 //! Register an account on this homeserver.
 
-use crate::{api::client::PrivOwnedStr, serde::StringEnum};
+use crate::serde::StringEnum;
+
+use crate::api::client::PrivOwnedStr;
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -11,16 +13,14 @@ pub mod v3 {
 
     use std::time::Duration;
 
-    use super::{LoginType, RegistrationKind};
     use crate::{
         OwnedDeviceId, OwnedUserId,
-        api::{
-            auth_scheme::AppserviceTokenOptional,
-            client::uiaa::{AuthData, UiaaResponse},
-            request, response,
-        },
+        api::{auth_scheme::AppserviceTokenOptional, request, response},
         metadata,
     };
+
+    use super::{LoginType, RegistrationKind};
+    use crate::api::client::uiaa::{AuthData, UiaaResponse};
 
     metadata! {
         method: POST,
@@ -51,9 +51,8 @@ pub mod v3 {
 
         /// ID of the client device.
         ///
-        /// If this does not correspond to a known client device, a new device
-        /// will be created. The server will auto-generate a device_id
-        /// if this is not specified.
+        /// If this does not correspond to a known client device, a new device will be created.
+        /// The server will auto-generate a device_id if this is not specified.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub device_id: Option<OwnedDeviceId>,
 
@@ -63,13 +62,11 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub initial_device_display_name: Option<String>,
 
-        /// Additional authentication information for the user-interactive
-        /// authentication API.
+        /// Additional authentication information for the user-interactive authentication API.
         ///
-        /// Note that this information is not used to define how the registered
-        /// user should be authenticated, but is instead used to
-        /// authenticate the register call itself. It should be left
-        /// empty, or omitted, unless an earlier call returned an response
+        /// Note that this information is not used to define how the registered user should be
+        /// authenticated, but is instead used to authenticate the register call itself.
+        /// It should be left empty, or omitted, unless an earlier call returned an response
         /// with status code 401.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub auth: Option<AuthData>,
@@ -88,9 +85,8 @@ pub mod v3 {
 
         /// Login `type` used by Appservices.
         ///
-        /// Appservices can [bypass the registration flows][admin] entirely by
-        /// providing their token in the header and setting this login
-        /// `type` to `m.login.application_service`.
+        /// Appservices can [bypass the registration flows][admin] entirely by providing their
+        /// token in the header and setting this login `type` to `m.login.application_service`.
         ///
         /// [admin]: https://spec.matrix.org/v1.19/application-service-api/#server-admin-style-permissions
         #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
@@ -127,16 +123,15 @@ pub mod v3 {
 
         /// ID of the registered device.
         ///
-        /// Will be the same as the corresponding parameter in the request, if
-        /// one was specified.
+        /// Will be the same as the corresponding parameter in the request, if one was specified.
         ///
         /// Required if the request's `inhibit_login` was set to `false`.
         pub device_id: Option<OwnedDeviceId>,
 
         /// A [refresh token] for the account.
         ///
-        /// This token can be used to obtain a new access token when it expires
-        /// by calling the [`refresh_token`] endpoint.
+        /// This token can be used to obtain a new access token when it expires by calling the
+        /// [`refresh_token`] endpoint.
         ///
         /// Omitted if the request's `inhibit_login` was set to `true`.
         ///
@@ -147,13 +142,11 @@ pub mod v3 {
 
         /// The lifetime of the access token, in milliseconds.
         ///
-        /// Once the access token has expired, a new access token can be
-        /// obtained by using the provided refresh token. If no refresh
-        /// token is provided, the client will need to re-login to
-        /// obtain a new access token.
+        /// Once the access token has expired, a new access token can be obtained by using the
+        /// provided refresh token. If no refresh token is provided, the client will need to
+        /// re-login to obtain a new access token.
         ///
-        /// If this is `None`, the client can assume that the access token will
-        /// not expire.
+        /// If this is `None`, the client can assume that the access token will not expire.
         ///
         /// Omitted if the request's `inhibit_login` was set to `true`.
         #[serde(
@@ -194,8 +187,7 @@ pub mod v3 {
 pub enum RegistrationKind {
     /// A guest account.
     ///
-    /// These accounts may have limited permissions and may not be supported by
-    /// all servers.
+    /// These accounts may have limited permissions and may not be supported by all servers.
     Guest,
 
     /// A regular user account.

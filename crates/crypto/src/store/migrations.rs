@@ -215,8 +215,8 @@ mod tests {
     };
 
     use async_trait::async_trait;
-    use ruma::{device_id, user_id};
     use sdk_test::async_test;
+    use ruma::{device_id, user_id};
 
     use super::{
         DataMigration, DataMigrationContext, HAS_MIGRATED_VERIFICATION_LATCH,

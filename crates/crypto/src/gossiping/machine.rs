@@ -31,6 +31,7 @@ use std::{
     },
 };
 
+use sdk_common::locks::RwLock as StdRwLock;
 use ruma::{
     DeviceId, OneTimeKeyAlgorithm, OwnedDeviceId, OwnedTransactionId, OwnedUserId, RoomId,
     TransactionId, UserId,
@@ -39,7 +40,6 @@ use ruma::{
         RequestAction, SecretName, ToDeviceSecretRequestEvent as SecretRequestEvent,
     },
 };
-use sdk_common::locks::RwLock as StdRwLock;
 use tracing::{Span, debug, field::debug, info, instrument, trace, warn};
 use vodozemac::Curve25519PublicKey;
 
@@ -1290,6 +1290,7 @@ mod tests {
 
     #[cfg(feature = "automatic-room-key-forwarding")]
     use assert_matches::assert_matches;
+    use sdk_test::{async_test, message_like_event_content};
     use ruma::{
         DeviceId, RoomId, UserId, device_id,
         events::{
@@ -1302,7 +1303,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::{async_test, message_like_event_content};
     use tokio::sync::Mutex;
 
     use super::GossipMachine;

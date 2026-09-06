@@ -42,8 +42,8 @@ pub fn new_sorter() -> impl Sorter {
 #[cfg(test)]
 mod tests {
     use matrix::test_utils::mocks::MatrixMockServer;
-    use ruma::room_id;
     use sdk_test::async_test;
+    use ruma::room_id;
 
     use super::{super::super::filters::new_rooms, *};
 

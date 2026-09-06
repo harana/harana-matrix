@@ -26,8 +26,15 @@ mod transaction;
 mod types;
 use std::{rc::Rc, time::Duration};
 
+pub use builder::IndexeddbMediaStoreBuilder;
+pub use error::IndexeddbMediaStoreError;
+use indexed_db_futures::{
+    Build, cursor::CursorDirection, database::Database, transaction::TransactionMode,
+};
 #[cfg(target_family = "wasm")]
-use base::cross_process_lock::{CrossProcessLockGeneration, FIRST_CROSS_PROCESS_LOCK_GENERATION};
+use base::cross_process_lock::{
+    CrossProcessLockGeneration, FIRST_CROSS_PROCESS_LOCK_GENERATION,
+};
 use base::{
     media::{
         MediaRequestParameters,
@@ -37,11 +44,6 @@ use base::{
         },
     },
     timer,
-};
-pub use builder::IndexeddbMediaStoreBuilder;
-pub use error::IndexeddbMediaStoreError;
-use indexed_db_futures::{
-    Build, cursor::CursorDirection, database::Database, transaction::TransactionMode,
 };
 use ruma::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
 use tracing::instrument;

@@ -1,10 +1,14 @@
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use base::RoomState;
 use matrix::{
     SlidingSyncList, config::SyncSettings, notification_settings::RoomNotificationMode,
     test_utils::mocks::MatrixMockServer,
+};
+use base::RoomState;
+use sdk_test::{
+    DEFAULT_TEST_ROOM_ID, InvitedRoomBuilder, JoinedRoomBuilder, SyncResponseBuilder, async_test,
+    event_factory::EventFactory,
 };
 use ruma::{
     api::client::sync::sync_events::v5,
@@ -12,10 +16,6 @@ use ruma::{
     push::{Action, ConditionalPushRule, NewSimplePushRule, Ruleset, SoundTweakValue, Tweak},
     room_id,
     serde::Raw,
-};
-use sdk_test::{
-    DEFAULT_TEST_ROOM_ID, InvitedRoomBuilder, JoinedRoomBuilder, SyncResponseBuilder, async_test,
-    event_factory::EventFactory,
 };
 use serde_json::json;
 use wiremock::{

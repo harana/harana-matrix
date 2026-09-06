@@ -2,18 +2,16 @@
 //!
 //! [`m.room.history_visibility`]: https://spec.matrix.org/v1.19/client-server-api/#mroomhistory_visibility
 
+use crate::serde::StringEnum;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    events::{EmptyStateKey, PrivOwnedStr},
-    serde::StringEnum,
-};
+use crate::events::{EmptyStateKey, PrivOwnedStr};
 
 /// The content of an `m.room.history_visibility` event.
 ///
-/// This event controls whether a member of a room can see the events that
-/// happened in a room from before they joined.
+/// This event controls whether a member of a room can see the events that happened in a room from
+/// before they joined.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room.history_visibility", kind = State, state_key_type = EmptyStateKey)]
@@ -31,8 +29,7 @@ impl RoomHistoryVisibilityEventContent {
 }
 
 impl RoomHistoryVisibilityEvent {
-    /// Obtain the history visibility, regardless of whether this event is
-    /// redacted.
+    /// Obtain the history visibility, regardless of whether this event is redacted.
     pub fn history_visibility(&self) -> &HistoryVisibility {
         match self {
             Self::Original(ev) => &ev.content.history_visibility,
@@ -42,8 +39,7 @@ impl RoomHistoryVisibilityEvent {
 }
 
 impl SyncRoomHistoryVisibilityEvent {
-    /// Obtain the history visibility, regardless of whether this event is
-    /// redacted.
+    /// Obtain the history visibility, regardless of whether this event is redacted.
     pub fn history_visibility(&self) -> &HistoryVisibility {
         match self {
             Self::Original(ev) => &ev.content.history_visibility,
@@ -58,28 +54,27 @@ impl SyncRoomHistoryVisibilityEvent {
 #[ruma_enum(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum HistoryVisibility {
-    /// Previous events are accessible to newly joined members from the point
-    /// they were invited onwards.
+    /// Previous events are accessible to newly joined members from the point they were invited
+    /// onwards.
     ///
-    /// Events stop being accessible when the member's state changes to
-    /// something other than *invite* or *join*.
+    /// Events stop being accessible when the member's state changes to something other than
+    /// *invite* or *join*.
     Invited,
 
-    /// Previous events are accessible to newly joined members from the point
-    /// they joined the room onwards.
-    /// Events stop being accessible when the member's state changes to
-    /// something other than *join*.
+    /// Previous events are accessible to newly joined members from the point they joined the room
+    /// onwards.
+    /// Events stop being accessible when the member's state changes to something other than
+    /// *join*.
     Joined,
 
     /// Previous events are always accessible to newly joined members.
     ///
-    /// All events in the room are accessible, even those sent when the member
-    /// was not a part of the room.
+    /// All events in the room are accessible, even those sent when the member was not a part of
+    /// the room.
     Shared,
 
-    /// All events while this is the `HistoryVisibility` value may be shared by
-    /// any participating homeserver with anyone, regardless of whether they
-    /// have ever joined the room.
+    /// All events while this is the `HistoryVisibility` value may be shared by any participating
+    /// homeserver with anyone, regardless of whether they have ever joined the room.
     WorldReadable,
 
     #[doc(hidden)]

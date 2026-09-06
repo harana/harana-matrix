@@ -1,7 +1,6 @@
 //! `PUT /_matrix/client/*/directory/list/appservice/{networkId}/{roomId}`
 //!
-//! Updates the visibility of a given room on the application service's room
-//! directory.
+//! Updates the visibility of a given room on the application service's room directory.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -10,9 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AppserviceToken, client::room::Visibility, request, response},
+        api::{auth_scheme::AppserviceToken, request, response},
         metadata,
     };
+
+    use crate::api::client::room::Visibility;
 
     metadata! {
         method: PUT,
@@ -35,8 +36,7 @@ pub mod v3 {
         #[ruma_api(path)]
         pub room_id: OwnedRoomId,
 
-        /// Whether the room should be visible (public) in the directory or not
-        /// (private).
+        /// Whether the room should be visible (public) in the directory or not (private).
         pub visibility: Visibility,
     }
 
@@ -46,8 +46,7 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given network ID, room ID and
-        /// visibility.
+        /// Creates a new `Request` with the given network ID, room ID and visibility.
         pub fn new(network_id: String, room_id: OwnedRoomId, visibility: Visibility) -> Self {
             Self { network_id, room_id, visibility }
         }

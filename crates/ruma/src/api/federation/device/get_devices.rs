@@ -8,15 +8,16 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1userdevicesuserid
 
     use js_int::UInt;
-    use serde::{Deserialize, Serialize};
-
     use crate::{
         OwnedDeviceId, OwnedUserId,
-        api::{federation::authentication::ServerSignatures, request, response},
+        api::{request, response},
         encryption::{CrossSigningKey, DeviceKeys},
         metadata,
         serde::Raw,
     };
+    use serde::{Deserialize, Serialize};
+
+    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,
@@ -41,12 +42,11 @@ pub mod v1 {
         /// The user ID devices were requested for.
         pub user_id: OwnedUserId,
 
-        /// A unique ID for a given user_id which describes the version of the
-        /// returned device list.
+        /// A unique ID for a given user_id which describes the version of the returned device
+        /// list.
         ///
-        /// This is matched with the `stream_id` field in `m.device_list_update`
-        /// EDUs in order to incrementally update the returned
-        /// device_list.
+        /// This is matched with the `stream_id` field in `m.device_list_update` EDUs in order to
+        /// incrementally update the returned device_list.
         pub stream_id: UInt,
 
         /// The user's devices.

@@ -27,6 +27,7 @@
 use std::time::Duration;
 
 use matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
+use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
     event_id,
     events::{
@@ -36,7 +37,6 @@ use ruma::{
     },
     room_id,
 };
-use sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use tokio::time::sleep;
 
 /// Test that the unread count increases when new messages arrive and no read

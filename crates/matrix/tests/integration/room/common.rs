@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, iter, ops::Not, time::Duration};
 
 use assert_matches2::{assert_let, assert_matches};
-use base::{DmRoomDefinition, RoomMembersUpdate};
 use futures_util::{FutureExt, StreamExt, pin_mut};
 use js_int::uint;
 use matrix::{
@@ -9,6 +8,11 @@ use matrix::{
     config::{SyncSettings, SyncToken},
     room::{RoomMember, RoomMemberSortOrder},
     test_utils::mocks::{AnyRoomBuilder, MatrixMockServer},
+};
+use base::{DmRoomDefinition, RoomMembersUpdate};
+use sdk_test::{
+    BOB, DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
+    bulk_room_members, event_factory::EventFactory, sync_state_event, test_json,
 };
 use ruma::{
     RoomVersionId, event_id,
@@ -24,10 +28,6 @@ use ruma::{
     int, mxc_uri, owned_room_alias_id, room_id, room_version_id,
     serde::Raw,
     user_id,
-};
-use sdk_test::{
-    BOB, DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
-    bulk_room_members, event_factory::EventFactory, sync_state_event, test_json,
 };
 use serde_json::json;
 use stream_assert::assert_pending;

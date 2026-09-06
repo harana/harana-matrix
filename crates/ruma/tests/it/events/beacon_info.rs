@@ -5,13 +5,11 @@ use std::time::Duration;
 use assert_matches2::assert_matches;
 use js_int::uint;
 use ruma::{
-    MilliSecondsSinceUnixEpoch,
-    canonical_json::assert_to_canonical_json_eq,
-    event_id,
-    events::{AnyStateEvent, StateEvent, beacon_info::BeaconInfoEventContent, location::AssetType},
-    room_id,
-    serde::CanBeEmpty,
-    user_id,
+    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, event_id, room_id,
+    serde::CanBeEmpty, user_id,
+};
+use ruma::events::{
+    AnyStateEvent, StateEvent, beacon_info::BeaconInfoEventContent, location::AssetType,
 };
 use serde_json::{from_value as from_json_value, json};
 

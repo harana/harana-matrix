@@ -10,7 +10,6 @@ pub mod v1 {
     use std::time::Duration;
 
     use http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
-
     use crate::{
         IdParseError, MxcUri, OwnedServerName,
         api::{auth_scheme::AccessToken, request, response},
@@ -39,9 +38,8 @@ pub mod v1 {
         #[ruma_api(path)]
         pub media_id: String,
 
-        /// The maximum duration that the client is willing to wait to start
-        /// receiving data, in the case that the content has not yet
-        /// been uploaded.
+        /// The maximum duration that the client is willing to wait to start receiving data, in the
+        /// case that the content has not yet been uploaded.
         ///
         /// The default value is 20 seconds.
         #[ruma_api(query)]
@@ -64,9 +62,8 @@ pub mod v1 {
         #[ruma_api(header = CONTENT_TYPE)]
         pub content_type: Option<String>,
 
-        /// The value of the `Content-Disposition` HTTP header, possibly
-        /// containing the name of the file that was previously
-        /// uploaded.
+        /// The value of the `Content-Disposition` HTTP header, possibly containing the name of the
+        /// file that was previously uploaded.
         #[ruma_api(header = CONTENT_DISPOSITION)]
         pub content_disposition: Option<ContentDisposition>,
     }
@@ -74,7 +71,11 @@ pub mod v1 {
     impl Request {
         /// Creates a new `Request` with the given media ID and server name.
         pub fn new(media_id: String, server_name: OwnedServerName) -> Self {
-            Self { media_id, server_name, timeout_ms: crate::media::default_download_timeout() }
+            Self {
+                media_id,
+                server_name,
+                timeout_ms: crate::media::default_download_timeout(),
+            }
         }
 
         /// Creates a new `Request` with the given URI.

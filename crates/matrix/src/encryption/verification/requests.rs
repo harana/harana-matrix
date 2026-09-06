@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base::crypto::{CancelInfo, DeviceData, VerificationRequest as BaseVerificationRequest};
 use futures_util::{Stream, StreamExt};
+use base::crypto::{
+    CancelInfo, DeviceData, VerificationRequest as BaseVerificationRequest,
+};
 use ruma::{RoomId, events::key::verification::VerificationMethod};
 
 #[cfg(feature = "qrcode")]

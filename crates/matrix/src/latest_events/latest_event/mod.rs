@@ -16,13 +16,17 @@ mod builder;
 
 use std::ops::{Deref, DerefMut, Not};
 
-pub use base::latest_event::{LatestEventValue, LocalLatestEventValue, RemoteLatestEventValue};
-use base::{RoomInfoNotableUpdateReasons, RoomState};
 pub use builder::filter_timeline_event;
 pub(in crate::latest_events) use builder::ignored_users;
 use builder::{BufferOfValuesForLocalEvents, Builder};
 use eyeball::{AsyncLock, ObservableWriteGuard, SharedObservable, Subscriber};
-use ruma::{EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels};
+pub use base::latest_event::{
+    LatestEventValue, LocalLatestEventValue, RemoteLatestEventValue,
+};
+use base::{RoomInfoNotableUpdateReasons, RoomState};
+use ruma::{
+    EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels,
+};
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{Room, event_cache::RoomEventCache, room::WeakRoom, send_queue::RoomSendQueueUpdate};
@@ -356,13 +360,13 @@ mod tests_latest_event {
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
         store::{SerializableEventContent, StoreConfig},
     };
+    use sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
         MilliSecondsSinceUnixEpoch, OwnedTransactionId, event_id,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
         owned_event_id, owned_room_id, owned_user_id, room_id, user_id,
     };
-    use sdk_common::cross_process_lock::CrossProcessLockConfig;
-    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use stream_assert::{assert_next_matches, assert_pending};
     use tokio::task::yield_now;
 
@@ -679,7 +683,9 @@ mod tests_latest_event {
 
         // First, let's create a `LatestEventValue` from the event cache. It must work.
         {
-            latest_event.update_with_event_cache(&room_event_cache, user_id, None).await;
+            latest_event
+                .update_with_event_cache(&room_event_cache, user_id, None)
+                .await;
 
             assert_matches!(latest_event.current_value.get().await, LatestEventValue::Remote(_));
         }
@@ -696,7 +702,9 @@ mod tests_latest_event {
                 content,
             });
 
-            latest_event.update_with_send_queue(&update, &room_event_cache, user_id, None).await;
+            latest_event
+                .update_with_send_queue(&update, &room_event_cache, user_id, None)
+                .await;
 
             assert_matches!(
                 latest_event.current_value.get().await,
@@ -708,7 +716,9 @@ mod tests_latest_event {
         // Nothing must happen, it cannot overwrite the current
         // `LatestEventValue` because the local event isn't sent yet.
         {
-            latest_event.update_with_event_cache(&room_event_cache, user_id, None).await;
+            latest_event
+                .update_with_event_cache(&room_event_cache, user_id, None)
+                .await;
 
             assert_matches!(
                 latest_event.current_value.get().await,
@@ -724,7 +734,9 @@ mod tests_latest_event {
                 event_id: owned_event_id!("$ev1"),
             };
 
-            latest_event.update_with_send_queue(&update, &room_event_cache, user_id, None).await;
+            latest_event
+                .update_with_send_queue(&update, &room_event_cache, user_id, None)
+                .await;
 
             assert_matches!(
                 latest_event.current_value.get().await,
@@ -735,7 +747,9 @@ mod tests_latest_event {
         // Finally, let's create a `LatestEventValue` from the event cache. _Now_ it's
         // possible, because there is no more local events.
         {
-            latest_event.update_with_event_cache(&room_event_cache, user_id, None).await;
+            latest_event
+                .update_with_event_cache(&room_event_cache, user_id, None)
+                .await;
 
             assert_matches!(latest_event.current_value.get().await, LatestEventValue::Remote(_));
         }
@@ -793,7 +807,9 @@ mod tests_latest_event {
 
         // Let's create a `LatestEventValue` from the event cache. It must work.
         {
-            latest_event.update_with_event_cache(&room_event_cache, user_id, None).await;
+            latest_event
+                .update_with_event_cache(&room_event_cache, user_id, None)
+                .await;
 
             assert_matches!(
                 latest_event.current_value.get().await,
@@ -817,7 +833,9 @@ mod tests_latest_event {
 
             yield_now().await;
 
-            latest_event.update_with_event_cache(&room_event_cache, user_id, None).await;
+            latest_event
+                .update_with_event_cache(&room_event_cache, user_id, None)
+                .await;
 
             assert_matches!(
                 latest_event.current_value.get().await,
@@ -893,7 +911,9 @@ mod tests_latest_event {
             // Generate a new `LatestEventValue`.
             {
                 let mut latest_event = LatestEvent::new(&weak_room, None);
-                latest_event.update_with_event_cache(&room_event_cache, user_id, None).await;
+                latest_event
+                    .update_with_event_cache(&room_event_cache, user_id, None)
+                    .await;
 
                 assert_matches!(
                     latest_event.current_value.get().await,

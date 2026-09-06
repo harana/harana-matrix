@@ -14,21 +14,24 @@
 
 use std::{str::FromStr, sync::Arc};
 
+use futures_util::StreamExt;
+use matrix::encryption::{self, backups, dehydrated_devices, recovery, vodozemac};
 use base::crypto::{
     store::types::DehydratedDeviceKey,
     types::{BackupSecrets, RoomKeyBackupInfo},
 };
-use futures_util::StreamExt;
-use matrix::encryption::{self, backups, dehydrated_devices, recovery, vodozemac};
-use ruma::OwnedUserId;
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
+use ruma::OwnedUserId;
 use serde::de::Error;
 use thiserror::Error;
 use tracing::{error, info};
 use zeroize::Zeroize;
 
 use crate::{
-    client::Client, error::ClientError, ruma::AuthData, runtime::get_runtime_handle,
+    client::Client,
+    error::ClientError,
+    ruma::AuthData,
+    runtime::get_runtime_handle,
     task_handle::TaskHandle,
 };
 
@@ -446,9 +449,11 @@ pub async fn database_contains_secrets_bundle(
     let info: Option<RoomKeyBackupInfo> =
         backup_info.map(|info| serde_json::from_str(&info)).transpose()?;
 
-    let maybe_bundle =
-        matrix::encryption::export_secrets_bundle_from_store(database_path, passphrase.as_deref())
-            .await?;
+    let maybe_bundle = matrix::encryption::export_secrets_bundle_from_store(
+        database_path,
+        passphrase.as_deref(),
+    )
+    .await?;
 
     passphrase.zeroize();
 

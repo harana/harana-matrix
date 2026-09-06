@@ -1,5 +1,6 @@
 use std::{mem::ManuallyDrop, sync::Arc};
 
+use sdk_common::executor::Handle;
 use crypto::{
     DecryptionSettings,
     dehydrated_devices::{
@@ -9,7 +10,6 @@ use crypto::{
     store::types::DehydratedDeviceKey as InnerDehydratedDeviceKey,
 };
 use ruma::{OwnedDeviceId, api::client::dehydrated_device, events::AnyToDeviceEvent, serde::Raw};
-use sdk_common::executor::Handle;
 use serde_json::json;
 
 use crate::{CryptoStoreError, DehydratedDeviceKey};
@@ -36,7 +36,9 @@ impl From<crypto::dehydrated_devices::DehydrationError> for DehydrationError {
         match value {
             crypto::dehydrated_devices::DehydrationError::Json(e) => Self::Json(e),
             crypto::dehydrated_devices::DehydrationError::Pickle(e) => Self::Pickle(e),
-            crypto::dehydrated_devices::DehydrationError::LegacyPickle(e) => Self::LegacyPickle(e),
+            crypto::dehydrated_devices::DehydrationError::LegacyPickle(e) => {
+                Self::LegacyPickle(e)
+            }
             crypto::dehydrated_devices::DehydrationError::MissingSigningKey(e) => {
                 Self::MissingSigningKey(e)
             }

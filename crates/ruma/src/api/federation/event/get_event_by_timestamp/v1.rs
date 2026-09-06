@@ -4,9 +4,11 @@
 
 use crate::{
     MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
-    api::{Direction, federation::authentication::ServerSignatures, request, response},
+    api::{Direction, request, response},
     metadata,
 };
+
+use crate::api::federation::authentication::ServerSignatures;
 
 metadata! {
     method: GET,

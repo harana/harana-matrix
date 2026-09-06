@@ -30,17 +30,17 @@ use std::{
 };
 
 use async_stream::stream;
-use base::RequestedRequiredStates;
 pub use client::{Version, VersionBuilder};
 use futures_core::stream::Stream;
+use base::RequestedRequiredStates;
+#[cfg(feature = "e2e-encryption")]
+use sdk_common::executor::JoinHandleExt as _;
+use sdk_common::{executor::spawn, timer};
 use ruma::{
     OwnedRoomId, RoomId,
     api::{client::sync::sync_events::v5 as http, error::ErrorKind},
     assign,
 };
-#[cfg(feature = "e2e-encryption")]
-use sdk_common::executor::JoinHandleExt as _;
-use sdk_common::{executor::spawn, timer};
 use tokio::{
     select,
     sync::{Mutex as AsyncMutex, OwnedMutexGuard, RwLock as AsyncRwLock, broadcast::Sender},
@@ -1138,9 +1138,11 @@ mod tests {
     };
 
     use assert_matches::assert_matches;
-    use base::{RequestedRequiredStates, RoomMemberships};
     use event_listener::Listener;
     use futures_util::{StreamExt, future::join_all, pin_mut};
+    use base::{RequestedRequiredStates, RoomMemberships};
+    use sdk_common::executor::spawn;
+    use sdk_test::{ALICE, async_test, event_factory::EventFactory};
     use ruma::{
         OwnedRoomId, assign,
         events::{direct::DirectEvent, room::member::MembershipState},
@@ -1153,8 +1155,6 @@ mod tests {
         serde::Raw,
         uint,
     };
-    use sdk_common::executor::spawn;
-    use sdk_test::{ALICE, async_test, event_factory::EventFactory};
     use serde::Deserialize;
     use serde_json::json;
     use stream_assert::assert_pending;
@@ -2020,8 +2020,8 @@ mod tests {
     #[cfg(feature = "e2e-encryption")]
     async fn test_no_pos_without_marking_tracked_users_dirty() -> anyhow::Result<()> {
         use base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
-        use ruma::user_id;
         use sdk_test::ruma_response_from_json;
+        use ruma::user_id;
 
         let server = MockServer::start().await;
         let client = logged_in_client(Some(server.uri())).await;
@@ -2092,8 +2092,8 @@ mod tests {
     #[cfg(feature = "e2e-encryption")]
     async fn test_no_pos_with_e2ee_marks_all_tracked_users_as_dirty() -> anyhow::Result<()> {
         use base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
-        use ruma::user_id;
         use sdk_test::ruma_response_from_json;
+        use ruma::user_id;
 
         let server = MockServer::start().await;
         let client = logged_in_client(Some(server.uri())).await;
@@ -2231,8 +2231,8 @@ mod tests {
     #[cfg(feature = "e2e-encryption")]
     async fn test_no_pos_with_e2ee_can_keep_tracked_users_clean() -> anyhow::Result<()> {
         use base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
-        use ruma::user_id;
         use sdk_test::ruma_response_from_json;
+        use ruma::user_id;
 
         let server = MockServer::start().await;
         let client = logged_in_client(Some(server.uri())).await;

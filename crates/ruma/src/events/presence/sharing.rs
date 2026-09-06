@@ -6,10 +6,11 @@
 
 use std::collections::BTreeMap;
 
+use crate::{OwnedRoomId, OwnedServerName, OwnedUserId};
 use ruma_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::{OwnedRoomId, OwnedServerName, OwnedUserId, events::PrivOwnedStr};
+use crate::events::PrivOwnedStr;
 
 /// A possible state for a user in the `m.presence.sharing` configuration.
 #[derive(Clone, StringEnum)]
@@ -59,8 +60,7 @@ pub enum ServerPresenceSharingState {
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "org.continuwuity.presence_v2.msc4495.presence.sharing", kind = GlobalAccountData)]
 pub struct PresenceSharingEventContent {
-    /// Whether presence should be shared with all users on the local
-    /// homeserver.
+    /// Whether presence should be shared with all users on the local homeserver.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub share_locally: bool,
 
@@ -70,8 +70,7 @@ pub struct PresenceSharingEventContent {
 
     /// Configuration for sharing presence with rooms.
     ///
-    /// Sharing presence with rooms also depends on the room's presence sharing
-    /// hint.
+    /// Sharing presence with rooms also depends on the room's presence sharing hint.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub rooms: BTreeMap<OwnedRoomId, RoomPresenceSharingState>,
 
@@ -94,15 +93,15 @@ impl PresenceSharingEventContent {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq, owned_room_id, owned_server_name,
+        owned_user_id, room_id, server_name, user_id,
+    };
     use serde_json::{from_value as from_json_value, json};
 
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq,
-        events::presence::sharing::{
-            PresenceSharingEventContent, RoomPresenceSharingState, ServerPresenceSharingState,
-            UserPresenceSharingState,
-        },
-        owned_room_id, owned_server_name, owned_user_id, room_id, server_name, user_id,
+    use crate::events::presence::sharing::{
+        PresenceSharingEventContent, RoomPresenceSharingState, ServerPresenceSharingState,
+        UserPresenceSharingState,
     };
 
     #[test]

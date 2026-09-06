@@ -2,15 +2,15 @@
 //!
 //! [`m.room.pinned_events`]: https://spec.matrix.org/v1.19/client-server-api/#mroompinned_events
 
+use crate::OwnedEventId;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::{OwnedEventId, events::EmptyStateKey};
+use crate::events::EmptyStateKey;
 
 /// The content of an `m.room.pinned_events` event.
 ///
-/// Used to "pin" particular events in a room for other participants to review
-/// later.
+/// Used to "pin" particular events in a room for other participants to review later.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room.pinned_events", kind = State, state_key_type = EmptyStateKey)]
@@ -28,8 +28,9 @@ impl RoomPinnedEventsEventContent {
 
 #[cfg(test)]
 mod tests {
-    use super::RoomPinnedEventsEventContent;
     use crate::owned_event_id;
+
+    use super::RoomPinnedEventsEventContent;
 
     #[test]
     fn serialization_deserialization() {

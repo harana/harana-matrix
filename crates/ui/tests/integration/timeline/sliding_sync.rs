@@ -23,10 +23,12 @@ use matrix::{
     Client, SlidingSync, SlidingSyncList, SlidingSyncListBuilder, SlidingSyncMode, UpdateSummary,
     assert_let_timeout, test_utils::mocks::MatrixMockServer,
 };
-use ruma::{RoomId, room_id, user_id};
 use sdk_test::async_test;
+use ui::timeline::{
+    TimelineBuilder, TimelineItem, TimelineItemKind, TimelineReadReceiptTracking,
+};
+use ruma::{RoomId, room_id, user_id};
 use serde_json::json;
-use ui::timeline::{TimelineBuilder, TimelineItem, TimelineItemKind, TimelineReadReceiptTracking};
 use wiremock::{Match, Mock, Request, ResponseTemplate, http::Method};
 
 macro_rules! receive_response {
@@ -651,8 +653,8 @@ async fn test_timeline_read_receipts_are_updated_live() -> Result<()> {
 #[cfg(feature = "unstable-msc4426")]
 #[async_test]
 async fn test_timeline_refreshes_sender_profile_on_global_profile_update() -> Result<()> {
-    use ruma::profile::StatusProfileField;
     use ui::timeline::TimelineDetails;
+    use ruma::profile::StatusProfileField;
 
     let (client, server, sliding_sync) = new_sliding_sync(vec![
         SlidingSyncList::builder("foo")

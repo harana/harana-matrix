@@ -4,13 +4,13 @@ use matrix::{
     Client, Room,
     config::{SyncSettings, SyncToken},
 };
+use sdk_test::{
+    JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory, test_json,
+};
 use ruma::{
     RoomId,
     events::tag::{TagInfo, TagName, Tags},
     room_id,
-};
-use sdk_test::{
-    JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory, test_json,
 };
 use wiremock::{
     Mock, MockServer, ResponseTemplate,

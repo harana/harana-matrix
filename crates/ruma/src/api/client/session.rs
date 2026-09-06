@@ -1,6 +1,8 @@
 //! Endpoints for user session management.
 
-use crate::{api::client::PrivOwnedStr, serde::StringEnum};
+use crate::serde::StringEnum;
+
+use crate::api::client::PrivOwnedStr;
 
 pub mod get_login_token;
 pub mod get_login_types;

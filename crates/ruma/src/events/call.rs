@@ -43,8 +43,7 @@ pub struct SessionDescription {
 }
 
 impl SessionDescription {
-    /// Creates a new `SessionDescription` with the given session type and SDP
-    /// text.
+    /// Creates a new `SessionDescription` with the given session type and SDP text.
     pub fn new(session_type: String, sdp: String) -> Self {
         Self { session_type, sdp }
     }

@@ -14,8 +14,8 @@ pub enum LazyLoadOptions {
 
     /// Enables lazy-loading of events.
     Enabled {
-        /// If `true`, sends all membership events for all events, even if they
-        /// have already been sent to the client.
+        /// If `true`, sends all membership events for all events, even if they have already been
+        /// sent to the client.
         ///
         /// Defaults to `false`.
         include_redundant_members: bool,
@@ -73,10 +73,10 @@ impl From<LazyLoadJsonRepr> for LazyLoadOptions {
 
 #[cfg(test)]
 mod tests {
+    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::LazyLoadOptions;
-    use crate::canonical_json::assert_to_canonical_json_eq;
 
     #[test]
     fn serialize_disabled() {

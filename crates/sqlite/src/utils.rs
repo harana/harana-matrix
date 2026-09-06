@@ -22,12 +22,12 @@ use std::{
 
 use async_trait::async_trait;
 use itertools::Itertools;
-use ruma::{OwnedEventId, OwnedRoomId, serde::Raw, time::SystemTime};
-use rusqlite::{OptionalExtension, Params, Row, Statement, Transaction, limits::Limit};
-use serde::{Serialize, de::DeserializeOwned};
 use store_encryption::{
     CodecError, CodecKind, EncryptableValue, StoreCipherBackend, StoreCodec, StoreCodecExt as _,
 };
+use ruma::{OwnedEventId, OwnedRoomId, serde::Raw, time::SystemTime};
+use rusqlite::{OptionalExtension, Params, Row, Statement, Transaction, limits::Limit};
+use serde::{Serialize, de::DeserializeOwned};
 use tracing::{error, trace, warn};
 
 use crate::{

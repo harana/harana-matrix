@@ -479,10 +479,10 @@ mod tests {
 
     use assert_matches2::assert_let;
     use insta::assert_json_snapshot;
+    use sdk_test::async_test;
     use ruma::{
         DeviceKeyAlgorithm, DeviceKeyId, device_id, owned_device_id, owned_user_id, user_id,
     };
-    use sdk_test::async_test;
     use serde_json::json;
     use vodozemac::{Curve25519PublicKey, Ed25519PublicKey, base64_decode};
 

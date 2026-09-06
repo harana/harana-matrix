@@ -4,13 +4,12 @@
 
 use std::ops::Deref;
 
-use serde::{Deserialize, Serialize};
-
 #[cfg(feature = "server")]
 use crate::api::OutgoingBody;
 #[cfg(feature = "client")]
 use crate::api::error::HeaderDeserializationError;
 use crate::http_headers::ContentDisposition;
+use serde::{Deserialize, Serialize};
 
 pub mod get_content;
 pub mod get_content_thumbnail;
@@ -57,8 +56,8 @@ pub struct Content {
     /// The content type of the file that was previously uploaded.
     pub content_type: Option<String>,
 
-    /// The value of the `Content-Disposition` HTTP header, possibly containing
-    /// the name of the file that was previously uploaded.
+    /// The value of the `Content-Disposition` HTTP header, possibly containing the name of the
+    /// file that was previously uploaded.
     pub content_disposition: Option<ContentDisposition>,
 }
 
@@ -283,8 +282,8 @@ impl ResponseBody {
         let (_raw_metadata_headers, serialized_metadata) =
             parse_multipart_body_part(body, metadata_start, metadata_end)?;
 
-        // Don't search for anything in the headers, just deserialize the content that
-        // should be JSON.
+        // Don't search for anything in the headers, just deserialize the content that should be
+        // JSON.
         let metadata = serde_json::from_slice(serialized_metadata)?;
 
         // Look at the part containing the media content now.
@@ -345,11 +344,10 @@ impl ResponseBody {
     }
 }
 
-/// Parse the multipart body part in the given bytes, starting and ending at the
-/// given positions.
+/// Parse the multipart body part in the given bytes, starting and ending at the given positions.
 ///
-/// Returns a `(headers_bytes, content_bytes)` tuple. Returns an error if the
-/// separation between the headers and the content could not be found.
+/// Returns a `(headers_bytes, content_bytes)` tuple. Returns an error if the separation between the
+/// headers and the content could not be found.
 #[cfg(feature = "client")]
 fn parse_multipart_body_part(
     bytes: &[u8],
@@ -358,9 +356,8 @@ fn parse_multipart_body_part(
 ) -> Result<(&[u8], &[u8]), crate::api::error::MultipartMixedDeserializationError> {
     use crate::api::error::MultipartMixedDeserializationError;
 
-    // The part should start with a newline after the boundary. We need to ignore
-    // characters before it in case of extra whitespaces, and for compatibility
-    // it might not have a CR.
+    // The part should start with a newline after the boundary. We need to ignore characters before
+    // it in case of extra whitespaces, and for compatibility it might not have a CR.
     let headers_start = memchr::memchr(b'\n', &bytes[start..end])
         .expect("the end boundary contains a newline")
         + start
@@ -389,12 +386,12 @@ fn parse_multipart_body_part(
 #[cfg(all(test, feature = "client", feature = "server"))]
 mod tests {
     use assert_matches2::assert_matches;
-
-    use super::{Content, ContentMetadata, FileOrLocation, ResponseBody};
     use crate::{
         api::OutgoingBody,
         http_headers::{ContentDisposition, ContentDispositionType},
     };
+
+    use super::{Content, ContentMetadata, FileOrLocation, ResponseBody};
 
     #[test]
     fn multipart_mixed_content_ascii_filename_conversions() {

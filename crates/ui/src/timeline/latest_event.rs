@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base::latest_event::LatestEventValue as BaseLatestEventValue;
 use matrix::{Client, Room, latest_events::LocalLatestEventValue};
+use base::latest_event::LatestEventValue as BaseLatestEventValue;
 use ruma::{MilliSecondsSinceUnixEpoch, OwnedUserId};
 use tracing::trace;
 
@@ -181,6 +181,7 @@ mod tests {
         store::SerializableEventContent,
         test_utils::mocks::MatrixMockServer,
     };
+    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
         MilliSecondsSinceUnixEpoch, event_id,
         events::{
@@ -189,7 +190,6 @@ mod tests {
         },
         owned_event_id, room_id, uint, user_id,
     };
-    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 
     use super::{
         super::{MsgLikeContent, MsgLikeKind, TimelineItemContent},

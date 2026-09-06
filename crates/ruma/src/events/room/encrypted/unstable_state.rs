@@ -1,15 +1,13 @@
 //! Types for `m.room.encrypted` state events, as defined in [MSC4362][msc].
 //!
 //! [msc]: https://github.com/matrix-org/matrix-spec-proposals/pull/4362
+use crate::room_version_rules::RedactionRules;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    events::{
-        PossiblyRedactedStateEventContent, RedactContent, StateEventType, StaticEventContent,
-        room::encrypted::EncryptedEventScheme,
-    },
-    room_version_rules::RedactionRules,
+use crate::events::{
+    PossiblyRedactedStateEventContent, RedactContent, StateEventType, StaticEventContent,
+    room::encrypted::EncryptedEventScheme,
 };
 
 /// The content of an `m.room.encrypted` state event.
@@ -72,19 +70,17 @@ mod tests {
 
     use assert_matches2::assert_matches;
     use js_int::uint;
+    use crate::{
+        MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, room_id, user_id,
+    };
     use serde_json::{from_value as from_json_value, json};
 
-    use crate::{
-        MilliSecondsSinceUnixEpoch,
-        canonical_json::assert_to_canonical_json_eq,
-        events::{
-            AnyStateEvent, StateEvent,
-            room::encrypted::{
-                EncryptedEventScheme, MegolmV1AesSha2ContentInit,
-                unstable_state::StateRoomEncryptedEventContent,
-            },
+    use crate::events::{
+        AnyStateEvent, StateEvent,
+        room::encrypted::{
+            EncryptedEventScheme, MegolmV1AesSha2ContentInit,
+            unstable_state::StateRoomEncryptedEventContent,
         },
-        room_id, user_id,
     };
 
     #[test]

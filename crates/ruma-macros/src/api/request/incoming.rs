@@ -8,8 +8,7 @@ use crate::{
 };
 
 impl Request {
-    /// Generate the `ruma_common::api::IncomingRequest` implementation for this
-    /// request struct.
+    /// Generate the `ruma_common::api::IncomingRequest` implementation for this request struct.
     pub fn expand_incoming(&self, ruma_common: &RumaCommon) -> TokenStream {
         let http = ruma_common.reexported(RumaCommonReexport::Http);
 
@@ -64,8 +63,7 @@ impl Request {
 }
 
 impl RequestPath {
-    /// Generate code to parse the path arguments of a `&[dyn AsRef<[u8]>]`
-    /// named `path_args`.
+    /// Generate code to parse the path arguments of a `&[dyn AsRef<[u8]>]` named `path_args`.
     fn expand_parse(&self, ruma_common: &RumaCommon) -> Option<TokenStream> {
         if self.0.is_empty() {
             return None;

@@ -26,8 +26,8 @@ use matrix::{
     },
     test_utils::mocks::MatrixMockServer,
 };
-use ruma::room_id;
 use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ruma::room_id;
 
 /// A join-shaped `m.call.member` state event for `(user_id, device_id)`.
 fn join_call_event(user_id: &UserId, device_id: &DeviceId) -> Raw<AnySyncStateEvent> {

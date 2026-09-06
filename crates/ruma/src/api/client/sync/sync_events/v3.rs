@@ -6,20 +6,19 @@ use std::{collections::BTreeMap, time::Duration};
 
 use as_variant::as_variant;
 use js_int::UInt;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     OneTimeKeyAlgorithm, OwnedEventId, OwnedRoomId, OwnedUserId,
     api::{auth_scheme::AccessToken, request, response},
-    events::{
-        AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnyStrippedStateEvent,
-        AnySyncEphemeralRoomEvent, AnySyncStateEvent, AnySyncTimelineEvent, AnyToDeviceEvent,
-        presence::PresenceEvent,
-    },
     metadata,
     presence::PresenceState,
     serde::Raw,
 };
+use crate::events::{
+    AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnyStrippedStateEvent,
+    AnySyncEphemeralRoomEvent, AnySyncStateEvent, AnySyncTimelineEvent, AnyToDeviceEvent,
+    presence::PresenceEvent,
+};
+use serde::{Deserialize, Serialize};
 
 mod response_serde;
 
@@ -40,8 +39,7 @@ metadata! {
 #[request]
 #[derive(Default)]
 pub struct Request {
-    /// A filter represented either as its full JSON definition or the ID of a
-    /// saved filter.
+    /// A filter represented either as its full JSON definition or the ID of a saved filter.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ruma_api(query)]
     pub filter: Option<Filter>,
@@ -54,14 +52,12 @@ pub struct Request {
     #[ruma_api(query)]
     pub since: Option<String>,
 
-    /// Controls whether to include the full state for all rooms the user is a
-    /// member of.
+    /// Controls whether to include the full state for all rooms the user is a member of.
     #[serde(default, skip_serializing_if = "crate::serde::is_default")]
     #[ruma_api(query)]
     pub full_state: bool,
 
-    /// Controls whether the client is automatically marked as online by polling
-    /// this API.
+    /// Controls whether the client is automatically marked as online by polling this API.
     ///
     /// Defaults to `PresenceState::Online`.
     #[serde(default, skip_serializing_if = "crate::serde::is_default")]
@@ -77,9 +73,8 @@ pub struct Request {
     #[ruma_api(query)]
     pub timeout: Option<Duration>,
 
-    /// Controls whether to receive state changes between the previous sync and
-    /// the **start** of the timeline, or between the previous sync and the
-    /// **end** of the timeline.
+    /// Controls whether to receive state changes between the previous sync and the **start** of
+    /// the timeline, or between the previous sync and the **end** of the timeline.
     #[serde(default, skip_serializing_if = "crate::serde::is_default")]
     #[ruma_api(query)]
     pub use_state_after: bool,
@@ -88,8 +83,7 @@ pub struct Request {
 /// Response type for the `sync` endpoint.
 #[response]
 pub struct Response {
-    /// The batch token to supply in the `since` param of the next `/sync`
-    /// request.
+    /// The batch token to supply in the `since` param of the next `/sync` request.
     pub next_batch: String,
 
     /// Updates to rooms.
@@ -150,8 +144,7 @@ impl Response {
     }
 }
 
-/// A filter represented either as its full JSON definition or the ID of a saved
-/// filter.
+/// A filter represented either as its full JSON definition or the ID of a saved filter.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
@@ -225,8 +218,8 @@ impl Rooms {
 #[derive(Clone, Debug, Default, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct LeftRoom {
-    /// The timeline of messages and state changes in the room up to the point
-    /// when the user left.
+    /// The timeline of messages and state changes in the room up to the point when the user
+    /// left.
     #[serde(skip_serializing_if = "Timeline::is_empty")]
     pub timeline: Timeline,
 
@@ -263,9 +256,8 @@ pub struct JoinedRoom {
 
     /// Counts of [unread notifications] for this room.
     ///
-    /// If `unread_thread_notifications` was set to `true` in the
-    /// [`RoomEventFilter`], these include only the unread notifications for
-    /// the main timeline.
+    /// If `unread_thread_notifications` was set to `true` in the [`RoomEventFilter`], these
+    /// include only the unread notifications for the main timeline.
     ///
     /// [unread notifications]: https://spec.matrix.org/v1.19/client-server-api/#receiving-notifications
     /// [`RoomEventFilter`]: crate::api::client::filter::RoomEventFilter
@@ -276,8 +268,7 @@ pub struct JoinedRoom {
     ///
     /// This is a map from thread root ID to unread notifications in the thread.
     ///
-    /// Only set if `unread_thread_notifications` was set to `true` in the
-    /// [`RoomEventFilter`].
+    /// Only set if `unread_thread_notifications` was set to `true` in the [`RoomEventFilter`].
     ///
     /// [unread notifications]: https://spec.matrix.org/v1.19/client-server-api/#receiving-notifications
     /// [`RoomEventFilter`]: crate::api::client::filter::RoomEventFilter
@@ -288,10 +279,9 @@ pub struct JoinedRoom {
     #[serde(skip_serializing_if = "Timeline::is_empty")]
     pub timeline: Timeline,
 
-    /// Updates to the state, between the time indicated by the `since`
-    /// parameter, and the start of the `timeline` (or all state up to the
-    /// start of the `timeline`, if `since` is not given, or `full_state` is
-    /// true).
+    /// Updates to the state, between the time indicated by the `since` parameter, and the
+    /// start of the `timeline` (or all state up to the start of the `timeline`, if
+    /// `since` is not given, or `full_state` is true).
     #[serde(flatten, skip_serializing_if = "State::is_before_and_empty")]
     pub state: State,
 
@@ -299,13 +289,12 @@ pub struct JoinedRoom {
     #[serde(skip_serializing_if = "RoomAccountData::is_empty")]
     pub account_data: RoomAccountData,
 
-    /// The ephemeral events in the room that aren't recorded in the timeline or
-    /// state of the room.
+    /// The ephemeral events in the room that aren't recorded in the timeline or state of the
+    /// room.
     #[serde(skip_serializing_if = "Ephemeral::is_empty")]
     pub ephemeral: Ephemeral,
 
-    /// The sticky events in the room that aren't recorded in the timeline of
-    /// the room.
+    /// The sticky events in the room that aren't recorded in the timeline of the room.
     ///
     /// See [MSC4354](https://github.com/matrix-org/matrix-spec-proposals/pull/4354).
     #[cfg(feature = "unstable-msc4354")]
@@ -420,8 +409,7 @@ impl KnockState {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Timeline {
-    /// True if the number of events returned was limited by the `limit` on the
-    /// filter.
+    /// True if the number of events returned was limited by the `limit` on the filter.
     ///
     /// Default to `false`.
     #[serde(default, skip_serializing_if = "crate::serde::is_default")]
@@ -456,34 +444,28 @@ impl Timeline {
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum State {
-    /// The state changes between the previous sync and the **start** of the
-    /// timeline.
+    /// The state changes between the previous sync and the **start** of the timeline.
     ///
-    /// To get the full list of state changes since the previous sync, the state
-    /// events in [`Timeline`] must be added to these events to update the
-    /// local state.
+    /// To get the full list of state changes since the previous sync, the state events in
+    /// [`Timeline`] must be added to these events to update the local state.
     ///
-    /// To get this variant, `use_state_after` must be set to `false` in the
-    /// [`Request`], which is the default.
+    /// To get this variant, `use_state_after` must be set to `false` in the [`Request`], which is
+    /// the default.
     #[serde(rename = "state")]
     Before(StateEvents),
 
-    /// The state changes between the previous sync and the **end** of the
-    /// timeline.
+    /// The state changes between the previous sync and the **end** of the timeline.
     ///
-    /// This contains the full list of state changes since the previous sync.
-    /// State events in [`Timeline`] must be ignored to update the local
-    /// state.
+    /// This contains the full list of state changes since the previous sync. State events in
+    /// [`Timeline`] must be ignored to update the local state.
     ///
-    /// To get this variant, `use_state_after` must be set to `true` in the
-    /// [`Request`].
+    /// To get this variant, `use_state_after` must be set to `true` in the [`Request`].
     #[serde(rename = "state_after")]
     After(StateEvents),
 }
 
 impl State {
-    /// Returns true if this is the `Before` variant and there are no state
-    /// updates.
+    /// Returns true if this is the `Before` variant and there are no state updates.
     fn is_before_and_empty(&self) -> bool {
         as_variant!(self, Self::Before).is_some_and(|state| state.is_empty())
     }
@@ -632,8 +614,7 @@ impl Sticky {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct RoomSummary {
-    /// Users which can be used to generate a room name if the room does not
-    /// have one.
+    /// Users which can be used to generate a room name if the room does not have one.
     ///
     /// Required if room name or canonical aliases are not set or empty.
     #[serde(rename = "m.heroes", default, skip_serializing_if = "Vec::is_empty")]
@@ -768,10 +749,10 @@ impl ToDevice {
 #[cfg(test)]
 mod tests {
     use assign::assign;
+    use crate::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::Timeline;
-    use crate::canonical_json::assert_to_canonical_json_eq;
 
     #[test]
     fn timeline_serde() {
@@ -794,10 +775,10 @@ mod tests {
     #[test]
     fn joined_room_sticky_section_serde() {
         use assert_matches2::assert_let;
+        use crate::events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent, SyncMessageLikeEvent};
         use serde_json::to_value as to_json_value;
 
         use super::JoinedRoom;
-        use crate::events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent, SyncMessageLikeEvent};
 
         let sticky_event = json!({
             "content": { "body": "sticky", "msgtype": "m.text" },
@@ -849,19 +830,18 @@ mod client_tests {
     use std::{borrow::Cow, time::Duration};
 
     use assert_matches2::assert_matches;
-    use serde_json::{Value as JsonValue, json};
-
-    use super::{Filter, PresenceState, Request, Response, State};
     use crate::{
         RoomVersionId,
         api::{
             IncomingResponseExt as _, MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
             auth_scheme::SendAccessToken,
         },
-        event_id,
-        events::AnyStrippedStateEvent,
-        room_id, user_id,
+        event_id, room_id, user_id,
     };
+    use crate::events::AnyStrippedStateEvent;
+    use serde_json::{Value as JsonValue, json};
+
+    use super::{Filter, PresenceState, Request, Response, State};
 
     fn sync_state_event() -> JsonValue {
         json!({
@@ -1149,16 +1129,16 @@ mod server_tests {
     use std::time::Duration;
 
     use assert_matches2::assert_matches;
-    use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
-
-    use super::{Filter, JoinedRoom, KnockedRoom, LeftRoom, Request, Response, State};
     use crate::{
         api::{IncomingRequest as _, OutgoingResponseExt as _},
-        events::{AnyStrippedStateEvent, AnySyncStateEvent},
         owned_room_id,
         presence::PresenceState,
         serde::Raw,
     };
+    use crate::events::{AnyStrippedStateEvent, AnySyncStateEvent};
+    use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
+
+    use super::{Filter, JoinedRoom, KnockedRoom, LeftRoom, Request, Response, State};
 
     fn sync_state_event() -> Raw<AnySyncStateEvent> {
         Raw::new(&json!({

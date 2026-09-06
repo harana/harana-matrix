@@ -889,16 +889,16 @@ mod tests {
     use std::{ops::Not, sync::Arc, time::Duration};
 
     use assert_matches::assert_matches;
+    use futures_util::FutureExt as _;
     use base::{
         RoomState,
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
         sync::{JoinedRoomUpdate, RoomUpdates, Timeline},
     };
-    use futures_util::FutureExt as _;
-    use ruma::{event_id, room_id, user_id};
     use sdk_test::{
         JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
+    use ruma::{event_id, room_id, user_id};
     use tokio::time::sleep;
 
     use super::{EventCacheError, RoomEventCacheGenericUpdate};

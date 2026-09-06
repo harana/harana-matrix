@@ -13,23 +13,20 @@ use crate::{IdParseError, PrivOwnedStr};
 
 /// A Matrix VoIP version ID.
 ///
-/// A `VoipVersionId` representing VoIP version 0 can be converted or
-/// deserialized from a `UInt`, and can be converted or serialized back into a
-/// `UInt` as needed.
+/// A `VoipVersionId` representing VoIP version 0 can be converted or deserialized from a `UInt`,
+/// and can be converted or serialized back into a `UInt` as needed.
 ///
-/// Custom room versions or ones that were introduced into the specification
-/// after this code was written are represented by a hidden enum variant. They
-/// can be converted or deserialized from a string slice, and can be converted
-/// or serialized back into a string as needed.
+/// Custom room versions or ones that were introduced into the specification after this code was
+/// written are represented by a hidden enum variant. They can be converted or deserialized from a
+/// string slice, and can be converted or serialized back into a string as needed.
 ///
 /// ```
 /// # use ruma::VoipVersionId;
 /// assert_eq!(VoipVersionId::try_from("1").unwrap().as_ref(), "1");
 /// ```
 ///
-/// For simplicity, version 0 has a string representation, but trying to
-/// construct a `VoipVersionId` from a `"0"` string will not result in the `V0`
-/// variant.
+/// For simplicity, version 0 has a string representation, but trying to construct a `VoipVersionId`
+/// from a `"0"` string will not result in the `V0` variant.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, DisplayAsRefStr)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum VoipVersionId {

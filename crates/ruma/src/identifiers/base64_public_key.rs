@@ -3,12 +3,10 @@ use ruma_macros::IdDst;
 use super::{IdParseError, KeyName};
 use crate::serde::{Base64, Base64DecodeError, base64::Standard};
 
-/// A public key encoded using unpadded base64, used as an identifier for
-/// [cross-signing] keys.
+/// A public key encoded using unpadded base64, used as an identifier for [cross-signing] keys.
 ///
-/// This string is validated using the set `[a-zA-Z0-9+/=]`, but it is not
-/// validated to be decodable as base64. This type is provided simply for its
-/// semantic value.
+/// This string is validated using the set `[a-zA-Z0-9+/=]`, but it is not validated to be decodable
+/// as base64. This type is provided simply for its semantic value.
 ///
 /// [cross-signing]: https://spec.matrix.org/v1.19/client-server-api/#cross-signing
 #[repr(transparent)]
@@ -17,8 +15,7 @@ use crate::serde::{Base64, Base64DecodeError, base64::Standard};
 pub struct Base64PublicKey(str);
 
 impl OwnedBase64PublicKey {
-    /// Construct a new `OwnedBase64PublicKey` by encoding the given bytes using
-    /// unpadded base64.
+    /// Construct a new `OwnedBase64PublicKey` by encoding the given bytes using unpadded base64.
     pub fn with_bytes<B: AsRef<[u8]>>(bytes: B) -> OwnedBase64PublicKey {
         Base64::<Standard, B>::new(bytes).into()
     }

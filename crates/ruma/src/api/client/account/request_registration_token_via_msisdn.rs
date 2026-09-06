@@ -8,12 +8,13 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3registermsisdnrequesttoken
 
     use js_int::UInt;
-
     use crate::{
         OwnedClientSecret, OwnedSessionId,
-        api::{auth_scheme::NoAccessToken, client::account::IdentityServerInfo, request, response},
+        api::{auth_scheme::NoAccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::account::IdentityServerInfo;
 
     metadata! {
         method: POST,
@@ -37,8 +38,7 @@ pub mod v3 {
         /// Phone number to validate.
         pub phone_number: String,
 
-        /// Used to distinguish protocol level retries from requests to re-send
-        /// the SMS.
+        /// Used to distinguish protocol level retries from requests to re-send the SMS.
         pub send_attempt: UInt,
 
         /// Return URL for identity server to redirect the client back to.
@@ -61,9 +61,8 @@ pub mod v3 {
         ///
         /// If omitted, verification happens without client.
         ///
-        /// If you activate the `compat-empty-string-null` feature, this field
-        /// being an empty string in JSON will result in `None` here
-        /// during deserialization.
+        /// If you activate the `compat-empty-string-null` feature, this field being an empty
+        /// string in JSON will result in `None` here during deserialization.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(
             feature = "compat-empty-string-null",
@@ -73,8 +72,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given client secret, country code,
-        /// phone number and send-attempt counter.
+        /// Creates a new `Request` with the given client secret, country code, phone number and
+        /// send-attempt counter.
         #[allow(deprecated)]
         pub fn new(
             client_secret: OwnedClientSecret,

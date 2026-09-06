@@ -1,10 +1,10 @@
 use matrix::{encryption::EncryptionSettings, test_utils::mocks::MatrixMockServer};
+use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
     RoomVersionId, device_id, event_id,
     events::{StateEventType, room::topic::RoomTopicEventContent},
     room_id, user_id,
 };
-use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use serde_json::json;
 
 /// Verifies clients can send encrypted state events when the room is configured

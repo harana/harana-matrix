@@ -1259,13 +1259,13 @@ mod tests {
     use std::sync::Arc;
 
     use matrix::{Room, test_utils::mocks::MatrixMockServer};
+    use sdk_test::async_test;
     use ruma::{
         MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId,
         events::receipt::{Receipt, ReceiptThread},
         owned_event_id, owned_user_id, room_id,
         room_version_rules::RoomVersionRules,
     };
-    use sdk_test::async_test;
 
     use crate::timeline::{
         EventTimelineItem, MsgLikeContent, TimelineDetails, TimelineItem, TimelineItemContent,

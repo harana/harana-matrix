@@ -20,8 +20,8 @@
 use std::{future::IntoFuture, io::Read};
 
 use eyeball::{SharedObservable, Subscriber};
-use ruma::events::room::EncryptedFile;
 use sdk_common::boxed_into_future;
+use ruma::events::room::EncryptedFile;
 
 use crate::{Client, Media, Result, TransmissionProgress, config::RequestConfig};
 

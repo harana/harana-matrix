@@ -13,42 +13,37 @@ use std::time::Duration;
 pub use focus::*;
 pub use member_data::*;
 pub use member_state_key::*;
+use crate::{MilliSecondsSinceUnixEpoch, OwnedDeviceId, room_version_rules::RedactionRules};
 use ruma_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    MilliSecondsSinceUnixEpoch, OwnedDeviceId,
-    events::{
-        PossiblyRedactedStateEventContent, PrivOwnedStr, RedactContent, RedactedStateEventContent,
-        StateEventType, StaticEventContent,
-    },
-    room_version_rules::RedactionRules,
+use crate::events::{
+    PossiblyRedactedStateEventContent, PrivOwnedStr, RedactContent, RedactedStateEventContent,
+    StateEventType, StaticEventContent,
 };
 
 /// The member state event for a MatrixRTC session.
 ///
-/// This is the object containing all the data related to a Matrix users
-/// participation in a MatrixRTC session.
+/// This is the object containing all the data related to a Matrix users participation in a
+/// MatrixRTC session.
 ///
-/// This is a unit struct with the enum [`CallMemberEventContent`] because a
-/// Ruma state event cannot be an enum and we need this to be an untagged enum
-/// for parsing purposes. (see [`CallMemberEventContent`])
+/// This is a unit struct with the enum [`CallMemberEventContent`] because a Ruma state event cannot
+/// be an enum and we need this to be an untagged enum for parsing purposes. (see
+/// [`CallMemberEventContent`])
 ///
-/// This struct also exposes allows to call the methods from
-/// [`CallMemberEventContent`].
+/// This struct also exposes allows to call the methods from [`CallMemberEventContent`].
 #[derive(Clone, Debug, Serialize, Deserialize, EventContent, PartialEq)]
 #[ruma_event(type = "org.matrix.msc3401.call.member", kind = State, state_key_type = CallMemberStateKey, custom_redacted, custom_possibly_redacted)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(untagged)]
 pub enum CallMemberEventContent {
-    /// The legacy format for m.call.member events. (An array of memberships.
-    /// The devices of one user.)
+    /// The legacy format for m.call.member events. (An array of memberships. The devices of one
+    /// user.)
     LegacyContent(LegacyMembershipContent),
-    /// Normal membership events. One event per membership. Multiple state keys
-    /// will be used to describe multiple devices for one user.
+    /// Normal membership events. One event per membership. Multiple state keys will
+    /// be used to describe multiple devices for one user.
     SessionContent(SessionMembershipData),
-    /// An empty content means this user has been in a rtc session but is not
-    /// anymore.
+    /// An empty content means this user has been in a rtc session but is not anymore.
     Empty(EmptyMembershipData),
 }
 
@@ -67,12 +62,10 @@ impl CallMemberEventContent {
     /// * `device_id` - The device ID of the member.
     /// * `focus_active` - The active focus state of the member.
     /// * `foci_preferred` - The preferred focus states of the member.
-    /// * `created_ts` - The timestamp when this state event chain for
-    ///   memberships was created. when updating the event the `created_ts`
-    ///   should be copied from the previous state. Set to `None` if this is the
-    ///   initial join event for the session.
-    /// * `expires` - The time after which the event is considered as expired.
-    ///   Defaults to 4 hours.
+    /// * `created_ts` - The timestamp when this state event chain for memberships was created. when
+    ///   updating the event the `created_ts` should be copied from the previous state. Set to
+    ///   `None` if this is the initial join event for the session.
+    /// * `expires` - The time after which the event is considered as expired. Defaults to 4 hours.
     pub fn new(
         application: Application,
         device_id: OwnedDeviceId,
@@ -91,25 +84,22 @@ impl CallMemberEventContent {
         })
     }
 
-    /// Creates a new Empty [`CallMemberEventContent`] representing a left
-    /// membership.
+    /// Creates a new Empty [`CallMemberEventContent`] representing a left membership.
     pub fn new_empty(leave_reason: Option<LeaveReason>) -> Self {
         Self::Empty(EmptyMembershipData { leave_reason })
     }
 
     /// All non expired memberships in this member event.
     ///
-    /// In most cases you want to use this method instead of the public
-    /// memberships field. The memberships field will also include expired
-    /// events.
+    /// In most cases you want to use this method instead of the public memberships field.
+    /// The memberships field will also include expired events.
     ///
     /// This copies all the memberships and converts them
     /// # Arguments
     ///
-    /// * `origin_server_ts` - optionally the `origin_server_ts` can be passed
-    ///   as a fallback in the Membership does not contain
-    ///   [`MembershipData::created_ts`]. (`origin_server_ts` will be ignored if
-    ///   [`MembershipData::created_ts`] is `Some`)
+    /// * `origin_server_ts` - optionally the `origin_server_ts` can be passed as a fallback in the
+    ///   Membership does not contain [`MembershipData::created_ts`]. (`origin_server_ts` will be
+    ///   ignored if [`MembershipData::created_ts`] is `Some`)
     pub fn active_memberships(
         &self,
         origin_server_ts: Option<MilliSecondsSinceUnixEpoch>,
@@ -132,8 +122,8 @@ impl CallMemberEventContent {
         }
     }
 
-    /// All the memberships for this event. Can only contain multiple elements
-    /// in the case of legacy `m.call.member` state events.
+    /// All the memberships for this event. Can only contain multiple elements in the case of legacy
+    /// `m.call.member` state events.
     pub fn memberships(&self) -> Vec<MembershipData<'_>> {
         match self {
             CallMemberEventContent::LegacyContent(content) => {
@@ -148,13 +138,12 @@ impl CallMemberEventContent {
 
     /// Set the `created_ts` in this event.
     ///
-    /// Each call member event contains the `origin_server_ts` and
-    /// `content.create_ts`. `content.create_ts` is undefined for the
-    /// initial event of a session (because the `origin_server_ts` is not
-    /// known on the client). In the rust sdk we want to copy over the
-    /// `origin_server_ts` of the event into the content. (This allows to
-    /// use `MinimalStateEvents` and still be able to determine if a membership
-    /// is expired)
+    /// Each call member event contains the `origin_server_ts` and `content.create_ts`.
+    /// `content.create_ts` is undefined for the initial event of a session (because the
+    /// `origin_server_ts` is not known on the client).
+    /// In the rust sdk we want to copy over the `origin_server_ts` of the event into the content.
+    /// (This allows to use `MinimalStateEvents` and still be able to determine if a membership is
+    /// expired)
     pub fn set_created_ts_if_none(&mut self, origin_server_ts: MilliSecondsSinceUnixEpoch) {
         match self {
             CallMemberEventContent::LegacyContent(content) => {
@@ -170,14 +159,12 @@ impl CallMemberEventContent {
     }
 }
 
-/// This describes the CallMember event if the user is not part of the current
-/// session.
+/// This describes the CallMember event if the user is not part of the current session.
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct EmptyMembershipData {
     /// An empty call member state event can optionally contain a leave reason.
-    /// If it is `None` the user has left the call ordinarily. (Intentional
-    /// hangup)
+    /// If it is `None` the user has left the call ordinarily. (Intentional hangup)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub leave_reason: Option<LeaveReason>,
 }
@@ -186,8 +173,7 @@ pub struct EmptyMembershipData {
 /// [`CallMemberEventContent::Empty`].
 ///
 /// It is used when the user disconnected and a Future ([MSC4140](https://github.com/matrix-org/matrix-spec-proposals/pull/4140))
-/// was used to update the membership after the client was not reachable
-/// anymore.
+/// was used to update the membership after the client was not reachable anymore.
 #[derive(Clone, StringEnum)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_enum(rename_all(prefix = "m.", rule = "snake_case"))]
@@ -209,9 +195,8 @@ impl RedactContent for CallMemberEventContent {
 
 /// The PossiblyRedacted version of [`CallMemberEventContent`].
 ///
-/// Since [`CallMemberEventContent`] has the [`CallMemberEventContent::Empty`]
-/// state it already is compatible with the redacted version of the state event
-/// content.
+/// Since [`CallMemberEventContent`] has the [`CallMemberEventContent::Empty`] state it already is
+/// compatible with the redacted version of the state event content.
 pub type PossiblyRedactedCallMemberEventContent = CallMemberEventContent;
 
 impl PossiblyRedactedStateEventContent for PossiblyRedactedCallMemberEventContent {
@@ -246,15 +231,14 @@ impl From<RedactedCallMemberEventContent> for PossiblyRedactedCallMemberEventCon
     }
 }
 
-/// Legacy content with an array of memberships. See also:
-/// [`CallMemberEventContent`]
+/// Legacy content with an array of memberships. See also: [`CallMemberEventContent`]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct LegacyMembershipContent {
     /// A list of all the memberships that user currently has in this room.
     ///
-    /// There can be multiple ones in case the user participates with multiple
-    /// devices or there are multiple RTC applications running.
+    /// There can be multiple ones in case the user participates with multiple devices or there
+    /// are multiple RTC applications running.
     ///
     /// e.g. a call and a spacial experience.
     ///
@@ -269,6 +253,10 @@ mod tests {
     use std::time::Duration;
 
     use assert_matches2::assert_matches;
+    use crate::{
+        MilliSecondsSinceUnixEpoch as TS, OwnedEventId, OwnedRoomId, OwnedUserId, device_id,
+        owned_device_id, user_id,
+    };
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
     use super::{
@@ -278,14 +266,10 @@ mod tests {
             Application, CallApplicationContent, CallScope, LegacyMembershipData, MembershipData,
         },
     };
-    use crate::{
-        MilliSecondsSinceUnixEpoch as TS, OwnedEventId, OwnedRoomId, OwnedUserId, device_id,
-        events::{
-            AnyStateEvent, StateEvent,
-            call::member::{EmptyMembershipData, FocusSelection, SessionMembershipData},
-            rtc::notification::CallIntent,
-        },
-        owned_device_id, user_id,
+    use crate::events::{
+        AnyStateEvent, StateEvent,
+        call::member::{EmptyMembershipData, FocusSelection, SessionMembershipData},
+        rtc::notification::CallIntent,
     };
 
     fn create_call_member_legacy_event_content() -> CallMemberEventContent {
@@ -691,9 +675,8 @@ mod tests {
             member_event.unsigned.prev_content.unwrap()
         );
 
-        // assert_eq!(, StateUnsigned { age: 10, transaction_id: None,
-        // prev_content: CallMemberEventContent::Empty { leave_reason:
-        // None }, relations: None })
+        // assert_eq!(, StateUnsigned { age: 10, transaction_id: None, prev_content:
+        // CallMemberEventContent::Empty { leave_reason: None }, relations: None })
     }
 
     #[test]

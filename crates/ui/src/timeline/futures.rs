@@ -1,8 +1,8 @@
 use std::future::IntoFuture;
 
-use base::boxed_into_future;
 use eyeball::SharedObservable;
 use matrix::TransmissionProgress;
+use base::boxed_into_future;
 use mime::Mime;
 use tracing::{Instrument as _, Span};
 

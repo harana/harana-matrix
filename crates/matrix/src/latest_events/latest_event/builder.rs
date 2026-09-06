@@ -953,6 +953,7 @@ mod filter_tests {
     use std::ops::Not;
 
     use assert_matches::assert_matches;
+    use sdk_test::event_factory::{EventFactory, PreviousMembership};
     use ruma::{
         event_id,
         events::{
@@ -961,7 +962,6 @@ mod filter_tests {
         },
         owned_event_id, owned_user_id, user_id,
     };
-    use sdk_test::event_factory::{EventFactory, PreviousMembership};
 
     use super::{BTreeSet, ControlFlow, FilterContinue, filter_timeline_event};
 
@@ -1859,6 +1859,7 @@ mod builder_tests {
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
         store::{ChildTransactionId, SerializableEventContent},
     };
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         EventId, MilliSecondsSinceUnixEpoch, OwnedRoomId, OwnedTransactionId, event_id,
         events::{
@@ -1870,7 +1871,6 @@ mod builder_tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
 
     use super::{
@@ -2590,8 +2590,8 @@ mod builder_tests {
 
         let value =
             Builder::new_remote(&room_event_cache, None, LatestEventValue::None, user_id, None)
-                .await
-                .unwrap();
+            .await
+            .unwrap();
 
         assert_eq!(value.timestamp(), original_timestamp);
     }
@@ -2662,10 +2662,15 @@ mod builder_tests {
 
         let (room_event_cache, _) = event_cache.room(room_id).await.unwrap();
 
-        let value =
-            Builder::new_remote(&room_event_cache, None, LatestEventValue::None, user_id, None)
-                .await
-                .expect("a latest event value");
+        let value = Builder::new_remote(
+            &room_event_cache,
+            None,
+            LatestEventValue::None,
+            user_id,
+            None,
+        )
+        .await
+        .expect("a latest event value");
 
         // The content is the edited one…
         assert_remote_value_matches_room_message_with_body!(Some(value.clone()) => with body = "* goodbye");

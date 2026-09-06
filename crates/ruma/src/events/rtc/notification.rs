@@ -8,13 +8,12 @@
 use std::time::Duration;
 
 use js_int::UInt;
+use crate::MilliSecondsSinceUnixEpoch;
+use crate::events::{Mentions, relation::Reference};
 use ruma_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    MilliSecondsSinceUnixEpoch,
-    events::{Mentions, PrivOwnedStr, relation::Reference},
-};
+use crate::events::PrivOwnedStr;
 
 /// The content of an `m.rtc.notification` event.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
@@ -26,12 +25,11 @@ use crate::{
 pub struct RtcNotificationEventContent {
     /// Local timestamp observed by the sender device.
     ///
-    /// Used with `lifetime` to determine validity; receivers SHOULD compare
-    /// with `origin_server_ts` and prefer it if the difference is large.
+    /// Used with `lifetime` to determine validity; receivers SHOULD compare with
+    /// `origin_server_ts` and prefer it if the difference is large.
     pub sender_ts: MilliSecondsSinceUnixEpoch,
 
-    /// Relative time from `sender_ts` during which the notification is
-    /// considered valid.
+    /// Relative time from `sender_ts` during which the notification is considered valid.
     #[serde(with = "crate::serde::duration::ms")]
     pub lifetime: Duration,
 
@@ -46,19 +44,16 @@ pub struct RtcNotificationEventContent {
     /// How this notification should notify the receiver.
     pub notification_type: NotificationType,
 
-    /// Gives a soft indication of whether the call is a "audio" or "video"
-    /// (+audio) call.
+    /// Gives a soft indication of whether the call is a "audio" or "video" (+audio) call.
     ///
-    /// This is just to indicate between trusted callers that they can start
-    /// with audio or video off, but the actual call semantics remain the
-    /// same, and they may switch at will.
+    /// This is just to indicate between trusted callers that they can start with audio or video
+    /// off, but the actual call semantics remain the same, and they may switch at will.
     #[serde(rename = "m.call.intent", skip_serializing_if = "Option::is_none")]
     pub call_intent: Option<CallIntent>,
 }
 
 impl RtcNotificationEventContent {
-    /// Creates a new `RtcNotificationEventContent` with the given
-    /// configuration.
+    /// Creates a new `RtcNotificationEventContent` with the given configuration.
     pub fn new(
         sender_ts: MilliSecondsSinceUnixEpoch,
         lifetime: Duration,
@@ -74,28 +69,26 @@ impl RtcNotificationEventContent {
         }
     }
 
-    /// Calculates the timestamp at which this notification is considered
-    /// invalid. This calculation is based on MSC4075 and tries to use the
-    /// `sender_ts` as the starting point and the `lifetime` as the duration
-    /// for which the notification is valid.
+    /// Calculates the timestamp at which this notification is considered invalid.
+    /// This calculation is based on MSC4075 and tries to use the `sender_ts` as the starting point
+    /// and the `lifetime` as the duration for which the notification is valid.
     ///
-    /// The `sender_ts` cannot be trusted since it is a generated value by the
-    /// sending client. To mitigate issue because of misconfigured client
-    /// clocks, the MSC requires that the `origin_server_ts` is used as the
-    /// starting point if the difference is large.
+    /// The `sender_ts` cannot be trusted since it is a generated value by the sending client.
+    /// To mitigate issue because of misconfigured client clocks, the MSC requires
+    /// that the `origin_server_ts` is used as the starting point if the difference is large.
     ///
     /// # Arguments:
     ///
-    /// - `max_sender_ts_offset` is the maximum allowed offset between the two
-    ///   timestamps. (default 20s)
-    /// - `origin_server_ts` has to be set to the origin_server_ts from the
-    ///   event containing this event content.
+    /// - `max_sender_ts_offset` is the maximum allowed offset between the two timestamps. (default
+    ///   20s)
+    /// - `origin_server_ts` has to be set to the origin_server_ts from the event containing this
+    ///   event content.
     ///
     /// # Examples
-    /// To start a timer until this client should stop ringing for this
-    /// notification: `let duration_ring =
-    /// MilliSecondsSinceUnixEpoch::now().saturated_sub(content.
-    /// expiration_ts(event. origin_server_ts(), None));`
+    /// To start a timer until this client should stop ringing for this notification:
+    /// `let duration_ring =
+    /// MilliSecondsSinceUnixEpoch::now().saturated_sub(content.expiration_ts(event.
+    /// origin_server_ts(), None));`
     pub fn expiration_ts(
         &self,
         origin_server_ts: MilliSecondsSinceUnixEpoch,
@@ -155,15 +148,13 @@ mod tests {
 
     use assert_matches2::assert_matches;
     use js_int::UInt;
+    use crate::{
+        MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
+    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::{CallIntent, NotificationType, RtcNotificationEventContent};
-    use crate::{
-        MilliSecondsSinceUnixEpoch,
-        canonical_json::assert_to_canonical_json_eq,
-        events::{AnyMessageLikeEvent, Mentions, MessageLikeEvent},
-        owned_event_id,
-    };
+    use crate::events::{AnyMessageLikeEvent, Mentions, MessageLikeEvent};
 
     #[test]
     fn notification_event_serialization() {
@@ -173,8 +164,7 @@ mod tests {
             NotificationType::Ring,
         );
         content.mentions = Some(Mentions::with_room_mention());
-        content.relates_to =
-            Some(crate::events::relation::Reference::new(owned_event_id!("$m:ex")));
+        content.relates_to = Some(crate::events::relation::Reference::new(owned_event_id!("$m:ex")));
 
         assert_to_canonical_json_eq!(
             content,
@@ -273,16 +263,14 @@ mod tests {
             MilliSecondsSinceUnixEpoch(UInt::new(130_365).unwrap())
         );
 
-        // sender_ts is not trustworthy (sender_ts too small), origin_server_ts is used
-        // instead
+        // sender_ts is not trustworthy (sender_ts too small), origin_server_ts is used instead
         let origin_server_ts = MilliSecondsSinceUnixEpoch(UInt::new(200_000).unwrap());
         assert_eq!(
             content.expiration_ts(origin_server_ts, None),
             MilliSecondsSinceUnixEpoch(UInt::new(230_000).unwrap())
         );
 
-        // sender_ts is not trustworthy (sender_ts too large), origin_server_ts is used
-        // instead
+        // sender_ts is not trustworthy (sender_ts too large), origin_server_ts is used instead
         let origin_server_ts = MilliSecondsSinceUnixEpoch(UInt::new(50_000).unwrap());
         assert_eq!(
             content.expiration_ts(origin_server_ts, None),

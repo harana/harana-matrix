@@ -1,15 +1,15 @@
 //! `msc4140` ([MSC])
 //!
-//! Old endpoint definition from MSC 4140. Does not correspond to the current
-//! state of the MSC.
+//! Old endpoint definition from MSC 4140. Does not correspond to the current state of the MSC.
 //!
 //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/blob/3ee73abe5f81252b00877cfb5db941ee9aa6c18d/proposals/4140-delayed-events-futures.md
 
-use super::UpdateAction;
 use crate::{
     api::{auth_scheme::AccessToken, request, response},
     metadata,
 };
+
+use super::UpdateAction;
 
 metadata! {
     method: POST,
@@ -20,8 +20,7 @@ metadata! {
     }
 }
 
-/// Request type for the
-/// [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
+/// Request type for the [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
 /// endpoint.
 #[request]
 pub struct Request {
@@ -39,8 +38,7 @@ impl Request {
     }
 }
 
-/// Response type for the
-/// [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
+/// Response type for the [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
 /// endpoint.
 #[response]
 pub struct Response {}
@@ -56,12 +54,12 @@ impl Response {
 mod tests {
     use std::borrow::Cow;
 
-    use serde_json::{Value as JsonValue, json};
-
-    use super::{Request, UpdateAction};
     use crate::api::{
         MatrixVersion, OutgoingRequestExt as _, SupportedVersions, auth_scheme::SendAccessToken,
     };
+    use serde_json::{Value as JsonValue, json};
+
+    use super::{Request, UpdateAction};
     #[test]
     fn serialize_update_delayed_event_request() {
         let supported = SupportedVersions {

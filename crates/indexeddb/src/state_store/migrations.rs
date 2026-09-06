@@ -17,10 +17,6 @@ use std::{
     sync::Arc,
 };
 
-use base::{
-    StateStoreDataKey, deserialized_responses::SyncOrStrippedState,
-    store::migration_helpers::RoomInfoV1,
-};
 use gloo_utils::format::JsValueSerdeExt;
 use indexed_db_futures::{
     database::{Database, VersionChangeEvent},
@@ -31,6 +27,11 @@ use indexed_db_futures::{
     transaction::{Transaction, TransactionMode},
 };
 use js_sys::Date as JsDate;
+use base::{
+    StateStoreDataKey, deserialized_responses::SyncOrStrippedState,
+    store::migration_helpers::RoomInfoV1,
+};
+use store_encryption::StoreCipher;
 use ruma::{
     events::{
         StateEventType,
@@ -43,7 +44,6 @@ use ruma::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::value::{RawValue as RawJsonValue, Value as JsonValue};
-use store_encryption::StoreCipher;
 use wasm_bindgen::JsValue;
 
 use super::{
@@ -859,12 +859,6 @@ mod tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
-    use base::{
-        RoomMemberships, RoomState, StateStore, StateStoreDataKey, StoreError,
-        deserialized_responses::RawMemberEvent,
-        store::{RoomLoadSettings, StateStoreExt},
-        sync::UnreadNotificationsCount,
-    };
     use indexed_db_futures::{
         database::{Database, VersionChangeEvent},
         error::Error,
@@ -872,6 +866,13 @@ mod tests {
         prelude::*,
         transaction::{Transaction, TransactionMode},
     };
+    use base::{
+        RoomMemberships, RoomState, StateStore, StateStoreDataKey, StoreError,
+        deserialized_responses::RawMemberEvent,
+        store::{RoomLoadSettings, StateStoreExt},
+        sync::UnreadNotificationsCount,
+    };
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         EventId, MilliSecondsSinceUnixEpoch, OwnedUserId, RoomId, UserId,
         events::{
@@ -885,7 +886,6 @@ mod tests {
         serde::Raw,
         server_name, user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
     use uuid::Uuid;
     use wasm_bindgen::JsValue;

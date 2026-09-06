@@ -22,14 +22,14 @@ use std::{
     },
 };
 
+use sdk_state_res::{AuthCheckOutcome, Event, auth_check, check_state_dependent_auth_rules};
+use sdk_test_macros::async_test;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
     events::{StateEventType, TimelineEventType},
     room_version_rules::RoomVersionRules,
     uint,
 };
-use sdk_state_res::{AuthCheckOutcome, Event, auth_check, check_state_dependent_auth_rules};
-use sdk_test_macros::async_test;
 use serde_json::{Value as JsonValue, json, value::RawValue as RawJsonValue};
 
 /// The smallest event a state resolution consumer can hold.

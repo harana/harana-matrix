@@ -2,6 +2,8 @@ use std::{ops::Deref, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use crypto::{EncryptionSettings, OlmMachine, OlmMachineBuilder};
+use sqlite::SqliteCryptoStore;
+use sdk_test::ruma_response_from_json;
 use ruma::{
     DeviceId, OwnedUserId, TransactionId, UserId,
     api::client::{
@@ -10,9 +12,7 @@ use ruma::{
     },
     device_id, room_id, user_id,
 };
-use sdk_test::ruma_response_from_json;
 use serde_json::Value;
-use sqlite::SqliteCryptoStore;
 use tokio::runtime::Builder;
 
 fn alice_id() -> &'static UserId {

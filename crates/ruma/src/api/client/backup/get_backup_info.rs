@@ -9,14 +9,15 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3room_keysversionversion
 
     use js_int::UInt;
-    use serde::{Deserialize, Deserializer, Serialize, ser};
-    use serde_json::value::{RawValue as RawJsonValue, to_raw_value as to_raw_json_value};
-
     use crate::{
-        api::{auth_scheme::AccessToken, client::backup::BackupAlgorithm, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
         serde::Raw,
     };
+    use serde::{Deserialize, Deserializer, Serialize, ser};
+    use serde_json::value::{RawValue as RawJsonValue, to_raw_value as to_raw_json_value};
+
+    use crate::api::client::backup::BackupAlgorithm;
 
     metadata! {
         method: GET,
@@ -48,8 +49,8 @@ pub mod v3 {
 
         /// An opaque string representing stored keys in the backup.
         ///
-        /// Clients can compare it with the etag value they received in the
-        /// request of their last key storage request.
+        /// Clients can compare it with the etag value they received in the request of their last
+        /// key storage request.
         pub etag: String,
 
         /// The backup version.
@@ -64,8 +65,7 @@ pub mod v3 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given algorithm, key count, etag
-        /// and version.
+        /// Creates a new `Response` with the given algorithm, key count, etag and version.
         pub fn new(
             algorithm: Raw<BackupAlgorithm>,
             count: UInt,

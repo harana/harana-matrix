@@ -17,8 +17,8 @@
 use std::{fmt, sync::Arc};
 
 use async_trait::async_trait;
-use ruma::{MxcUri, time::SystemTime};
 use sdk_common::{AsyncTraitDeps, cross_process_lock::CrossProcessLockGeneration};
+use ruma::{MxcUri, time::SystemTime};
 
 #[cfg(doc)]
 use crate::media::store::MediaService;

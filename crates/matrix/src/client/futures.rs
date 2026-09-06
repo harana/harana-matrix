@@ -18,6 +18,7 @@ use std::{fmt::Debug, future::IntoFuture};
 
 use eyeball::{SharedObservable, Subscriber};
 use js_int::UInt;
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm, boxed_into_future};
 use oauth2::{RequestTokenError, basic::BasicErrorResponseType};
 use ruma::api::{
     OutgoingRequest,
@@ -25,7 +26,6 @@ use ruma::api::{
     error::{ErrorKind, FromHttpResponseError},
     path_builder::PathBuilder,
 };
-use sdk_common::{SendOutsideWasm, SyncOutsideWasm, boxed_into_future};
 use tracing::{error, trace};
 
 use super::super::Client;

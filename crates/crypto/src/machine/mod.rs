@@ -21,6 +21,19 @@ use std::{
 };
 
 use itertools::Itertools;
+#[cfg(feature = "experimental-send-custom-to-device")]
+use sdk_common::deserialized_responses::WithheldCode;
+use sdk_common::{
+    BoxFuture,
+    deserialized_responses::{
+        AlgorithmInfo, DecryptedRoomEvent, DeviceLinkProblem, EncryptionInfo, ForwarderInfo,
+        ProcessedToDeviceEvent, ToDeviceUnableToDecryptInfo, ToDeviceUnableToDecryptReason,
+        UnableToDecryptInfo, UnableToDecryptReason, UnsignedDecryptionResult,
+        UnsignedEventLocation, VerificationLevel, VerificationState,
+    },
+    locks::RwLock as StdRwLock,
+    timer,
+};
 #[cfg(feature = "experimental-encrypted-state-events")]
 use ruma::events::{AnyStateEventContent, StateEventContent};
 use ruma::{
@@ -42,19 +55,6 @@ use ruma::{
         MessageLikeEventContent, secret::request::SecretName,
     },
     serde::{JsonObject, Raw},
-};
-#[cfg(feature = "experimental-send-custom-to-device")]
-use sdk_common::deserialized_responses::WithheldCode;
-use sdk_common::{
-    BoxFuture,
-    deserialized_responses::{
-        AlgorithmInfo, DecryptedRoomEvent, DeviceLinkProblem, EncryptionInfo, ForwarderInfo,
-        ProcessedToDeviceEvent, ToDeviceUnableToDecryptInfo, ToDeviceUnableToDecryptReason,
-        UnableToDecryptInfo, UnableToDecryptReason, UnsignedDecryptionResult,
-        UnsignedEventLocation, VerificationLevel, VerificationState,
-    },
-    locks::RwLock as StdRwLock,
-    timer,
 };
 use serde::Serialize;
 use serde_json::{Value, value::to_raw_value};

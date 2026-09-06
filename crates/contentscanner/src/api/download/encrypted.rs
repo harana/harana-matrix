@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::olm::Curve25519PublicKey;
 use matrix::RumaApiError;
+use crypto::olm::Curve25519PublicKey;
 use ruma::{
     api::{
         BytesBody, Metadata, OutgoingRequest, auth_scheme::AccessTokenOptional,

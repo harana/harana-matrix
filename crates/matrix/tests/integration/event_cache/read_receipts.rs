@@ -31,6 +31,7 @@ use matrix::{
     event_cache::RoomEventCacheUpdate,
     test_utils::mocks::{MatrixMockServer, RoomMessagesResponseTemplate},
 };
+use sdk_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use ruma::{
     api::client::receipt::create_receipt::v3::ReceiptType as CreateReceiptType,
     event_id,
@@ -41,7 +42,6 @@ use ruma::{
     },
     room_id,
 };
-use sdk_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 
 /// Test that the unread count increases when new messages arrive and no read
 /// receipt is known.

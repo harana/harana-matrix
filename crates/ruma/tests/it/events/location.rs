@@ -4,21 +4,15 @@ use assert_matches2::assert_matches;
 use assign::assign;
 use js_int::uint;
 use ruma::{
-    MilliSecondsSinceUnixEpoch,
-    canonical_json::assert_to_canonical_json_eq,
-    event_id,
-    events::{
-        AnyMessageLikeEvent, MessageLikeEvent,
-        location::{AssetType, LocationContent, LocationEventContent, ZoomLevel, ZoomLevelError},
-        message::TextContentBlock,
-        relation::Reply,
-        room::message::{
-            LocationMessageEventContent, MessageType, Relation, RoomMessageEventContent,
-        },
-    },
-    owned_event_id, room_id,
-    serde::CanBeEmpty,
-    user_id,
+    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, event_id,
+    owned_event_id, room_id, serde::CanBeEmpty, user_id,
+};
+use ruma::events::{
+    AnyMessageLikeEvent, MessageLikeEvent,
+    location::{AssetType, LocationContent, LocationEventContent, ZoomLevel, ZoomLevelError},
+    message::TextContentBlock,
+    relation::Reply,
+    room::message::{LocationMessageEventContent, MessageType, Relation, RoomMessageEventContent},
 };
 use serde_json::{from_value as from_json_value, json};
 

@@ -13,12 +13,11 @@ pub mod leave_room;
 pub mod mutual_rooms;
 pub mod unban_user;
 
+use crate::{OwnedUserId, ServerSignatures, thirdparty::Medium};
 use serde::{Deserialize, Serialize};
 
-use crate::{OwnedUserId, ServerSignatures, thirdparty::Medium};
-
-/// A signature of an `m.third_party_invite` token to prove that this user owns
-/// a third party identity which has been invited to the room.
+/// A signature of an `m.third_party_invite` token to prove that this user owns a third party
+/// identity which has been invited to the room.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct ThirdPartySigned {
@@ -36,8 +35,8 @@ pub struct ThirdPartySigned {
 }
 
 impl ThirdPartySigned {
-    /// Creates a new `ThirdPartySigned` from the given sender and invitee user
-    /// IDs, state key token and signatures.
+    /// Creates a new `ThirdPartySigned` from the given sender and invitee user IDs, state key token
+    /// and signatures.
     pub fn new(
         sender: OwnedUserId,
         mxid: OwnedUserId,
@@ -50,8 +49,8 @@ impl ThirdPartySigned {
 
 /// Represents third party IDs to invite to the room.
 ///
-/// To create an instance of this type, first create a `Invite3pidInit` and
-/// convert it via `Invite3pid::from` / `.into()`.
+/// To create an instance of this type, first create a `Invite3pidInit` and convert it via
+/// `Invite3pid::from` / `.into()`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Invite3pid {
@@ -70,8 +69,8 @@ pub struct Invite3pid {
 
 /// Initial set of fields of `Invite3pid`.
 ///
-/// This struct will not be updated even if additional fields are added to
-/// `Invite3pid` in a new (non-breaking) release of the Matrix specification.
+/// This struct will not be updated even if additional fields are added to `Invite3pid` in a new
+/// (non-breaking) release of the Matrix specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct Invite3pidInit {

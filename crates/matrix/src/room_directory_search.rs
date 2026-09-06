@@ -216,10 +216,10 @@ mod tests {
     use assert_matches::assert_matches;
     use eyeball_im::VectorDiff;
     use futures_util::StreamExt;
+    use sdk_test::{async_test, test_json};
     use ruma::{
         RoomAliasId, RoomId, directory::Filter, owned_server_name, room::JoinRuleKind, serde::Raw,
     };
-    use sdk_test::{async_test, test_json};
     use serde_json::Value as JsonValue;
     use stream_assert::assert_pending;
     use wiremock::{

@@ -40,10 +40,10 @@ use matrix::{
     },
     utils::local_server::{LocalServerBuilder, LocalServerRedirectHandle, QueryString},
 };
+use ui::sync_service::SyncService;
 use rand::{RngExt, distr::Alphanumeric, rng};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io::AsyncBufReadExt as _};
-use ui::sync_service::SyncService;
 use url::Url;
 
 /// A command-line tool to demonstrate the steps requiring an interaction with
@@ -66,7 +66,8 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // The folder containing this example's data.
-    let data_dir = dirs::data_dir().expect("no data_dir directory found").join("matrix/oauth_cli");
+    let data_dir =
+        dirs::data_dir().expect("no data_dir directory found").join("matrix/oauth_cli");
     // The file where the session is persisted.
     let session_file = data_dir.join("session.json");
 

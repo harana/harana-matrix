@@ -16,7 +16,6 @@ use std::{fmt::Debug, sync::Arc};
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
-use ruma::RoomId;
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use ui::spaces::{
     SpaceFilter as UISpaceFilter, SpaceRoom as UISpaceRoom, SpaceRoomList as UISpaceRoomList,
@@ -24,6 +23,7 @@ use ui::spaces::{
     leave::{LeaveSpaceHandle as UILeaveSpaceHandle, LeaveSpaceRoom as UILeaveSpaceRoom},
     room_list::SpaceRoomListPaginationState,
 };
+use ruma::RoomId;
 
 use crate::{
     TaskHandle,

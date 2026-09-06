@@ -11,10 +11,12 @@ pub mod v3 {
 
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AccessToken, client::backup::KeyBackupData, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
         serde::Raw,
     };
+
+    use crate::api::client::backup::KeyBackupData;
 
     metadata! {
         method: GET,

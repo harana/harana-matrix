@@ -34,6 +34,7 @@ use base::{
     sync::SyncResponse as BaseSyncResponse,
     timer,
 };
+use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use ruma::{
     OwnedRoomId, RoomId,
     api::client::sync::sync_events::{
@@ -44,7 +45,6 @@ use ruma::{
     serde::Raw,
     time::Instant,
 };
-use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
 use tracing::{debug, error, instrument, warn};
 
 use crate::{Client, Result, Room, event_handler::HandlerKind};

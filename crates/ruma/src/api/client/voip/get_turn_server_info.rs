@@ -54,8 +54,7 @@ pub mod v3 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given username, password, TURN
-        /// URIs and time-to-live.
+        /// Creates a new `Response` with the given username, password, TURN URIs and time-to-live.
         pub fn new(username: String, password: String, uris: Vec<String>, ttl: Duration) -> Self {
             Self { username, password, uris, ttl }
         }

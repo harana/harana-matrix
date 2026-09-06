@@ -5,6 +5,7 @@ use base64::{
     engine::{GeneralPurpose, general_purpose},
 };
 use indexed_db_futures::KeyRange;
+use store_encryption::StoreCipher;
 use ruma::{
     DeviceId, EventId, MxcUri, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, TransactionId,
     UserId,
@@ -12,7 +13,6 @@ use ruma::{
         GlobalAccountDataEventType, RoomAccountDataEventType, StateEventType, receipt::ReceiptType,
     },
 };
-use store_encryption::StoreCipher;
 use wasm_bindgen::JsValue;
 
 /// ASCII Group Separator, for elements in the keys

@@ -4,9 +4,9 @@
 //!
 //! # Usage
 //!
-//! Begin by creating a `Client`, selecting one of the type aliases from
-//! `ruma_client::http_client` for the generic parameter. For the client API,
-//! there are login and registration methods provided for the client:
+//! Begin by creating a `Client`, selecting one of the type aliases from `ruma_client::http_client`
+//! for the generic parameter. For the client API, there are login and registration methods
+//! provided for the client:
 //!
 //! ```no_run
 //! # async {
@@ -23,10 +23,9 @@
 //! # };
 //! ```
 //!
-//! You can also pass an existing access token to the `Client` constructor to
-//! restore a previous session rather than calling `log_in`. This can also be
-//! used to create a session for an application service that does not need to
-//! log in, but uses the access_token directly:
+//! You can also pass an existing access token to the `Client` constructor to restore a previous
+//! session rather than calling `log_in`. This can also be used to create a session for an
+//! application service that does not need to log in, but uses the access_token directly:
 //!
 //! ```no_run
 //! # async {
@@ -43,13 +42,12 @@
 //! # };
 //! ```
 //!
-//! The `Client` type also provides methods for registering a new account if you
-//! don't already have one with the given homeserver.
+//! The `Client` type also provides methods for registering a new account if you don't already have
+//! one with the given homeserver.
 //!
-//! Beyond these basic convenience methods, `ruma-client` gives you access to
-//! the entire Matrix client-server API via the `request` method. You can pass
-//! it any of the `Request` types found in `ruma::api::*` and get back a
-//! corresponding response from the homeserver.
+//! Beyond these basic convenience methods, `ruma-client` gives you access to the entire Matrix
+//! client-server API via the `request` method. You can pass it any of the `Request` types found in
+//! `ruma::api::*` and get back a corresponding response from the homeserver.
 //!
 //! For example:
 //!
@@ -68,8 +66,7 @@
 //! };
 //!
 //! let alias = owned_room_alias_id!("#example_room:example.com");
-//! let response =
-//!     client.send_request(get_alias::v3::Request::new(alias)).await?;
+//! let response = client.send_request(get_alias::v3::Request::new(alias)).await?;
 //!
 //! assert_eq!(response.room_id, room_id!("!n8f893n9:example.com"));
 //! # Result::<(), ruma_client::Error<_, _>>::Ok(())
@@ -78,8 +75,7 @@
 //!
 //! # Crate features
 //!
-//! The following features activate http client types in the [`http_client`]
-//! module:
+//! The following features activate http client types in the [`http_client`] module:
 //!
 //! * `reqwest` – if you use the `reqwest` library already, activate this feature and configure the
 //!   TLS backend on `reqwest` directly. If you want to use `reqwest` but don't depend on it
@@ -110,8 +106,8 @@ mod client;
 mod error;
 pub mod http_client;
 
+pub use self::client::{Client, ClientBuilder, SupportedPathBuilder, TokenMode};
 pub use self::{
-    client::{Client, ClientBuilder, SupportedPathBuilder, TokenMode},
     error::Error,
     http_client::{DefaultConstructibleHttpClient, HttpClient, HttpClientExt},
 };

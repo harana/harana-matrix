@@ -21,6 +21,9 @@ use std::{
 };
 
 use as_variant::as_variant;
+use sdk_common::deserialized_responses::{
+    TimelineEvent, UnableToDecryptInfo, UnableToDecryptReason,
+};
 use ruma::{
     EventId, Int, MilliSecondsSinceUnixEpoch, MxcUri, OwnedDeviceId, OwnedEventId, OwnedMxcUri,
     OwnedRoomAliasId, OwnedRoomId, OwnedTransactionId, OwnedUserId, OwnedVoipId, RoomId,
@@ -106,9 +109,6 @@ use ruma::{
     room_version_rules::AuthorizationRules,
     serde::Raw,
     server_name,
-};
-use sdk_common::deserialized_responses::{
-    TimelineEvent, UnableToDecryptInfo, UnableToDecryptReason,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -963,6 +963,7 @@ impl EventFactory {
     /// [`MembershipState::Join`].
     ///
     /// ```
+    /// use sdk_test::event_factory::EventFactory;
     /// use ruma::{
     ///     events::{
     ///         SyncStateEvent,
@@ -972,7 +973,6 @@ impl EventFactory {
     ///     serde::Raw,
     ///     user_id,
     /// };
-    /// use sdk_test::event_factory::EventFactory;
     ///
     /// let factory = EventFactory::new().room(room_id!("!test:localhost"));
     ///
@@ -1090,13 +1090,13 @@ impl EventFactory {
     /// ```
     /// use std::collections::BTreeSet;
     ///
+    /// use sdk_test::event_factory::EventFactory;
     /// use ruma::{
     ///     events::{SyncStateEvent, member_hints::MemberHintsEventContent},
     ///     owned_user_id, room_id,
     ///     serde::Raw,
     ///     user_id,
     /// };
-    /// use sdk_test::event_factory::EventFactory;
     ///
     /// let factory = EventFactory::new().room(room_id!("!test:localhost"));
     ///
@@ -1364,6 +1364,7 @@ impl EventFactory {
     /// Create a new `org.matrix.msc3672.beacon` event.
     ///
     /// ```
+    /// use sdk_test::event_factory::EventFactory;
     /// use ruma::{
     ///     MilliSecondsSinceUnixEpoch,
     ///     events::{MessageLikeEvent, beacon::BeaconEventContent},
@@ -1371,7 +1372,6 @@ impl EventFactory {
     ///     serde::Raw,
     ///     user_id,
     /// };
-    /// use sdk_test::event_factory::EventFactory;
     ///
     /// let factory = EventFactory::new().room(room_id!("!test:localhost"));
     ///
@@ -1414,8 +1414,8 @@ impl EventFactory {
     /// ```rust
     /// use std::time::Duration;
     ///
-    /// use ruma::{room_id, user_id};
     /// use sdk_test::event_factory::EventFactory;
+    /// use ruma::{room_id, user_id};
     ///
     /// let factory = EventFactory::new().room(room_id!("!test:localhost"));
     ///
@@ -1478,12 +1478,12 @@ impl EventFactory {
     /// Creates a rtc membership state event.
     ///
     /// ```
+    /// use sdk_test::event_factory::EventFactory;
     /// use ruma::{
     ///     events::{SyncStateEvent, call::member::CallMemberEventContent},
     ///     owned_user_id, room_id,
     ///     serde::Raw,
     /// };
-    /// use sdk_test::event_factory::EventFactory;
     ///
     /// let factory = EventFactory::new().room(room_id!("!test:localhost"));
     ///

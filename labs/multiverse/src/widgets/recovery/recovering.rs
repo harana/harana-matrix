@@ -7,12 +7,12 @@ use matrix::{
     reqwest::Url,
     ruma::api::client::uiaa::{AuthData, Password},
 };
+use sdk_common::executor::spawn;
 use ratatui::{
     prelude::*,
     widgets::{Block, Paragraph, WidgetRef as _},
 };
 use ratatui_textarea::TextArea;
-use sdk_common::executor::spawn;
 use throbber_widgets_tui::{Throbber, ThrobberState};
 use tokio::sync::{
     mpsc::{UnboundedSender, unbounded_channel},

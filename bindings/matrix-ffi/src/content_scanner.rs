@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use contentscanner::{ContentScannerMediaFetcher, MediaScanResponse};
 use matrix::media::MediaFetcher;
+use contentscanner::{ContentScannerMediaFetcher, MediaScanResponse};
 
 use crate::{client::Client, error::ClientError, ruma::MediaSource};
 
@@ -35,7 +35,9 @@ impl ContentScanner {
     /// Instantiate a new [`ContentScanner`] using the `scanner_url`.
     #[uniffi::constructor]
     pub fn new(scanner_url: String) -> Arc<Self> {
-        Arc::new(Self { inner: Arc::new(contentscanner::ContentScanner::new(scanner_url)) })
+        Arc::new(Self {
+            inner: Arc::new(contentscanner::ContentScanner::new(scanner_url)),
+        })
     }
 
     /// Scan a media source, returning a [`MediaScanResponse`] with the scan

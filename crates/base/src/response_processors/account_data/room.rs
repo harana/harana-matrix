@@ -195,6 +195,7 @@ fn on_unread_marker(
 
 #[cfg(test)]
 mod tests {
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         RoomId, event_id,
         events::{
@@ -204,7 +205,6 @@ mod tests {
         room_id,
         serde::Raw,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
 
     use crate::{

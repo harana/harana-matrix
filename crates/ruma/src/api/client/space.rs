@@ -4,14 +4,13 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#spaces
 
-use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue as RawJsonValue;
-
 use crate::{
-    events::space::child::HierarchySpaceChildEvent,
     room::RoomSummary,
     serde::{Raw, from_raw_json_value},
 };
+use crate::events::space::child::HierarchySpaceChildEvent;
+use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue as RawJsonValue;
 
 pub mod get_hierarchy;
 
@@ -30,8 +29,7 @@ pub struct SpaceHierarchyRoomsChunk {
 }
 
 impl SpaceHierarchyRoomsChunk {
-    /// Construct a `SpaceHierarchyRoomsChunk` with the given summary and
-    /// children state.
+    /// Construct a `SpaceHierarchyRoomsChunk` with the given summary and children state.
     pub fn new(summary: RoomSummary, children_state: Vec<Raw<HierarchySpaceChildEvent>>) -> Self {
         Self { summary, children_state }
     }

@@ -31,17 +31,17 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
+use eyeball_im::VectorDiff;
 use base::{
     deserialized_responses::TimelineEvent,
     event_cache::{Event, Gap},
     linked_chunk::OwnedLinkedChunkId,
 };
-use eyeball_im::VectorDiff;
-use ruma::{OwnedEventId, UInt, api::Direction, events::relation::RelationType};
 use sdk_common::{
     linked_chunk::ChunkIdentifier,
     serde_helpers::{extract_relation, extract_thread_root},
 };
+use ruma::{OwnedEventId, UInt, api::Direction, events::relation::RelationType};
 use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::{instrument, trace, warn};
 
@@ -796,8 +796,8 @@ pub type EventFocusedCacheUpdateSender = Sender<TimelineVectorDiffs>;
 
 #[cfg(test)]
 mod tests {
-    use ruma::{event_id, events::room::message::RoomMessageEventContentWithoutRelation, room_id};
     use sdk_test::{ALICE, BOB, event_factory::EventFactory};
+    use ruma::{event_id, events::room::message::RoomMessageEventContentWithoutRelation, room_id};
 
     use super::aggregations_to_append;
 

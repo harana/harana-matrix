@@ -1,18 +1,18 @@
 use assert_matches2::{assert_let, assert_matches};
 use ruma::{
     canonical_json::assert_to_canonical_json_eq,
-    events::{
-        relation::{Annotation, Reference, Reply, Thread},
-        room::{
-            EncryptedFile, EncryptedFileHash, EncryptedFileInfo, V2EncryptedFileInfo,
-            encrypted::{
-                EncryptedEventScheme, MegolmV1AesSha2ContentInit, Relation, Replacement,
-                RoomEncryptedEventContent,
-            },
-        },
-    },
     owned_device_id, owned_event_id, owned_mxc_uri,
     serde::{Base64, Raw},
+};
+use ruma::events::{
+    relation::{Annotation, Reference, Reply, Thread},
+    room::{
+        EncryptedFile, EncryptedFileHash, EncryptedFileInfo, V2EncryptedFileInfo,
+        encrypted::{
+            EncryptedEventScheme, MegolmV1AesSha2ContentInit, Relation, Replacement,
+            RoomEncryptedEventContent,
+        },
+    },
 };
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 

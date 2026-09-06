@@ -2,6 +2,7 @@ use assert_matches2::{assert_let, assert_matches};
 use assign::assign;
 #[cfg(feature = "unstable-msc3381")]
 use ruma::event_id;
+use ruma::{canonical_json::assert_to_canonical_json_eq, owned_event_id, serde::Raw};
 #[cfg(feature = "unstable-msc3381")]
 use ruma::events::poll::{
     start::{PollAnswer, PollContentBlock, PollStartEventContent},
@@ -16,14 +17,9 @@ use ruma::events::{
     message::TextContentBlock,
     room::{encrypted, message::RelationWithoutReplacement},
 };
-use ruma::{
-    canonical_json::assert_to_canonical_json_eq,
-    events::{
-        relation::{Replacement, Reply, Thread},
-        room::message::{MessageType, Relation, RoomMessageEventContent},
-    },
-    owned_event_id,
-    serde::Raw,
+use ruma::events::{
+    relation::{Replacement, Reply, Thread},
+    room::message::{MessageType, Relation, RoomMessageEventContent},
 };
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 

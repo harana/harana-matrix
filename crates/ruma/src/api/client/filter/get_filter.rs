@@ -9,9 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedUserId,
-        api::{auth_scheme::AccessToken, client::filter::FilterDefinition, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::filter::FilterDefinition;
 
     metadata! {
         method: GET,
@@ -74,7 +76,9 @@ pub mod v3 {
         #[cfg(feature = "server")]
         #[test]
         fn serialize_response() {
-            use crate::api::{OutgoingResponseExt as _, client::filter::FilterDefinition};
+            use crate::api::OutgoingResponseExt as _;
+
+            use crate::api::client::filter::FilterDefinition;
 
             let res = super::Response::new(FilterDefinition::default())
                 .try_into_http_response::<Vec<u8>>()

@@ -291,19 +291,21 @@ mod tests {
     use std::{cell::Cell, future::Future, rc::Rc, sync::Arc};
 
     use assert_matches::assert_matches;
+    use gloo_utils::format::JsValueSerdeExt;
+    use indexed_db_futures::{database::VersionChangeEvent, transaction::TransactionMode};
+    use sdk_common::{
+        deserialized_responses::WithheldCode, js_tracing::make_tracing_subscriber,
+    };
     use crypto::{
         olm::{InboundGroupSession, SenderData, SessionKey},
         store::{CryptoStore, types::RoomKeyWithheldEntry},
         types::{EventEncryptionAlgorithm, events::room_key_withheld::RoomKeyWithheldContent},
         vodozemac::{Curve25519PublicKey, Curve25519SecretKey, Ed25519PublicKey, Ed25519SecretKey},
     };
-    use gloo_utils::format::JsValueSerdeExt;
-    use indexed_db_futures::{database::VersionChangeEvent, transaction::TransactionMode};
-    use ruma::{OwnedRoomId, RoomId, owned_device_id, owned_user_id, room_id};
-    use sdk_common::{deserialized_responses::WithheldCode, js_tracing::make_tracing_subscriber};
-    use sdk_test::async_test;
-    use serde::Serialize;
     use store_encryption::StoreCipher;
+    use sdk_test::async_test;
+    use ruma::{OwnedRoomId, RoomId, owned_device_id, owned_user_id, room_id};
+    use serde::Serialize;
     use tracing_subscriber::util::SubscriberInitExt;
     use wasm_bindgen::JsValue;
     use web_sys::console;

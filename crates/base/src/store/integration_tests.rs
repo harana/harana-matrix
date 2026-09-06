@@ -8,6 +8,8 @@ use std::{
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use growable_bloom_filter::GrowableBloomBuilder;
+use sdk_common::ttl::TtlValue;
+use sdk_test::{TestResult, event_factory::EventFactory};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedUserId, RoomId, TransactionId, UserId,
     api::{
@@ -42,8 +44,6 @@ use ruma::{
     serde::Raw,
     uint, user_id,
 };
-use sdk_common::ttl::TtlValue;
-use sdk_test::{TestResult, event_factory::EventFactory};
 use serde_json::json;
 
 use super::{

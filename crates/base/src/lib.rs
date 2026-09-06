@@ -23,8 +23,8 @@
 // is only applied elsewhere.
 #![cfg_attr(not(target_family = "wasm"), deny(clippy::future_not_send))]
 
-use ruma::{OwnedDeviceId, OwnedUserId};
 pub use sdk_common::*;
+use ruma::{OwnedDeviceId, OwnedUserId};
 use serde::{Deserialize, Serialize};
 
 pub use crate::error::{Error, Result};
@@ -60,10 +60,10 @@ pub mod recent_emojis;
 uniffi::setup_scaffolding!();
 
 pub use client::{BaseClient, ThreadingSupport};
-#[cfg(feature = "e2e-encryption")]
-pub use crypto;
 #[cfg(any(test, feature = "testing"))]
 pub use http;
+#[cfg(feature = "e2e-encryption")]
+pub use crypto as crypto;
 pub use room::{
     CallIntentConsensus, EncryptionState, MembersRequestGuard, PredecessorRoom, Room,
     RoomCreateWithCreatorEventContent, RoomDisplayName, RoomHero, RoomHeroWithProfile, RoomInfo,

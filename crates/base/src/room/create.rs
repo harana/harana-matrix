@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use sdk_common::ROOM_VERSION_RULES_FALLBACK;
 use ruma::{
     OwnedUserId, RoomVersionId, assign,
     events::{
@@ -23,7 +24,6 @@ use ruma::{
     room::RoomType,
     room_version_rules::RedactionRules,
 };
-use sdk_common::ROOM_VERSION_RULES_FALLBACK;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.room.create` event, with a required `creator` field.

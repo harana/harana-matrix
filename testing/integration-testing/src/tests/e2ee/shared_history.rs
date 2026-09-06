@@ -3,7 +3,6 @@ use std::{ops::Deref, sync::Arc, time::Duration};
 use anyhow::Result;
 use assert_matches2::{assert_let, assert_matches};
 use assign::assign;
-use base::crypto::types::events::UtdCause;
 use eyeball_im::VectorDiff;
 use futures::{FutureExt, StreamExt, future, pin_mut};
 use matrix::{
@@ -24,13 +23,11 @@ use matrix::{
     },
     timeout::timeout,
 };
+use base::crypto::types::events::UtdCause;
 use sdk_common::deserialized_responses::{
     DeviceLinkProblem, ProcessedToDeviceEvent, UnableToDecryptReason::MissingMegolmSession,
     VerificationLevel, VerificationState, WithheldCode,
 };
-use similar_asserts::assert_eq;
-use tempfile::tempdir;
-use tracing::{Instrument, Span, info};
 use ui::{
     Timeline,
     sync_service::SyncService,
@@ -39,6 +36,9 @@ use ui::{
         TimelineItemContent,
     },
 };
+use similar_asserts::assert_eq;
+use tempfile::tempdir;
+use tracing::{Instrument, Span, info};
 
 use crate::{
     helpers::{SyncTokenAwareClient, TestClientBuilder, wait_for_room},

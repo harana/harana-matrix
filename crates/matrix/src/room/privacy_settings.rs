@@ -187,6 +187,7 @@ impl<'a> RoomPrivacySettings<'a> {
 mod tests {
     use std::{ops::Not, time::Duration};
 
+    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
         api::client::room::Visibility,
         event_id,
@@ -199,7 +200,6 @@ mod tests {
         },
         owned_room_alias_id, room_id, user_id,
     };
-    use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 
     use crate::test_utils::mocks::MatrixMockServer;
 

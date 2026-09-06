@@ -19,9 +19,10 @@
 
 use std::sync::Arc;
 
-use base::{deserialized_responses::SyncOrStrippedState, event_cache::Event};
 use eyeball_im::{ObservableVector, VectorSubscriberBatchedStream};
 use imbl::Vector;
+use base::{deserialized_responses::SyncOrStrippedState, event_cache::Event};
+use sdk_common::locks::Mutex;
 use ruma::{
     MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId,
     events::{
@@ -32,7 +33,6 @@ use ruma::{
         relation::RelationType,
     },
 };
-use sdk_common::locks::Mutex;
 
 use super::Room;
 use crate::event_handler::EventHandlerDropGuard;

@@ -5,33 +5,31 @@ use std::{collections::BTreeMap, ops::Range};
 use assert_matches2::assert_matches;
 use js_int::{UInt, uint};
 use ruma::{
-    MilliSecondsSinceUnixEpoch,
-    canonical_json::assert_to_canonical_json_eq,
-    events::{
-        AnyMessageLikeEvent, MessageLikeEvent,
-        message::TextContentBlock,
-        poll::{
-            compile_poll_results, compile_unstable_poll_results,
-            end::PollEndEventContent,
-            response::{OriginalSyncPollResponseEvent, PollResponseEventContent},
-            start::{
-                OriginalSyncPollStartEvent, PollAnswer, PollAnswers, PollAnswersError,
-                PollContentBlock, PollKind, PollStartEventContent,
-            },
-            unstable_end::UnstablePollEndEventContent,
-            unstable_response::{
-                OriginalSyncUnstablePollResponseEvent, UnstablePollResponseEventContent,
-            },
-            unstable_start::{
-                NewUnstablePollStartEventContent, OriginalSyncUnstablePollStartEvent,
-                ReplacementUnstablePollStartEventContent, UnstablePollAnswer,
-                UnstablePollStartContentBlock, UnstablePollStartEventContent,
-            },
+    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
+};
+use ruma::events::{
+    AnyMessageLikeEvent, MessageLikeEvent,
+    message::TextContentBlock,
+    poll::{
+        compile_poll_results, compile_unstable_poll_results,
+        end::PollEndEventContent,
+        response::{OriginalSyncPollResponseEvent, PollResponseEventContent},
+        start::{
+            OriginalSyncPollStartEvent, PollAnswer, PollAnswers, PollAnswersError,
+            PollContentBlock, PollKind, PollStartEventContent,
         },
-        relation::Reference,
-        room::message::{Relation, RelationWithoutReplacement},
+        unstable_end::UnstablePollEndEventContent,
+        unstable_response::{
+            OriginalSyncUnstablePollResponseEvent, UnstablePollResponseEventContent,
+        },
+        unstable_start::{
+            NewUnstablePollStartEventContent, OriginalSyncUnstablePollStartEvent,
+            ReplacementUnstablePollStartEventContent, UnstablePollAnswer,
+            UnstablePollStartContentBlock, UnstablePollStartEventContent,
+        },
     },
-    owned_event_id,
+    relation::Reference,
+    room::message::{Relation, RelationWithoutReplacement},
 };
 use serde_json::{from_value as from_json_value, json};
 

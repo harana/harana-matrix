@@ -8,7 +8,6 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixmediav3upload
 
     use http::header::CONTENT_TYPE;
-
     use crate::{
         OwnedMxcUri,
         api::{auth_scheme::AccessToken, request, response},

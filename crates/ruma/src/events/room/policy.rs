@@ -4,13 +4,13 @@
 
 use std::collections::BTreeMap;
 
+use crate::{OwnedServerName, SigningKeyAlgorithm, serde::Base64};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::{OwnedServerName, SigningKeyAlgorithm, events::EmptyStateKey, serde::Base64};
+use crate::events::EmptyStateKey;
 
-/// The signing key ID that must be used by a Policy Server for its ed25519
-/// signature.
+/// The signing key ID that must be used by a Policy Server for its ed25519 signature.
 pub const POLICY_SERVER_ED25519_SIGNING_KEY_ID: &str = "ed25519:policy_server";
 
 /// The content of an [`m.room.policy`] event.
@@ -37,8 +37,7 @@ pub struct RoomPolicyEventContent {
 }
 
 impl RoomPolicyEventContent {
-    /// Creates a new `RoomPolicyEventContent` with the given server name and
-    /// ed25519 public key.
+    /// Creates a new `RoomPolicyEventContent` with the given server name and ed25519 public key.
     pub fn new(via: OwnedServerName, ed25519_public_key: Base64) -> Self {
         Self { via, public_keys: [(SigningKeyAlgorithm::Ed25519, ed25519_public_key)].into() }
     }

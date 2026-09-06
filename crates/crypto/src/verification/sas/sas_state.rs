@@ -14,6 +14,7 @@
 
 use std::{matches, sync::Arc, time::Duration};
 
+use sdk_common::locks::Mutex;
 use ruma::{
     DeviceId, OwnedTransactionId, TransactionId, UserId,
     events::{
@@ -38,7 +39,6 @@ use ruma::{
     serde::Base64,
     time::Instant,
 };
-use sdk_common::locks::Mutex;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use vodozemac::{
@@ -1500,6 +1500,7 @@ impl SasState<Cancelled> {
 
 #[cfg(test)]
 mod tests {
+    use sdk_test::async_test;
     use ruma::{
         DeviceId, TransactionId, UserId, device_id,
         events::key::verification::{
@@ -1514,7 +1515,6 @@ mod tests {
         serde::Base64,
         user_id,
     };
-    use sdk_test::async_test;
     use serde_json::json;
 
     use super::{Accepted, Created, SasState, Started, SupportedMacMethod, WeAccepted};

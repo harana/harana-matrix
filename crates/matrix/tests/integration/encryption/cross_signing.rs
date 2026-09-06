@@ -14,11 +14,11 @@
 
 use assert_matches2::assert_let;
 use matrix::{encryption::CrossSigningResetAuthType, test_utils::mocks::MatrixMockServer};
+use sdk_test::async_test;
 use ruma::api::{
     client::uiaa,
     error::{ErrorKind, StandardErrorBody},
 };
-use sdk_test::async_test;
 use similar_asserts::assert_eq;
 
 #[async_test]
@@ -51,8 +51,10 @@ async fn test_bootstrap_cross_signing_reports_what_it_did() {
     server.mock_upload_cross_signing_signatures().ok().expect(1).mount().await;
 
     let user_id = client.user_id().expect("We should be able to access the user ID by now");
-    let auth_data =
-        uiaa::AuthData::Password(uiaa::Password::new(user_id.to_owned().into(), "1234".to_owned()));
+    let auth_data = uiaa::AuthData::Password(uiaa::Password::new(
+        user_id.to_owned().into(),
+        "1234".to_owned(),
+    ));
 
     let outcome = client
         .encryption()

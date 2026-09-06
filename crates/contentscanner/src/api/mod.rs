@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::vodozemac::Curve25519PublicKey;
 use matrix::{RumaApiError, encryption::vodozemac::pk_encryption::PkEncryption};
+use crypto::vodozemac::Curve25519PublicKey;
 use ruma::{
     api::{
         IncomingResponse,

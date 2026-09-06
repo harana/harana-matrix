@@ -6,6 +6,7 @@ use matrix::{
     room::reply::{EnforceThread, Reply},
     test_utils::mocks::MatrixMockServer,
 };
+use sdk_test::{ALICE, DEFAULT_TEST_ROOM_ID, async_test, event_factory::EventFactory};
 use ruma::{
     event_id,
     events::{
@@ -17,7 +18,6 @@ use ruma::{
     },
     mxc_uri, owned_mxc_uri, owned_user_id, uint,
 };
-use sdk_test::{ALICE, DEFAULT_TEST_ROOM_ID, async_test, event_factory::EventFactory};
 use serde_json::json;
 
 #[async_test]

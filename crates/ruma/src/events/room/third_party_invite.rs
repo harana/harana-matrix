@@ -2,45 +2,39 @@
 //!
 //! [`m.room.third_party_invite`]: https://spec.matrix.org/v1.19/client-server-api/#mroomthird_party_invite
 
+use crate::third_party_invite::IdentityServerBase64PublicKey;
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::third_party_invite::IdentityServerBase64PublicKey;
-
 /// The content of an `m.room.third_party_invite` event.
 ///
-/// An invitation to a room issued to a third party identifier, rather than a
-/// matrix user ID.
+/// An invitation to a room issued to a third party identifier, rather than a matrix user ID.
 ///
-/// Acts as an `m.room.member` invite event, where there isn't a target user_id
-/// to invite. This event contains a token and a public key whose private key
-/// must be used to sign the token. Any user who can present that signature may
-/// use this invitation to join the target room.
+/// Acts as an `m.room.member` invite event, where there isn't a target user_id to invite. This
+/// event contains a token and a public key whose private key must be used to sign the token.
+/// Any user who can present that signature may use this invitation to join the target room.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room.third_party_invite", kind = State, state_key_type = String)]
 pub struct RoomThirdPartyInviteEventContent {
     /// A user-readable string which represents the user who has been invited.
     ///
-    /// If the `compat-optional` feature is enabled, this field being absent in
-    /// JSON will result in an empty string instead of an error when
-    /// deserializing.
+    /// If the `compat-optional` feature is enabled, this field being absent in JSON will result
+    /// in an empty string instead of an error when deserializing.
     #[cfg_attr(feature = "compat-optional", serde(default))]
     pub display_name: String,
 
     /// A URL which can be fetched to validate whether the key has been revoked.
     ///
-    /// If the `compat-optional` feature is enabled, this field being absent in
-    /// JSON will result in an empty string instead of an error when
-    /// deserializing.
+    /// If the `compat-optional` feature is enabled, this field being absent in JSON will result
+    /// in an empty string instead of an error when deserializing.
     #[cfg_attr(feature = "compat-optional", serde(default))]
     pub key_validity_url: String,
 
     /// A base64-encoded Ed25519 key with which the token must be signed.
     ///
-    /// If the `compat-optional` feature is enabled, this field being absent in
-    /// JSON will result in an empty string instead of an error when
-    /// deserializing.
+    /// If the `compat-optional` feature is enabled, this field being absent in JSON will result
+    /// in an empty string instead of an error when deserializing.
     #[cfg_attr(
         feature = "compat-optional",
         serde(default = "empty_identity_server_base64_public_key")
@@ -53,8 +47,8 @@ pub struct RoomThirdPartyInviteEventContent {
 }
 
 impl RoomThirdPartyInviteEventContent {
-    /// Creates a new `RoomThirdPartyInviteEventContent` with the given display
-    /// name, key validity url and public key.
+    /// Creates a new `RoomThirdPartyInviteEventContent` with the given display name, key validity
+    /// url and public key.
     pub fn new(
         display_name: String,
         key_validity_url: String,
@@ -68,12 +62,10 @@ impl RoomThirdPartyInviteEventContent {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct PublicKey {
-    /// An optional URL which can be fetched to validate whether the key has
-    /// been revoked.
+    /// An optional URL which can be fetched to validate whether the key has been revoked.
     ///
-    /// The URL must return a JSON object containing a boolean property named
-    /// 'valid'. If this URL is absent, the key must be considered valid
-    /// indefinitely.
+    /// The URL must return a JSON object containing a boolean property named 'valid'.
+    /// If this URL is absent, the key must be considered valid indefinitely.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_validity_url: Option<String>,
 

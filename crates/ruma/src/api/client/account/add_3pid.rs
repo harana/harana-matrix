@@ -9,13 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedClientSecret, OwnedSessionId,
-        api::{
-            auth_scheme::AccessToken,
-            client::uiaa::{AuthData, UiaaResponse},
-            request, response,
-        },
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::uiaa::{AuthData, UiaaResponse};
 
     metadata! {
         method: POST,
@@ -47,8 +45,7 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given client secret and session
-        /// identifier.
+        /// Creates a new `Request` with the given client secret and session identifier.
         pub fn new(client_secret: OwnedClientSecret, sid: OwnedSessionId) -> Self {
             Self { auth: None, client_secret, sid }
         }

@@ -21,6 +21,7 @@ use matrix::{
         no_retry_test_client_with_server, test_client_builder_with_server,
     },
 };
+use sdk_test::{async_test, test_json};
 use ruma::{
     api::{
         MatrixVersion,
@@ -29,7 +30,6 @@ use ruma::{
     },
     assign, owned_device_id, owned_user_id,
 };
-use sdk_test::{async_test, test_json};
 use serde_json::json;
 use tokio::sync::{broadcast::error::TryRecvError, mpsc};
 use wiremock::{

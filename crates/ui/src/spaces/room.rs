@@ -223,11 +223,11 @@ async fn num_joined_service_members_or_default(room: &Room) -> u64 {
 mod tests {
     use std::cmp::Ordering;
 
+    use sdk_test::async_test;
     use proptest::prelude::*;
     use ruma::{
         MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId, SpaceChildOrder, UInt, room_id, uint,
     };
-    use sdk_test::async_test;
 
     use crate::spaces::{SpaceRoom, room::SpaceRoomChildState};
 

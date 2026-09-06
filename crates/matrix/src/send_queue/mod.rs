@@ -83,8 +83,8 @@
 //! no thumbnails):
 //!
 //! - The file's content is immediately cached in the
-//!   [`base::event_cache::store::EventCacheStore`], using an MXC ID that is
-//!   temporary and designates a local URI without any possible doubt.
+//!   [`base::event_cache::store::EventCacheStore`], using an MXC ID
+//!   that is temporary and designates a local URI without any possible doubt.
 //! - An initial media event is created and uses this temporary MXC ID, and
 //!   propagated as a local echo for an event.
 //! - A [`QueuedRequest`] is pushed to upload the file's media
@@ -147,6 +147,7 @@ use std::{
 };
 
 use as_variant::as_variant;
+use eyeball::SharedObservable;
 #[cfg(feature = "e2e-encryption")]
 use base::crypto::{OlmError, SessionRecipientCollectionError};
 pub use base::store::EnforceThreadInReply;
@@ -165,7 +166,7 @@ use base::{
     },
     task_monitor::BackgroundTaskHandle,
 };
-use eyeball::SharedObservable;
+use sdk_common::{boxed_into_future, locks::Mutex as SyncMutex};
 use mime::Mime;
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId, RoomId,
@@ -192,7 +193,6 @@ use ruma::{
     },
     serde::Raw,
 };
-use sdk_common::{boxed_into_future, locks::Mutex as SyncMutex};
 use tokio::sync::{Mutex, Notify, OwnedMutexGuard, broadcast, oneshot};
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -3900,6 +3900,7 @@ mod tests {
         ChildTransactionId, DependentQueuedRequest, DependentQueuedRequestKind,
         SerializableEventContent,
     };
+    use sdk_test::{JoinedRoomBuilder, SyncResponseBuilder, async_test};
     use ruma::{
         EventId, MilliSecondsSinceUnixEpoch, TransactionId, event_id,
         events::{
@@ -3909,7 +3910,6 @@ mod tests {
         },
         owned_event_id, room_id, user_id,
     };
-    use sdk_test::{JoinedRoomBuilder, SyncResponseBuilder, async_test};
 
     use super::{
         EnforceThreadInReply, canonicalize_dependent_requests, make_reply_to_local_echo,

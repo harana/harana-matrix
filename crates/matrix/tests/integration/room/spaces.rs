@@ -3,8 +3,8 @@ use std::{sync::LazyLock, time::Duration};
 use assert_matches2::assert_let;
 use futures_util::StreamExt;
 use matrix::{Client, config::SyncSettings, room::ParentSpace};
-use ruma::{RoomId, room_id};
 use sdk_test::{DEFAULT_TEST_ROOM_ID, async_test, test_json};
+use ruma::{RoomId, room_id};
 use serde_json::{Value as JsonValue, json};
 use wiremock::{
     Mock, ResponseTemplate,

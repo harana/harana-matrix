@@ -8,11 +8,11 @@ pub mod unstable {
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/4140
 
     use crate::{
-        api::{
-            auth_scheme::AccessToken, client::delayed_events::DelayedEventData, request, response,
-        },
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::delayed_events::DelayedEventData;
 
     metadata! {
         method: GET,
@@ -23,8 +23,7 @@ pub mod unstable {
         }
     }
 
-    /// Request type for the
-    /// [`get_delayed_event`](crate::api::client::delayed_events::get_delayed_event)
+    /// Request type for the [`get_delayed_event`](crate::api::client::delayed_events::get_delayed_event)
     /// endpoint
     #[request]
     pub struct Request {
@@ -33,8 +32,7 @@ pub mod unstable {
         pub delay_id: String,
     }
 
-    /// Response type for the
-    /// [`get_delayed_event`](crate::api::client::delayed_events::get_delayed_event)
+    /// Response type for the [`get_delayed_event`](crate::api::client::delayed_events::get_delayed_event)
     /// endpoint
     #[response]
     pub struct Response {
@@ -68,16 +66,15 @@ pub mod unstable {
         use std::time::Duration;
 
         use js_int::UInt;
+        use crate::{
+            MilliSecondsSinceUnixEpoch, api::OutgoingResponseExt as _, owned_event_id,
+            owned_room_id, serde::Raw,
+        };
+        use crate::events::TimelineEventType;
         use serde_json::{Value as JsonValue, json};
 
         use super::Response;
-        use crate::{
-            MilliSecondsSinceUnixEpoch,
-            api::{OutgoingResponseExt as _, client::delayed_events::DelayedEventData},
-            events::TimelineEventType,
-            owned_event_id, owned_room_id,
-            serde::Raw,
-        };
+        use crate::api::client::delayed_events::DelayedEventData;
 
         #[test]
         fn serialize_get_delayed_event_response() {
@@ -125,13 +122,14 @@ pub mod unstable {
         use std::time::Duration;
 
         use js_int::UInt;
+        use crate::{
+            MilliSecondsSinceUnixEpoch, api::IncomingResponseExt as _, owned_event_id,
+            owned_room_id,
+        };
+        use crate::events::TimelineEventType;
         use serde_json::{Value as JsonValue, json};
 
         use super::Response;
-        use crate::{
-            MilliSecondsSinceUnixEpoch, api::IncomingResponseExt as _, events::TimelineEventType,
-            owned_event_id, owned_room_id,
-        };
 
         #[test]
         fn deserialize_get_delayed_event_request() {

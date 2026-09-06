@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use eyeball_im::VectorDiff;
-use ruma::event_id;
 use sdk_test::{ALICE, async_test, event_factory::EventFactory};
+use ruma::event_id;
 use stream_assert::assert_next_matches;
 
 use crate::timeline::{

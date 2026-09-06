@@ -71,6 +71,7 @@ mod tests {
         store::SerializableEventContent,
         test_utils::mocks::MatrixMockServer,
     };
+    use sdk_test::async_test;
     use ruma::{
         MilliSecondsSinceUnixEpoch,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
@@ -78,7 +79,6 @@ mod tests {
         serde::Raw,
         uint,
     };
-    use sdk_test::async_test;
     use serde_json::json;
 
     use super::{super::super::filters::new_rooms, *};

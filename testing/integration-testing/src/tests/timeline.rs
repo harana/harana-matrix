@@ -49,14 +49,6 @@ use matrix::{
 };
 use sdk_common::cross_process_lock::CrossProcessLockConfig;
 use sdk_test::{TestError, TestResult};
-use similar_asserts::assert_eq;
-use stream_assert::assert_pending;
-use tokio::{
-    spawn,
-    task::JoinHandle,
-    time::{sleep, timeout},
-};
-use tracing::{debug, warn};
 use ui::{
     Timeline,
     notification_client::NotificationClient,
@@ -68,6 +60,14 @@ use ui::{
         TimelineItem,
     },
 };
+use similar_asserts::assert_eq;
+use stream_assert::assert_pending;
+use tokio::{
+    spawn,
+    task::JoinHandle,
+    time::{sleep, timeout},
+};
+use tracing::{debug, warn};
 
 use crate::helpers::{TestClientBuilder, wait_for_room};
 

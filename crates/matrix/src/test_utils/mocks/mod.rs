@@ -23,10 +23,14 @@ use std::{
 };
 
 use as_variant::as_variant;
+use js_int::UInt;
 use base::deserialized_responses::TimelineEvent;
 #[cfg(feature = "experimental-element-recent-emojis")]
 use base::recent_emojis::RecentEmojisContent;
-use js_int::UInt;
+use sdk_test::{
+    InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, LeftRoomBuilder,
+    SyncResponseBuilder, event_factory::EventFactory, test_json,
+};
 use percent_encoding::{AsciiSet, CONTROLS};
 use ruma::{
     DeviceId, EventId, MilliSecondsSinceUnixEpoch, MxcUri, OwnedDeviceId, OwnedEventId,
@@ -57,10 +61,6 @@ use ruma::{
     push::RuleKind,
     serde::Raw,
     time::Duration,
-};
-use sdk_test::{
-    InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, LeftRoomBuilder,
-    SyncResponseBuilder, event_factory::EventFactory, test_json,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value, json};
@@ -706,7 +706,9 @@ impl MatrixMockServer {
     ///
     /// ```
     /// # tokio_test::block_on(async {
-    /// use matrix::{ruma::room_alias_id, test_utils::mocks::MatrixMockServer};
+    /// use matrix::{
+    ///     ruma::room_alias_id, test_utils::mocks::MatrixMockServer,
+    /// };
     ///
     /// let mock_server = MatrixMockServer::new().await;
     /// let client = mock_server.client_builder().build().await;
@@ -954,16 +956,16 @@ impl MatrixMockServer {
     ///
     /// ```
     /// # tokio_test::block_on(async {
-    /// use base::RoomMemberships;
     /// use matrix::{
     ///     ruma::{event_id, room_id},
     ///     test_utils::mocks::MatrixMockServer,
     /// };
+    /// use base::RoomMemberships;
+    /// use sdk_test::event_factory::EventFactory;
     /// use ruma::{
     ///     events::room::member::{MembershipState, RoomMemberEventContent},
     ///     user_id,
     /// };
-    /// use sdk_test::event_factory::EventFactory;
     /// let mock_server = MatrixMockServer::new().await;
     /// let client = mock_server.client_builder().build().await;
     /// let event_id = event_id!("$id");
@@ -4459,8 +4461,8 @@ impl<'a> MockEndpoint<'a, LoginEndpoint> {
     /// use matrix::test_utils::mocks::{
     ///     LoginResponseTemplate200, MatrixMockServer,
     /// };
-    /// use ruma::{device_id, time::Duration, user_id};
     /// use sdk_test::async_test;
+    /// use ruma::{device_id, time::Duration, user_id};
     ///
     /// #[async_test]
     /// async fn test_ok_with() {

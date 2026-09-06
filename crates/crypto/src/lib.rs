@@ -100,10 +100,10 @@ pub use machine::{
     BootstrapCrossSigningError, CrossSigningBootstrapRequests, EncryptionSyncChanges, OlmMachine,
     OlmMachineBuilder,
 };
-pub use olm::{Account, CrossSigningStatus, EncryptionSettings, Session};
+use sdk_common::deserialized_responses::{DecryptedRoomEvent, UnableToDecryptInfo};
 #[cfg(feature = "qrcode")]
 pub use qrcode;
-use sdk_common::deserialized_responses::{DecryptedRoomEvent, UnableToDecryptInfo};
+pub use olm::{Account, CrossSigningStatus, EncryptionSettings, Session};
 use serde::{Deserialize, Serialize};
 pub use session_manager::CollectStrategy;
 pub use store::{

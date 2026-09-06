@@ -90,11 +90,10 @@ impl EventTypeEnum<'_> {
         }
     }
 
-    /// Generate the `Ord` and `PartialOrd` implementations for the event type
-    /// enum.
+    /// Generate the `Ord` and `PartialOrd` implementations for the event type enum.
     ///
-    /// To compare event types we need to compare the static event type first,
-    /// and then the "type fragment" if there is one.
+    /// To compare event types we need to compare the static event type first, and then the "type
+    /// fragment" if there is one.
     fn expand_ord_impl(&self) -> TokenStream {
         let ident = &self.ident;
 
@@ -180,8 +179,8 @@ impl EventTypeEnum<'_> {
         }
     }
 
-    /// Generate the `std::fmt::Display`, `std::fmt::Debug` and
-    /// `serde::Serialize` implementations for the event type enum.
+    /// Generate the `std::fmt::Display`, `std::fmt::Debug` and `serde::Serialize` implementations
+    /// for the event type enum.
     fn expand_to_string_impl(&self) -> TokenStream {
         let ident = &self.ident;
         let serde = &self.serde;
@@ -244,8 +243,8 @@ impl EventTypeEnum<'_> {
         }
     }
 
-    /// Generate the `From<&str>`, `From<String>` and `serde::Deserialize`
-    /// implementations for the event type enum.
+    /// Generate the `From<&str>`, `From<String>` and `serde::Deserialize` implementations for the
+    /// event type enum.
     fn expand_from_string_impl(&self) -> TokenStream {
         let ident = &self.ident;
         let ruma_common = self.ruma_events.ruma_common();
@@ -330,8 +329,7 @@ impl EventTypeEnum<'_> {
         }
     }
 
-    /// Generate the `From<{ident}> for TimelineEventType` implementation for
-    /// the timeline kinds.
+    /// Generate the `From<{ident}> for TimelineEventType` implementation for the timeline kinds.
     fn expand_into_timeline_event_type_impl(&self) -> Option<TokenStream> {
         if !self.kind.is_timeline() || self.kind == EventEnumKind::Timeline {
             return None;

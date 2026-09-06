@@ -89,6 +89,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use async_trait::async_trait;
+pub use bytes;
 pub use base::{
     CallIntentConsensus, ComposerDraft, ComposerDraftType, DraftAttachment, DraftAttachmentContent,
     DraftThumbnail, EncryptionState, PredecessorRoom, QueueWedgeError, Room as BaseRoom,
@@ -98,10 +99,9 @@ pub use base::{
     deserialized_responses,
     store::{self, DynStateStore, MemoryStore, StateStoreExt},
 };
-pub use bytes;
+pub use sdk_common::*;
 #[cfg(feature = "reqwest-transport")]
 pub use reqwest;
-pub use sdk_common::*;
 
 mod account;
 pub mod attachment;
@@ -156,14 +156,6 @@ pub use http_client::ReqwestTransport;
 pub use http_client::{
     HttpSend, RequestProgress, SupportedAuthScheme, SupportedPathBuilder, TransmissionProgress,
 };
-pub use media::Media;
-pub use pusher::Pusher;
-pub use room::Room;
-pub use ruma::{IdParseError, OwnedServerName, ServerName};
-pub use sliding_sync::{
-    SlidingSync, SlidingSyncBuilder, SlidingSyncList, SlidingSyncListBuilder,
-    SlidingSyncListLoadingState, SlidingSyncMode, UpdateSummary,
-};
 #[cfg(all(feature = "e2e-encryption", feature = "sqlite"))]
 pub use sqlite::SqliteCryptoStore;
 #[cfg(feature = "sqlite")]
@@ -174,6 +166,14 @@ pub use sqlite::pluggable as store_encryption;
 pub use sqlite::{
     STATE_STORE_DATABASE_NAME, SecretStoreCipherProvider, SqliteEventCacheStore, SqliteMediaStore,
     SqliteStateStore, SqliteStoreConfig,
+};
+pub use media::Media;
+pub use pusher::Pusher;
+pub use room::Room;
+pub use ruma::{IdParseError, OwnedServerName, ServerName};
+pub use sliding_sync::{
+    SlidingSync, SlidingSyncBuilder, SlidingSyncList, SlidingSyncListBuilder,
+    SlidingSyncListLoadingState, SlidingSyncMode, UpdateSummary,
 };
 
 #[cfg(feature = "uniffi")]

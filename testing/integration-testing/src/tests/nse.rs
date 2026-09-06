@@ -26,15 +26,15 @@ use matrix::{
     },
 };
 use sdk_common::cross_process_lock::CrossProcessLockConfig;
-use serde_json::json;
-use tempfile::tempdir;
-use tracing::{Level, info, instrument, span};
 use ui::{
     notification_client::{
         NotificationClient, NotificationEvent, NotificationProcessSetup, NotificationStatus,
     },
     sync_service::SyncService,
 };
+use serde_json::json;
+use tempfile::tempdir;
+use tracing::{Level, info, instrument, span};
 
 use crate::helpers::{SyncTokenAwareClient, TestClientBuilder};
 

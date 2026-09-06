@@ -18,10 +18,10 @@
 //! This offers a few capabilities for previewing the content of the room as
 //! well.
 
+use futures_util::future::join_all;
 use base::{
     RawStateEventWithKeys, RoomHeroWithProfile, RoomInfo, RoomInfoNotableUpdateReasons, RoomState,
 };
-use futures_util::future::join_all;
 use ruma::{
     OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedServerName, RoomId, RoomOrAliasId, ServerName,
     api::client::{membership::joined_members, state::get_state_events},

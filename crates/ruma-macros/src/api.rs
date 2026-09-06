@@ -12,8 +12,8 @@ pub mod response;
 
 use self::common::{Body, Headers, MacroKind, StructSuffix};
 
-// Returns an error with a helpful error if the crate the request or response
-// macro is used from doesn't declare both a `client` and a `server` feature.
+// Returns an error with a helpful error if the crate the request or response macro is used from
+// doesn't declare both a `client` and a `server` feature.
 fn ensure_feature_presence() -> Option<&'static syn::Error> {
     #[derive(Deserialize)]
     struct CargoToml {

@@ -255,10 +255,10 @@ pub enum CrossProcessRefreshLockError {
 mod tests {
 
     use anyhow::Context as _;
-    use base::{SessionMeta, store::RoomLoadSettings};
     use futures_util::future::join_all;
-    use ruma::{owned_device_id, owned_user_id};
+    use base::{SessionMeta, store::RoomLoadSettings};
     use sdk_test::async_test;
+    use ruma::{owned_device_id, owned_user_id};
 
     use super::compute_session_hash;
     use crate::{

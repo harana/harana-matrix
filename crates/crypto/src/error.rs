@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
+use sdk_common::deserialized_responses::{VerificationLevel, WithheldCode};
 use ruma::{
     CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedUserId,
 };
-use sdk_common::deserialized_responses::{VerificationLevel, WithheldCode};
 use serde::{Serializer, ser::SerializeMap};
 use serde_json::Error as SerdeError;
 use thiserror::Error;

@@ -5,10 +5,9 @@
 pub mod v3 {
     //! `/v3/` ([spec])
     //!
-    //! Although this endpoint has a similar format to [`get_avatar_url`] and
-    //! [`get_display_name`], it will only work with homeservers advertising
-    //! support for the proper unstable feature or a version compatible with
-    //! Matrix 1.16.
+    //! Although this endpoint has a similar format to [`get_avatar_url`] and [`get_display_name`],
+    //! it will only work with homeservers advertising support for the proper unstable feature or
+    //! a version compatible with Matrix 1.16.
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3profileuseridkeyname
     //! [`get_avatar_url`]: crate::api::client::profile::get_avatar_url
@@ -54,8 +53,7 @@ pub mod v3 {
             Self { user_id, field }
         }
 
-        /// Creates a new request with the given user ID and statically-known
-        /// field.
+        /// Creates a new request with the given user ID and statically-known field.
         pub fn new_static<F: StaticProfileField>(user_id: OwnedUserId) -> RequestStatic<F> {
             RequestStatic::new(user_id)
         }
@@ -72,9 +70,9 @@ pub mod v3 {
             base_url: &str,
             considering: std::borrow::Cow<'_, crate::api::SupportedVersions>,
         ) -> Result<http::Request<EmptyBody>, crate::api::error::IntoHttpError> {
-            use crate::api::{
-                client::profile::field_existed_before_extended_profiles, path_builder::PathBuilder,
-            };
+            use crate::api::path_builder::PathBuilder;
+
+            use crate::api::client::profile::field_existed_before_extended_profiles;
 
             let url = if field_existed_before_extended_profiles(&self.field) {
                 Self::make_endpoint_url(considering, base_url, &[&self.user_id, &self.field], "")?
@@ -121,8 +119,7 @@ pub mod v3 {
         }
     }
 
-    /// Request type for the `get_profile_field` endpoint, using a
-    /// statically-known field.
+    /// Request type for the `get_profile_field` endpoint, using a statically-known field.
     #[derive(Debug)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct RequestStatic<F: StaticProfileField> {
@@ -247,8 +244,7 @@ pub mod v3 {
         }
     }
 
-    /// Response type for the `get_profile_field` endpoint, using a
-    /// statically-known field.
+    /// Response type for the `get_profile_field` endpoint, using a statically-known field.
     #[derive(Debug)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ResponseStatic<F: StaticProfileField> {
@@ -286,13 +282,13 @@ pub mod v3 {
 
 #[cfg(all(test, feature = "client"))]
 mod tests_client {
-    use serde_json::{json, to_vec as to_json_vec};
-
-    use super::v3::{Request, RequestStatic, Response};
     use crate::{
         owned_mxc_uri, owned_user_id,
         profile::{ProfileFieldName, ProfileFieldValue},
     };
+    use serde_json::{json, to_vec as to_json_vec};
+
+    use super::v3::{Request, RequestStatic, Response};
 
     #[test]
     fn serialize_request() {
@@ -397,8 +393,8 @@ mod tests_client {
         assert!(response.value.is_none());
     }
 
-    /// Mock a response from the homeserver to a request of type `R` and return
-    /// the given `value` as a typed response.
+    /// Mock a response from the homeserver to a request of type `R` and return the given `value` as
+    /// a typed response.
     fn get_static_response<R: crate::api::OutgoingRequest>(
         value: Option<ProfileFieldValue>,
     ) -> Result<R::IncomingResponse, crate::api::error::FromHttpResponseError<R::EndpointError>>
@@ -437,13 +433,13 @@ mod tests_client {
 
 #[cfg(all(test, feature = "server"))]
 mod tests_server {
-    use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
-
-    use super::v3::{Request, Response};
     use crate::{
         owned_mxc_uri,
         profile::{ProfileFieldName, ProfileFieldValue},
     };
+    use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
+
+    use super::v3::{Request, Response};
 
     #[test]
     fn deserialize_request() {

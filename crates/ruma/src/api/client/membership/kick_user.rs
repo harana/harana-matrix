@@ -37,8 +37,7 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub reason: Option<String>,
 
-        /// A flag indicating whether all the user's events should be
-        /// immediately redacted.
+        /// A flag indicating whether all the user's events should be immediately redacted.
         ///
         /// This uses the unstable prefix defined in [MSC4293].
         ///

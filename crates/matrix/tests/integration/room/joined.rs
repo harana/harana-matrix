@@ -6,13 +6,20 @@ use std::{
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::{EncryptionState, RoomMembersUpdate, RoomState};
 use futures_util::{future::join_all, pin_mut};
 use matrix::{
     assert_next_with_timeout, assert_recv_with_timeout,
     config::SyncSettings,
     room::{Receipts, RoomMemberRole, edit::EditedContent},
     test_utils::mocks::MatrixMockServer,
+};
+use base::{EncryptionState, RoomMembersUpdate, RoomState};
+use sdk_common::executor::spawn;
+use sdk_test::{
+    DEFAULT_TEST_ROOM_ID, InvitedRoomBuilder, JoinedRoomBuilder, SyncResponseBuilder, async_test,
+    event_factory::EventFactory,
+    mocks::mock_encryption_state,
+    test_json::{self, sync::CUSTOM_ROOM_POWER_LEVELS},
 };
 use ruma::{
     OwnedUserId, RoomVersionId, TransactionId,
@@ -31,13 +38,6 @@ use ruma::{
         },
     },
     int, mxc_uri, owned_event_id, owned_user_id, room_id, server_name, thirdparty, user_id,
-};
-use sdk_common::executor::spawn;
-use sdk_test::{
-    DEFAULT_TEST_ROOM_ID, InvitedRoomBuilder, JoinedRoomBuilder, SyncResponseBuilder, async_test,
-    event_factory::EventFactory,
-    mocks::mock_encryption_state,
-    test_json::{self, sync::CUSTOM_ROOM_POWER_LEVELS},
 };
 use serde_json::json;
 use stream_assert::assert_pending;

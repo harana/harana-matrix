@@ -19,6 +19,9 @@ use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
+use sdk_common::executor::spawn;
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{RoomExt, TimelineDetails};
 use ruma::{
     event_id,
     events::room::{
@@ -27,10 +30,7 @@ use ruma::{
     },
     room_id, user_id,
 };
-use sdk_common::executor::spawn;
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use stream_assert::assert_pending;
-use ui::timeline::{RoomExt, TimelineDetails};
 
 #[async_test]
 async fn test_batched() {

@@ -5,17 +5,17 @@
 use std::{borrow::Cow, fmt, marker::PhantomData};
 
 use bytes::BufMut;
-use serde::{Deserialize, Deserializer, Serialize, de};
-use serde_json::{from_slice as from_json_slice, value::RawValue as RawJsonValue};
-
 use crate::{
     api::{
         EndpointError, OutgoingBody, OutgoingBodyJson, OutgoingResponse,
-        client::PrivOwnedStr,
         error::{Error as MatrixError, ErrorResponseBody, IntoHttpError, StandardErrorBody},
     },
     serde::StringEnum,
 };
+use serde::{Deserialize, Deserializer, Serialize, de};
+use serde_json::{from_slice as from_json_slice, value::RawValue as RawJsonValue};
+
+use crate::api::client::PrivOwnedStr;
 
 mod auth_data;
 mod auth_params;
@@ -64,8 +64,8 @@ pub enum AuthType {
 
     /// OAuth 2.0 (`m.oauth`).
     ///
-    /// This type is only valid with the cross-signing keys upload endpoint,
-    /// after logging in with the OAuth 2.0 API.
+    /// This type is only valid with the cross-signing keys upload endpoint, after logging in with
+    /// the OAuth 2.0 API.
     #[ruma_enum(rename = "m.oauth", alias = "org.matrix.cross_signing_reset")]
     OAuth,
 
@@ -73,8 +73,8 @@ pub enum AuthType {
     _Custom(PrivOwnedStr),
 }
 
-/// Information about available authentication flows and status for
-/// User-Interactive Authenticiation API.
+/// Information about available authentication flows and status for User-Interactive Authenticiation
+/// API.
 #[derive(Clone, Debug, Deserialize, Serialize, OutgoingBodyJson)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct UiaaInfo {
@@ -85,8 +85,7 @@ pub struct UiaaInfo {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub completed: Vec<AuthType>,
 
-    /// Authentication parameters required for the client to complete
-    /// authentication.
+    /// Authentication parameters required for the client to complete authentication.
     ///
     /// To create a `Box<RawJsonValue>`, use `serde_json::value::to_raw_value`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,8 +95,7 @@ pub struct UiaaInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
 
-    /// Authentication-related errors for previous request returned by
-    /// homeserver.
+    /// Authentication-related errors for previous request returned by homeserver.
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub auth_error: Option<Box<StandardErrorBody>>,
 }
@@ -108,13 +106,11 @@ impl UiaaInfo {
         Self { flows, completed: Vec::new(), params: None, session: None, auth_error: None }
     }
 
-    /// Get the parameters for the given [`AuthType`], if they are available in
-    /// the `params` object.
+    /// Get the parameters for the given [`AuthType`], if they are available in the `params` object.
     ///
-    /// Returns `Ok(Some(_))` if the parameters for the authentication type were
-    /// found and the deserialization worked, `Ok(None)` if the parameters
-    /// for the authentication type were not found, and `Err(_)` if the
-    /// parameters for the authentication type were found but their
+    /// Returns `Ok(Some(_))` if the parameters for the authentication type were found and the
+    /// deserialization worked, `Ok(None)` if the parameters for the authentication type were not
+    /// found, and `Err(_)` if the parameters for the authentication type were found but their
     /// deserialization failed.
     ///
     /// # Example
@@ -124,8 +120,7 @@ impl UiaaInfo {
     /// use ruma::api::client::uiaa::{AuthType, LoginTermsParams};
     ///
     /// # let uiaa_info = UiaaInfo::new(Vec::new());
-    /// let login_terms_params =
-    ///     uiaa_info.params::<LoginTermsParams>(&AuthType::Terms)?;
+    /// let login_terms_params = uiaa_info.params::<LoginTermsParams>(&AuthType::Terms)?;
     /// # Ok::<(), serde_json::Error>(())
     /// ```
     pub fn params<'a, T: Deserialize<'a>>(
@@ -174,8 +169,7 @@ impl UiaaInfo {
     }
 }
 
-/// Description of steps required to authenticate via the User-Interactive
-/// Authentication API.
+/// Description of steps required to authenticate via the User-Interactive Authentication API.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct AuthFlow {
@@ -193,8 +187,7 @@ impl AuthFlow {
     }
 }
 
-/// Contains either a User-Interactive Authentication API response body or a
-/// Matrix error.
+/// Contains either a User-Interactive Authentication API response body or a Matrix error.
 #[derive(Clone, Debug)]
 #[allow(clippy::exhaustive_enums)]
 pub enum UiaaResponse {
@@ -272,10 +265,10 @@ impl OutgoingBody for ResponseBody {
 #[cfg(test)]
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
+    use crate::serde::JsonObject;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{AuthType, LoginTermsParams, OAuthParams, UiaaInfo};
-    use crate::serde::JsonObject;
 
     #[test]
     fn uiaa_info_params() {

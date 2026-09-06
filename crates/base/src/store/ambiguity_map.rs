@@ -296,8 +296,8 @@ impl AmbiguityCache {
 
 #[cfg(test)]
 mod test {
-    use ruma::{EventId, room_id, server_name, user_id};
     use sdk_test::async_test;
+    use ruma::{EventId, room_id, server_name, user_id};
     use serde_json::json;
 
     use super::*;

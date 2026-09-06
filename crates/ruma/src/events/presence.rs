@@ -8,9 +8,8 @@ pub mod prompted;
 pub mod sharing;
 
 use js_int::UInt;
-use serde::{Deserialize, Serialize};
-
 use crate::{OwnedMxcUri, OwnedUserId, presence::PresenceState};
+use serde::{Deserialize, Serialize};
 
 /// Presence event.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,9 +31,8 @@ pub struct PresenceEvent {
 pub struct PresenceEventContent {
     /// The current avatar URL for this user.
     ///
-    /// If you activate the `compat-empty-string-null` feature, this field being
-    /// an empty string in JSON will result in `None` here during
-    /// deserialization.
+    /// If you activate the `compat-empty-string-null` feature, this field being an empty string in
+    /// JSON will result in `None` here during deserialization.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "compat-empty-string-null",
@@ -79,13 +77,13 @@ impl PresenceEventContent {
 #[cfg(test)]
 mod tests {
     use js_int::uint;
-    use serde_json::{from_value as from_json_value, json};
-
-    use super::{PresenceEvent, PresenceEventContent};
     use crate::{
         canonical_json::assert_to_canonical_json_eq, mxc_uri, owned_mxc_uri,
         presence::PresenceState,
     };
+    use serde_json::{from_value as from_json_value, json};
+
+    use super::{PresenceEvent, PresenceEventContent};
 
     #[test]
     fn serialization() {

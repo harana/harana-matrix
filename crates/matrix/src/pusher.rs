@@ -83,11 +83,11 @@ impl Pusher {
 // The http mocking library is not supported for wasm32
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
+    use sdk_test::{async_test, test_json};
     use ruma::{
         api::client::push::{PusherIds, PusherInit, PusherKind},
         push::HttpPusherData,
     };
-    use sdk_test::{async_test, test_json};
     use serde_json::json;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,

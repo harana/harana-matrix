@@ -241,8 +241,8 @@ pub(super) async fn get_supported_versions(
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use assert_matches::assert_matches;
-    use ruma::OwnedServerName;
     use sdk_test::async_test;
+    use ruma::OwnedServerName;
     use serde_json::json;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,

@@ -20,10 +20,11 @@
 use std::borrow::Borrow;
 use std::future::IntoFuture;
 
+use eyeball::SharedObservable;
 #[cfg(feature = "e2e-encryption")]
 use base::crypto::CollectStrategy;
 use base::deserialized_responses::EncryptionInfo;
-use eyeball::SharedObservable;
+use sdk_common::boxed_into_future;
 use mime::Mime;
 #[cfg(doc)]
 use ruma::events::{MessageLikeUnsigned, SyncMessageLikeEvent};
@@ -39,7 +40,6 @@ use ruma::{
     api::client::state::send_state_event,
     events::{AnyStateEventContent, StateEventContent},
 };
-use sdk_common::boxed_into_future;
 #[cfg(feature = "e2e-encryption")]
 use tracing::debug;
 use tracing::{Instrument, Span, info, trace};

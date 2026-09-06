@@ -18,12 +18,12 @@ use std::time::Duration;
 
 use assert_matches2::assert_matches;
 use eyeball_im::VectorDiff;
+use sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, event_id,
     events::beacon_info::{BeaconInfoEventContent, RedactedBeaconInfoEventContent},
     owned_event_id, uint,
 };
-use sdk_test::{ALICE, BOB, async_test};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use crate::timeline::{

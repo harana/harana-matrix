@@ -16,11 +16,6 @@ use std::{fs::File, io::Write, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use assert_matches::assert_matches;
-use base::crypto::{
-    olm::{InboundGroupSession, OutboundGroupSession, SenderData, SessionCreationError},
-    store::types::BackupDecryptionKey,
-    types::EventEncryptionAlgorithm,
-};
 use futures_util::{FutureExt, StreamExt, pin_mut};
 use matrix::{
     Client, SessionMeta,
@@ -36,6 +31,13 @@ use matrix::{
         test_client_builder_with_server,
     },
 };
+use base::crypto::{
+    olm::{InboundGroupSession, OutboundGroupSession, SenderData, SessionCreationError},
+    store::types::BackupDecryptionKey,
+    types::EventEncryptionAlgorithm,
+};
+use sdk_common::timeout::timeout;
+use sdk_test::{JoinedRoomBuilder, SyncResponseBuilder, TestResult, async_test};
 use ruma::{
     EventId, RoomId, TransactionId,
     api::client::room::create_room::v3::Request as CreateRoomRequest,
@@ -43,8 +45,6 @@ use ruma::{
     events::room::message::{RoomMessageEvent, RoomMessageEventContent},
     owned_device_id, owned_user_id, room_id, user_id,
 };
-use sdk_common::timeout::timeout;
-use sdk_test::{JoinedRoomBuilder, SyncResponseBuilder, TestResult, async_test};
 use serde_json::{Value, json};
 use tempfile::tempdir;
 use tokio::spawn;

@@ -30,6 +30,11 @@ use matrix::{
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
 };
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
+use ui::{
+    timeline::{RoomExt, TimelineBuilder, default_event_filter},
+    unable_to_decrypt_hook::UtdHookManager,
+};
 use mime::Mime;
 use ruma::{
     EventId, Int, OwnedDeviceId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId, RoomAliasId,
@@ -46,13 +51,8 @@ use ruma::{
     },
     serde::Raw,
 };
-use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
-use ui::{
-    timeline::{RoomExt, TimelineBuilder, default_event_filter},
-    unable_to_decrypt_hook::UtdHookManager,
-};
 
 use self::{
     power_levels::RoomPowerLevels,

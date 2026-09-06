@@ -8,7 +8,6 @@ use as_variant::as_variant;
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use assign::assign;
-use base::crypto::{SasState, format_emojis};
 use matrix::{
     Client, assert_next_eq_with_timeout,
     encryption::{
@@ -34,12 +33,13 @@ use matrix::{
     },
     timeout::timeout,
 };
-use similar_asserts::assert_eq;
-use tracing::{debug, warn};
+use base::crypto::{SasState, format_emojis};
 use ui::{
     notification_client::{NotificationClient, NotificationProcessSetup},
     sync_service::SyncService,
 };
+use similar_asserts::assert_eq;
+use tracing::{debug, warn};
 
 use crate::helpers::{SyncTokenAwareClient, TestClientBuilder};
 

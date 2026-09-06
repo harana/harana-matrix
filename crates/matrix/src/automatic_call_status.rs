@@ -23,11 +23,11 @@ use std::{
     time::SystemTime,
 };
 
+use sdk_common::executor::spawn;
 use ruma::{
     OwnedRoomId, SecondsSinceUnixEpoch,
     events::{OriginalSyncStateEvent, call::member::CallMemberEventContent},
 };
-use sdk_common::executor::spawn;
 use tracing::warn;
 
 use crate::{Client, Room, client::WeakClient, event_handler::EventHandlerHandle};

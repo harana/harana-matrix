@@ -24,6 +24,14 @@ use std::{
 };
 
 use async_stream::stream;
+use eyeball::SharedObservable;
+use futures_core::Stream;
+use futures_util::{
+    StreamExt, future::join_all, stream as futures_stream, stream::FuturesUnordered,
+};
+use http::StatusCode;
+#[cfg(feature = "e2e-encryption")]
+pub use identity_status_changes::IdentityStatusChanges;
 #[cfg(feature = "experimental-encrypted-state-events")]
 use base::crypto::types::events::room::encrypted::EncryptedEvent;
 #[cfg(feature = "e2e-encryption")]
@@ -45,14 +53,13 @@ use base::{
 };
 #[cfg(feature = "e2e-encryption")]
 use base::{crypto::RoomEventDecryptionResult, deserialized_responses::EncryptionInfo};
-use eyeball::SharedObservable;
-use futures_core::Stream;
-use futures_util::{
-    StreamExt, future::join_all, stream as futures_stream, stream::FuturesUnordered,
-};
-use http::StatusCode;
 #[cfg(feature = "e2e-encryption")]
-pub use identity_status_changes::IdentityStatusChanges;
+use sdk_common::BoxFuture;
+use sdk_common::{
+    deserialized_responses::TimelineEvent,
+    executor::{JoinHandle, spawn},
+    timeout::timeout,
+};
 use mime::Mime;
 use reply::Reply;
 #[cfg(feature = "e2e-encryption")]
@@ -143,13 +150,6 @@ use ruma::{
 use ruma::{
     events::room::encrypted::unstable_state::OriginalSyncStateRoomEncryptedEvent,
     serde::JsonCastable,
-};
-#[cfg(feature = "e2e-encryption")]
-use sdk_common::BoxFuture;
-use sdk_common::{
-    deserialized_responses::TimelineEvent,
-    executor::{JoinHandle, spawn},
-    timeout::timeout,
 };
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -2843,8 +2843,7 @@ impl Room {
     ///         &mime::IMAGE_JPEG,
     ///         image,
     ///         AttachmentConfig::new(),
-    ///     )
-    ///     .await?;
+    ///     ).await?;
     /// }
     /// # anyhow::Ok(()) };
     /// ```
@@ -5232,6 +5231,9 @@ mod tests {
     use std::{collections::BTreeMap, time::Duration};
 
     use base::{ComposerDraft, DraftAttachment, store::ComposerDraftType};
+    use sdk_test::{
+        JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
+    };
     use ruma::{
         RoomVersionId, event_id,
         events::{
@@ -5239,9 +5241,6 @@ mod tests {
             room::{member::MembershipState, retention::RoomRetentionEventContent},
         },
         owned_event_id, room_id, user_id,
-    };
-    use sdk_test::{
-        JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
     use wiremock::{
         Mock, ResponseTemplate,

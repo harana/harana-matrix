@@ -29,8 +29,8 @@ pub mod unstable {
         #[ruma_api(query)]
         pub user_id: OwnedUserId,
 
-        /// The `next_batch_token` returned from a previous response, to get the
-        /// next batch of rooms.
+        /// The `next_batch_token` returned from a previous response, to get the next batch of
+        /// rooms.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub batch_token: Option<String>,
@@ -53,8 +53,7 @@ pub mod unstable {
             Self { user_id, batch_token: None }
         }
 
-        /// Creates a new `Request` with the given user id, together with a
-        /// batch token.
+        /// Creates a new `Request` with the given user id, together with a batch token.
         pub fn with_token(user_id: OwnedUserId, token: String) -> Self {
             Self { user_id, batch_token: Some(token) }
         }
@@ -66,8 +65,7 @@ pub mod unstable {
             Self { joined, next_batch_token: None }
         }
 
-        /// Creates a `Response` with the given room ids, together with a batch
-        /// token.
+        /// Creates a `Response` with the given room ids, together with a batch token.
         pub fn with_token(joined: Vec<OwnedRoomId>, token: String) -> Self {
             Self { joined, next_batch_token: Some(token) }
         }
@@ -80,7 +78,6 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv1mutual_rooms
 
     use js_int::UInt;
-
     use crate::{
         OwnedRoomId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
@@ -103,8 +100,8 @@ pub mod v1 {
         #[ruma_api(query)]
         pub user_id: OwnedUserId,
 
-        /// The `next_batch` returned from a previous response, to get the next
-        /// batch of rooms.
+        /// The `next_batch` returned from a previous response, to get the next batch of
+        /// rooms.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub from: Option<String>,
@@ -113,8 +110,7 @@ pub mod v1 {
     /// Response type for the `mutual_rooms` endpoint.
     #[response]
     pub struct Response {
-        /// The total number of rooms the user is in together with the
-        /// authenticated user.
+        /// The total number of rooms the user is in together with the authenticated user.
         ///
         /// This is unaffected by batching.
         pub count: UInt,
@@ -133,8 +129,7 @@ pub mod v1 {
             Self { user_id, from: None }
         }
 
-        /// Creates a new `Request` with the given user id, together with a
-        /// batch token.
+        /// Creates a new `Request` with the given user id, together with a batch token.
         pub fn with_batch_token(user_id: OwnedUserId, token: String) -> Self {
             Self { user_id, from: Some(token) }
         }
@@ -146,8 +141,7 @@ pub mod v1 {
             Self { count, joined, next_batch: None }
         }
 
-        /// Creates a `Response` with the given count and room IDs, together
-        /// with a batch token.
+        /// Creates a `Response` with the given count and room IDs, together with a batch token.
         pub fn with_batch_token(count: UInt, joined: Vec<OwnedRoomId>, token: String) -> Self {
             Self { count, joined, next_batch: Some(token) }
         }

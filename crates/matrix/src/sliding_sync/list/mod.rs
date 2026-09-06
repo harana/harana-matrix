@@ -508,8 +508,8 @@ mod tests {
     };
 
     use assert_matches::assert_matches;
-    use ruma::uint;
     use sdk_test::async_test;
+    use ruma::uint;
     use serde_json::json;
     use tokio::sync::broadcast::{channel, error::TryRecvError};
 

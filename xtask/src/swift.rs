@@ -859,7 +859,10 @@ mod tests {
         let crypto = build_path_for_target(target, "release", &CRYPTO_SDK).unwrap();
 
         assert!(full.as_str().ends_with("aarch64-apple-ios/release/libmatrix_ffi.a"), "{full}");
-        assert!(crypto.as_str().ends_with("aarch64-apple-ios/release/libcrypto_ffi.a"), "{crypto}");
+        assert!(
+            crypto.as_str().ends_with("aarch64-apple-ios/release/libcrypto_ffi.a"),
+            "{crypto}"
+        );
     }
 
     /// Cargo's builtin dev profile writes to `target/debug`; every other

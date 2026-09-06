@@ -15,7 +15,6 @@
 use std::sync::{Arc, Mutex};
 
 use assert_matches2::assert_let;
-use base::SessionMeta;
 use futures_util::StreamExt;
 use matrix::{
     Client,
@@ -31,8 +30,9 @@ use matrix::{
         test_client_builder_with_server,
     },
 };
-use ruma::{UserId, api::client::uiaa, owned_device_id, user_id};
+use base::SessionMeta;
 use sdk_test::async_test;
+use ruma::{UserId, api::client::uiaa, owned_device_id, user_id};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::spawn;

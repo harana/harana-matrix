@@ -4,6 +4,10 @@
 
 use std::borrow::Cow;
 
+use crate::{
+    OwnedTransactionId,
+    serde::{Base64, JsonObject},
+};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, from_value as from_json_value};
@@ -11,11 +15,7 @@ use serde_json::{Value as JsonValue, from_value as from_json_value};
 use super::{
     HashAlgorithm, KeyAgreementProtocol, MessageAuthenticationCode, ShortAuthenticationString,
 };
-use crate::{
-    OwnedTransactionId,
-    events::relation::Reference,
-    serde::{Base64, JsonObject},
-};
+use crate::events::relation::Reference;
 
 /// The content of a to-device `m.key.verification.accept` event.
 ///
@@ -26,8 +26,7 @@ use crate::{
 pub struct ToDeviceKeyVerificationAcceptEventContent {
     /// An opaque identifier for the verification process.
     ///
-    /// Must be the same as the one used for the `m.key.verification.start`
-    /// message.
+    /// Must be the same as the one used for the `m.key.verification.start` message.
     pub transaction_id: OwnedTransactionId,
 
     /// The method specific content.
@@ -36,8 +35,8 @@ pub struct ToDeviceKeyVerificationAcceptEventContent {
 }
 
 impl ToDeviceKeyVerificationAcceptEventContent {
-    /// Creates a new `ToDeviceKeyVerificationAcceptEventContent` with the given
-    /// transaction ID and method-specific content.
+    /// Creates a new `ToDeviceKeyVerificationAcceptEventContent` with the given transaction ID and
+    /// method-specific content.
     pub fn new(transaction_id: OwnedTransactionId, method: AcceptMethod) -> Self {
         Self { transaction_id, method }
     }
@@ -60,15 +59,14 @@ pub struct KeyVerificationAcceptEventContent {
 }
 
 impl KeyVerificationAcceptEventContent {
-    /// Creates a new `KeyVerificationAcceptEventContent` with the given
-    /// method-specific content and reference.
+    /// Creates a new `KeyVerificationAcceptEventContent` with the given method-specific
+    /// content and reference.
     pub fn new(method: AcceptMethod, relates_to: Reference) -> Self {
         Self { method, relates_to }
     }
 }
 
-/// An enum representing the different method specific
-/// `m.key.verification.accept` content.
+/// An enum representing the different method specific `m.key.verification.accept` content.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(untagged)]
@@ -84,8 +82,8 @@ pub enum AcceptMethod {
 impl AcceptMethod {
     /// The data of this `AcceptMethod`.
     ///
-    /// Prefer to use the public variants of `AcceptMethod` where possible; this
-    /// method is meant to be used for custom methods only.
+    /// Prefer to use the public variants of `AcceptMethod` where possible; this method is meant to
+    /// be used for custom methods only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: T) -> JsonObject {
             match serde_json::to_value(obj).expect("accept method serialization to succeed") {
@@ -127,8 +125,7 @@ pub struct _CustomAcceptMethodContent {
     data: JsonObject,
 }
 
-/// The payload of an `m.key.verification.accept` event using the `m.sas.v1`
-/// method.
+/// The payload of an `m.key.verification.accept` event using the `m.sas.v1` method.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct SasV1Content {
@@ -151,10 +148,9 @@ pub struct SasV1Content {
     /// message.
     pub short_authentication_string: Vec<ShortAuthenticationString>,
 
-    /// The hash (encoded as unpadded base64) of the concatenation of the
-    /// device's ephemeral public key (encoded as unpadded base64) and the
-    /// canonical JSON representation of the `content` of the `m.key.
-    /// verification.start` message.
+    /// The hash (encoded as unpadded base64) of the concatenation of the device's ephemeral public
+    /// key (encoded as unpadded base64) and the canonical JSON representation of the `content` of
+    /// the `m.key.verification.start` message.
     pub commitment: Base64,
 }
 
@@ -202,6 +198,11 @@ impl From<SasV1ContentInit> for SasV1Content {
 #[cfg(test)]
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
+    use crate::{
+        canonical_json::assert_to_canonical_json_eq,
+        event_id,
+        serde::{Base64, Raw},
+    };
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
     use super::{
@@ -209,12 +210,7 @@ mod tests {
         MessageAuthenticationCode, SasV1Content, ShortAuthenticationString,
         ToDeviceKeyVerificationAcceptEventContent,
     };
-    use crate::{
-        canonical_json::assert_to_canonical_json_eq,
-        event_id,
-        events::{ToDeviceEvent, relation::Reference},
-        serde::{Base64, Raw},
-    };
+    use crate::events::{ToDeviceEvent, relation::Reference};
 
     #[test]
     fn to_device_serialization() {
@@ -284,8 +280,7 @@ mod tests {
             "short_authentication_string": ["decimal"]
         });
 
-        // Deserialize the content struct separately to verify `TryFromRaw` is
-        // implemented for it.
+        // Deserialize the content struct separately to verify `TryFromRaw` is implemented for it.
         let content = from_json_value::<ToDeviceKeyVerificationAcceptEventContent>(json).unwrap();
         assert_eq!(content.transaction_id, "456");
 
@@ -336,8 +331,7 @@ mod tests {
             }
         });
 
-        // Deserialize the content struct separately to verify `TryFromRaw` is
-        // implemented for it.
+        // Deserialize the content struct separately to verify `TryFromRaw` is implemented for it.
         let content = from_json_value::<KeyVerificationAcceptEventContent>(json).unwrap();
         assert_eq!(content.relates_to.event_id, "$1598361704261elfgc:localhost");
 

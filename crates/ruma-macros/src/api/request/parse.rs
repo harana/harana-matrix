@@ -95,8 +95,8 @@ impl RequestPath {
 impl RequestQuery {
     /// Add the given field to the list of [`RequestQuery::Fields`].
     ///
-    /// Returns an error if this is not a [`RequestQuery::None`] or
-    /// [`RequestQuery::Fields`] variant.
+    /// Returns an error if this is not a [`RequestQuery::None`] or [`RequestQuery::Fields`]
+    /// variant.
     fn push_field(&mut self, field: syn::Field) -> syn::Result<()> {
         match self {
             Self::None => {
@@ -134,8 +134,8 @@ impl RequestQuery {
 /// Attributes on the request struct.
 #[derive(Default)]
 pub(crate) struct RequestAttrs {
-    /// The type used for the `EndpointError` associated type on
-    /// `OutgoingRequest` and `IncomingRequest` implementations.
+    /// The type used for the `EndpointError` associated type on `OutgoingRequest` and
+    /// `IncomingRequest` implementations.
     error_ty: Option<syn::Type>,
 }
 
@@ -157,8 +157,7 @@ impl RequestAttrs {
 
     /// Try to parse the given meta item and merge it into this `RequestAttrs`.
     ///
-    /// Returns an error if parsing the meta item fails, or if it sets a field
-    /// that was already set.
+    /// Returns an error if parsing the meta item fails, or if it sets a field that was already set.
     pub(crate) fn try_merge(&mut self, meta: ParseNestedMeta<'_>) -> syn::Result<()> {
         if meta.path.is_ident("error") {
             return self.set_error_ty(meta.value()?.parse()?);
@@ -167,8 +166,7 @@ impl RequestAttrs {
         Err(meta.error("unsupported `request` attribute"))
     }
 
-    /// The error type that was set on the request, or the default value which
-    /// is `Error`.
+    /// The error type that was set on the request, or the default value which is `Error`.
     pub(super) fn error_ty_or_default(&self, ruma_common: &RumaCommon) -> syn::Type {
         self.error_ty.clone().unwrap_or_else(|| parse_quote! { #ruma_common::api::error::Error })
     }
@@ -199,8 +197,7 @@ impl RequestField {
         Ok(())
     }
 
-    /// Try to merge the values of the attributes in the given meta in this
-    /// `RequestField`.
+    /// Try to merge the values of the attributes in the given meta in this `RequestField`.
     ///
     /// Returns an error if parsing the meta fails or a value is set twice.
     fn try_merge(&mut self, meta: ParseNestedMeta<'_>) -> syn::Result<()> {
@@ -264,10 +261,9 @@ enum RequestFieldKind {
 impl RequestFieldKind {
     /// Try to convert the given meta into a `RequestFieldKind`.
     ///
-    /// Returns `Ok(Some(kind))` if the meta matches one of the variants and
-    /// parsing it succeeds, `Ok(None)` if the meta doesn't match one of the
-    /// variants, and `Err(_)` if the meta matches one of the variants but
-    /// parsing it fails.
+    /// Returns `Ok(Some(kind))` if the meta matches one of the variants and parsing it succeeds,
+    /// `Ok(None)` if the meta doesn't match one of the variants, and `Err(_)` if the meta matches
+    /// one of the variants but parsing it fails.
     fn try_from_meta(meta: &ParseNestedMeta<'_>) -> syn::Result<Option<Self>> {
         let Some(ident) = meta.path.get_ident() else {
             return Ok(None);

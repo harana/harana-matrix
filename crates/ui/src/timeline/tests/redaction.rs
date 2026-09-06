@@ -17,6 +17,7 @@ use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
 use imbl::vector;
 use matrix::deserialized_responses::TimelineEvent;
+use sdk_test::{ALICE, BOB, async_test, sync_timeline_event};
 use ruma::{
     event_id,
     events::{
@@ -25,7 +26,6 @@ use ruma::{
     },
     owned_event_id,
 };
-use sdk_test::{ALICE, BOB, async_test, sync_timeline_event};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;

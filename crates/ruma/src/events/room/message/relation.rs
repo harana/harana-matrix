@@ -1,17 +1,15 @@
 use std::borrow::Cow;
 
-use crate::{
-    events::relation::{CustomRelation, RelationType, Replacement, Reply, Thread},
-    serde::JsonObject,
-};
+use crate::serde::JsonObject;
+
+use crate::events::relation::{CustomRelation, RelationType, Replacement, Reply, Thread};
 
 /// Message event relationship.
 #[derive(Clone, Debug)]
 #[allow(clippy::manual_non_exhaustive)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum Relation<C> {
-    /// An `m.in_reply_to` relation indicating that the event is a reply to
-    /// another event.
+    /// An `m.in_reply_to` relation indicating that the event is a reply to another event.
     Reply(Reply),
 
     /// An event that replaces another event.
@@ -27,8 +25,7 @@ pub enum Relation<C> {
 impl<C> Relation<C> {
     /// The type of this `Relation`.
     ///
-    /// Returns an `Option` because the `Reply` relation does not have
-    /// a`rel_type` field.
+    /// Returns an `Option` because the `Reply` relation does not have a`rel_type` field.
     pub fn rel_type(&self) -> Option<RelationType> {
         match self {
             Relation::Reply(_) => None,
@@ -40,13 +37,12 @@ impl<C> Relation<C> {
 
     /// The associated data.
     ///
-    /// The returned JSON object holds the contents of `m.relates_to`, including
-    /// `rel_type` and `event_id` if present, but not things like
-    /// `m.new_content` for `m.replace` relations that live next to
-    /// `m.relates_to`.
+    /// The returned JSON object holds the contents of `m.relates_to`, including `rel_type` and
+    /// `event_id` if present, but not things like `m.new_content` for `m.replace` relations that
+    /// live next to `m.relates_to`.
     ///
-    /// Prefer to use the public variants of `Relation` where possible; this
-    /// method is meant to be used for custom relations only.
+    /// Prefer to use the public variants of `Relation` where possible; this method is meant to
+    /// be used for custom relations only.
     pub fn data(&self) -> Cow<'_, JsonObject>
     where
         C: Clone,
@@ -77,8 +73,7 @@ pub enum RelationWithoutReplacement {
 impl RelationWithoutReplacement {
     /// The type of this `Relation`.
     ///
-    /// Returns an `Option` because the `Reply` relation does not have
-    /// a`rel_type` field.
+    /// Returns an `Option` because the `Reply` relation does not have a`rel_type` field.
     pub fn rel_type(&self) -> Option<RelationType> {
         match self {
             Self::Reply(_) => None,
@@ -89,13 +84,12 @@ impl RelationWithoutReplacement {
 
     /// The associated data.
     ///
-    /// The returned JSON object holds the contents of `m.relates_to`, including
-    /// `rel_type` and `event_id` if present, but not things like
-    /// `m.new_content` for `m.replace` relations that live next to
-    /// `m.relates_to`.
+    /// The returned JSON object holds the contents of `m.relates_to`, including `rel_type` and
+    /// `event_id` if present, but not things like `m.new_content` for `m.replace` relations that
+    /// live next to `m.relates_to`.
     ///
-    /// Prefer to use the public variants of `Relation` where possible; this
-    /// method is meant to be used for custom relations only.
+    /// Prefer to use the public variants of `Relation` where possible; this method is meant to
+    /// be used for custom relations only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         if let Self::_Custom(CustomRelation(data)) = self {
             Cow::Borrowed(data)

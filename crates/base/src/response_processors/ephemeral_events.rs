@@ -51,6 +51,7 @@ pub(super) fn dispatch_receipt(
 
 #[cfg(test)]
 mod tests {
+    use sdk_test::event_factory::EventFactory;
     use ruma::{
         event_id,
         events::receipt::{ReceiptThread, ReceiptType},
@@ -58,7 +59,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::event_factory::EventFactory;
     use serde_json::json;
 
     use super::{super::Context, dispatch};

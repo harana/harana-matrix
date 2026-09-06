@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use base::crypto::types::SecretsBundle;
+use sdk_common::deserialized_responses::PrivOwnedStr;
 use oauth2::{
     EndUserVerificationUrl, StandardDeviceAuthorizationResponse, VerificationUriComplete,
 };
 use ruma::serde::StringEnum;
-use sdk_common::deserialized_responses::PrivOwnedStr;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use vodozemac::Curve25519PublicKey;

@@ -731,8 +731,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches2::{assert_let, assert_matches};
-    use ruma::{CanonicalJsonValue, DeviceId, RoomId, UserId, device_id, room_id, user_id};
     use sdk_test::async_test;
+    use ruma::{CanonicalJsonValue, DeviceId, RoomId, UserId, device_id, room_id, user_id};
     use serde_json::json;
 
     use super::BackupMachine;

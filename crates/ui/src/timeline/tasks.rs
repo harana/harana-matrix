@@ -16,7 +16,6 @@
 
 use std::collections::BTreeSet;
 
-use base::RoomInfo;
 use eyeball::Subscriber as EyeballSubscriber;
 use matrix::{
     event_cache::{
@@ -25,6 +24,7 @@ use matrix::{
     },
     send_queue::RoomSendQueueUpdate,
 };
+use base::RoomInfo;
 use ruma::OwnedEventId;
 #[cfg(feature = "unstable-msc4426")]
 use ruma::{OwnedUserId, UserId};

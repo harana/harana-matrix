@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use base::crypto::types::qr_login::{self, QrCodeIntent};
 use matrix::authentication::oauth::{
     OAuth,
     qrcode::{
@@ -23,6 +22,7 @@ use matrix::authentication::oauth::{
         GeneratedQrProgress, LoginFailureReason, QrProgress, SenderError,
     },
 };
+use base::crypto::types::qr_login::{self, QrCodeIntent};
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm, stream::StreamExt};
 
 use crate::{

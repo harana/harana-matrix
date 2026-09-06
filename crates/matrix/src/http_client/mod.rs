@@ -24,11 +24,11 @@ use std::{
     time::Duration,
 };
 
-use base::SendOutsideWasm;
 use bytes::{Bytes, BytesMut};
 use bytesize::ByteSize;
 use eyeball::SharedObservable;
 use http::Method;
+use base::SendOutsideWasm;
 use ruma::api::{
     OutgoingRequest, OutgoingRequestExt, SupportedVersions,
     auth_scheme::{self, AuthScheme, SendAccessToken},

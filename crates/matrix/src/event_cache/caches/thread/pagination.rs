@@ -14,12 +14,12 @@
 
 use std::{fmt, sync::Arc};
 
+use eyeball::SharedObservable;
+use eyeball_im::VectorDiff;
 use base::{
     event_cache::{Event, Gap},
     linked_chunk::{ChunkContent, LinkedChunkId, Update},
 };
-use eyeball::SharedObservable;
-use eyeball_im::VectorDiff;
 use ruma::api::Direction;
 use tracing::{error, trace};
 

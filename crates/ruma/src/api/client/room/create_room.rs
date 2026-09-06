@@ -5,14 +5,13 @@
 use std::collections::BTreeMap;
 
 use js_int::Int;
-use serde::Serialize;
-
 use crate::{
     OwnedUserId,
-    events::{TimelineEventType, room::power_levels::RoomPowerLevelsEventContent},
     power_levels::NotificationPowerLevels,
     serde::{JsonCastable, JsonObject},
 };
+use crate::events::{TimelineEventType, room::power_levels::RoomPowerLevelsEventContent};
+use serde::Serialize;
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -20,24 +19,21 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3createroom
 
     use assign::assign;
-    use serde::{Deserialize, Serialize};
-
-    use super::RoomPowerLevelsContentOverride;
     use crate::{
         OwnedRoomId, OwnedUserId, RoomVersionId,
-        api::{
-            auth_scheme::AccessToken,
-            client::{PrivOwnedStr, membership::Invite3pid, room::Visibility},
-            request, response,
-        },
-        events::{
-            AnyInitialStateEvent,
-            room::create::{PreviousRoom, RoomCreateEventContent},
-        },
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
         room::RoomType,
         serde::{Raw, StringEnum},
     };
+    use crate::events::{
+        AnyInitialStateEvent,
+        room::create::{PreviousRoom, RoomCreateEventContent},
+    };
+    use serde::{Deserialize, Serialize};
+
+    use super::RoomPowerLevelsContentOverride;
+    use crate::api::client::{PrivOwnedStr, membership::Invite3pid, room::Visibility};
 
     metadata! {
         method: POST,
@@ -59,15 +55,13 @@ pub mod v3 {
 
         /// List of state events to send to the new room.
         ///
-        /// Takes precedence over events set by preset, but gets overridden by
-        /// name and topic keys.
+        /// Takes precedence over events set by preset, but gets overridden by name and topic keys.
         #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
         pub initial_state: Vec<Raw<AnyInitialStateEvent>>,
 
         /// A list of user IDs to invite to the room.
         ///
-        /// This will tell the server to invite everyone in the list to the
-        /// newly created room.
+        /// This will tell the server to invite everyone in the list to the newly created room.
         #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
         pub invite: Vec<OwnedUserId>,
 
@@ -79,8 +73,8 @@ pub mod v3 {
         #[serde(default, skip_serializing_if = "crate::serde::is_default")]
         pub is_direct: bool,
 
-        /// If this is included, an `m.room.name` event will be sent into the
-        /// room to indicate the name of the room.
+        /// If this is included, an `m.room.name` event will be sent into the room to indicate the
+        /// name of the room.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub name: Option<String>,
 
@@ -88,8 +82,7 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub power_level_content_override: Option<Raw<RoomPowerLevelsContentOverride>>,
 
-        /// Convenience parameter for setting various default state events based
-        /// on a preset.
+        /// Convenience parameter for setting various default state events based on a preset.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub preset: Option<RoomPreset>,
 
@@ -103,16 +96,15 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub room_version: Option<RoomVersionId>,
 
-        /// If this is included, an `m.room.topic` event will be sent into the
-        /// room to indicate the topic for the room.
+        /// If this is included, an `m.room.topic` event will be sent into the room to indicate
+        /// the topic for the room.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub topic: Option<String>,
 
-        /// A public visibility indicates that the room will be shown in the
-        /// published room list.
+        /// A public visibility indicates that the room will be shown in the published room list.
         ///
-        /// A private visibility will hide the room from the published room
-        /// list. Defaults to `Private`.
+        /// A private visibility will hide the room from the published room list. Defaults to
+        /// `Private`.
         #[serde(default, skip_serializing_if = "crate::serde::is_default")]
         pub visibility: Visibility,
     }
@@ -140,14 +132,13 @@ pub mod v3 {
 
     /// Extra options to be added to the `m.room.create` event.
     ///
-    /// This is the same as the event content struct for `m.room.create`, but
-    /// without some fields that servers are supposed to ignore.
+    /// This is the same as the event content struct for `m.room.create`, but without some fields
+    /// that servers are supposed to ignore.
     #[derive(Clone, Debug, Deserialize, Serialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct CreationContent {
-        /// A list of user IDs to consider as additional creators, and hence
-        /// grant an "infinite" immutable power level, from room version
-        /// 12 onwards.
+        /// A list of user IDs to consider as additional creators, and hence grant an "infinite"
+        /// immutable power level, from room version 12 onwards.
         #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
         pub additional_creators: Vec<OwnedUserId>,
 
@@ -161,8 +152,7 @@ pub mod v3 {
         )]
         pub federate: bool,
 
-        /// A reference to the room this room replaces, if the previous room was
-        /// upgraded.
+        /// A reference to the room this room replaces, if the previous room was upgraded.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub predecessor: Option<PreviousRoom>,
 
@@ -182,8 +172,8 @@ pub mod v3 {
             }
         }
 
-        /// Given a `CreationContent` and the other fields that a homeserver has
-        /// to fill, construct a `RoomCreateEventContent`.
+        /// Given a `CreationContent` and the other fields that a homeserver has to fill, construct
+        /// a `RoomCreateEventContent`.
         pub fn into_event_content(
             self,
             creator: OwnedUserId,
@@ -219,16 +209,14 @@ pub mod v3 {
     #[ruma_enum(rename_all = "snake_case")]
     #[non_exhaustive]
     pub enum RoomPreset {
-        /// `join_rules` is set to `invite` and `history_visibility` is set to
-        /// `shared`.
+        /// `join_rules` is set to `invite` and `history_visibility` is set to `shared`.
         PrivateChat,
 
-        /// `join_rules` is set to `public` and `history_visibility` is set to
-        /// `shared`.
+        /// `join_rules` is set to `public` and `history_visibility` is set to `shared`.
         PublicChat,
 
-        /// Same as `PrivateChat`, but all initial invitees get the same power
-        /// level as the creator.
+        /// Same as `PrivateChat`, but all initial invitees get the same power level as the
+        /// creator.
         TrustedPrivateChat,
 
         #[doc(hidden)]
@@ -238,16 +226,14 @@ pub mod v3 {
 
 /// The power level values that can be overridden when creating a room.
 ///
-/// This has the same fields as [`RoomPowerLevelsEventContent`], but most of
-/// them are `Option`s. Contrary to [`RoomPowerLevelsEventContent`] which
-/// doesn't serialize fields that are set to their default value defined in the
-/// Matrix specification, this type serializes all fields that are `Some(_)`,
-/// regardless of their value.
+/// This has the same fields as [`RoomPowerLevelsEventContent`], but most of them are `Option`s.
+/// Contrary to [`RoomPowerLevelsEventContent`] which doesn't serialize fields that are set to their
+/// default value defined in the Matrix specification, this type serializes all fields that are
+/// `Some(_)`, regardless of their value.
 ///
-/// This type is used to allow clients to avoid server behavior observed in the
-/// wild that sets custom default values for fields that are not set in the
-/// `create_room` request, while a client wants the server to use the default
-/// value defined in the Matrix specification for that field.
+/// This type is used to allow clients to avoid server behavior observed in the wild that sets
+/// custom default values for fields that are not set in the `create_room` request, while a client
+/// wants the server to use the default value defined in the Matrix specification for that field.
 #[derive(Clone, Debug, Serialize, Default)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct RoomPowerLevelsContentOverride {
@@ -349,13 +335,13 @@ mod tests {
     use assign::assign;
     use js_int::int;
     use maplit::btreemap;
-    use serde_json::json;
-
-    use super::RoomPowerLevelsContentOverride;
     use crate::{
         canonical_json::assert_to_canonical_json_eq, owned_user_id,
         power_levels::NotificationPowerLevels,
     };
+    use serde_json::json;
+
+    use super::RoomPowerLevelsContentOverride;
 
     #[test]
     fn serialization_of_power_levels_overridden_values_with_optional_fields_as_none() {

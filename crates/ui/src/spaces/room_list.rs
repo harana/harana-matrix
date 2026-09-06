@@ -59,8 +59,10 @@ pub enum SpaceRoomListPaginationState {
 /// ```no_run
 /// use futures_util::StreamExt;
 /// use matrix::Client;
+/// use ui::spaces::{
+///     SpaceService, room_list::SpaceRoomListPaginationState,
+/// };
 /// use ruma::owned_room_id;
-/// use ui::spaces::{SpaceService, room_list::SpaceRoomListPaginationState};
 ///
 /// # async {
 /// # let client: Client = todo!();
@@ -425,6 +427,9 @@ mod tests {
     use eyeball_im::VectorDiff;
     use futures_util::pin_mut;
     use matrix::{RoomState, test_utils::mocks::MatrixMockServer};
+    use sdk_test::{
+        JoinedRoomBuilder, LeftRoomBuilder, async_test, event_factory::EventFactory,
+    };
     use ruma::{
         MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId,
         events::space::child::HierarchySpaceChildEvent,
@@ -432,7 +437,6 @@ mod tests {
         room::{JoinRuleSummary, RoomSummary},
         room_id, server_name, uint,
     };
-    use sdk_test::{JoinedRoomBuilder, LeftRoomBuilder, async_test, event_factory::EventFactory};
     use serde_json::{from_value, json};
     use stream_assert::{assert_next_eq, assert_next_matches, assert_pending, assert_ready};
     use wiremock::ResponseTemplate;

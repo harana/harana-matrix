@@ -14,12 +14,12 @@
 
 use std::collections::BTreeMap;
 
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use ruma::{
     OwnedRoomId,
     push::{Action, PushConditionRoomCtx, Ruleset},
     serde::Raw,
 };
-use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 
 use crate::{
     deserialized_responses::RawAnySyncOrStrippedTimelineEvent, store::BaseStateStore, sync,

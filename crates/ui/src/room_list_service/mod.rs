@@ -621,8 +621,8 @@ mod tests {
 
     use futures_util::{StreamExt, pin_mut};
     use matrix::{SlidingSyncMode, test_utils::mocks::MatrixMockServer};
-    use ruma::{api::client::sync::sync_events::v5, assign, uint};
     use sdk_test::{TestError, async_test};
+    use ruma::{api::client::sync::sync_events::v5, assign, uint};
 
     use super::{ALL_ROOMS_LIST_NAME, Error, RoomListService, State};
 

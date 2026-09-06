@@ -20,6 +20,12 @@ use std::{
 };
 
 use async_trait::async_trait;
+use gloo_utils::format::JsValueSerdeExt;
+use growable_bloom_filter::GrowableBloom;
+use indexed_db_futures::{
+    KeyRange, cursor::CursorDirection, database::Database, error::OpenDbError, prelude::*,
+    transaction::TransactionMode,
+};
 use base::{
     MinimalRoomMemberEvent, ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK, RoomInfo,
     RoomMemberships, StateStoreDataKey, StateStoreDataValue, ThreadSubscriptionCatchupToken,
@@ -33,12 +39,7 @@ use base::{
     },
     ttl::TtlValue,
 };
-use gloo_utils::format::JsValueSerdeExt;
-use growable_bloom_filter::GrowableBloom;
-use indexed_db_futures::{
-    KeyRange, cursor::CursorDirection, database::Database, error::OpenDbError, prelude::*,
-    transaction::TransactionMode,
-};
+use store_encryption::{Error as EncryptionError, StoreCipher};
 use ruma::{
     CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri,
     OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UserId,
@@ -57,7 +58,6 @@ use ruma::{
     serde::Raw,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned, ser::Error};
-use store_encryption::{Error as EncryptionError, StoreCipher};
 use tracing::{debug, warn};
 use wasm_bindgen::JsValue;
 
@@ -215,8 +215,8 @@ mod keys {
     pub const STORE_KEY: &str = "store_key";
 }
 
-use base::store::QueueWedgeError;
 pub use keys::ALL_STORES;
+use base::store::QueueWedgeError;
 
 /// Encrypt (if needs be) then JSON-serialize a value.
 fn serialize_value(store_cipher: Option<&StoreCipher>, event: &impl Serialize) -> Result<JsValue> {

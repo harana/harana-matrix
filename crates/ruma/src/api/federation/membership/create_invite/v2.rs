@@ -2,18 +2,16 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#put_matrixfederationv2inviteroomideventid
 
-use serde_json::value::RawValue as RawJsonValue;
-
 #[cfg(feature = "unstable-msc4125")]
 use crate::OwnedServerName;
 use crate::{
     OwnedEventId, OwnedRoomId, RoomVersionId,
-    api::{
-        federation::{authentication::ServerSignatures, membership::RawStrippedState},
-        request, response,
-    },
+    api::{request, response},
     metadata,
 };
+use serde_json::value::RawValue as RawJsonValue;
+
+use crate::api::federation::{authentication::ServerSignatures, membership::RawStrippedState};
 
 metadata! {
     method: PUT,
@@ -39,12 +37,11 @@ pub struct Request {
     /// The invite event which needs to be signed.
     pub event: Box<RawJsonValue>,
 
-    /// An optional list of simplified events to help the receiver of the invite
-    /// identify the room.
+    /// An optional list of simplified events to help the receiver of the invite identify the room.
     pub invite_room_state: Vec<RawStrippedState>,
 
-    /// An optional list of servers the invited homeserver should attempt to
-    /// join or leave via, according to [MSC4125](https://github.com/matrix-org/matrix-spec-proposals/pull/4125).
+    /// An optional list of servers the invited homeserver should attempt to join or leave via,
+    /// according to [MSC4125](https://github.com/matrix-org/matrix-spec-proposals/pull/4125).
     ///
     /// If present, it must not be empty.
     #[cfg(feature = "unstable-msc4125")]
@@ -60,8 +57,8 @@ pub struct Response {
 }
 
 impl Request {
-    /// Creates a new `Request` with the given room ID, event ID, room version,
-    /// event and invite room state.
+    /// Creates a new `Request` with the given room ID, event ID, room version, event and invite
+    /// room state.
     pub fn new(
         room_id: OwnedRoomId,
         event_id: OwnedEventId,

@@ -25,8 +25,8 @@ pub fn new_filter(identifiers: Vec<OwnedRoomId>) -> impl Filter {
 #[cfg(test)]
 mod tests {
     use matrix::test_utils::mocks::MatrixMockServer;
-    use ruma::{owned_room_id, room_id};
     use sdk_test::async_test;
+    use ruma::{owned_room_id, room_id};
 
     use super::{super::new_rooms, *};
 

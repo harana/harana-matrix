@@ -18,8 +18,8 @@ use std::{
 };
 
 use itertools::{Either, Itertools};
-use ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
 use sdk_common::deserialized_responses::WithheldCode;
+use ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument, trace};
 
@@ -1160,11 +1160,6 @@ mod tests {
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
     use insta::{assert_snapshot, with_settings};
-    use ruma::{
-        DeviceId, TransactionId, UserId, device_id,
-        events::{dummy::ToDeviceDummyEventContent, room::history_visibility::HistoryVisibility},
-        room_id,
-    };
     use sdk_common::deserialized_responses::WithheldCode;
     use sdk_test::{
         async_test, test_json,
@@ -1172,6 +1167,11 @@ mod tests {
             IdentityChangeDataSet, KeyDistributionTestData, MaloIdentityChangeDataSet,
             VerificationViolationTestData,
         },
+    };
+    use ruma::{
+        DeviceId, TransactionId, UserId, device_id,
+        events::{dummy::ToDeviceDummyEventContent, room::history_visibility::HistoryVisibility},
+        room_id,
     };
     use serde_json::json;
 
@@ -2395,7 +2395,6 @@ mod tests {
         use std::{collections::HashSet, iter};
 
         use insta::{allow_duplicates, assert_json_snapshot, with_settings};
-        use ruma::{DeviceId, TransactionId, UserId, device_id, user_id};
         use sdk_common::deserialized_responses::WithheldCode;
         use sdk_test::{
             async_test, ruma_response_to_json,
@@ -2404,6 +2403,7 @@ mod tests {
                 KeyQueryResponseTemplateDeviceOptions,
             },
         };
+        use ruma::{DeviceId, TransactionId, UserId, device_id, user_id};
         use vodozemac::{Curve25519PublicKey, Ed25519SecretKey};
 
         use super::{

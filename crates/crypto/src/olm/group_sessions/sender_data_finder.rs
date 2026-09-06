@@ -329,8 +329,8 @@ mod tests {
     use std::{ops::Deref as _, sync::Arc};
 
     use assert_matches2::assert_let;
-    use ruma::{DeviceId, OwnedUserId, RoomId, UserId, device_id, room_id, user_id};
     use sdk_test::async_test;
+    use ruma::{DeviceId, OwnedUserId, RoomId, UserId, device_id, room_id, user_id};
     use tokio::sync::Mutex;
     use vodozemac::{Curve25519PublicKey, Ed25519PublicKey, megolm::SessionKey};
 

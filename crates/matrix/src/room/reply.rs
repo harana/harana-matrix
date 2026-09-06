@@ -151,6 +151,7 @@ mod tests {
 
     use assert_matches2::{assert_let, assert_matches};
     use base::deserialized_responses::TimelineEvent;
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         EventId, OwnedEventId, event_id,
         events::{
@@ -162,7 +163,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
 
     use super::{EnforceThread, EventSource, Reply, ReplyError, make_reply_event};

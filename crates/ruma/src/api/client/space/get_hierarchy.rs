@@ -1,7 +1,6 @@
 //! `GET /_matrix/client/*/rooms/{roomId}/hierarchy`
 //!
-//! Paginates over the space tree in a depth-first manner to locate child rooms
-//! of a given space.
+//! Paginates over the space tree in a depth-first manner to locate child rooms of a given space.
 
 pub mod v1 {
     //! `/v1/` ([spec])
@@ -9,14 +8,13 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 
     use js_int::UInt;
-
     use crate::{
         OwnedRoomId,
-        api::{
-            auth_scheme::AccessToken, client::space::SpaceHierarchyRoomsChunk, request, response,
-        },
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::space::SpaceHierarchyRoomsChunk;
 
     metadata! {
         method: GET,
@@ -37,8 +35,8 @@ pub mod v1 {
 
         /// A pagination token from a previous result.
         ///
-        /// If specified, `max_depth` and `suggested_only` cannot be changed
-        /// from the first request.
+        /// If specified, `max_depth` and `suggested_only` cannot be changed from the first
+        /// request.
         #[ruma_api(query)]
         pub from: Option<String>,
 
@@ -54,8 +52,7 @@ pub mod v1 {
 
         /// Whether or not the server should only consider suggested rooms.
         ///
-        /// Suggested rooms are annotated in their `m.space.child` event
-        /// contents.
+        /// Suggested rooms are annotated in their `m.space.child` event contents.
         ///
         /// Defaults to `false`.
         #[ruma_api(query)]
@@ -94,10 +91,10 @@ pub mod v1 {
 
 #[cfg(all(test, feature = "client"))]
 mod tests {
+    use crate::api::IncomingResponseExt as _;
     use serde_json::json;
 
     use super::v1::Response;
-    use crate::api::IncomingResponseExt as _;
 
     #[test]
     fn deserialize_response() {

@@ -18,7 +18,21 @@ use std::{
 };
 
 use async_trait::async_trait;
-use base::cross_process_lock::{CrossProcessLockGeneration, FIRST_CROSS_PROCESS_LOCK_GENERATION};
+use gloo_utils::format::JsValueSerdeExt;
+use hkdf::Hkdf;
+use indexed_db_futures::{
+    KeyRange,
+    cursor::Cursor,
+    database::Database,
+    internals::SystemRepr,
+    object_store::ObjectStore,
+    prelude::*,
+    transaction::{Transaction, TransactionDurability, TransactionMode, TransactionOptions},
+};
+use js_sys::Array;
+use base::cross_process_lock::{
+    CrossProcessLockGeneration, FIRST_CROSS_PROCESS_LOCK_GENERATION,
+};
 use crypto::{
     Account, DeviceData, GossipRequest, SecretInfo, TrackedUser, UserIdentityData,
     olm::{
@@ -36,25 +50,13 @@ use crypto::{
     },
     vodozemac::base64_encode,
 };
-use gloo_utils::format::JsValueSerdeExt;
-use hkdf::Hkdf;
-use indexed_db_futures::{
-    KeyRange,
-    cursor::Cursor,
-    database::Database,
-    internals::SystemRepr,
-    object_store::ObjectStore,
-    prelude::*,
-    transaction::{Transaction, TransactionDurability, TransactionMode, TransactionOptions},
-};
-use js_sys::Array;
+use store_encryption::StoreCipher;
 use ruma::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, RoomId, TransactionId, UserId,
     events::secret::request::SecretName,
 };
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use store_encryption::StoreCipher;
 use tokio::sync::Mutex;
 use tracing::{debug, warn};
 use wasm_bindgen::JsValue;
@@ -2224,9 +2226,9 @@ mod unit_tests {
         types::EventEncryptionAlgorithm,
         vodozemac::Ed25519Keypair,
     };
-    use ruma::{device_id, room_id, user_id};
-    use sdk_test::async_test;
     use store_encryption::EncryptedValueBase64;
+    use sdk_test::async_test;
+    use ruma::{device_id, room_id, user_id};
 
     use super::InboundGroupSessionIndexedDbObject;
     use crate::serializer::{MaybeEncrypted, SafeEncodeSerializer};
@@ -2322,8 +2324,8 @@ mod wasm_unit_tests {
         olm::{Curve25519PublicKey, SenderData},
         types::{DeviceKeys, Signatures},
     };
-    use ruma::{owned_device_id, owned_user_id};
     use sdk_test::async_test;
+    use ruma::{owned_device_id, owned_user_id};
     use wasm_bindgen::JsValue;
 
     use crate::crypto_store::unit_tests::sender_data_test_session;
@@ -2415,8 +2417,8 @@ mod encrypted_tests {
         store::{CryptoStore, types::PendingChanges},
         vodozemac::base64_encode,
     };
-    use ruma::{device_id, user_id};
     use sdk_test::async_test;
+    use ruma::{device_id, user_id};
 
     use super::IndexeddbCryptoStore;
 

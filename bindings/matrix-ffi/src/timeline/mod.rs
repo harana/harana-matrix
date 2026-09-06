@@ -24,6 +24,17 @@ use matrix::{
     event_cache::PaginationStatus,
     room::edit::EditedContent as SdkEditedContent,
 };
+use sdk_common::{
+    executor::{AbortHandle, JoinHandle},
+    stream::StreamExt,
+};
+use ui::timeline::{
+    self, AttachmentConfig, AttachmentSource, EventItemOrigin,
+    LatestEventValue as UiLatestEventValue, LatestEventValueLocalState,
+    MediaUploadProgress as SdkMediaUploadProgress, Profile, TimelineDetails, TimelineEventItemId,
+    TimelineEventShieldState as SdkShieldState, TimelineEventShieldStateCode,
+    TimelineUniqueId as SdkTimelineUniqueId,
+};
 use mime::Mime;
 use reply::{EmbeddedEventDetails, InReplyToDetails};
 use ruma::{
@@ -44,19 +55,8 @@ use ruma::{
         },
     },
 };
-use sdk_common::{
-    executor::{AbortHandle, JoinHandle},
-    stream::StreamExt,
-};
 use tokio::sync::Mutex;
 use tracing::{error, warn};
-use ui::timeline::{
-    self, AttachmentConfig, AttachmentSource, EventItemOrigin,
-    LatestEventValue as UiLatestEventValue, LatestEventValueLocalState,
-    MediaUploadProgress as SdkMediaUploadProgress, Profile, TimelineDetails, TimelineEventItemId,
-    TimelineEventShieldState as SdkShieldState, TimelineEventShieldStateCode,
-    TimelineUniqueId as SdkTimelineUniqueId,
-};
 use uuid::Uuid;
 
 pub use self::{content::TimelineItemContent, msg_like::MessageContent};
@@ -1571,12 +1571,12 @@ mod galleries {
         },
         utils::formatted_body_from,
     };
+    use sdk_common::executor::{AbortHandle, JoinHandle};
+    use ui::timeline::GalleryConfig;
     use mime::Mime;
     use ruma::{EventId, assign, events::room::message::TextMessageEventContent};
-    use sdk_common::executor::{AbortHandle, JoinHandle};
     use tokio::sync::Mutex;
     use tracing::error;
-    use ui::timeline::GalleryConfig;
 
     use crate::{
         error::RoomError,
@@ -1707,7 +1707,9 @@ mod galleries {
     impl TryInto<ui::timeline::GalleryItemInfo> for GalleryItemInfo {
         type Error = RoomError;
 
-        fn try_into(self) -> std::result::Result<ui::timeline::GalleryItemInfo, Self::Error> {
+        fn try_into(
+            self,
+        ) -> std::result::Result<ui::timeline::GalleryItemInfo, Self::Error> {
             let mime_str = self.mimetype().as_ref().ok_or(RoomError::InvalidAttachmentMimeType)?;
             let mime_type =
                 mime_str.parse::<Mime>().map_err(|_| RoomError::InvalidAttachmentMimeType)?;

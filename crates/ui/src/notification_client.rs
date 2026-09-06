@@ -19,12 +19,13 @@ use std::{
     time::Duration,
 };
 
-use base::{RoomState, StoreError, deserialized_responses::TimelineEvent};
 use futures_util::{StreamExt as _, pin_mut};
 use itertools::Itertools;
 use matrix::{
     Client, ClientBuildError, SlidingSyncList, SlidingSyncMode, room::Room, sleep::sleep,
 };
+use base::{RoomState, StoreError, deserialized_responses::TimelineEvent};
+use sdk_common::cross_process_lock::CrossProcessLockConfig;
 use ruma::{
     EventId, OwnedEventId, OwnedRoomId, RoomId, UserId,
     api::client::sync::sync_events::v5 as http,
@@ -45,7 +46,6 @@ use ruma::{
     serde::Raw,
     uint,
 };
-use sdk_common::cross_process_lock::CrossProcessLockConfig;
 use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::{debug, info, instrument, trace, warn};
@@ -337,17 +337,10 @@ impl NotificationClient {
                 // Note: We specify the cast type in case the
                 // `experimental-encrypted-state-events` feature is enabled, which provides
                 // multiple cast implementations.
-                Ok(()) => match room
-                    .decrypt_event(
-                        raw_event.cast_ref_unchecked::<OriginalSyncRoomEncryptedEvent>(),
-                        push_ctx.as_ref(),
-                    )
-                    .await
-                {
+                Ok(()) => match room.decrypt_event(raw_event.cast_ref_unchecked::<OriginalSyncRoomEncryptedEvent>(), push_ctx.as_ref()).await {
                     Ok(new_event) => match new_event.kind {
                         matrix::deserialized_responses::TimelineEventKind::UnableToDecrypt {
-                            utd_info,
-                            ..
+                            utd_info, ..
                         } => {
                             trace!(
                                 "Encryption sync failed to decrypt the event: {:?}",
@@ -1154,13 +1147,13 @@ mod tests {
 
     use assert_matches2::assert_let;
     use matrix::test_utils::mocks::MatrixMockServer;
+    use sdk_test::{ALICE, async_test, event_factory::EventFactory};
     use ruma::{
         api::client::sync::sync_events::v5,
         assign, event_id,
         events::room::{member::MembershipState, message::RedactedRoomMessageEventContent},
         owned_event_id, owned_room_id, room_id, user_id,
     };
-    use sdk_test::{ALICE, async_test, event_factory::EventFactory};
 
     use crate::notification_client::{
         NotificationClient, NotificationItem, NotificationItemsRequest, NotificationProcessSetup,

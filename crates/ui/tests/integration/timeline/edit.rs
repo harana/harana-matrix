@@ -24,6 +24,14 @@ use matrix::{
     room::edit::EditedContent,
     test_utils::mocks::{MatrixMockServer, RoomMessagesResponseTemplate},
 };
+use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::{
+    Timeline,
+    timeline::{
+        EditError, Error, EventSendState, MsgLikeContent, MsgLikeKind, RoomExt, TimelineDetails,
+        TimelineEventItemId, TimelineItemContent,
+    },
+};
 use ruma::{
     OwnedRoomId, event_id,
     events::{
@@ -42,16 +50,8 @@ use ruma::{
     owned_event_id, room_id,
     serde::Raw,
 };
-use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use stream_assert::{assert_next_matches, assert_pending};
 use tokio::{task::yield_now, time::sleep};
-use ui::{
-    Timeline,
-    timeline::{
-        EditError, Error, EventSendState, MsgLikeContent, MsgLikeKind, RoomExt, TimelineDetails,
-        TimelineEventItemId, TimelineItemContent,
-    },
-};
 
 #[async_test]
 async fn test_edit() {

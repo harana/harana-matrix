@@ -136,11 +136,11 @@ mod tests {
     use std::collections::BTreeMap;
 
     use matrix::test_utils::mocks::MatrixMockServer;
-    use ruma::{RoomVersionId, owned_user_id, room_id};
     use sdk_test::{
         InvitedRoomBuilder, JoinedRoomBuilder, LeftRoomBuilder, async_test,
         event_factory::EventFactory,
     };
+    use ruma::{RoomVersionId, owned_user_id, room_id};
 
     use crate::spaces::SpaceService;
 

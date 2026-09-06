@@ -24,8 +24,8 @@ use matrix::{
     },
     ruma::events::key::verification::VerificationMethod,
 };
-use ruma::UserId;
 use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
+use ruma::UserId;
 use tracing::{error, warn};
 
 use crate::{

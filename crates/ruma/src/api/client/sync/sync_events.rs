@@ -1,12 +1,10 @@
 //! `GET /_matrix/client/*/sync`
 //!
-//! Get all new events from all rooms since the last sync or a given point in
-//! time.
+//! Get all new events from all rooms since the last sync or a given point in time.
 
 use js_int::UInt;
-use serde::{Deserialize, Serialize};
-
 use crate::OwnedUserId;
+use serde::{Deserialize, Serialize};
 
 pub mod v3;
 
@@ -48,8 +46,8 @@ pub struct DeviceLists {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub changed: Vec<OwnedUserId>,
 
-    /// List of users who no longer share encrypted rooms since the previous
-    /// sync response.
+    /// List of users who no longer share encrypted rooms since the previous sync
+    /// response.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub left: Vec<OwnedUserId>,
 }

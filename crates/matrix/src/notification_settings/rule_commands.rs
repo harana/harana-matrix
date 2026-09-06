@@ -236,18 +236,18 @@ impl RuleCommands {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
+    use sdk_test::{
+        async_test,
+        notification_settings::{
+            get_server_default_ruleset, server_default_ruleset_with_legacy_mentions,
+        },
+    };
     use ruma::{
         OwnedRoomId, RoomId,
         push::{
             Action, NewPushRule, NewSimplePushRule, PredefinedContentRuleId,
             PredefinedOverrideRuleId, PredefinedUnderrideRuleId, RemovePushRuleError, RuleKind,
             SoundTweakValue, Tweak,
-        },
-    };
-    use sdk_test::{
-        async_test,
-        notification_settings::{
-            get_server_default_ruleset, server_default_ruleset_with_legacy_mentions,
         },
     };
 

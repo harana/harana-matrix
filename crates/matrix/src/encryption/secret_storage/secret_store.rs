@@ -14,7 +14,9 @@
 
 use std::fmt;
 
-use base::crypto::{CrossSigningKeyExport, secret_storage::SecretStorageKey};
+use base::crypto::{
+    CrossSigningKeyExport, secret_storage::SecretStorageKey,
+};
 use ruma::{
     events::{
         GlobalAccountDataEventType, secret::request::SecretName,

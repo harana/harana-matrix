@@ -22,7 +22,6 @@ use matrix::{
         serde::Raw,
     },
 };
-use tracing::warn;
 use ui::{
     notification_client::{
         Error, NotificationClient, NotificationEvent, NotificationItem, NotificationProcessSetup,
@@ -30,6 +29,7 @@ use ui::{
     },
     sync_service::SyncService,
 };
+use tracing::warn;
 
 use crate::helpers::TestClientBuilder;
 

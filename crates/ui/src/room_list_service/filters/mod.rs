@@ -20,7 +20,9 @@
 //! following:
 //!
 //! ```rust
-//! use ui::room_list_service::{RoomListDynamicEntriesController, filters};
+//! use ui::room_list_service::{
+//!     RoomListDynamicEntriesController, filters,
+//! };
 //!
 //! fn configure_room_list(
 //!     entries_controller: &RoomListDynamicEntriesController,
@@ -58,9 +60,9 @@
 #[cfg(test)]
 use matrix::{Client, test_utils::mocks::MatrixMockServer};
 #[cfg(test)]
-use ruma::RoomId;
-#[cfg(test)]
 use sdk_test::JoinedRoomBuilder;
+#[cfg(test)]
+use ruma::RoomId;
 use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
 
 use super::RoomListItem;

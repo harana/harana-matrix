@@ -22,12 +22,12 @@ use std::{
 };
 
 use as_variant::as_variant;
+use sdk_common::locks::RwLock;
 use ruma::{
     DeviceId, EventId, OwnedDeviceId, OwnedUserId, RoomId, UserId,
     api::client::keys::upload_signatures::v3::{Request as SignatureUploadRequest, SignedKeys},
     events::{key::verification::VerificationMethod, room::message::MessageType},
 };
-use sdk_common::locks::RwLock;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tracing::{error, info, warn};
@@ -1419,6 +1419,7 @@ where
 #[cfg(any(test, feature = "testing"))]
 #[allow(dead_code)]
 pub(crate) mod testing {
+    use sdk_test::ruma_response_from_json;
     use ruma::{
         UserId,
         api::client::keys::{
@@ -1427,7 +1428,6 @@ pub(crate) mod testing {
         },
         user_id,
     };
-    use sdk_test::ruma_response_from_json;
     use serde_json::json;
 
     use super::{OtherUserIdentityData, OwnUserIdentity, OwnUserIdentityData};
@@ -1623,10 +1623,10 @@ pub(crate) mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use assert_matches::assert_matches;
+    use sdk_test::{async_test, test_json};
     #[cfg(feature = "experimental-x509-identity-verification")]
     use rcgen::{Certificate, KeyPair};
     use ruma::{TransactionId, device_id, user_id};
-    use sdk_test::{async_test, test_json};
     use serde_json::{Value, json};
     use tokio::sync::Mutex;
 

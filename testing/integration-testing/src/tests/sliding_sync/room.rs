@@ -9,7 +9,6 @@ use std::{
 
 use anyhow::Result;
 use assert_matches::assert_matches;
-use base::ruma::{api::client::sync::sync_events::v5 as http, owned_room_id, room_alias_id};
 use eyeball_im::VectorDiff;
 use futures_util::{StreamExt as _, pin_mut};
 use matrix::{
@@ -42,8 +41,15 @@ use matrix::{
     sliding_sync::VersionBuilder,
     test_utils::{logged_in_client_with_server, mocks::MatrixMockServer},
 };
-use rand::{Rng as _, RngExt};
+use base::ruma::{
+    api::client::sync::sync_events::v5 as http, owned_room_id, room_alias_id,
+};
 use sdk_test::async_test;
+use ui::{
+    RoomListService, room_list_service::filters::new_filter_all, sync_service::SyncService,
+    timeline::RoomExt,
+};
+use rand::{Rng as _, RngExt};
 use serde_json::Value;
 use stream_assert::assert_pending;
 use tokio::{
@@ -52,10 +58,6 @@ use tokio::{
     time::{sleep, timeout},
 };
 use tracing::{debug, error, info, trace, warn};
-use ui::{
-    RoomListService, room_list_service::filters::new_filter_all, sync_service::SyncService,
-    timeline::RoomExt,
-};
 use wiremock::{Mock, MockServer, matchers::AnyMatcher};
 
 use crate::helpers::{TestClientBuilder, wait_for_room};

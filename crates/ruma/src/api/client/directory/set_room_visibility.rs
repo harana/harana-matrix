@@ -9,9 +9,11 @@ pub mod v3 {
 
     use crate::{
         OwnedRoomId,
-        api::{auth_scheme::AccessToken, client::room::Visibility, request, response},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
+
+    use crate::api::client::room::Visibility;
 
     metadata! {
         method: PUT,

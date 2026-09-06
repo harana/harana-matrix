@@ -18,7 +18,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId, events::relation::RelationType};
 use sdk_common::{
     cross_process_lock::{
         CrossProcessLockGeneration,
@@ -29,6 +28,7 @@ use sdk_common::{
         RawChunk, Update, relational::RelationalLinkedChunk,
     },
 };
+use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId, events::relation::RelationType};
 use tracing::error;
 
 use super::{

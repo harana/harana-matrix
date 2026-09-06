@@ -24,6 +24,9 @@ use std::{
     time::Duration,
 };
 
+use sdk_common::{
+    SyncOutsideWasm, deserialized_responses::WithheldCode, locks::RwLock as StdRwLock,
+};
 #[cfg(feature = "experimental-encrypted-state-events")]
 use ruma::events::AnyStateEventContent;
 use ruma::{
@@ -37,9 +40,6 @@ use ruma::{
         },
     },
     serde::Raw,
-};
-use sdk_common::{
-    SyncOutsideWasm, deserialized_responses::WithheldCode, locks::RwLock as StdRwLock,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
@@ -1085,11 +1085,11 @@ mod tests {
     mod expiration {
         use std::{sync::atomic::Ordering, time::Duration};
 
+        use sdk_test::async_test;
         use ruma::{
             SecondsSinceUnixEpoch, device_id, events::room::message::RoomMessageEventContent,
             room_id, serde::Raw, uint, user_id,
         };
-        use sdk_test::async_test;
 
         use crate::{
             Account, EncryptionSettings, MegolmError,

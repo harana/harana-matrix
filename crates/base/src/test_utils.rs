@@ -16,8 +16,8 @@
 
 #![allow(dead_code)]
 
-use ruma::{UserId, owned_user_id};
 use sdk_common::cross_process_lock::CrossProcessLockConfig;
+use ruma::{UserId, owned_user_id};
 
 use crate::{
     BaseClient, DmRoomDefinition, SessionMeta,

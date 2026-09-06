@@ -26,8 +26,8 @@
 
 use std::{io, path::Path};
 
-use rusqlite::ErrorCode;
 use sdk_common::executor::spawn_blocking;
+use rusqlite::ErrorCode;
 use tracing::warn;
 
 use crate::{OpenStoreError, connection::PoolError, error::Error};
@@ -143,8 +143,8 @@ where
 mod tests {
     use std::io::ErrorKind;
 
-    use rusqlite::ffi::Error as FfiError;
     use sdk_test::async_test;
+    use rusqlite::ffi::Error as FfiError;
     use tempfile::TempDir;
 
     use super::{delete_database, is_corruption};

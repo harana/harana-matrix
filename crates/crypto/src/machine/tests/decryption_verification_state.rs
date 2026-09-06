@@ -15,6 +15,10 @@
 use std::{iter, sync::Arc};
 
 use assert_matches2::{assert_let, assert_matches};
+use sdk_common::deserialized_responses::{
+    DeviceLinkProblem, ShieldState, VerificationLevel, VerificationState,
+};
+use sdk_test::{async_test, ruma_response_from_json, test_json};
 use ruma::{
     MilliSecondsSinceUnixEpoch, RoomId, TransactionId,
     events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
@@ -22,10 +26,6 @@ use ruma::{
     serde::Raw,
     user_id,
 };
-use sdk_common::deserialized_responses::{
-    DeviceLinkProblem, ShieldState, VerificationLevel, VerificationState,
-};
-use sdk_test::{async_test, ruma_response_from_json, test_json};
 use serde_json::json;
 use vodozemac::{Curve25519PublicKey, Ed25519PublicKey};
 

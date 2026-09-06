@@ -14,15 +14,15 @@
 
 use assert_matches2::{assert_let, assert_matches};
 use insta::assert_json_snapshot;
-use ruma::{
-    RoomId, TransactionId, events::AnyToDeviceEvent, room_id, serde::Raw,
-    to_device::DeviceIdOrAllDevices,
-};
 use sdk_common::deserialized_responses::{
     AlgorithmInfo, ProcessedToDeviceEvent, ToDeviceUnableToDecryptReason, VerificationLevel,
     VerificationState,
 };
 use sdk_test::{async_test, ruma_response_from_json};
+use ruma::{
+    RoomId, TransactionId, events::AnyToDeviceEvent, room_id, serde::Raw,
+    to_device::DeviceIdOrAllDevices,
+};
 use serde_json::{Value, json, value::to_raw_value};
 
 use crate::{
@@ -748,9 +748,9 @@ async fn make_alice_unverified(alice: &OlmMachine, bob: &OlmMachine) {
 /// Test that when we get an error when we try to encrypt to a device that
 /// doesn't satisfy the share strategy.
 async fn test_share_strategy_prevents_encryption() {
-    use ruma::TransactionId;
     use sdk_common::deserialized_responses::WithheldCode;
     use sdk_test::test_json::keys_query_sets::KeyDistributionTestData as DataSet;
+    use ruma::TransactionId;
 
     use crate::CrossSigningKeyExport;
 

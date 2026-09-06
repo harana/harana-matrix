@@ -13,9 +13,9 @@ use matrix::{
     },
 };
 use sdk_common::deserialized_responses::ProcessedToDeviceEvent;
+use ui::sync_service::SyncService;
 use similar_asserts::assert_eq;
 use tracing::{Instrument, info};
-use ui::sync_service::SyncService;
 
 use crate::helpers::{SyncTokenAwareClient, TestClientBuilder};
 

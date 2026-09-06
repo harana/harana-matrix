@@ -20,6 +20,7 @@ use std::{
 use as_variant::as_variant;
 use bitflags::bitflags;
 use eyeball::Subscriber;
+use sdk_common::{ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK};
 use ruma::{
     EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedUserId,
     RoomAliasId, RoomId, RoomVersionId, UserId,
@@ -57,7 +58,6 @@ use ruma::{
     room_version_rules::{RedactionRules, RoomVersionRules},
     serde::Raw,
 };
-use sdk_common::{ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK};
 use serde::{Deserialize, Serialize};
 use tokio::sync::MutexGuard;
 use tracing::{field::debug, info, instrument, warn};
@@ -1755,6 +1755,8 @@ mod tests {
     use futures_util::future::{self, Either};
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use gloo_timers::future::sleep;
+    use sdk_common::executor::spawn;
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         assign,
         events::{
@@ -1768,8 +1770,6 @@ mod tests {
         serde::Raw,
         user_id,
     };
-    use sdk_common::executor::spawn;
-    use sdk_test::{async_test, event_factory::EventFactory};
     use serde_json::json;
     use similar_asserts::assert_eq;
     use tokio::sync::Mutex;
@@ -2835,6 +2835,7 @@ mod redaction_tests {
 #[cfg(test)]
 mod state_event_tests {
     use assert_matches2::assert_let;
+    use sdk_test::event_factory::EventFactory;
     use ruma::{
         RoomVersionId,
         events::{
@@ -2854,7 +2855,6 @@ mod state_event_tests {
         serde::Raw,
         user_id,
     };
-    use sdk_test::event_factory::EventFactory;
     use serde_json::json;
 
     use super::{RoomInfo, RoomState};

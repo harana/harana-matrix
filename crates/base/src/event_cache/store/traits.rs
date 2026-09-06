@@ -15,7 +15,6 @@
 use std::{fmt, sync::Arc};
 
 use async_trait::async_trait;
-use ruma::{EventId, OwnedEventId, RoomId, events::relation::RelationType};
 use sdk_common::{
     AsyncTraitDeps,
     cross_process_lock::CrossProcessLockGeneration,
@@ -24,6 +23,7 @@ use sdk_common::{
         RawChunk, Update,
     },
 };
+use ruma::{EventId, OwnedEventId, RoomId, events::relation::RelationType};
 
 use super::{
     super::{Event, Gap, thread::ThreadInfo},

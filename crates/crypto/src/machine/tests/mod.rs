@@ -17,6 +17,21 @@ use std::{collections::BTreeMap, future::Future, iter, ops::Not, sync::Arc, time
 use assert_matches2::{assert_let, assert_matches};
 use futures_util::{FutureExt, StreamExt, pin_mut};
 use itertools::Itertools;
+use sdk_common::{
+    deserialized_responses::{
+        AlgorithmInfo, ProcessedToDeviceEvent, UnableToDecryptInfo, UnableToDecryptReason,
+        UnsignedDecryptionResult, UnsignedEventLocation, VerificationLevel, VerificationState,
+        WithheldCode,
+    },
+    executor::spawn,
+};
+use sdk_test::{
+    async_test, message_like_event_content, ruma_response_from_json,
+    test_json::{
+        self,
+        keys_query_sets::{KeyQueryResponseTemplate, KeyQueryResponseTemplateDeviceOptions},
+    },
+};
 #[cfg(feature = "experimental-encrypted-state-events")]
 use ruma::events::{
     StateEvent,
@@ -40,21 +55,6 @@ use ruma::{
     owned_room_id, room_id,
     serde::Raw,
     uint, user_id,
-};
-use sdk_common::{
-    deserialized_responses::{
-        AlgorithmInfo, ProcessedToDeviceEvent, UnableToDecryptInfo, UnableToDecryptReason,
-        UnsignedDecryptionResult, UnsignedEventLocation, VerificationLevel, VerificationState,
-        WithheldCode,
-    },
-    executor::spawn,
-};
-use sdk_test::{
-    async_test, message_like_event_content, ruma_response_from_json,
-    test_json::{
-        self,
-        keys_query_sets::{KeyQueryResponseTemplate, KeyQueryResponseTemplateDeviceOptions},
-    },
 };
 use serde::Deserialize;
 use serde_json::json;

@@ -27,6 +27,14 @@ use matrix::{
     send_queue::AbstractProgress,
     test_utils::mocks::MatrixMockServer,
 };
+use sdk_test::{
+    ALICE, JoinedRoomBuilder, TestResult, async_test, event_factory::EventFactory,
+};
+use ui::timeline::{
+    AttachmentConfig, AttachmentSource, EventSendState, MediaUploadProgress, RoomExt, TimelineFocus,
+};
+#[cfg(feature = "unstable-msc4274")]
+use ui::timeline::{GalleryConfig, GalleryItemInfo};
 #[cfg(feature = "unstable-msc4274")]
 use ruma::events::room::message::GalleryItemType;
 #[cfg(feature = "unstable-msc4274")]
@@ -39,15 +47,9 @@ use ruma::{
     },
     mxc_uri, room_id, uint,
 };
-use sdk_test::{ALICE, JoinedRoomBuilder, TestResult, async_test, event_factory::EventFactory};
 use serde_json::json;
 use stream_assert::assert_pending;
 use tempfile::TempDir;
-use ui::timeline::{
-    AttachmentConfig, AttachmentSource, EventSendState, MediaUploadProgress, RoomExt, TimelineFocus,
-};
-#[cfg(feature = "unstable-msc4274")]
-use ui::timeline::{GalleryConfig, GalleryItemInfo};
 use wiremock::ResponseTemplate;
 
 fn create_temporary_file(filename: &str) -> anyhow::Result<(TempDir, PathBuf)> {

@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use assert_matches2::assert_let;
-use base::deserialized_responses::TimelineEvent;
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt as _;
 use matrix::{
@@ -11,6 +10,10 @@ use matrix::{
     },
     timeout::timeout,
 };
+use base::deserialized_responses::TimelineEvent;
+use sdk_common::executor::spawn;
+use sdk_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{RoomExt, TimelineBuilder, TimelineFocus};
 use ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, RoomId, UserId, assign,
     event_id,
@@ -27,11 +30,8 @@ use ruma::{
     serde::Raw,
     user_id,
 };
-use sdk_common::executor::spawn;
-use sdk_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use stream_assert::assert_pending;
 use tokio::time::sleep;
-use ui::timeline::{RoomExt, TimelineBuilder, TimelineFocus};
 use wiremock::ResponseTemplate;
 
 #[async_test]

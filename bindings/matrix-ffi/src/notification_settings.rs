@@ -23,6 +23,7 @@ use matrix::{
     },
     ruma::events::push_rules::PushRulesEvent,
 };
+use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use ruma::{
     Int, RoomId, UInt,
     events::push_rules::PushRulesEventContent,
@@ -35,7 +36,6 @@ use ruma::{
         Tweak as SdkTweak,
     },
 };
-use sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use tokio::sync::RwLock as AsyncRwLock;
 
 use crate::error::{ClientError, NotificationSettingsError};

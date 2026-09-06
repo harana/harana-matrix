@@ -33,9 +33,8 @@ pub enum MatrixId {
 
     /// An event ID.
     ///
-    /// Constructing this variant from an `OwnedRoomAliasId` is deprecated,
-    /// because room aliases are mutable, so the URI might break after a
-    /// while.
+    /// Constructing this variant from an `OwnedRoomAliasId` is deprecated, because room aliases
+    /// are mutable, so the URI might break after a while.
     Event(OwnedRoomOrAliasId, OwnedEventId),
 }
 

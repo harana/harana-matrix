@@ -12,19 +12,18 @@ use crate::{
     serde::{JsonObject, from_raw_json_value},
 };
 
-/// This represents the different actions that should be taken when a rule is
-/// matched, and controls how notifications are delivered to the client.
+/// This represents the different actions that should be taken when a rule is matched, and
+/// controls how notifications are delivered to the client.
 ///
 /// See [the spec](https://spec.matrix.org/v1.19/client-server-api/#actions) for details.
 #[derive(Clone, Debug)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum Action {
-    /// Causes matching events to generate a notification (both in-app and
-    /// remote / push).
+    /// Causes matching events to generate a notification (both in-app and remote / push).
     Notify,
 
-    /// Causes matching events to generate an in-app notification but no remote
-    /// / push notification.
+    /// Causes matching events to generate an in-app notification but no remote / push
+    /// notification.
     #[cfg(feature = "unstable-msc3768")]
     NotifyInApp,
 
@@ -39,14 +38,14 @@ pub enum Action {
 impl Action {
     /// Creates a new `Action`.
     ///
-    /// Prefer to use the public variants of `Action` where possible; this
-    /// constructor is meant be used for unsupported actions only and does
-    /// not allow setting arbitrary data for supported ones.
+    /// Prefer to use the public variants of `Action` where possible; this constructor is meant
+    /// be used for unsupported actions only and does not allow setting arbitrary data for
+    /// supported ones.
     ///
     /// # Errors
     ///
-    /// Returns an error if the action type is known and deserialization of
-    /// `data` to the corresponding variant fails.
+    /// Returns an error if the action type is known and deserialization of `data` to the
+    /// corresponding variant fails.
     pub fn new(data: CustomActionData) -> serde_json::Result<Self> {
         Ok(match data {
             CustomActionData::String(s) => match s.as_str() {
@@ -70,8 +69,7 @@ impl Action {
         matches!(self, Action::SetTweak(Tweak::Highlight(HighlightTweakValue::Yes)))
     }
 
-    /// Whether this action should trigger a notification (either in-app or
-    /// remote / push).
+    /// Whether this action should trigger a notification (either in-app or remote / push).
     pub fn should_notify(&self) -> bool {
         match self {
             Action::Notify => true,
@@ -137,12 +135,10 @@ pub enum CustomActionData {
 pub enum Tweak {
     /// The sound to be played when this notification arrives.
     ///
-    /// A device may choose to alert the user by some other means if
-    /// appropriate, eg. vibration.
+    /// A device may choose to alert the user by some other means if appropriate, eg. vibration.
     Sound(SoundTweakValue),
 
-    /// A boolean representing whether or not this message should be highlighted
-    /// in the UI.
+    /// A boolean representing whether or not this message should be highlighted in the UI.
     Highlight(HighlightTweakValue),
 
     #[doc(hidden)]
@@ -152,14 +148,14 @@ pub enum Tweak {
 impl Tweak {
     /// Creates a new `Tweak`.
     ///
-    /// Prefer to use the public variants of `Tweak` where possible; this
-    /// constructor is meant be used for unsupported tweaks only and does
-    /// not allow setting arbitrary data for supported ones.
+    /// Prefer to use the public variants of `Tweak` where possible; this constructor is meant
+    /// be used for unsupported tweaks only and does not allow setting arbitrary data for
+    /// supported ones.
     ///
     /// # Errors
     ///
-    /// Returns an error if the `set_tweak` is known and deserialization of
-    /// `value` to the corresponding variant fails.
+    /// Returns an error if the `set_tweak` is known and deserialization of `value` to the
+    /// corresponding variant fails.
     pub fn new(set_tweak: String, value: Option<Box<RawJsonValue>>) -> serde_json::Result<Self> {
         Ok(match set_tweak.as_str() {
             "sound" => Self::Sound(from_raw_json_value(
@@ -192,8 +188,8 @@ impl Tweak {
 
     /// Access the value of this tweak.
     ///
-    /// Prefer to use the public variants of `Tweak` where possible; this method
-    /// is meant to be used for custom tweaks only.
+    /// Prefer to use the public variants of `Tweak` where possible; this method is meant to
+    /// be used for custom tweaks only.
     pub fn value(&self) -> Option<Cow<'_, RawJsonValue>> {
         fn serialize<T: Serialize>(val: &T) -> Box<RawJsonValue> {
             RawJsonValue::from_string(
@@ -239,9 +235,9 @@ pub enum SoundTweakValue {
 
 /// Whether or not a message should be highlighted in the UI.
 ///
-/// This will normally take the form of presenting the message in a different
-/// color and/or style. The UI might also be adjusted to draw particular
-/// attention to the room in which the event occurred.
+/// This will normally take the form of presenting the message in a different color and/or
+/// style. The UI might also be adjusted to draw particular attention to the room in which the
+/// event occurred.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[allow(clippy::exhaustive_enums)]
 pub enum HighlightTweakValue {

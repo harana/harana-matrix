@@ -4,12 +4,11 @@ use crate::Error;
 ///
 /// According to the specification, the order:
 ///
-/// > Must consist of ASCII characters within the range `\x20` (space) and
-/// > `\x7E` (~),
+/// > Must consist of ASCII characters within the range `\x20` (space) and `\x7E` (~),
 /// > inclusive. Must not exceed 50 characters.
 ///
-/// Returns `Ok(())` if the order passes validation, or an error if the order
-/// doesn't respect the rules from the spec, as it cannot be used for ordering.
+/// Returns `Ok(())` if the order passes validation, or an error if the order doesn't respect
+/// the rules from the spec, as it cannot be used for ordering.
 ///
 /// [`m.space.child`]: https://spec.matrix.org/v1.19/client-server-api/#mspacechild
 pub fn validate(s: &str) -> Result<(), Error> {

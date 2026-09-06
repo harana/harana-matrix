@@ -1,9 +1,8 @@
 //! `PUT /_matrix/federation/*/exchange_third_party_invite/{roomId}`
 //!
-//! The receiving server will verify the partial `m.room.member` event given in
-//! the request body. If valid, the receiving server will issue an invite as per
-//! the [Inviting to a room] section before returning a response to this
-//! request.
+//! The receiving server will verify the partial `m.room.member` event given in the request body.
+//! If valid, the receiving server will issue an invite as per the [Inviting to a room] section
+//! before returning a response to this request.
 //!
 //! [Inviting to a room]: https://spec.matrix.org/v1.19/server-server-api/#inviting-to-a-room
 
@@ -14,20 +13,19 @@ pub mod v1 {
 
     use crate::{
         OwnedRoomId, OwnedUserId,
-        api::{
-            federation::{authentication::ServerSignatures, thirdparty::bind_callback},
-            request, response,
-        },
-        events::{
-            StateEventType,
-            room::{
-                member::{MembershipState, RoomMemberEventContent, ThirdPartyInvite},
-                third_party_invite::RoomThirdPartyInviteEventContent,
-            },
-        },
+        api::{request, response},
         metadata,
         serde::Raw,
     };
+    use crate::events::{
+        StateEventType,
+        room::{
+            member::{MembershipState, RoomMemberEventContent, ThirdPartyInvite},
+            third_party_invite::RoomThirdPartyInviteEventContent,
+        },
+    };
+
+    use crate::api::federation::{authentication::ServerSignatures, thirdparty::bind_callback};
 
     metadata! {
         method: PUT,
@@ -57,8 +55,7 @@ pub mod v1 {
 
         /// The content of the invite event.
         ///
-        /// It must have a `membership` of `invite` and the `third_party_invite`
-        /// field must be set.
+        /// It must have a `membership` of `invite` and the `third_party_invite` field must be set.
         pub content: Raw<RoomMemberEventContent>,
     }
 
@@ -78,8 +75,7 @@ pub mod v1 {
             Self { room_id, kind: StateEventType::RoomMember, sender, state_key, content }
         }
 
-        /// Creates a new `Request` for a third-party invite exchange from a
-        /// `ThirdPartyInvite`.
+        /// Creates a new `Request` for a third-party invite exchange from a `ThirdPartyInvite`.
         ///
         /// Returns an error if the serialization of the event content fails.
         pub fn with_third_party_invite(
@@ -95,9 +91,9 @@ pub mod v1 {
             Ok(Self::new(room_id, sender, state_key, content))
         }
 
-        /// Creates a new `Request` for a third-party invite exchange from a
-        /// `ThirdPartyInvite` in the [`bind_callback::v1::Request`] and
-        /// the matching [`RoomThirdPartyInviteEventContent`].
+        /// Creates a new `Request` for a third-party invite exchange from a `ThirdPartyInvite` in
+        /// the [`bind_callback::v1::Request`] and the matching
+        /// [`RoomThirdPartyInviteEventContent`].
         ///
         /// Returns an error if the serialization of the event content fails.
         pub fn with_bind_callback_request_and_event(

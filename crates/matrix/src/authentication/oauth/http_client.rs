@@ -16,8 +16,8 @@
 
 use std::sync::Arc;
 
-use base::BoxFuture;
 use bytes::Bytes;
+use base::BoxFuture;
 use oauth2::{
     AsyncHttpClient, ErrorResponse, HttpClientError, HttpRequest, HttpResponse, RequestTokenError,
 };

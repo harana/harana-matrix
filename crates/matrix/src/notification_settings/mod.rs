@@ -641,6 +641,11 @@ mod tests {
     };
 
     use assert_matches::assert_matches;
+    use sdk_test::{
+        TestResult, async_test,
+        event_factory::EventFactory,
+        notification_settings::{build_ruleset, get_server_default_ruleset},
+    };
     use ruma::{
         OwnedRoomId, RoomId, owned_room_id,
         push::{
@@ -648,11 +653,6 @@ mod tests {
             PredefinedContentRuleId, PredefinedOverrideRuleId, PredefinedUnderrideRuleId,
             PushCondition, RuleKind, Ruleset,
         },
-    };
-    use sdk_test::{
-        TestResult, async_test,
-        event_factory::EventFactory,
-        notification_settings::{build_ruleset, get_server_default_ruleset},
     };
     use stream_assert::{assert_next_eq, assert_pending};
     use tokio_stream::wrappers::BroadcastStream;

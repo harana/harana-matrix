@@ -16,15 +16,16 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use base::{
-    deserialized_responses::{DecryptedRoomEvent, TimelineEvent},
-    store::QueueWedgeError,
-};
 use eyeball_im::VectorDiff;
 use matrix::{
     deserialized_responses::{AlgorithmInfo, EncryptionInfo, VerificationLevel, VerificationState},
     send_queue::RoomSendQueueUpdate,
 };
+use base::{
+    deserialized_responses::{DecryptedRoomEvent, TimelineEvent},
+    store::QueueWedgeError,
+};
+use sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     event_id,
     events::{
@@ -37,7 +38,6 @@ use ruma::{
     },
     room_id,
 };
-use sdk_test::{ALICE, BOB, async_test};
 use stream_assert::{assert_next_matches, assert_pending};
 
 use super::TestTimeline;

@@ -35,8 +35,8 @@ impl Parse for EventEnumInput {
             }
         }
 
-        // Mark event types which are declared for both account data kinds, because they
-        // use a different name for the event struct.
+        // Mark event types which are declared for both account data kinds, because they use a
+        // different name for the event struct.
         let mut room_account_data = enums_map.remove(&CommonEventKind::RoomAccountData);
         if let Some((global_account_data, room_account_data)) =
             enums_map.get_mut(&CommonEventKind::GlobalAccountData).zip(room_account_data.as_mut())
@@ -78,8 +78,8 @@ impl Parse for EventEnumEntry {
 
         let types = EventTypes::try_from_parts(ev_type, entry_attrs.aliases)?;
 
-        // We will need the name of the event type so compute it right now to make sure
-        // that we have enough data for it.
+        // We will need the name of the event type so compute it right now to make sure that we have
+        // enough data for it.
         let ident =
             if let Some(ident) = entry_attrs.ident { ident } else { types.as_event_ident()? };
 
@@ -113,11 +113,9 @@ impl EventEnumEntryAttrs {
         Ok(())
     }
 
-    /// Try to parse the given meta item and merge it into this
-    /// `EventEnumEntryAttrs`.
+    /// Try to parse the given meta item and merge it into this `EventEnumEntryAttrs`.
     ///
-    /// Returns an error if parsing the meta item fails, or if it sets a field
-    /// that was already set.
+    /// Returns an error if parsing the meta item fails, or if it sets a field that was already set.
     pub(crate) fn try_merge(
         &mut self,
         meta: ParseNestedMeta<'_>,

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use crypto::x509::{RawX509Signer, RawX509Verifier, RustRawX509Signer, RustRawX509Verifier};
 use matrix::encryption::EncryptionSettings;
+use crypto::x509::{
+    RawX509Signer, RawX509Verifier, RustRawX509Signer, RustRawX509Verifier,
+};
 use rand::RngExt as _;
 use rcgen::{
     Certificate, CertificateParams, CustomExtension, DnType, Issuer, KeyPair, PublicKeyData,

@@ -17,8 +17,8 @@
 use std::{fmt, sync::Arc, time::Duration};
 
 use base::{SessionMeta, locks::Mutex};
-use ruma::time::Instant;
 use sdk_common::BoxFuture;
+use ruma::time::Instant;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex as AsyncMutex, OnceCell, broadcast};
 

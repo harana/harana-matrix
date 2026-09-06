@@ -4,12 +4,11 @@
 
 use crate::{
     OwnedRoomId,
-    api::{
-        Metadata, federation::space::SpaceHierarchyParentSummary, path_builder::SinglePath,
-        request, response,
-    },
+    api::{Metadata, path_builder::SinglePath, request, response},
     room::RoomSummary,
 };
+
+use crate::api::federation::space::SpaceHierarchyParentSummary;
 
 /// Request type for the `hierarchy` endpoint.
 #[request]
@@ -64,11 +63,10 @@ pub struct Response {
     /// Rooms which the requesting server cannot peek/join will be excluded.
     pub children: Vec<RoomSummary>,
 
-    /// The list of room IDs the requesting server doesn’t have a viable way to
-    /// peek/join.
+    /// The list of room IDs the requesting server doesn’t have a viable way to peek/join.
     ///
-    /// Rooms which the responding server cannot provide details on will be
-    /// outright excluded from the response instead.
+    /// Rooms which the responding server cannot provide details on will be outright
+    /// excluded from the response instead.
     pub inaccessible_children: Vec<OwnedRoomId>,
 
     /// A summary of the requested room.

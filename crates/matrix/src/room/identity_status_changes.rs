@@ -18,9 +18,11 @@
 use std::collections::BTreeMap;
 
 use async_stream::stream;
-use base::crypto::{IdentityState, IdentityStatusChange, RoomIdentityChange, RoomIdentityState};
 use futures_core::Stream;
 use futures_util::{StreamExt, stream_select};
+use base::crypto::{
+    IdentityState, IdentityStatusChange, RoomIdentityChange, RoomIdentityState,
+};
 use ruma::{OwnedUserId, UserId, events::room::member::SyncRoomMemberEvent};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -165,7 +167,9 @@ async fn wrap_identity_updates(
         .map(|item| RoomIdentityChange::IdentityUpdates(to_base_updates(item))))
 }
 
-fn to_base_updates(input: IdentityUpdates) -> base::crypto::store::types::IdentityUpdates {
+fn to_base_updates(
+    input: IdentityUpdates,
+) -> base::crypto::store::types::IdentityUpdates {
     base::crypto::store::types::IdentityUpdates {
         new: to_base_identities(input.new),
         changed: to_base_identities(input.changed),
@@ -201,8 +205,8 @@ fn wrap_room_member_events(
 mod tests {
     use std::time::Duration;
 
-    use base::crypto::IdentityState;
     use futures_util::{FutureExt as _, StreamExt as _, pin_mut};
+    use base::crypto::IdentityState;
     use sdk_test::{async_test, test_json::keys_query_sets::IdentityChangeDataSet};
     use test_setup::TestSetup;
 
@@ -589,6 +593,7 @@ mod tests {
     // figure out how to get out own user into a non-pinned state.
 
     mod test_setup {
+        use futures_core::Stream;
         use base::{
             RoomState,
             crypto::{
@@ -596,17 +601,16 @@ mod tests {
                 testing::simulate_key_query_response_for_verification,
             },
         };
-        use futures_core::Stream;
+        use sdk_test::{
+            DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder,
+            event_factory::EventFactory, test_json,
+            test_json::keys_query_sets::IdentityChangeDataSet,
+        };
         use ruma::{
             OwnedUserId, TransactionId, UserId,
             api::client::keys::{get_keys, get_keys::v3::Response as KeyQueryResponse},
             events::room::member::MembershipState,
             owned_user_id, user_id,
-        };
-        use sdk_test::{
-            DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder,
-            event_factory::EventFactory, test_json,
-            test_json::keys_query_sets::IdentityChangeDataSet,
         };
         use serde_json::json;
         use wiremock::{

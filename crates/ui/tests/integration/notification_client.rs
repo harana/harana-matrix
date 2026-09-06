@@ -9,15 +9,7 @@ use matrix::{
     ThreadingSupport,
     test_utils::mocks::{MatrixMockServer, RoomContextResponseTemplate},
 };
-use ruma::{
-    RoomVersionId,
-    api::client::sync::sync_events::v5::{Response, response},
-    assign, event_id,
-    events::{Mentions, TimelineEventType, room::member::MembershipState},
-    mxc_uri, owned_user_id, room_id, uint, user_id,
-};
 use sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use serde_json::json;
 use ui::{
     notification_client::{
         NotificationClient, NotificationEvent, NotificationItemsRequest, NotificationProcessSetup,
@@ -25,6 +17,14 @@ use ui::{
     },
     sync_service::SyncService,
 };
+use ruma::{
+    RoomVersionId,
+    api::client::sync::sync_events::v5::{Response, response},
+    assign, event_id,
+    events::{Mentions, TimelineEventType, room::member::MembershipState},
+    mxc_uri, owned_user_id, room_id, uint, user_id,
+};
+use serde_json::json;
 use wiremock::{
     Mock, Request, ResponseTemplate,
     matchers::{header, method, path},

@@ -14,13 +14,13 @@ use matrix::{
         events::room::message::RoomMessageEventContent,
     },
 };
-use ratatui::{prelude::*, widgets::*};
-use tokio::{spawn, sync::OnceCell, task::JoinHandle};
-use tracing::info;
 use ui::{
     Timeline,
     timeline::{TimelineBuilder, TimelineFocus, TimelineItem, TimelineReadReceiptTracking},
 };
+use ratatui::{prelude::*, widgets::*};
+use tokio::{spawn, sync::OnceCell, task::JoinHandle};
+use tracing::info;
 
 use self::{details::RoomDetails, input::Input, timeline::TimelineView};
 use super::status::StatusHandle;

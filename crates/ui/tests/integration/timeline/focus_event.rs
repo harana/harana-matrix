@@ -26,11 +26,11 @@ use matrix::{
         RoomRelationsResponseTemplate,
     },
 };
-use ruma::{event_id, events::room::message::RoomMessageEventContent, room_id};
 use sdk_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+use ui::timeline::{TimelineBuilder, TimelineEventFocusThreadMode, TimelineFocus};
+use ruma::{event_id, events::room::message::RoomMessageEventContent, room_id};
 use stream_assert::assert_pending;
 use tokio::time::sleep;
-use ui::timeline::{TimelineBuilder, TimelineEventFocusThreadMode, TimelineFocus};
 
 #[async_test]
 async fn test_new_focused() {
@@ -264,8 +264,8 @@ async fn test_focused_timeline_loads_aggregations_outside_the_context_window() {
         .mount()
         .await;
 
-    // The reaction to the focused event isn't part of the /context window, it's
-    // only known by /relations.
+    // The reaction to the focused event isn't part of the /context window, it's only
+    // known by /relations.
     server
         .mock_room_relations()
         .match_target_event(target_event.to_owned())

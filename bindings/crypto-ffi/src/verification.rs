@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
+use futures_util::{Stream, StreamExt};
+use sdk_common::executor::Handle;
 use crypto::{
     CancelInfo as RustCancelInfo, QrVerification as InnerQr, QrVerificationState, Sas as InnerSas,
     SasState as RustSasState, Verification as InnerVerification,
     VerificationRequest as InnerVerificationRequest,
-    VerificationRequestState as RustVerificationRequestState, qrcode::QrVerificationData,
+    VerificationRequestState as RustVerificationRequestState,
+    qrcode::QrVerificationData,
 };
-use futures_util::{Stream, StreamExt};
 use ruma::events::key::verification::VerificationMethod;
-use sdk_common::executor::Handle;
 use vodozemac::{base64_decode, base64_encode};
 
 use crate::{CryptoStoreError, OutgoingVerificationRequest, SignatureUploadRequest};

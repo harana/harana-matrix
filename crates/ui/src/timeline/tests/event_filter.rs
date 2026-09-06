@@ -18,6 +18,7 @@ use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
 use matrix::deserialized_responses::TimelineEvent;
+use sdk_test::{ALICE, BOB, async_test, sync_timeline_event};
 use ruma::{
     events::{
         AnyMessageLikeEventContent, AnySyncTimelineEvent, MessageLikeEventType, StateEventType,
@@ -31,7 +32,6 @@ use ruma::{
     },
     mxc_uri,
 };
-use sdk_test::{ALICE, BOB, async_test, sync_timeline_event};
 use stream_assert::assert_next_matches;
 
 use super::TestTimeline;

@@ -288,6 +288,7 @@ mod tests {
 
     use assert_matches2::{assert_let, assert_matches};
     use base::deserialized_responses::TimelineEvent;
+    use sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         EventId, OwnedEventId, event_id,
         events::{
@@ -296,7 +297,6 @@ mod tests {
         },
         owned_mxc_uri, owned_user_id, user_id,
     };
-    use sdk_test::{async_test, event_factory::EventFactory};
 
     use super::{EditError, EventSource, make_edit_event};
     use crate::{Error, room::edit::EditedContent};

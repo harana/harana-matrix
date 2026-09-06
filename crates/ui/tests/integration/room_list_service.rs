@@ -1,23 +1,14 @@
 use std::sync::Arc;
 
 use assert_matches::assert_matches;
-use base::sync::UnreadNotificationsCount;
 use eyeball_im::{Vector, VectorDiff};
 use futures_util::{FutureExt, StreamExt, pin_mut};
 use matrix::{
     Client, RoomDisplayName,
     test_utils::mocks::{MatrixMockServer, RoomMessagesResponseTemplate},
 };
-use ruma::{
-    api::client::room::create_room::v3::Request as CreateRoomRequest,
-    events::room::message::RoomMessageEventContent,
-    owned_mxc_uri, room_id,
-    time::{Duration, Instant},
-};
+use base::sync::UnreadNotificationsCount;
 use sdk_test::{ALICE, async_test, event_factory::EventFactory};
-use stream_assert::{assert_next_matches, assert_pending};
-use tempfile::TempDir;
-use tokio::{spawn, sync::Barrier, task::yield_now, time::sleep};
 use ui::{
     RoomListService,
     room_list_service::{
@@ -30,6 +21,15 @@ use ui::{
     },
     timeline::{LatestEventValue, RoomExt as _, TimelineItemKind, VirtualTimelineItem},
 };
+use ruma::{
+    api::client::room::create_room::v3::Request as CreateRoomRequest,
+    events::room::message::RoomMessageEventContent,
+    owned_mxc_uri, room_id,
+    time::{Duration, Instant},
+};
+use stream_assert::{assert_next_matches, assert_pending};
+use tempfile::TempDir;
+use tokio::{spawn, sync::Barrier, task::yield_now, time::sleep};
 
 use crate::timeline::sliding_sync::{assert_timeline_stream, timeline_event};
 
@@ -3326,7 +3326,9 @@ async fn test_thread_subscriptions_extension_enabled_only_if_server_advertises_i
         .client_builder()
         .no_server_versions()
         .on_builder(|b| {
-            b.with_threading_support(matrix::ThreadingSupport::Enabled { with_subscriptions: true })
+            b.with_threading_support(matrix::ThreadingSupport::Enabled {
+                with_subscriptions: true,
+            })
         })
         .build()
         .await;

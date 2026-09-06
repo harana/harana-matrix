@@ -15,9 +15,9 @@
 
 //! Error conditions.
 
+use sdk_common::cross_process_lock::CrossProcessLockError;
 #[cfg(feature = "e2e-encryption")]
 use crypto::{CryptoStoreError, MegolmError, OlmError};
-use sdk_common::cross_process_lock::CrossProcessLockError;
 use thiserror::Error;
 
 use crate::{event_cache::store::EventCacheStoreError, media::store::MediaStoreError};

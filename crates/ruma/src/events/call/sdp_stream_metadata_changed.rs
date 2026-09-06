@@ -4,16 +4,15 @@
 
 use std::collections::BTreeMap;
 
+use crate::{OwnedVoipId, VoipVersionId};
 use ruma_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::StreamMetadata;
-use crate::{OwnedVoipId, VoipVersionId};
 
 /// The content of an `m.call.sdp_stream_metadata_changed` event.
 ///
-/// This event is sent by any party when a stream metadata changes but no
-/// negotiation is required.
+/// This event is sent by any party when a stream metadata changes but no negotiation is required.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.call.sdp_stream_metadata_changed", alias = "org.matrix.call.sdp_stream_metadata_changed", kind = MessageLike)]
@@ -37,8 +36,8 @@ pub struct CallSdpStreamMetadataChangedEventContent {
 }
 
 impl CallSdpStreamMetadataChangedEventContent {
-    /// Creates a new `SdpStreamMetadataChangedEventContent` with the given call
-    /// ID, party ID, VoIP version and stream metadata.
+    /// Creates a new `SdpStreamMetadataChangedEventContent` with the given call ID, party ID, VoIP
+    /// version and stream metadata.
     pub fn new(
         call_id: OwnedVoipId,
         party_id: OwnedVoipId,

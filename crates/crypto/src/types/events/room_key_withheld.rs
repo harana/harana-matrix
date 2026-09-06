@@ -16,10 +16,10 @@
 
 use std::collections::BTreeMap;
 
+use sdk_common::deserialized_responses::WithheldCode;
 use ruma::{
     OwnedDeviceId, OwnedRoomId, RoomId, events::AnyToDeviceEventContent, serde::JsonCastable,
 };
-use sdk_common::deserialized_responses::WithheldCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vodozemac::Curve25519PublicKey;
@@ -585,8 +585,8 @@ pub(super) mod tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
-    use ruma::{device_id, room_id, serde::Raw, to_device::DeviceIdOrAllDevices, user_id};
     use sdk_common::deserialized_responses::WithheldCode;
+    use ruma::{device_id, room_id, serde::Raw, to_device::DeviceIdOrAllDevices, user_id};
     use serde_json::{Value, json};
     use vodozemac::Curve25519PublicKey;
 

@@ -14,12 +14,12 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
 use ui::notification_client::{
     NotificationClient as SdkNotificationClient, NotificationEvent as SdkNotificationEvent,
     NotificationItem as SdkNotificationItem, NotificationStatus as SdkNotificationStatus,
     RawNotificationEvent as SdkRawNotificationEvent,
 };
+use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
 
 use crate::{
     client::{Client, JoinRule},
@@ -271,7 +271,9 @@ impl NotificationItemsRequest {
     }
 }
 
-impl TryFrom<NotificationItemsRequest> for ui::notification_client::NotificationItemsRequest {
+impl TryFrom<NotificationItemsRequest>
+    for ui::notification_client::NotificationItemsRequest
+{
     type Error = ClientError;
     fn try_from(value: NotificationItemsRequest) -> Result<Self, Self::Error> {
         Ok(Self { room_id: value.room_id()?, event_ids: value.event_ids()? })

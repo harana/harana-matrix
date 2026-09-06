@@ -22,8 +22,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use base::{SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent};
 use eyeball::{SharedObservable, Subscriber};
+use base::{SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent};
 use ruma::{EventId, UInt, api::Direction};
 
 use crate::{
@@ -422,11 +422,11 @@ mod tests {
     use std::sync::{Arc, LazyLock};
 
     use assert_matches2::assert_let;
-    use base::deserialized_responses::TimelineEvent;
     use futures_core::Future;
     use futures_util::FutureExt as _;
-    use ruma::{EventId, RoomId, UInt, UserId, api::Direction, event_id, room_id, uint, user_id};
+    use base::deserialized_responses::TimelineEvent;
     use sdk_test::{async_test, event_factory::EventFactory};
+    use ruma::{EventId, RoomId, UInt, UserId, api::Direction, event_id, room_id, uint, user_id};
     use tokio::{
         spawn,
         sync::{Mutex, Notify},

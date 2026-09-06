@@ -21,6 +21,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use deadpool::managed::PoolConfig;
 use base::{
     cross_process_lock::CrossProcessLockGeneration,
     media::{
@@ -32,7 +33,6 @@ use base::{
     },
     timer,
 };
-use deadpool::managed::PoolConfig;
 use ruma::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
 use rusqlite::{OptionalExtension, params_from_iter};
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -742,8 +742,8 @@ mod tests {
         media_store_inner_integration_tests, media_store_integration_tests,
         media_store_integration_tests_time,
     };
-    use ruma::{events::room::MediaSource, media::Method, mxc_uri, uint};
     use sdk_test::async_test;
+    use ruma::{events::room::MediaSource, media::Method, mxc_uri, uint};
     use tempfile::{TempDir, tempdir};
 
     use super::{DATABASE_NAME, SqliteMediaStore};
@@ -911,8 +911,8 @@ mod close_reopen_tests {
         MediaFormat, MediaRequestParameters,
         store::{IgnoreMediaRetentionPolicy, MediaStore},
     };
-    use ruma::{events::room::MediaSource, mxc_uri};
     use sdk_test::async_test;
+    use ruma::{events::room::MediaSource, mxc_uri};
     use tempfile::{TempDir, tempdir};
 
     use super::SqliteMediaStore;

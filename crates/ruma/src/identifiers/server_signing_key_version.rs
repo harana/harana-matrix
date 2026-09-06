@@ -4,11 +4,11 @@ use super::{IdParseError, KeyName};
 
 /// The version of a [homeserver signing key].
 ///
-/// This is an opaque character sequences of `[a-zA-Z0-9_]`. This type is
-/// provided simply for its semantic value.
+/// This is an opaque character sequences of `[a-zA-Z0-9_]`. This type is provided simply for its
+/// semantic value.
 ///
-/// With the `compat-server-signing-key-version` cargo feature, the validation
-/// of this type is relaxed to accept any string.
+/// With the `compat-server-signing-key-version` cargo feature, the validation of this type is
+/// relaxed to accept any string.
 ///
 /// [homeserver signing key]: https://spec.matrix.org/v1.19/server-server-api/#retrieving-server-keys
 #[repr(transparent)]

@@ -1,6 +1,5 @@
 use std::{pin::Pin, sync::Arc};
 
-use base::event_cache::store::{DynEventCacheStore, IntoEventCacheStore, MemoryStore};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use matrix::{
     RoomInfo, RoomState, SqliteEventCacheStore, StateStore,
@@ -9,12 +8,13 @@ use matrix::{
     sync::{JoinedRoomUpdate, RoomUpdates},
     test_utils::client::MockClientBuilder,
 };
+use base::event_cache::store::{DynEventCacheStore, IntoEventCacheStore, MemoryStore};
+use sdk_test::{ALICE, base64_sha256_hash, event_factory::EventFactory};
 use ruma::{
     OwnedRoomId, RoomId,
     events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
     room_id,
 };
-use sdk_test::{ALICE, base64_sha256_hash, event_factory::EventFactory};
 use tempfile::tempdir;
 use tokio::runtime::Builder;
 

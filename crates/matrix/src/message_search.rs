@@ -83,12 +83,12 @@
 use std::{collections::HashSet, pin::Pin};
 
 use async_stream::try_stream;
-use base::{RoomStateFilter, deserialized_responses::TimelineEvent};
 use futures_util::{Stream, StreamExt as _};
-use ruma::{OwnedEventId, OwnedRoomId};
+use base::{RoomStateFilter, deserialized_responses::TimelineEvent};
 use search::error::IndexError;
 #[cfg(doc)]
 use search::index::RoomIndex;
+use ruma::{OwnedEventId, OwnedRoomId};
 
 use crate::{Client, Room};
 
@@ -352,8 +352,8 @@ mod tests {
     use std::time::Duration;
 
     use futures_util::TryStreamExt as _;
-    use ruma::{OwnedEventId, OwnedRoomId, event_id, room_id, user_id};
     use sdk_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
+    use ruma::{OwnedEventId, OwnedRoomId, event_id, room_id, user_id};
 
     use crate::{sleep::sleep, test_utils::mocks::MatrixMockServer};
 

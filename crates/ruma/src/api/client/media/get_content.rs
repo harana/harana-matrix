@@ -10,7 +10,6 @@ pub mod v3 {
     use std::time::Duration;
 
     use http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
-
     use crate::{
         IdParseError, MxcUri, OwnedServerName,
         api::{auth_scheme::NoAccessToken, request, response},
@@ -54,9 +53,8 @@ pub mod v3 {
         )]
         pub allow_remote: bool,
 
-        /// The maximum duration that the client is willing to wait to start
-        /// receiving data, in the case that the content has not yet
-        /// been uploaded.
+        /// The maximum duration that the client is willing to wait to start receiving data, in the
+        /// case that the content has not yet been uploaded.
         ///
         /// The default value is 20 seconds.
         #[ruma_api(query)]
@@ -67,11 +65,10 @@ pub mod v3 {
         )]
         pub timeout_ms: Duration,
 
-        /// Whether the server may return a 307 or 308 redirect response that
-        /// points at the relevant media content.
+        /// Whether the server may return a 307 or 308 redirect response that points at the
+        /// relevant media content.
         ///
-        /// Unless explicitly set to `true`, the server must return the media
-        /// content itself.
+        /// Unless explicitly set to `true`, the server must return the media content itself.
         #[ruma_api(query)]
         #[serde(default, skip_serializing_if = "crate::serde::is_default")]
         pub allow_redirect: bool,
@@ -88,9 +85,8 @@ pub mod v3 {
         #[ruma_api(header = CONTENT_TYPE)]
         pub content_type: Option<String>,
 
-        /// The value of the `Content-Disposition` HTTP header, possibly
-        /// containing the name of the file that was previously
-        /// uploaded.
+        /// The value of the `Content-Disposition` HTTP header, possibly containing the name of the
+        /// file that was previously uploaded.
         #[ruma_api(header = CONTENT_DISPOSITION)]
         pub content_disposition: Option<ContentDisposition>,
 

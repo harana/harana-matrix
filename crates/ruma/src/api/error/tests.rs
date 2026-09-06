@@ -1,4 +1,5 @@
 use assert_matches2::assert_let;
+use crate::api::{EndpointError, OutgoingResponseExt as _};
 use serde_json::{
     Value as JsonValue, from_slice as from_json_slice, from_value as from_json_value, json,
 };
@@ -8,7 +9,6 @@ use super::{
     Error, ErrorBody, ErrorKind, LimitExceededErrorData, RetryAfter, StandardErrorBody,
     WrongRoomKeysVersionErrorData,
 };
-use crate::api::{EndpointError, OutgoingResponseExt as _};
 
 #[test]
 fn deserialize_forbidden() {

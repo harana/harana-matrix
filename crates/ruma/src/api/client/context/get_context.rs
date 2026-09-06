@@ -8,14 +8,15 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3roomsroomidcontexteventid
 
     use js_int::{UInt, uint};
-
     use crate::{
         OwnedEventId, OwnedRoomId,
-        api::{auth_scheme::AccessToken, client::filter::RoomEventFilter, request, response},
-        events::{AnyStateEvent, AnyTimelineEvent},
+        api::{auth_scheme::AccessToken, request, response},
         metadata,
         serde::Raw,
     };
+    use crate::events::{AnyStateEvent, AnyTimelineEvent};
+
+    use crate::api::client::filter::RoomEventFilter;
 
     metadata! {
         method: GET,
@@ -40,9 +41,8 @@ pub mod v3 {
 
         /// The maximum number of context events to return.
         ///
-        /// This limit applies to the sum of the `events_before` and
-        /// `events_after` arrays. The requested event ID is always
-        /// returned in `event` even if the limit is `0`.
+        /// This limit applies to the sum of the `events_before` and `events_after` arrays. The
+        /// requested event ID is always returned in `event` even if the limit is `0`.
         ///
         /// Defaults to 10.
         #[ruma_api(query)]

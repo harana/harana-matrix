@@ -22,6 +22,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use futures_core::Stream;
+use futures_util::StreamExt;
 #[cfg(feature = "experimental-encrypted-state-events")]
 use base::crypto::types::events::room::encrypted::EncryptedEvent;
 use base::crypto::{
@@ -30,8 +32,6 @@ use base::crypto::{
     store::types::{BackupAuthenticity, BackupDecryptionKey},
     types::{RoomKeyBackupInfo, requests::KeysBackupRequest},
 };
-use futures_core::Stream;
-use futures_util::StreamExt;
 #[cfg(feature = "experimental-push-secrets")]
 use ruma::events::secret::push::ToDeviceSecretPushEvent;
 #[cfg(feature = "experimental-encrypted-state-events")]
@@ -1480,10 +1480,10 @@ mod test {
             secret_send::SecretSendContent,
         },
     };
+    use sdk_test::async_test;
     use ruma::room_id;
     #[cfg(feature = "experimental-push-secrets")]
     use ruma::{device_id, user_id};
-    use sdk_test::async_test;
     use serde_json::json;
     use vodozemac::Curve25519PublicKey;
     use wiremock::{

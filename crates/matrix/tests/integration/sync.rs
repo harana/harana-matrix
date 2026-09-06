@@ -7,12 +7,16 @@ use std::{
 };
 
 use assert_matches2::assert_matches;
-use base::RoomMemberships;
 use futures_util::StreamExt as _;
 use matrix::{
     config::SyncSettings,
     deserialized_responses::RawSyncOrStrippedState,
     test_utils::mocks::{AnyRoomBuilder, MatrixMockServer},
+};
+use base::RoomMemberships;
+use sdk_test::{
+    InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, async_test,
+    event_factory::EventFactory,
 };
 use ruma::{
     EventEncryptionAlgorithm, MilliSecondsSinceUnixEpoch, RoomVersionId, event_id,
@@ -39,10 +43,6 @@ use ruma::{
     room_alias_id, room_id,
     serde::Raw,
     user_id,
-};
-use sdk_test::{
-    InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, async_test,
-    event_factory::EventFactory,
 };
 use serde_json::json;
 use stream_assert::{assert_pending, assert_ready};

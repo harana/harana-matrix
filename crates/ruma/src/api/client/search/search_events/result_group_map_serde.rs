@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
+use crate::serde::from_raw_json_value;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeMap};
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::v3::{CustomResultGroupMap, GroupingKey, ResultGroupMap, ResultGroupMapsByGroupingKey};
-use crate::serde::from_raw_json_value;
 
 impl Serialize for ResultGroupMapsByGroupingKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
