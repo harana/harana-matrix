@@ -47,6 +47,7 @@ async fn test_client(user_id: &UserId) -> (Client, wiremock::MockServer) {
     let session = MatrixSession {
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
 
     let (builder, server) = test_client_builder_with_server().await;
@@ -172,6 +173,7 @@ async fn test_recovery_status_secret_storage_set_up() {
     let session = MatrixSession {
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
 
     let (client, server) = no_retry_test_client_with_server().await;
@@ -193,6 +195,7 @@ async fn test_recovery_status_secret_storage_not_set_up() {
     let session = MatrixSession {
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
 
     let (client, server) = no_retry_test_client_with_server().await;
@@ -781,6 +784,7 @@ async fn test_recover_and_reset() {
     let session = MatrixSession {
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
 
     let (client, server) = no_retry_test_client_with_server().await;

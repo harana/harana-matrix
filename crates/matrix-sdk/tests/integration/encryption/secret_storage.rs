@@ -375,6 +375,7 @@ async fn test_restore_cross_signing_from_secret_store() {
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
     let (client, server) = no_retry_test_client_with_server().await;
     client.restore_session(session).await.unwrap();
@@ -576,6 +577,7 @@ async fn test_is_secret_storage_enabled() {
             device_id: owned_device_id!("DEVICEID"),
         },
         tokens: mock_session_tokens(),
+        homeserver: None,
     };
     let (client, server) = no_retry_test_client_with_server().await;
     client.restore_session(session).await.unwrap();

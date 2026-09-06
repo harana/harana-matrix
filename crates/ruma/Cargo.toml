@@ -25,6 +25,7 @@ default = []
 full = [
     "client",
     "server",
+    "appservice-api",
     "federation-api",
     "signatures",
     "html",
@@ -120,6 +121,12 @@ full = [
 client = []
 # `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
 server = []
+
+# The application service API, in `api::appservice`. Only the registration file
+# format is vendored, so the client and server halves are the same thing here.
+appservice-api = []
+appservice-api-c = ["appservice-api"]
+appservice-api-s = ["appservice-api"]
 
 # The server-server (federation) API, in `api::federation`.
 federation-api = [
