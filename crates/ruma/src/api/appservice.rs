@@ -1,7 +1,8 @@
-//! (De)serializable types for the [Matrix Application Service API][appservice-api].
+//! (De)serializable types for the [Matrix Application Service
+//! API][appservice-api].
 //!
-//! Only the registration file types are modelled here: they are what a homeserver
-//! and an application service agree on out of band, and what
+//! Only the registration file types are modelled here: they are what a
+//! homeserver and an application service agree on out of band, and what
 //! [`matrix_sdk_appservice`] needs to decide which users, aliases and rooms a
 //! given appservice claims. The push, query and third-party endpoints of the
 //! specification are not part of this vendored copy.

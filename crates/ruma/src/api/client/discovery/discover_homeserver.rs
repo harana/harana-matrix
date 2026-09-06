@@ -4,14 +4,14 @@
 //!
 //! Get discovery information about the domain.
 
-use crate::{
-    api::{auth_scheme::NoAccessToken, request, response},
-    metadata,
-};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "unstable-msc4143")]
 use crate::api::client::rtc::RtcTransport;
+use crate::{
+    api::{auth_scheme::NoAccessToken, request, response},
+    metadata,
+};
 
 metadata! {
     method: GET,
