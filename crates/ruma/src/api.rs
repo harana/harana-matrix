@@ -253,8 +253,6 @@ use self::error::{FromHttpRequestError, FromHttpResponseError, IntoHttpError};
 pub use crate::metadata;
 use crate::{DeviceId, UserId};
 
-// Registration file types, which are direction-independent: they are read from
-// disk rather than sent over the wire.
 #[cfg(feature = "appservice-api")]
 pub mod appservice;
 pub mod auth_scheme;

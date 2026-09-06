@@ -429,8 +429,16 @@ impl ClientBuilder {
         self
     }
 
-    /// Update the client's homeserver URL with the discovery information
-    /// present in the login response, if any.
+    /// Update the client's homeserver URL with the discovery information the
+    /// homeserver publishes: the `well_known` field of a login response, and
+    /// the `.well-known` file itself whenever the client reads it again, such
+    /// as in [`Client::revalidate_homeserver()`].
+    ///
+    /// Defaults to `true`. Turn it off when the URL the client was built with
+    /// must be the one requests go to whatever discovery says, which is what a
+    /// proxy in front of the homeserver needs.
+    ///
+    /// [`Client::revalidate_homeserver()`]: crate::Client::revalidate_homeserver
     pub fn respect_login_well_known(mut self, value: bool) -> Self {
         self.respect_login_well_known = value;
         self
@@ -850,10 +858,6 @@ impl ClientBuilder {
         #[allow(unused_variables)]
         let HomeserverDiscoveryResult { server, homeserver, supported_versions, well_known } =
             homeserver_cfg.discover(&http_client, self.well_known_lookup_disabled).await?;
-        // A client that resolved its homeserver from a server name follows that
-        // server name if the delegation later moves; one handed a homeserver
-        // URL stays where it was put.
-        let homeserver_from_discovery = server.is_some();
 
         let sliding_sync_version = {
             let supported_versions = match supported_versions {
@@ -912,7 +916,6 @@ impl ClientBuilder {
             self.respect_login_well_known,
             self.well_known_lookup_disabled,
             self.discovery_cache_timeout,
-            homeserver_from_discovery,
             event_cache,
             self.enable_automatic_back_pagination,
             send_queue,

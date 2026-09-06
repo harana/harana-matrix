@@ -21,19 +21,13 @@ ignored = [
 [features]
 default = []
 
-# The application service registration file types. `-c` and `-s` mirror the
-# upstream feature names, which split the appservice API by direction; only the
-# registration types are vendored here, so both enable the same module.
-appservice-api = []
-appservice-api-c = ["appservice-api"]
-appservice-api-s = ["appservice-api"]
-
 # Everything the vendored test suite needs. Not meant for downstream use.
 full = [
     "appservice-api-c",
     "appservice-api-s",
     "client",
     "server",
+    "appservice-api",
     "state-res",
     "federation-api",
     "signatures",
@@ -130,6 +124,12 @@ full = [
 client = []
 # `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
 server = []
+
+# The application service API, in `api::appservice`. Only the registration file
+# format is vendored, so the client and server halves are the same thing here.
+appservice-api = []
+appservice-api-c = ["appservice-api"]
+appservice-api-s = ["appservice-api"]
 
 # The server-server (federation) API, in `api::federation`.
 federation-api = [

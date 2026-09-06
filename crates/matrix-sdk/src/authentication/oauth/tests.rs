@@ -18,18 +18,21 @@ use super::{
     OAuthError, RedirectUriQueryParseError,
 };
 use crate::{
-    Client, Error, SessionChange,
-    authentication::oauth::{
-        AuthorizationValidationData, ClientRegistrationData, OAuthAuthorizationCodeError,
-        error::{AuthorizationCodeErrorResponseType, OAuthClientRegistrationError},
+    AuthApi, Client, Error, SessionChange,
+    authentication::{
+        matrix::MatrixSession,
+        oauth::{
+            AuthorizationValidationData, ClientRegistrationData, OAuthAuthorizationCodeError,
+            error::{AuthorizationCodeErrorResponseType, OAuthClientRegistrationError},
+        },
     },
     client::caches::CachedValue,
     config::RequestConfig,
     executor::spawn,
     test_utils::{
         client::{
-            MockClientBuilder, mock_prev_session_tokens_with_refresh,
-            mock_session_tokens_with_refresh,
+            MockClientBuilder, mock_prev_session_tokens_with_refresh, mock_session_meta,
+            mock_session_tokens, mock_session_tokens_with_refresh,
             oauth::{mock_client_id, mock_client_metadata, mock_redirect_uri, mock_session},
         },
         mocks::MatrixMockServer,
@@ -575,6 +578,85 @@ async fn test_oauth_session() -> anyhow::Result<()> {
     assert_eq!(full_session.client_id.as_str(), "test_client_id");
     assert_eq!(full_session.user.meta, session.user.meta);
     assert_eq!(full_session.user.tokens, tokens);
+
+    Ok(())
+}
+
+#[async_test]
+async fn test_migrating_a_matrix_session_to_oauth() -> anyhow::Result<()> {
+    let server = MatrixMockServer::new().await;
+    let oauth_server = server.oauth();
+    oauth_server.mock_server_metadata().ok().expect(1..).named("server_metadata").mount().await;
+    oauth_server.mock_registration().ok().expect(1).named("registration").mount().await;
+
+    // A session created before the homeserver moved to an authentication server:
+    // it has an access token and no OAuth 2.0 data of any kind.
+    let client = server.client_builder().unlogged().build().await;
+    let session = MatrixSession {
+        meta: mock_session_meta(),
+        tokens: mock_session_tokens(),
+        homeserver: None,
+    };
+
+    let migrated = client
+        .oauth()
+        .migrate_matrix_session(
+            session.clone(),
+            Some(&mock_client_metadata().into()),
+            RoomLoadSettings::default(),
+        )
+        .await?;
+
+    // The same user and the same tokens, now with the client credentials the
+    // authentication server issued, so this session can be stored and restored
+    // with `OAuth::restore_session` from now on.
+    assert_eq!(migrated.user.meta, session.meta);
+    assert_eq!(migrated.user.tokens, session.tokens);
+    assert_eq!(migrated.client_id, mock_client_id());
+
+    assert_matches!(client.auth_api(), Some(AuthApi::OAuth(_)));
+    assert_eq!(client.oauth().full_session().context("logged in")?.client_id, migrated.client_id);
+    assert_eq!(client.session_tokens().context("logged in")?, session.tokens);
+
+    Ok(())
+}
+
+#[async_test]
+async fn test_migrating_a_matrix_session_needs_an_authentication_server() -> anyhow::Result<()> {
+    let server = MatrixMockServer::new().await;
+    // The homeserver has not moved: it doesn't implement the endpoint that
+    // advertises an authentication server, so there is nothing to migrate to.
+    server
+        .oauth()
+        .mock_server_metadata()
+        .error_unrecognized()
+        .expect(1..)
+        .named("server_metadata")
+        .mount()
+        .await;
+
+    let client = server.client_builder().unlogged().build().await;
+
+    let error = client
+        .oauth()
+        .migrate_matrix_session(
+            MatrixSession {
+                meta: mock_session_meta(),
+                tokens: mock_session_tokens(),
+                homeserver: None,
+            },
+            Some(&mock_client_metadata().into()),
+            RoomLoadSettings::default(),
+        )
+        .await
+        .unwrap_err();
+
+    let Error::OAuth(error) = error else { panic!("expected an OAuth 2.0 error, got {error:?}") };
+    assert_matches!(*error, OAuthError::Discovery(error) if error.is_not_supported());
+
+    // The client is untouched, so the caller can go on restoring the session with
+    // the native Matrix authentication API.
+    assert_matches!(client.auth_api(), None);
 
     Ok(())
 }

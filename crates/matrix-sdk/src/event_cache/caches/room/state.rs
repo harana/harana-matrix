@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::empty;
+use std::{collections::BTreeSet, iter::empty};
 
 use eyeball::SharedObservable;
 use eyeball_im::VectorDiff;
@@ -21,14 +21,15 @@ use matrix_sdk_base::{
     deserialized_responses::{ThreadSummary, ThreadSummaryStatus},
     event_cache::{Event, Gap, store::EventCacheStoreLockGuard},
     linked_chunk::{
-        ChunkIdentifierGenerator, LinkedChunkId, OwnedLinkedChunkId, Position, Update, lazy_loader,
+        ChunkContent, ChunkIdentifierGenerator, ChunkMetadata, LinkedChunkId, OwnedLinkedChunkId,
+        Position, Update, lazy_loader,
     },
     serde_helpers::extract_redaction_target,
     sync::Timeline,
 };
 use matrix_sdk_common::executor::spawn;
 use ruma::{
-    EventId, OwnedEventId, OwnedRoomId, OwnedUserId,
+    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     events::{
         receipt::ReceiptEventContent, relation::RelationType,
         room::redaction::SyncRoomRedactionEvent,
@@ -36,7 +37,7 @@ use ruma::{
     room_version_rules::RoomVersionRules,
 };
 use tokio::sync::broadcast::Sender;
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 #[cfg(feature = "e2e-encryption")]
 use super::super::super::redecryptor::MaybeResolvedEvent;
@@ -425,6 +426,216 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Remove every event sent by one of the given users, from memory and from
+    /// the store.
+    ///
+    /// Returns the updates to send to the observers of this cache, which is
+    /// empty when nothing has been removed.
+    #[must_use = "Propagate `VectorDiff` updates via `RoomEventCacheUpdate`"]
+    #[instrument(skip_all)]
+    pub async fn remove_events_sent_by(
+        &mut self,
+        senders: &BTreeSet<OwnedUserId>,
+    ) -> Result<Vec<VectorDiff<Event>>, EventCacheError> {
+        let sent_by_one_of_them = |event: &Event| {
+            event.sender().is_some_and(|sender| senders.contains::<UserId>(&sender))
+        };
+
+        // The events loaded in memory: their position is known.
+        let in_memory_events = self
+            .state
+            .room_linked_chunk
+            .events()
+            .filter(|(_position, event)| sent_by_one_of_them(event))
+            .filter_map(|(position, event)| Some((event.event_id()?.to_owned(), position)))
+            .collect::<Vec<_>>();
+
+        // The events that live in the store only: ask the store where they are.
+        let in_store_events = {
+            let stored_event_ids = self
+                .store
+                .get_room_events(&self.state.room_id, None, None)
+                .await?
+                .into_iter()
+                .filter(sent_by_one_of_them)
+                .filter_map(|event| event.event_id().map(ToOwned::to_owned))
+                .collect::<Vec<_>>();
+
+            if stored_event_ids.is_empty() {
+                Vec::new()
+            } else {
+                let in_memory_chunk_identifiers = self
+                    .state
+                    .room_linked_chunk
+                    .chunks()
+                    .map(|chunk| chunk.identifier())
+                    .collect::<Vec<_>>();
+
+                self.store
+                    .filter_duplicated_events(
+                        LinkedChunkId::Room(&self.state.room_id),
+                        stored_event_ids,
+                    )
+                    .await?
+                    .into_iter()
+                    .filter(|(_event_id, position)| {
+                        !in_memory_chunk_identifiers.contains(&position.chunk_identifier())
+                    })
+                    .collect()
+            }
+        };
+
+        if in_memory_events.is_empty() && in_store_events.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        trace!(
+            num_in_memory = in_memory_events.len(),
+            num_in_store = in_store_events.len(),
+            "removing the events sent by ignored users"
+        );
+
+        self.remove_events(in_memory_events, in_store_events).await?;
+
+        Ok(self.state.room_linked_chunk.updates_as_vector_diffs())
+    }
+
+    /// Load the events held by the chunk described by `metadata`, from the
+    /// store.
+    ///
+    /// The store can only walk a linked chunk backwards, so a chunk is loaded
+    /// by asking for the predecessor of its successor. The last chunk, which
+    /// has no successor, is loaded on its own.
+    async fn load_chunk_events(
+        &self,
+        linked_chunk_id: LinkedChunkId<'_>,
+        metadata: &ChunkMetadata,
+    ) -> Result<Vec<Event>, EventCacheError> {
+        let raw_chunk = match metadata.next {
+            Some(next) => self.store.load_previous_chunk(linked_chunk_id, next).await?,
+            None => self.store.load_last_chunk(linked_chunk_id).await?.0,
+        };
+
+        let Some(raw_chunk) = raw_chunk else {
+            // The chunk disappeared between reading the metadata and now.
+            return Ok(Vec::new());
+        };
+
+        if raw_chunk.identifier != metadata.identifier {
+            // The chunks moved under our feet; don't guess, and let the caller stop.
+            warn!(
+                expected = metadata.identifier.index(),
+                found = raw_chunk.identifier.index(),
+                "the store returned a different chunk than the one that was asked for"
+            );
+
+            return Ok(Vec::new());
+        }
+
+        Ok(match raw_chunk.content {
+            ChunkContent::Items(events) => events,
+            // A gap holds no event.
+            ChunkContent::Gap(_) => Vec::new(),
+        })
+    }
+
+    /// Remove every event of this room that was sent strictly before `cutoff`,
+    /// from memory and from the store.
+    ///
+    /// The room's chunks are walked from the oldest one forwards, and the walk
+    /// stops at the first event that is still within the retention period:
+    /// events are stored in topological order, so everything that follows it is
+    /// younger and must be kept. A room whose events are all recent therefore
+    /// costs one chunk read.
+    ///
+    /// Events that cannot be dated are kept, and don't stop the walk.
+    ///
+    /// Returns the events that were removed, so the caller can clear the local
+    /// media they refer to, along with the updates to send to the observers of
+    /// this room.
+    #[instrument(skip(self))]
+    pub async fn purge_events_older_than(
+        &mut self,
+        cutoff: MilliSecondsSinceUnixEpoch,
+    ) -> Result<(Vec<Event>, Vec<VectorDiff<Event>>), EventCacheError> {
+        let room_id = self.state.room_id.clone();
+        let linked_chunk_id = LinkedChunkId::Room(&room_id);
+
+        let Some(chunks) = load_linked_chunk_metadata(&self.store, linked_chunk_id).await? else {
+            // The room has no chunk at all: nothing to purge.
+            return Ok((Vec::new(), Vec::new()));
+        };
+
+        // The chunks that are loaded in memory: the events they hold must be removed
+        // from the in-memory linked chunk as well as from the store, while the others
+        // are removed from the store only.
+        let in_memory_chunks = self
+            .state
+            .room_linked_chunk
+            .chunks()
+            .map(|chunk| chunk.identifier())
+            .collect::<BTreeSet<_>>();
+
+        let mut in_memory_expired = Vec::new();
+        let mut in_store_expired = Vec::new();
+        let mut removed = Vec::new();
+
+        'chunks: for metadata in &chunks {
+            // Nothing to look at in a gap, or in an empty chunk.
+            if metadata.num_items == 0 {
+                continue;
+            }
+
+            let events = self.load_chunk_events(linked_chunk_id, metadata).await?;
+
+            for (index, event) in events.into_iter().enumerate() {
+                let Some(timestamp) = event.timestamp() else {
+                    warn!(
+                        event_id = ?event.event_id(),
+                        "keeping an event the retention sweep cannot date"
+                    );
+                    continue;
+                };
+
+                if timestamp >= cutoff {
+                    // This event, and so every event after it, is within the retention
+                    // period.
+                    break 'chunks;
+                }
+
+                let Some(event_id) = event.event_id().map(ToOwned::to_owned) else {
+                    // An event without an id can't be removed by position safely, since
+                    // it can't be identified afterwards.
+                    continue;
+                };
+
+                let position = Position::new(metadata.identifier, index);
+
+                if in_memory_chunks.contains(&metadata.identifier) {
+                    in_memory_expired.push((event_id, position));
+                } else {
+                    in_store_expired.push((event_id, position));
+                }
+
+                removed.push(event);
+            }
+        }
+
+        if removed.is_empty() {
+            return Ok((Vec::new(), Vec::new()));
+        }
+
+        debug!(
+            num_in_memory = in_memory_expired.len(),
+            num_in_store = in_store_expired.len(),
+            "purging the events that fall outside the room's retention policy"
+        );
+
+        self.remove_events(in_memory_expired, in_store_expired).await?;
+
+        Ok((removed, self.state.room_linked_chunk.updates_as_vector_diffs()))
     }
 
     /// Remove events by their position, in `EventLinkedChunk` and in

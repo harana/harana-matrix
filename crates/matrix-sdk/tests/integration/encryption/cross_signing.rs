@@ -250,3 +250,73 @@ async fn test_reset_stable_oauth() {
         "After the reset we have the cross-signing available.",
     );
 }
+
+#[async_test]
+async fn test_bootstrap_records_that_the_keys_reached_the_homeserver() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    server.mock_upload_keys().ok().mount().await;
+    server.mock_upload_cross_signing_keys().ok().expect(1).mount().await;
+    server.mock_upload_cross_signing_signatures().ok().expect(1).mount().await;
+
+    client.encryption().bootstrap_cross_signing(None).await.unwrap();
+
+    let status = client.encryption().cross_signing_status().await.unwrap();
+    assert!(status.is_complete(), "we hold the whole identity");
+    assert!(status.is_published, "the homeserver accepted the keys we uploaded");
+    assert!(status.is_usable(), "an identity everybody else can see is a usable one");
+}
+
+#[async_test]
+async fn test_an_identity_that_never_reached_the_homeserver_is_published_again() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    server.mock_upload_keys().ok().mount().await;
+
+    // The upload fails, so the keys exist here and nowhere else. Every other
+    // device goes on seeing this one as unverified.
+    {
+        let _guard = server.mock_upload_cross_signing_keys().error500().mount_as_scoped().await;
+
+        client
+            .encryption()
+            .bootstrap_cross_signing(None)
+            .await
+            .expect_err("the homeserver rejected the upload");
+    }
+
+    let status = client.encryption().cross_signing_status().await.unwrap();
+    assert!(status.is_complete(), "the keys were created before the upload failed");
+    assert!(!status.is_published, "but nothing of them reached the homeserver");
+    assert!(!status.is_usable());
+
+    // Having the identity locally is not enough to consider the work done: the
+    // upload is tried again rather than left for nobody to retry.
+    server.mock_upload_cross_signing_keys().ok().expect(1).mount().await;
+    server.mock_upload_cross_signing_signatures().ok().expect(1).mount().await;
+
+    client.encryption().bootstrap_cross_signing_if_needed(None).await.unwrap();
+
+    let status = client.encryption().cross_signing_status().await.unwrap();
+    assert!(status.is_usable(), "the second attempt got the keys published");
+}
+
+#[async_test]
+async fn test_a_published_identity_is_not_published_again() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    server.mock_upload_keys().ok().mount().await;
+    server.mock_upload_cross_signing_keys().ok().expect(1).mount().await;
+    server.mock_upload_cross_signing_signatures().ok().expect(1).mount().await;
+
+    client.encryption().bootstrap_cross_signing(None).await.unwrap();
+
+    // The keys are on the homeserver, so there is nothing to redo: the mocks
+    // above expect exactly one call each.
+    client.encryption().bootstrap_cross_signing_if_needed(None).await.unwrap();
+
+    assert!(client.encryption().cross_signing_status().await.unwrap().is_usable());
+}

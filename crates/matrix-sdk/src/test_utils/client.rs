@@ -305,7 +305,7 @@ pub mod oauth {
     pub fn mock_session(tokens: SessionTokens) -> OAuthSession {
         OAuthSession {
             client_id: mock_client_id(),
-            user: UserSession { meta: super::mock_session_meta(), tokens },
+            user: UserSession { meta: super::mock_session_meta(), tokens, homeserver: None },
         }
     }
 }

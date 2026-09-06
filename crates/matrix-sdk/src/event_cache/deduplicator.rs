@@ -15,7 +15,7 @@
 //! Simple but efficient types to find duplicated events. See [`Deduplicator`]
 //! to learn more.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use matrix_sdk_base::{
     event_cache::store::EventCacheStoreLockGuard,
@@ -89,7 +89,17 @@ pub async fn filter_duplicate_events(
         + in_store_duplicated_event_ids.len())
         == new_events.len();
 
-    let non_empty_all_duplicates = at_least_one_event_not_sent_by_me && all_duplicates;
+    // Being all duplicates isn't enough to conclude that we already know this part
+    // of the timeline: the duplicates must also be laid out in the linked chunk the
+    // way the server just sent them. See
+    // `duplicates_are_ordered_like_the_linked_chunk`.
+    let non_empty_all_duplicates = at_least_one_event_not_sent_by_me
+        && all_duplicates
+        && duplicates_are_ordered_like_the_linked_chunk(
+            &new_events,
+            &in_store_duplicated_event_ids,
+            linked_chunk,
+        );
 
     Ok(DeduplicationOutcome {
         all_events: new_events,
@@ -97,6 +107,58 @@ pub async fn filter_duplicate_events(
         in_store_duplicated_event_ids,
         non_empty_all_duplicates,
     })
+}
+
+/// Check that the duplicated events appear in the linked chunk in the same
+/// relative order as in the new batch of events.
+///
+/// When every new event is a duplicate, the caller concludes that it already
+/// knows this part of the timeline: it drops the previous-batch token that came
+/// with the batch, and stops back-paginating there. That conclusion only holds
+/// if the events are laid out in the linked chunk the way the server just sent
+/// them. If they are interleaved differently, the linked chunk and the server
+/// disagree about the ordering: the events must be re-inserted in the order
+/// given by the server, and the previous-batch token must be kept, so that
+/// back-pagination can continue.
+///
+/// This returns `true` when the order cannot be determined, so as to keep the
+/// existing behaviour when there is nothing to compare against: either some
+/// duplicates live in the store only, or some of them are not loaded in memory,
+/// and in both cases their relative order is unknown here.
+fn duplicates_are_ordered_like_the_linked_chunk(
+    new_events: &[Event],
+    in_store_duplicated_event_ids: &[(OwnedEventId, Position)],
+    linked_chunk: &EventLinkedChunk,
+) -> bool {
+    if !in_store_duplicated_event_ids.is_empty() {
+        return true;
+    }
+
+    // Index all the events loaded in memory, in the order of the linked chunk.
+    let indices = linked_chunk
+        .events()
+        .enumerate()
+        .filter_map(|(index, (_position, event))| Some((event.event_id()?.to_owned(), index)))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut orders = Vec::with_capacity(new_events.len());
+
+    for event in new_events {
+        let Some(event_id) = event.event_id() else { continue };
+        let Some(index) = indices.get(event_id) else {
+            // This event isn't loaded in memory, so its order relatively to the others
+            // is unknown; don't second-guess the deduplication.
+            return true;
+        };
+
+        orders.push(*index);
+    }
+
+    // `new_events` is topologically ordered for a sync, and in the reverse order
+    // for a back-pagination, so both directions are valid; what matters is that the
+    // whole batch agrees on one of them.
+    orders.windows(2).all(|pair| pair[0] < pair[1])
+        || orders.windows(2).all(|pair| pair[0] > pair[1])
 }
 
 pub(super) struct DeduplicationOutcome {
@@ -141,6 +203,11 @@ pub(super) struct DeduplicationOutcome {
     /// user's own events, that are considered duplicates because the send queue
     /// inserted them prior to receiving the response. In this case, if the sync
     /// is gappy, then the previouos-batch token would be incorrectly dropped.
+    ///
+    /// Finally, the duplicates must appear in the linked chunk in the same
+    /// order as in the new batch: if they don't, the linked chunk and the
+    /// server disagree about the ordering, and the previous-batch token must be
+    /// kept so that back-pagination can carry on.
     ///
     /// If we had already seen all the duplicated events that we're trying to
     /// add, then it would be wasteful to store a previous-batch token, or
@@ -311,6 +378,101 @@ mod tests {
             outcome.in_store_duplicated_event_ids[1],
             (event_id_1, Position::new(ChunkIdentifier::new(42), 1))
         );
+    }
+
+    #[async_test]
+    async fn test_all_duplicates_but_in_a_different_order() {
+        use std::sync::Arc;
+
+        use matrix_sdk_base::{
+            event_cache::store::{EventCacheStore, MemoryStore},
+            linked_chunk::Update,
+        };
+        use ruma::room_id;
+
+        let user_id = user_id!("@user:example.com");
+        let room_id = room_id!("!fondue:raclette.ch");
+
+        let event_id_0 = owned_event_id!("$ev0");
+        let event_id_1 = owned_event_id!("$ev1");
+        let event_id_2 = owned_event_id!("$ev2");
+
+        let event_0 = timeline_event(&event_id_0);
+        let event_1 = timeline_event(&event_id_1);
+        let event_2 = timeline_event(&event_id_2);
+
+        let event_cache_store = Arc::new(MemoryStore::new());
+
+        // All three events are known by the store, in the chunk that is loaded in
+        // memory.
+        event_cache_store
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![event_0.clone(), event_1.clone(), event_2.clone()],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let event_cache_store = EventCacheStoreLock::new(
+            event_cache_store,
+            CrossProcessLockConfig::multi_process("hodor"),
+        );
+        let event_cache_store = event_cache_store.lock().await.unwrap();
+        let event_cache_store_guard = event_cache_store.as_clean().unwrap();
+
+        let mut linked_chunk = EventLinkedChunk::new();
+        linked_chunk.push_events([event_0.clone(), event_1.clone(), event_2.clone()]);
+
+        // Same order as the linked chunk: we really know this part of the timeline.
+        let outcome = filter_duplicate_events(
+            user_id,
+            event_cache_store_guard,
+            LinkedChunkId::Room(room_id),
+            &linked_chunk,
+            vec![event_0.clone(), event_1.clone(), event_2.clone()],
+        )
+        .await
+        .unwrap();
+
+        assert!(outcome.non_empty_all_duplicates);
+
+        // Reverse order, as sent by a backwards pagination: still the same ordering.
+        let outcome = filter_duplicate_events(
+            user_id,
+            event_cache_store_guard,
+            LinkedChunkId::Room(room_id),
+            &linked_chunk,
+            vec![event_2.clone(), event_1.clone(), event_0.clone()],
+        )
+        .await
+        .unwrap();
+
+        assert!(outcome.non_empty_all_duplicates);
+
+        // The events are all duplicates, but they are not in the order of the linked
+        // chunk: the previous-batch token must be kept, so the events can be
+        // re-inserted in the order given by the server.
+        let outcome = filter_duplicate_events(
+            user_id,
+            event_cache_store_guard,
+            LinkedChunkId::Room(room_id),
+            &linked_chunk,
+            vec![event_0, event_2, event_1],
+        )
+        .await
+        .unwrap();
+
+        assert!(outcome.non_empty_all_duplicates.not());
     }
 
     #[async_test]

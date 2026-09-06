@@ -14,7 +14,12 @@
 
 mod updates;
 
-use std::{cmp::Ordering, collections::BTreeSet, fmt, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::BTreeSet,
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 use eyeball_im::VectorDiff;
 use futures_util::{StreamExt as _, stream};
@@ -32,7 +37,7 @@ use ruma::{
     events::{relation::RelationType, room::redaction::SyncRoomRedactionEvent},
     room_version_rules::RoomVersionRules,
 };
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::{broadcast::Sender, mpsc};
 use tracing::{debug, instrument, trace, warn};
 
 pub(super) use self::updates::PinnedEventsCacheUpdateSender;
@@ -51,6 +56,7 @@ use super::{
     EventLocation, TimelineVectorDiffs,
     event_linked_chunk::{EventLinkedChunk, sort_positions_descending},
     room::RoomEventCacheLinkedChunkUpdate,
+    subscriber::{AutoShrinkMessage, Subscriber, SubscribersHandle},
 };
 use crate::{Room, client::WeakClient, config::RequestConfig, room::WeakRoom};
 
@@ -80,6 +86,19 @@ pub struct PinnedEventsCacheState {
     ///
     /// See also [`super::super::EventCacheInner::linked_chunk_update_sender`].
     linked_chunk_update_sender: Sender<RoomEventCacheLinkedChunkUpdate>,
+
+    /// The handle to count the subscribers of this cache.
+    ///
+    /// When the last subscriber is dropped, the cache is unloaded, see
+    /// [`StateLockWriteGuard::unload_if_no_subscribers`].
+    subscribers_handle: SubscribersHandle,
+
+    /// Whether the events have been dropped from memory because nobody was
+    /// listening to this cache.
+    ///
+    /// They are reloaded from the store by the next subscriber, see
+    /// [`PinnedEventsCache::subscribe`].
+    unloaded: bool,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -118,6 +137,46 @@ impl<'a> StateLockWriteGuard<'a, PinnedEventsCacheState> {
         self.reload_from_storage().await?;
 
         Ok(self.state.chunk.updates_as_vector_diffs())
+    }
+
+    /// Drop the pinned events from memory if nobody is listening to this cache
+    /// anymore.
+    ///
+    /// The events are only dropped from memory: they remain in the store, and
+    /// the next subscriber gets them back, see
+    /// [`PinnedEventsCache::subscribe`].
+    ///
+    /// Returns whether the cache has been unloaded. A new subscriber can't
+    /// appear between the check and the unloading, since this method takes an
+    /// exclusive access to the state, which is required to subscribe.
+    pub fn unload_if_no_subscribers(&mut self) -> bool {
+        let number_of_subscribers = self.state.subscribers_handle.count();
+
+        trace!(number_of_subscribers, "received request to unload the pinned events");
+
+        if number_of_subscribers > 0 {
+            return false;
+        }
+
+        self.state.chunk.reset();
+
+        // Resetting drops the linked chunk's chunks, and its first one is recreated
+        // lazily, pushing an update of its own the first time it is looked at. Force
+        // that to happen now, so the drain below catches it instead of letting it
+        // reach the store on some later, unrelated write.
+        let _ = self.state.chunk.events().next();
+
+        // Nobody is listening, and a new subscriber receives the events reloaded
+        // from the store, so these diffs are of no use to anyone.
+        let _ = self.state.chunk.updates_as_vector_diffs();
+
+        // The events must stay in the store, so none of these updates may reach it.
+        // Drained last, after everything above has had a chance to push.
+        let _ = self.state.chunk.store_updates().take();
+
+        self.state.unloaded = true;
+
+        true
     }
 
     async fn handle_sync(&mut self, timeline: Timeline) -> Result<()> {
@@ -432,10 +491,6 @@ impl PinnedEventsCacheState {
 #[derive(Clone)]
 pub struct PinnedEventsCache {
     inner: Arc<PinnedEventsCacheInner>,
-
-    /// The task handling the refreshing of pinned events for this specific
-    /// room.
-    _task: Arc<BackgroundTaskHandle>,
 }
 
 /// The (non-cloneable) details of the `PinnedEventsCache`.
@@ -443,10 +498,26 @@ struct PinnedEventsCacheInner {
     /// The ID of the room owning this list of pinned events.
     room_id: OwnedRoomId,
 
+    /// The room owning this list of pinned events.
+    ///
+    /// Used to restart the listener task after the cache has been unloaded.
+    weak_room: WeakRoom,
+
     /// State of this `PinnedEventsCache`.
     ///
     /// It is behind an `Arc` because it is shared with the task.
     state: CacheStateLock<PinnedEventsStateSelector>,
+
+    /// The task refreshing the pinned events for this room.
+    ///
+    /// It only runs while someone is listening to this cache: it is aborted
+    /// when the last subscriber is dropped, and restarted by the next
+    /// subscriber. `None` means the cache is unloaded.
+    task: Mutex<Option<BackgroundTaskHandle>>,
+
+    /// The sender to notify the auto-shrink task that the last subscriber of
+    /// this cache has been dropped.
+    auto_shrink_sender: mpsc::Sender<AutoShrinkMessage>,
 }
 
 impl PinnedEventsCache {
@@ -457,6 +528,7 @@ impl PinnedEventsCache {
         room_version_rules: RoomVersionRules,
         linked_chunk_update_sender: Sender<RoomEventCacheLinkedChunkUpdate>,
         state: &StateLock,
+        auto_shrink_sender: mpsc::Sender<AutoShrinkMessage>,
     ) -> Result<Self> {
         let room = weak_room.get().ok_or(EventCacheError::ClientDropped)?;
         let room_id = room.room_id().to_owned();
@@ -472,23 +544,69 @@ impl PinnedEventsCache {
                         chunk: EventLinkedChunk::new(),
                         update_sender: PinnedEventsCacheUpdateSender::new(),
                         linked_chunk_update_sender,
+                        subscribers_handle: SubscribersHandle::default(),
+                        unloaded: false,
                     })
                 },
             )
             .await?;
 
-        let inner = Arc::new(PinnedEventsCacheInner { room_id, state: cache_state });
+        let inner = Arc::new(PinnedEventsCacheInner {
+            room_id,
+            weak_room: weak_room.clone(),
+            state: cache_state,
+            task: Mutex::new(None),
+            auto_shrink_sender,
+        });
 
-        let task = room
-            .client()
-            .task_monitor()
-            .spawn_infinite_task(
-                "pinned_event_listener_task",
-                Self::pinned_event_listener_task(room, inner.clone()),
-            )
-            .abort_on_drop();
+        // The listener task is only spawned once someone listens to this cache, see
+        // `Self::subscribe`.
 
-        Ok(Self { inner, _task: Arc::new(task) })
+        Ok(Self { inner })
+    }
+
+    /// Spawn the listener task, if it isn't running already.
+    ///
+    /// The task reloads the pinned events, from the store first and from the
+    /// network if they differ, then keeps them up to date with the room's
+    /// pinned event IDs.
+    fn ensure_listener_task_is_running(&self) {
+        let mut task = self.inner.task.lock().unwrap();
+
+        if task.as_ref().is_some_and(|task| !task.is_finished()) {
+            return;
+        }
+
+        let Some(room) = self.inner.weak_room.get() else {
+            debug!("room has been dropped, not spawning the pinned events listener task");
+            return;
+        };
+
+        *task = Some(
+            room.client()
+                .task_monitor()
+                .spawn_infinite_task(
+                    "pinned_event_listener_task",
+                    Self::pinned_event_listener_task(room, self.inner.clone()),
+                )
+                .abort_on_drop(),
+        );
+    }
+
+    /// Drop the pinned events from memory, and stop refreshing them, if nobody
+    /// is listening to this cache anymore.
+    ///
+    /// See [`StateLockWriteGuard::unload_if_no_subscribers`].
+    pub(in super::super) async fn unload_if_no_subscribers(&self) -> Result<bool> {
+        let unloaded = self.inner.state.write().await?.unload_if_no_subscribers();
+
+        if unloaded {
+            // Stop refreshing a list of events nobody reads. The next subscriber
+            // spawns the task again, which reloads the events.
+            self.inner.task.lock().unwrap().take();
+        }
+
+        Ok(unloaded)
     }
 
     /// Return a reference to the state.
@@ -497,13 +615,39 @@ impl PinnedEventsCache {
     }
 
     /// Subscribe to live events from this room's pinned events cache.
-    pub async fn subscribe(&self) -> Result<(Vec<Event>, Receiver<TimelineVectorDiffs>)> {
-        let guard = self.inner.state.read().await?;
+    ///
+    /// The cache is loaded, and kept up to date, for as long as at least one
+    /// subscriber is alive; the events are dropped from memory when the last
+    /// one is dropped. Creating, and especially dropping, a [`Subscriber`]
+    /// isn't free, so it should be done sparingly.
+    pub async fn subscribe(&self) -> Result<(Vec<Event>, Subscriber<TimelineVectorDiffs>)> {
+        // An exclusive access to the state, so that the unloading of this cache can't
+        // race with the creation of this subscriber.
+        let mut guard = self.inner.state.write().await?;
+
+        if guard.state.unloaded {
+            // The events were dropped from memory when the last subscriber went away;
+            // bring them back, so this subscriber gets them right away.
+            guard.reload_from_storage().await?;
+            guard.state.unloaded = false;
+        }
+
         let events = guard.state.chunk.events().map(|(_position, item)| item.clone()).collect();
 
-        let recv = guard.state.update_sender.new_pinned_events_receiver();
+        let subscriber = Subscriber::new(
+            guard.state.update_sender.new_pinned_events_receiver(),
+            AutoShrinkMessage::PinnedEvents { room_id: self.inner.room_id.clone() },
+            self.inner.auto_shrink_sender.clone(),
+            &guard.state.subscribers_handle,
+        );
 
-        Ok((events, recv))
+        drop(guard);
+
+        // The events this subscriber just received may be stale, or empty if the cache
+        // was unloaded: the task reloads them and notifies the subscriber.
+        self.ensure_listener_task_is_running();
+
+        Ok((events, subscriber))
     }
 
     /// Try to locate the events in the linked chunk corresponding to the given
@@ -831,5 +975,109 @@ mod tests {
             prop_assert_eq!(ac, Ordering::Greater);
         }
     }
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))] // This uses the cross-process lock, so needs time support.
+mod timed_tests {
+    use std::ops::Not;
+
+    use matrix_sdk_base::event_cache::store::{EventCacheStoreLock, MemoryStore};
+    use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
+    use matrix_sdk_test::{ALICE, async_test, event_factory::EventFactory};
+    use ruma::{event_id, room_id, room_version_rules::RoomVersionRules};
+    use tokio::sync::broadcast::Sender;
+
+    use super::*;
+    use crate::event_cache::states::{StateLock, selectors::PinnedEventsStateSelector};
+
+    /// A `PinnedEventsCacheState`, holding two events, and the `StateLock` it
+    /// lives in.
+    async fn state_with_two_pinned_events() -> (StateLock, CacheStateLock<PinnedEventsStateSelector>)
+    {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let f = EventFactory::new().room(room_id).sender(*ALICE);
+
+        let state_lock = StateLock::new(EventCacheStoreLock::new(
+            MemoryStore::new(),
+            CrossProcessLockConfig::multi_process("hodor"),
+        ));
+
+        let cache_state = state_lock
+            .try_insert_once_with(
+                PinnedEventsStateSelector::new(room_id.to_owned()),
+                |_store_guard| async {
+                    let mut chunk = EventLinkedChunk::new();
+                    chunk.push_live_events(
+                        None,
+                        &[
+                            f.text_msg("first").event_id(event_id!("$ev0")).into(),
+                            f.text_msg("second").event_id(event_id!("$ev1")).into(),
+                        ],
+                    );
+
+                    Ok(PinnedEventsCacheState {
+                        room_id: room_id.to_owned(),
+                        own_user_id: ALICE.to_owned(),
+                        room_version_rules: RoomVersionRules::V1,
+                        chunk,
+                        update_sender: PinnedEventsCacheUpdateSender::new(),
+                        linked_chunk_update_sender: Sender::new(32),
+                        subscribers_handle: SubscribersHandle::default(),
+                        unloaded: false,
+                    })
+                },
+            )
+            .await
+            .unwrap();
+
+        (state_lock, cache_state)
+    }
+
+    #[async_test]
+    async fn test_unload_if_no_subscribers_keeps_the_events_while_someone_listens() {
+        let (_state_lock, cache_state) = state_with_two_pinned_events().await;
+
+        // Someone is listening to this cache.
+        let subscriber_handle = {
+            let guard = cache_state.read().await.unwrap();
+            guard.state.subscribers_handle.new_subscriber_handle()
+        };
+
+        {
+            let mut guard = cache_state.write().await.unwrap();
+
+            assert!(guard.unload_if_no_subscribers().not());
+            assert_eq!(guard.state.chunk.events().count(), 2);
+            assert!(guard.state.unloaded.not());
+        }
+
+        // Once the last subscriber is gone, the events can be dropped.
+        drop(subscriber_handle);
+
+        let mut guard = cache_state.write().await.unwrap();
+
+        assert!(guard.unload_if_no_subscribers());
+        assert_eq!(guard.state.chunk.events().count(), 0);
+        assert!(guard.state.unloaded);
+    }
+
+    #[async_test]
+    async fn test_unload_if_no_subscribers_doesnt_touch_the_store() {
+        let (_state_lock, cache_state) = state_with_two_pinned_events().await;
+
+        let mut guard = cache_state.write().await.unwrap();
+
+        // Forget the updates of the events that were pushed above, as the test is
+        // interested in what unloading produces.
+        let _ = guard.state.chunk.store_updates().take();
+        let _ = guard.state.chunk.updates_as_vector_diffs();
+
+        assert!(guard.unload_if_no_subscribers());
+
+        // The events must stay in the store: no update may reach it, and no observer
+        // may be told the events are gone, since they are only gone from memory.
+        assert!(guard.state.chunk.store_updates().take().is_empty());
+        assert!(guard.state.chunk.updates_as_vector_diffs().is_empty());
     }
 }

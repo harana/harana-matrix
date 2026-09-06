@@ -57,7 +57,7 @@
 //! subscribes to [`RedecryptorReport`] stream.
 //!
 //! ```markdown
-//! 
+//!
 //!      .----------------------.
 //!     |                        |
 //!     |      Beeb, boop!       |
@@ -130,7 +130,10 @@ use matrix_sdk_base::{
         store::types::{RoomKeyInfo, RoomKeyWithheldInfo},
         types::events::room::encrypted::EncryptedEvent,
     },
-    deserialized_responses::{DecryptedRoomEvent, TimelineEvent, TimelineEventKind},
+    deserialized_responses::{
+        DecryptedRoomEvent, TimelineEvent, TimelineEventKind, UnsignedDecryptionResult,
+        UnsignedEventLocation,
+    },
     locks::Mutex,
     task_monitor::BackgroundTaskHandle,
     timer,
@@ -141,7 +144,7 @@ use ruma::{
     OwnedEventId, OwnedRoomId, RoomId,
     events::{AnySyncTimelineEvent, room::encrypted::OriginalSyncRoomEncryptedEvent},
     push::Action,
-    serde::Raw,
+    serde::{JsonObject, Raw},
 };
 use tokio::sync::{
     broadcast::{self, Sender},
@@ -199,6 +202,12 @@ impl MaybeResolvedEvent {
                 if matches!(unresolved_event.kind, TimelineEventKind::UnableToDecrypt { .. })
                     || unresolved_event.encryption_info()
                         != Some(&resolved_utd.decrypted_event.encryption_info)
+                    // The event itself can be unchanged while one of the events bundled in
+                    // its `unsigned` object has been decrypted in the meantime.
+                    || undecryptable_bundled_locations(unresolved_event.kind.unsigned_encryption_map())
+                        != undecryptable_bundled_locations(
+                            resolved_utd.decrypted_event.unsigned_encryption_info.as_ref(),
+                        )
                 {
                     unresolved_event.kind =
                         TimelineEventKind::Decrypted(resolved_utd.decrypted_event);
@@ -343,6 +352,23 @@ fn filter_timeline_event_to_utd(
     // Zip the event ID and event together so we don't have to pick out the event ID
     // again. We need the event ID to replace the event in the cache.
     event_id.zip(event)
+}
+
+/// The locations, in the `unsigned` object of an event, of the bundled events
+/// that couldn't be decrypted.
+fn undecryptable_bundled_locations(
+    unsigned_encryption_info: Option<&BTreeMap<UnsignedEventLocation, UnsignedDecryptionResult>>,
+) -> BTreeSet<UnsignedEventLocation> {
+    unsigned_encryption_info
+        .map(|map| {
+            map.iter()
+                .filter_map(|(location, result)| {
+                    matches!(result, UnsignedDecryptionResult::UnableToDecrypt(_))
+                        .then_some(*location)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// A function which can be used to filter an map [`TimelineEvent`]s into a
@@ -665,7 +691,168 @@ impl EventCache {
     ) -> Result<(), EventCacheError> {
         // Get all the relevant UTDs.
         let events = self.all_encrypted_events(room_id, session_id).await?;
-        self.retry_decryption_for_events(room_id, events).await
+        self.retry_decryption_for_events(room_id, events).await?;
+
+        // An event bundled in the `unsigned` object of another event, an edit for
+        // example, can be a UTD of its own while its parent event is perfectly
+        // decrypted, in which case the parent isn't part of the events above.
+        self.retry_decryption_for_bundled_events(room_id, Some(session_id)).await
+    }
+
+    /// Attempt to decrypt the events bundled in the `unsigned` object of the
+    /// events that are loaded in memory.
+    ///
+    /// A bundled event, an edit or the latest event of a thread, isn't an event
+    /// of a linked chunk: it lives inside its parent event, which is not a UTD
+    /// itself, so the redecryption paths based on UTDs never see it. Its
+    /// decryption is retried here instead, from its parent event.
+    ///
+    /// Only the events loaded in memory are considered, as those are the ones a
+    /// timeline is showing. If `session_id` is given, only the bundled events
+    /// encrypted with that session are retried.
+    #[instrument(skip_all, fields(room_id, session_id))]
+    async fn retry_decryption_for_bundled_events(
+        &self,
+        room_id: &RoomId,
+        session_id: Option<SessionId<'_>>,
+    ) -> Result<(), EventCacheError> {
+        let caches = self.inner.all_caches_for_room(room_id).await?;
+
+        let candidates = caches
+            .all_in_memory_events()
+            .await?
+            .filter_map(filter_timeline_event_to_decrypted)
+            .filter(|(_event_id, event)| {
+                event.unsigned_encryption_info.as_ref().is_some_and(|unsigned_encryption_info| {
+                    unsigned_encryption_info.values().any(|result| {
+                        matches!(
+                            result,
+                            UnsignedDecryptionResult::UnableToDecrypt(info)
+                                if session_id.is_none_or(|session_id| {
+                                    info.session_id.as_deref() == Some(session_id)
+                                })
+                        )
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+
+        if candidates.is_empty() {
+            trace!("No event with an undecryptable bundled event found");
+
+            return Ok(());
+        }
+
+        let mut resolved = Vec::with_capacity(candidates.len());
+
+        for (event_id, mut event) in candidates {
+            if self.decrypt_bundled_events(room_id, &mut event).await {
+                resolved.push(ResolvedUtd { event_id, decrypted_event: event, actions: None });
+            }
+        }
+
+        if !resolved.is_empty() {
+            trace!(
+                num_events = resolved.len(),
+                "Successfully decrypted the bundled events of some events"
+            );
+        }
+
+        self.on_resolved_utds(room_id, resolved).await
+    }
+
+    /// Try to decrypt the bundled events of `event` that are still UTDs, and
+    /// replace them, in place, by their decrypted counterpart.
+    ///
+    /// Returns whether at least one bundled event has been decrypted.
+    async fn decrypt_bundled_events(
+        &self,
+        room_id: &RoomId,
+        event: &mut DecryptedRoomEvent,
+    ) -> bool {
+        let locations = undecryptable_bundled_locations(event.unsigned_encryption_info.as_ref());
+
+        if locations.is_empty() {
+            return false;
+        }
+
+        let Ok(client) = self.inner.client() else {
+            return false;
+        };
+        let olm_machine = client.olm_machine().await;
+        let Some(olm_machine) = olm_machine.as_ref() else {
+            return false;
+        };
+
+        // The bundled events live in the JSON of their parent event, so it must be
+        // deserialized to be able to replace them.
+        let Ok(mut json) = serde_json::from_str::<JsonObject>(event.event.json().get()) else {
+            warn!("Failed to deserialize an event to decrypt its bundled events");
+
+            return false;
+        };
+
+        let mut decrypted_locations = BTreeMap::new();
+
+        {
+            let Some(unsigned) =
+                json.get_mut("unsigned").and_then(|unsigned| unsigned.as_object_mut())
+            else {
+                return false;
+            };
+
+            for location in locations {
+                let Some(bundled_event) = location.find_mut(unsigned) else { continue };
+
+                let Ok(raw_bundled_event) =
+                    serde_json::from_value::<Raw<EncryptedEvent>>(bundled_event.clone())
+                else {
+                    continue;
+                };
+
+                match olm_machine
+                    .decrypt_room_event(&raw_bundled_event, room_id, client.decryption_settings())
+                    .await
+                {
+                    Ok(decrypted) => {
+                        let Ok(decrypted_json) = serde_json::to_value(&decrypted.event) else {
+                            continue;
+                        };
+
+                        *bundled_event = decrypted_json;
+                        decrypted_locations.insert(
+                            location,
+                            UnsignedDecryptionResult::Decrypted(decrypted.encryption_info),
+                        );
+                    }
+
+                    Err(error) => {
+                        trace!(
+                            ?location,
+                            "Failed to decrypt a bundled event despite receiving a room key: {error:?}"
+                        );
+                    }
+                }
+            }
+        }
+
+        if decrypted_locations.is_empty() {
+            return false;
+        }
+
+        let Ok(new_event) = Raw::new(&json) else {
+            warn!("Failed to serialize an event after decrypting its bundled events");
+
+            return false;
+        };
+
+        event.event = new_event.cast_unchecked();
+
+        if let Some(unsigned_encryption_info) = event.unsigned_encryption_info.as_mut() {
+            unsigned_encryption_info.extend(decrypted_locations);
+        }
+
+        true
     }
 
     /// Attempt to redecrypt events that were persisted in the event cache.
@@ -691,6 +878,10 @@ impl EventCache {
         for (room_id, utds) in utds.into_iter() {
             if let Err(e) = self.retry_decryption_for_events(&room_id, utds).await {
                 warn!(%room_id, "Failed to redecrypt in-memory events {e:?}");
+            }
+
+            if let Err(e) = self.retry_decryption_for_bundled_events(&room_id, None).await {
+                warn!(%room_id, "Failed to redecrypt the bundled events of in-memory events {e:?}");
             }
         }
     }
@@ -1264,7 +1455,10 @@ mod tests {
     use matrix_sdk_base::{
         cross_process_lock::CrossProcessLockGeneration,
         crypto::types::events::{ToDeviceEvent, room::encrypted::ToDeviceEncryptedEventContent},
-        deserialized_responses::{ThreadSummaryStatus, TimelineEventKind, VerificationState},
+        deserialized_responses::{
+            ThreadSummaryStatus, TimelineEventKind, UnsignedDecryptionResult,
+            UnsignedEventLocation, VerificationState,
+        },
         event_cache::{
             Event, Gap,
             store::{EventCacheStore, EventCacheStoreError, MemoryStore},
@@ -1279,7 +1473,7 @@ mod tests {
         store::StoreConfig,
     };
     use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
-    use matrix_sdk_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
+    use matrix_sdk_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
     use ruma::{
         EventId, OwnedEventId, RoomId, RoomVersionId, device_id, event_id,
         events::{AnySyncTimelineEvent, relation::RelationType},
@@ -1627,6 +1821,68 @@ mod tests {
         (event, room_key)
     }
 
+    #[test]
+    fn test_undecryptable_bundled_locations() {
+        use std::collections::BTreeMap;
+
+        use matrix_sdk_base::deserialized_responses::{
+            AlgorithmInfo, EncryptionInfo, UnableToDecryptInfo, UnableToDecryptReason,
+        };
+
+        use super::undecryptable_bundled_locations;
+
+        fn utd() -> UnsignedDecryptionResult {
+            UnsignedDecryptionResult::UnableToDecrypt(UnableToDecryptInfo {
+                session_id: Some("session".to_owned()),
+                reason: UnableToDecryptReason::MissingMegolmSession { withheld_code: None },
+            })
+        }
+
+        fn decrypted() -> UnsignedDecryptionResult {
+            UnsignedDecryptionResult::Decrypted(Arc::new(EncryptionInfo {
+                sender: (*ALICE).into(),
+                sender_device: None,
+                forwarder: None,
+                algorithm_info: AlgorithmInfo::MegolmV1AesSha2 {
+                    curve25519_key: "fake_key".to_owned(),
+                    sender_claimed_keys: BTreeMap::new(),
+                    session_id: Some("session".to_owned()),
+                },
+                verification_state: VerificationState::Verified,
+            }))
+        }
+
+        // No bundled event was encrypted at all.
+        assert!(undecryptable_bundled_locations(None).is_empty());
+
+        // Every bundled event was decrypted.
+        let all_decrypted =
+            BTreeMap::from([(UnsignedEventLocation::RelationsReplace, decrypted())]);
+        assert!(undecryptable_bundled_locations(Some(&all_decrypted)).is_empty());
+
+        // Only the locations that are still UTDs are reported.
+        let mixed = BTreeMap::from([
+            (UnsignedEventLocation::RelationsReplace, utd()),
+            (UnsignedEventLocation::RelationsThreadLatestEvent, decrypted()),
+        ]);
+        assert_eq!(
+            undecryptable_bundled_locations(Some(&mixed)),
+            BTreeSet::from([UnsignedEventLocation::RelationsReplace])
+        );
+
+        let all_utds = BTreeMap::from([
+            (UnsignedEventLocation::RelationsReplace, utd()),
+            (UnsignedEventLocation::RelationsThreadLatestEvent, utd()),
+        ]);
+        assert_eq!(
+            undecryptable_bundled_locations(Some(&all_utds)),
+            BTreeSet::from([
+                UnsignedEventLocation::RelationsReplace,
+                UnsignedEventLocation::RelationsThreadLatestEvent,
+            ])
+        );
+    }
+
     #[async_test]
     async fn test_redecryptor() {
         let room_id = room_id!("!test:localhost");
@@ -1714,6 +1970,162 @@ mod tests {
         );
         assert_eq!(expected_room_id, room_id);
         assert!(generic_stream.is_empty());
+    }
+
+    /// Send an encrypted event as `sender`, and capture both the event and the
+    /// to-device message carrying the room key it was encrypted with.
+    async fn send_and_capture(
+        matrix_mock_server: &MatrixMockServer,
+        sender: &Client,
+        room_id: &RoomId,
+        event_id: &EventId,
+        content: Value,
+    ) -> (Raw<AnySyncTimelineEvent>, Raw<ToDeviceEvent<ToDeviceEncryptedEventContent>>) {
+        let sender_user_id = sender.user_id().unwrap();
+        let room = sender.get_room(room_id).expect("The sender should have access to the room");
+
+        let (event_receiver, mock) =
+            matrix_mock_server.mock_room_send().ok_with_capture(event_id, sender_user_id);
+        let (_guard, room_key) =
+            matrix_mock_server.mock_capture_put_to_device(sender_user_id).await;
+
+        {
+            let _guard = mock.mock_once().mount_as_scoped().await;
+
+            room.send_raw("m.room.message", content)
+                .await
+                .expect("We should be able to send the message");
+        }
+
+        (event_receiver.await.expect("The event should have been sent by now"), room_key.await)
+    }
+
+    /// An event with a bundled `m.replace`, as a server would serve it.
+    fn with_bundled_edit(
+        event: &Raw<AnySyncTimelineEvent>,
+        edit: &Raw<AnySyncTimelineEvent>,
+    ) -> Raw<AnySyncTimelineEvent> {
+        let mut event: Value = serde_json::from_str(event.json().get()).unwrap();
+        let edit: Value = serde_json::from_str(edit.json().get()).unwrap();
+
+        event["unsigned"] = json!({ "m.relations": { "m.replace": edit } });
+
+        serde_json::from_value(event).unwrap()
+    }
+
+    #[async_test]
+    async fn test_redecryptor_decrypts_bundled_events() {
+        let room_id = room_id!("!test:localhost");
+
+        let event_factory = EventFactory::new().room(room_id);
+        let (alice, bob, matrix_mock_server, _) = set_up_clients(room_id, true, false).await;
+
+        // Alice sends a first message, and shares the room key it uses.
+        let (event, room_key) =
+            prepare_room(&matrix_mock_server, &event_factory, &alice, &bob, room_id).await;
+
+        // Alice discards that room key, so that the edit below is encrypted with
+        // another session, which Bob doesn't know about yet.
+        alice
+            .get_room(room_id)
+            .unwrap()
+            .discard_room_key()
+            .await
+            .expect("Alice should be able to discard the room key");
+
+        let (edit, edit_room_key) = send_and_capture(
+            &matrix_mock_server,
+            &alice,
+            room_id,
+            event_id!("$edit_id"),
+            json!({
+                "body": "* It's a secret to nobody",
+                "msgtype": "m.text",
+                "m.new_content": { "body": "It's a secret to nobody", "msgtype": "m.text" },
+                "m.relates_to": { "rel_type": "m.replace", "event_id": "$some_id" },
+            }),
+        )
+        .await;
+
+        let event_cache = bob.event_cache();
+        let (room_cache, _) = event_cache
+            .room(room_id)
+            .await
+            .expect("We should be able to get to the event cache for a specific room");
+
+        let (_, mut subscriber) = room_cache.subscribe().await.unwrap();
+
+        // Bob receives the room key of the first message, but not the one of the edit.
+        matrix_mock_server
+            .mock_sync()
+            .ok_and_run(&bob, |builder| {
+                builder.add_to_device_event(room_key.deserialize_as().unwrap());
+            })
+            .await;
+
+        // Bob receives the first message, with the edit bundled in its `unsigned`.
+        matrix_mock_server
+            .mock_sync()
+            .ok_and_run(&bob, |builder| {
+                builder.add_joined_room(
+                    JoinedRoomBuilder::new(room_id)
+                        .add_timeline_event(with_bundled_edit(&event, &edit)),
+                );
+            })
+            .await;
+
+        // The event itself is decrypted, but its bundled edit is not.
+        assert_let_timeout!(
+            Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) =
+                subscriber.recv()
+        );
+        assert_eq!(diffs.len(), 1);
+        assert_matches!(&diffs[0], VectorDiff::Append { values });
+        assert_eq!(values.len(), 1);
+        assert_matches!(&values[0].kind, TimelineEventKind::Decrypted(decrypted));
+        assert_matches!(
+            decrypted
+                .unsigned_encryption_info
+                .as_ref()
+                .expect("The bundled edit must have been processed")
+                .get(&UnsignedEventLocation::RelationsReplace)
+                .expect("The bundled edit must have an encryption result"),
+            UnsignedDecryptionResult::UnableToDecrypt(_)
+        );
+
+        // Now Bob receives the room key of the edit.
+        matrix_mock_server
+            .mock_sync()
+            .ok_and_run(&bob, |builder| {
+                builder.add_to_device_event(edit_room_key.deserialize_as().unwrap());
+            })
+            .await;
+
+        // The bundled edit is decrypted, and the event is replaced in the cache.
+        assert_let_timeout!(
+            Duration::from_secs(1),
+            Ok(RoomEventCacheUpdate::UpdateTimelineEvents(TimelineVectorDiffs { diffs, .. })) =
+                subscriber.recv()
+        );
+        assert_eq!(diffs.len(), 1);
+        assert_matches!(&diffs[0], VectorDiff::Set { index: 0, value });
+        assert_matches!(&value.kind, TimelineEventKind::Decrypted(decrypted));
+        assert_matches!(
+            decrypted
+                .unsigned_encryption_info
+                .as_ref()
+                .expect("The bundled edit must still be described")
+                .get(&UnsignedEventLocation::RelationsReplace)
+                .expect("The bundled edit must have an encryption result"),
+            UnsignedDecryptionResult::Decrypted(_)
+        );
+
+        // And its content is the decrypted edit.
+        let event: Value = serde_json::from_str(decrypted.event.json().get()).unwrap();
+        assert_eq!(
+            event["unsigned"]["m.relations"]["m.replace"]["content"]["m.new_content"]["body"],
+            "It's a secret to nobody"
+        );
     }
 
     #[async_test]

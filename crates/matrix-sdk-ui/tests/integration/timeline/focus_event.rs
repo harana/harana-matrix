@@ -245,6 +245,63 @@ async fn test_live_aggregations_are_reflected_on_focused_timelines() {
 }
 
 #[async_test]
+async fn test_focused_timeline_loads_aggregations_outside_the_context_window() {
+    let room_id = room_id!("!a98sd12bjh:example.org");
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    // Start a focused timeline.
+    let f = EventFactory::new().room(room_id);
+    let target_event = event_id!("$1");
+
+    server
+        .mock_room_event_context()
+        .room(room_id)
+        .ok(RoomContextResponseTemplate::new(
+            f.text_msg("yolo").event_id(target_event).sender(*BOB).into_event(),
+        ))
+        .mock_once()
+        .mount()
+        .await;
+
+    // The reaction to the focused event isn't part of the /context window, it's only
+    // known by /relations.
+    server
+        .mock_room_relations()
+        .match_target_event(target_event.to_owned())
+        .ok(RoomRelationsResponseTemplate::default()
+            .events(vec![f.reaction(target_event, "👍").sender(*ALICE).into_raw_timeline()]))
+        .mock_once()
+        .mount()
+        .await;
+
+    server.mock_room_state_encryption().plain().mount().await;
+
+    let room = server.sync_joined_room(&client, room_id).await;
+    let timeline = TimelineBuilder::new(&room)
+        .with_focus(TimelineFocus::Event {
+            target: target_event.to_owned(),
+            num_context_events: 20,
+            thread_mode: TimelineEventFocusThreadMode::Automatic { hide_threaded_events: false },
+        })
+        .build()
+        .await
+        .unwrap();
+
+    let (items, _timeline_stream) = timeline.subscribe().await;
+
+    assert_eq!(items.len(), 1 + 1); // event items + a date divider
+    assert!(items[0].is_date_divider());
+
+    // The reaction has been loaded with the focused event, and aggregated onto it.
+    let event_item = items[1].as_event().unwrap();
+    assert_eq!(event_item.content().as_message().unwrap().body(), "yolo");
+    let reactions = event_item.content().reactions().cloned().unwrap_or_default();
+    assert_eq!(reactions.len(), 1);
+    let _ = reactions["👍"][*ALICE];
+}
+
+#[async_test]
 async fn test_focused_timeline_local_echoes() {
     let room_id = room_id!("!a98sd12bjh:example.org");
     let server = MatrixMockServer::new().await;

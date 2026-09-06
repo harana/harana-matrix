@@ -3195,8 +3195,8 @@ impl Session {
                 let matrix_sdk::authentication::matrix::MatrixSession {
                     meta: matrix_sdk::SessionMeta { user_id, device_id },
                     tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
-                    // The FFI session carries the homeserver in its own field,
-                    // which the caller passed in.
+                    // This type has carried the homeserver of its own since before the
+                    // SDK's session did, and it is the one the caller passed in.
                     homeserver: _,
                 } = a.session().context("Missing session")?;
 
@@ -3215,6 +3215,7 @@ impl Session {
                 let matrix_sdk::authentication::oauth::UserSession {
                     meta: matrix_sdk::SessionMeta { user_id, device_id },
                     tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                    homeserver: _,
                 } = api.user_session().context("Missing session")?;
                 let client_id = api.client_id().context("OAuth client ID is missing.")?.clone();
                 let oauth_data = OAuthSessionData { client_id };
@@ -3262,6 +3263,7 @@ impl TryFrom<Session> for AuthSession {
                     device_id: device_id.into(),
                 },
                 tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                homeserver: Url::parse(&homeserver_url).ok(),
             };
 
             let session = OAuthSession { client_id: oauth_data.client_id, user: user_session };
@@ -3275,8 +3277,6 @@ impl TryFrom<Session> for AuthSession {
                     device_id: device_id.into(),
                 },
                 tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
-                // Hand the stored homeserver to the SDK, so restoring the
-                // session doesn't have to resolve the server name again.
                 homeserver: Url::parse(&homeserver_url).ok(),
             };
 
