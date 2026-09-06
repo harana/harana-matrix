@@ -27,7 +27,7 @@ pub mod verification;
 
 use std::collections::BTreeMap;
 
-use common_ruma::OwnedRoomId;
+use harana_matrix_common::OwnedRoomId;
 
 use crate::{RoomInfoNotableUpdateReasons, StateChanges};
 

@@ -26,13 +26,13 @@ use client_common::{
     },
     locks::RwLock as StdRwLock,
 };
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId, OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId,
     UserId, events::secret::request::SecretName,
 };
 use tokio::sync::{Mutex, RwLock};
 use tracing::warn;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 use zeroize::Zeroizing;
 
 use super::{
@@ -876,8 +876,8 @@ mod tests {
     use std::collections::HashMap;
 
     use common_test::async_test;
-    use common_ruma::{RoomId, room_id, user_id};
-    use common_olm::{Curve25519PublicKey, Ed25519PublicKey};
+    use harana_matrix_common::{RoomId, room_id, user_id};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey};
 
     use super::SessionId;
     use crate::{
@@ -1370,10 +1370,10 @@ mod integration_tests {
 
     use async_trait::async_trait;
     use client_common::cross_process_lock::CrossProcessLockGeneration;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, OwnedDeviceId, RoomId, TransactionId, UserId, events::secret::request::SecretName,
     };
-    use common_olm::Curve25519PublicKey;
+    use harana_matrix_common::olm::Curve25519PublicKey;
     use zeroize::Zeroizing;
 
     use super::MemoryStore;

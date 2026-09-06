@@ -16,7 +16,7 @@
 //!
 //! [MSC4268]: https://github.com/matrix-org/matrix-spec-proposals/pull/4268
 
-use common_ruma::{OwnedRoomId, events::room::EncryptedFile};
+use harana_matrix_common::{OwnedRoomId, events::room::EncryptedFile};
 use serde::{Deserialize, Serialize};
 
 use super::EventType;

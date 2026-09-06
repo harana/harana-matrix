@@ -4,7 +4,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use client_crypto::{EncryptionSettings, OlmMachine, OlmMachineBuilder};
 use client_sqlite::SqliteCryptoStore;
 use common_test::ruma_response_from_json;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedUserId, TransactionId, UserId,
     api::client::{
         keys::{claim_keys, get_keys},

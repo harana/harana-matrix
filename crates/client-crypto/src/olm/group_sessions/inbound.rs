@@ -22,13 +22,13 @@ use std::{
     },
 };
 
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, OwnedRoomId, RoomId, events::room::history_visibility::HistoryVisibility,
     serde::JsonObject,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use common_olm::{
+use harana_matrix_common::olm::{
     Curve25519PublicKey, Ed25519PublicKey, PickleError,
     megolm::{
         DecryptedMessage, DecryptionError, InboundGroupSession as InnerSession,
@@ -986,13 +986,13 @@ mod tests {
     use assert_matches2::assert_let;
     use insta::{assert_json_snapshot, with_settings};
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, UserId, device_id, events::room::history_visibility::HistoryVisibility,
         owned_room_id, room_id, user_id,
     };
     use serde_json::json;
     use similar_asserts::assert_eq;
-    use common_olm::{
+    use harana_matrix_common::olm::{
         Curve25519PublicKey, Ed25519PublicKey,
         megolm::{SessionKey, SessionOrdering},
     };

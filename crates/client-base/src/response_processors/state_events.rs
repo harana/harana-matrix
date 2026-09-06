@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 
 use as_variant::as_variant;
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     events::{AnySyncStateEvent, SyncStateEvent},
     serde::Raw,
@@ -32,7 +32,7 @@ pub mod sync {
     use std::collections::BTreeSet;
 
     use as_variant::as_variant;
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedUserId, RoomId, UserId,
         events::{
             AnySyncStateEvent, AnySyncTimelineEvent, StateEventType, room::member::MembershipState,
@@ -269,7 +269,7 @@ pub mod sync {
 pub mod stripped {
     use std::collections::BTreeMap;
 
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomId, UserId,
         events::{AnyStrippedStateEvent, StateEventType},
         push::Action,
@@ -521,7 +521,7 @@ async fn decrypt_state_event(
     e2ee: &e2ee::E2EE<'_>,
 ) -> Option<RawStateEventWithKeys<AnySyncStateEvent>> {
     use client_crypto::RoomEventDecryptionResult;
-    use common_ruma::OwnedEventId;
+    use harana_matrix_common::OwnedEventId;
     use tracing::{trace, warn};
 
     let event_id = match raw_event.raw.get_field::<OwnedEventId>("event_id") {
@@ -576,7 +576,7 @@ mod tests {
         DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, TestResult, async_test,
         event_factory::EventFactory,
     };
-    use common_ruma::{RoomVersionId, event_id, room_id, user_id};
+    use harana_matrix_common::{RoomVersionId, event_id, room_id, user_id};
 
     use crate::test_utils::logged_in_base_client;
 

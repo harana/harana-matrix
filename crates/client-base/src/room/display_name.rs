@@ -17,8 +17,8 @@ use std::fmt;
 use as_variant::as_variant;
 use regex::Regex;
 #[cfg(feature = "unstable-msc4426")]
-use common_ruma::profile::{CallProfileField, StatusProfileField};
-use common_ruma::{
+use harana_matrix_common::profile::{CallProfileField, StatusProfileField};
+use harana_matrix_common::{
     OwnedMxcUri, OwnedUserId, RoomAliasId, UserId,
     events::{SyncStateEvent, member_hints::MemberHintsEventContent},
 };
@@ -584,7 +584,7 @@ mod tests {
     use std::{collections::BTreeSet, sync::Arc};
 
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         UserId,
         api::client::sync::sync_events::v3::RoomSummary as RumaSummary,
         assign,

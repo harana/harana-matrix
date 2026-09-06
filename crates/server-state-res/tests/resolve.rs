@@ -21,7 +21,7 @@ use std::{
 
 use server_state_res::{Error, Event, StateMap, resolve, utils::event_id_set::EventIdSet};
 use harana_matrix_macros::async_test;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt,
     UserId,
     events::{StateEventType, TimelineEventType},

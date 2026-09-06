@@ -24,7 +24,7 @@ use std::{
 use assert_matches2::assert_let;
 use client_base::crypto::types::events::room::encrypted::EncryptedToDeviceEvent;
 use common_test::test_json;
-use common_ruma::{
+use harana_matrix_common::{
     CrossSigningKeyId, DeviceId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OwnedDeviceId,
     OwnedOneTimeKeyId, OwnedUserId, UserId,
     api::client::{
@@ -296,7 +296,7 @@ impl MatrixMockServer {
     /// # Examples
     ///
     /// ```rust
-    /// # use common_ruma::{ device_id,  user_id, serde::Raw};
+    /// # use harana_matrix_common::{ device_id,  user_id, serde::Raw};
     /// # use serde_json::json;
     ///
     /// # use common_test::async_test;
@@ -725,7 +725,7 @@ fn mock_keys_signature_upload(keys: Arc<Mutex<Keys>>) -> impl Fn(&Request) -> Re
                     let mut existing = existing_master_key.deserialize().unwrap();
 
                     let target = CrossSigningKeyId::from_parts(
-                        common_ruma::SigningKeyAlgorithm::Ed25519,
+                        harana_matrix_common::SigningKeyAlgorithm::Ed25519,
                         key_id.try_into().unwrap(),
                     );
 

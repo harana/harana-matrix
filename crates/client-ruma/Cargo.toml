@@ -34,7 +34,7 @@ bytes = "1.11.1"
 futures-core.workspace = true
 http = { workspace = true, features = ["std"] }
 reqwest = { workspace = true, optional = true }
-common-ruma.workspace = true
+harana-matrix-common.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

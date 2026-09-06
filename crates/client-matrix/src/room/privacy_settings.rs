@@ -1,5 +1,5 @@
 use client_base::Room as BaseRoom;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomAliasId, RoomAliasId,
     api::client::{
         directory::{get_room_visibility, set_room_visibility},
@@ -188,7 +188,7 @@ mod tests {
     use std::{ops::Not, time::Duration};
 
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::room::Visibility,
         event_id,
         events::{

@@ -18,7 +18,7 @@
 use std::{fmt, future::Future};
 
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, UserId,
     events::{MessageLikeEventType, StateEventType},
 };
@@ -349,7 +349,7 @@ impl<'de> Deserialize<'de> for Capabilities {
             where
                 D: Deserializer<'de>,
             {
-                let s = common_ruma::serde::deserialize_cow_str(deserializer)?;
+                let s = harana_matrix_common::serde::deserialize_cow_str(deserializer)?;
                 if s == REQUIRES_CLIENT {
                     return Ok(Self::RequiresClient);
                 }
@@ -436,7 +436,7 @@ impl<'de> Deserialize<'de> for Capabilities {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{device_id, events::StateEventType, user_id};
+    use harana_matrix_common::{device_id, events::StateEventType, user_id};
 
     use super::*;
     use crate::widget::filter::ToDeviceEventFilter;

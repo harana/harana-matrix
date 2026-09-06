@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use common_ruma::{
+use harana_matrix_common::{
     MxcUri, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId, UserId,
     events::room::member::SyncRoomMemberEvent,
 };

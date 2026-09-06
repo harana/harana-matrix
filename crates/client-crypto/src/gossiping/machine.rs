@@ -32,7 +32,7 @@ use std::{
 };
 
 use client_common::locks::RwLock as StdRwLock;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OneTimeKeyAlgorithm, OwnedDeviceId, OwnedTransactionId, OwnedUserId, RoomId,
     TransactionId, UserId,
     api::client::keys::claim_keys::v3::Request as KeysClaimRequest,
@@ -41,7 +41,7 @@ use common_ruma::{
     },
 };
 use tracing::{Span, debug, field::debug, info, instrument, trace, warn};
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use super::{
     GossipRequest, GossippedSecret, RequestEvent, RequestInfo, SecretInfo, ServedSecretRequests,
@@ -1291,7 +1291,7 @@ mod tests {
     #[cfg(feature = "automatic-room-key-forwarding")]
     use assert_matches::assert_matches;
     use common_test::{async_test, message_like_event_content};
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, RoomId, UserId, device_id,
         events::{
             ToDeviceEvent as RumaToDeviceEvent,
@@ -1533,7 +1533,7 @@ mod tests {
     fn extract_content<'a>(
         recipient: &UserId,
         request: &'a crate::types::requests::OutgoingRequest,
-    ) -> &'a Raw<common_ruma::events::AnyToDeviceEventContent> {
+    ) -> &'a Raw<harana_matrix_common::events::AnyToDeviceEventContent> {
         request
             .request()
             .to_device()
@@ -1558,7 +1558,7 @@ mod tests {
             #[cfg(feature = "experimental-encrypted-state-events")]
             state_key: None,
             content,
-            origin_server_ts: common_ruma::MilliSecondsSinceUnixEpoch::now(),
+            origin_server_ts: harana_matrix_common::MilliSecondsSinceUnixEpoch::now(),
             unsigned: Default::default(),
             other: Default::default(),
         }
@@ -2389,7 +2389,7 @@ mod tests {
     #[async_test]
     async fn test_secret_broadcasting() {
         use futures_util::{FutureExt, pin_mut};
-        use common_ruma::api::client::to_device::send_event_to_device::v3::Response as ToDeviceResponse;
+        use harana_matrix_common::api::client::to_device::send_event_to_device::v3::Response as ToDeviceResponse;
         use serde_json::value::to_raw_value;
         use tokio_stream::StreamExt;
 

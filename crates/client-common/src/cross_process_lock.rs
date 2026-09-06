@@ -1079,7 +1079,7 @@ mod tests {
 pub mod memory_store_helper {
     use std::collections::{HashMap, hash_map::Entry};
 
-    use common_ruma::time::{Duration, Instant};
+    use harana_matrix_common::time::{Duration, Instant};
 
     use super::{CrossProcessLockGeneration, FIRST_CROSS_PROCESS_LOCK_GENERATION};
 

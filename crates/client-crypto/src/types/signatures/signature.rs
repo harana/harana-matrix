@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 use as_variant::as_variant;
-use common_ruma::DeviceKeyAlgorithm;
-use common_olm::Ed25519Signature;
+use harana_matrix_common::DeviceKeyAlgorithm;
+use harana_matrix_common::olm::Ed25519Signature;
 
 use crate::types::InvalidSignature;
 #[cfg(feature = "experimental-x509-identity-verification")]

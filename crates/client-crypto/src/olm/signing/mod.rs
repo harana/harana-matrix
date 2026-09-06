@@ -20,14 +20,14 @@ use std::sync::{
 };
 
 pub use pk_signing::{MasterSigning, PickledSignings, SelfSigning, SigningError, UserSigning};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceId, OwnedDeviceKeyId, OwnedUserId, UserId,
     api::client::keys::upload_signatures::v3::{Request as SignatureUploadRequest, SignedKeys},
     events::secret::request::SecretName,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use common_olm::Ed25519Signature;
+use harana_matrix_common::olm::Ed25519Signature;
 
 use super::StaticAccountData;
 #[cfg(feature = "experimental-x509-identity-verification")]
@@ -695,7 +695,7 @@ mod tests {
     use std::sync::Arc;
 
     use common_test::async_test;
-    use common_ruma::{CanonicalJsonValue, DeviceKeyAlgorithm, DeviceKeyId, UserId, device_id, user_id};
+    use harana_matrix_common::{CanonicalJsonValue, DeviceKeyAlgorithm, DeviceKeyId, UserId, device_id, user_id};
     use serde_json::json;
 
     use super::{PrivateCrossSigningIdentity, pk_signing::Signing};

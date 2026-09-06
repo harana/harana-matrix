@@ -33,7 +33,7 @@ use rand::{
     distr::{Alphanumeric, SampleString},
     rng,
 };
-use common_ruma::{
+use harana_matrix_common::{
     UInt,
     events::{
         GlobalAccountDataEventContent, GlobalAccountDataEventType,
@@ -78,7 +78,7 @@ pub enum DecodeError {
     Base58(#[from] bs58::decode::Error),
     /// The secret storage key isn't valid Base64.
     #[error(transparent)]
-    Base64(#[from] common_olm::Base64DecodeError),
+    Base64(#[from] harana_matrix_common::olm::Base64DecodeError),
     /// The secret storage key is too short, we couldn't read enough data.
     #[error("The Base58 decoded key has an invalid length, expected {0}, got {1}")]
     KeyLength(usize, usize),
@@ -515,7 +515,7 @@ impl SecretStorageKey {
     ///
     /// ```
     /// use client_crypto::secret_storage::SecretStorageKey;
-    /// use common_ruma::events::secret::request::SecretName;
+    /// use harana_matrix_common::events::secret::request::SecretName;
     ///
     /// let key = SecretStorageKey::new();
     /// let secret = "It's a secret to everybody";
@@ -598,7 +598,7 @@ impl Default for SecretStorageKey {
 mod test {
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
-    use common_ruma::events::EventContentFromType;
+    use harana_matrix_common::events::EventContentFromType;
     use serde_json::{json, value::to_raw_value};
 
     use super::*;

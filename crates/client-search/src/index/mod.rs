@@ -21,7 +21,7 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
-use common_ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedRoomId, RoomId};
 use tantivy::{
     Index, IndexReader, ReloadPolicy, TantivyDocument, collector::TopDocs,
     directory::error::OpenDirectoryError, query::QueryParser, schema::Value,
@@ -381,7 +381,7 @@ mod tests {
     use std::{collections::HashSet, error::Error};
 
     use common_test::event_factory::EventFactory;
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, MilliSecondsSinceUnixEpoch, UInt, event_id,
         events::{
             AnySyncMessageLikeEvent,

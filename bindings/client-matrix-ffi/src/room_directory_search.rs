@@ -18,7 +18,7 @@ use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use client_matrix::room_directory_search::RoomDirectorySearch as SdkRoomDirectorySearch;
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::ServerName;
+use harana_matrix_common::ServerName;
 use tokio::sync::RwLock;
 
 use crate::{error::ClientError, runtime::get_runtime_handle, task_handle::TaskHandle};
@@ -32,16 +32,16 @@ pub enum PublicRoomJoinRule {
     Invite,
 }
 
-impl TryFrom<common_ruma::room::JoinRuleKind> for PublicRoomJoinRule {
+impl TryFrom<harana_matrix_common::room::JoinRuleKind> for PublicRoomJoinRule {
     type Error = String;
 
-    fn try_from(value: common_ruma::room::JoinRuleKind) -> Result<Self, Self::Error> {
+    fn try_from(value: harana_matrix_common::room::JoinRuleKind) -> Result<Self, Self::Error> {
         match value {
-            common_ruma::room::JoinRuleKind::Public => Ok(Self::Public),
-            common_ruma::room::JoinRuleKind::Knock => Ok(Self::Knock),
-            common_ruma::room::JoinRuleKind::Restricted => Ok(Self::Restricted),
-            common_ruma::room::JoinRuleKind::KnockRestricted => Ok(Self::KnockRestricted),
-            common_ruma::room::JoinRuleKind::Invite => Ok(Self::Invite),
+            harana_matrix_common::room::JoinRuleKind::Public => Ok(Self::Public),
+            harana_matrix_common::room::JoinRuleKind::Knock => Ok(Self::Knock),
+            harana_matrix_common::room::JoinRuleKind::Restricted => Ok(Self::Restricted),
+            harana_matrix_common::room::JoinRuleKind::KnockRestricted => Ok(Self::KnockRestricted),
+            harana_matrix_common::room::JoinRuleKind::Invite => Ok(Self::Invite),
             rule => Err(format!("unsupported join rule: {rule:?}")),
         }
     }

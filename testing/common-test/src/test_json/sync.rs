@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use common_ruma::{RoomId, room_id};
+use harana_matrix_common::{RoomId, room_id};
 use serde_json::{Value as JsonValue, json};
 
 use crate::DEFAULT_TEST_ROOM_ID;

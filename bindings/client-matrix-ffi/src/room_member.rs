@@ -1,5 +1,5 @@
 use client_matrix::room::{RoomMember as SdkRoomMember, RoomMemberRole};
-use common_ruma::{UserId, events::room::power_levels::UserPowerLevel};
+use harana_matrix_common::{UserId, events::room::power_levels::UserPowerLevel};
 
 use crate::{
     error::{ClientError, NotYetImplemented},

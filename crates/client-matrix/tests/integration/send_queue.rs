@@ -26,8 +26,8 @@ use common_test::{
     event_factory::EventFactory,
 };
 #[cfg(feature = "unstable-msc4274")]
-use common_ruma::events::room::message::GalleryItemType;
-use common_ruma::{
+use harana_matrix_common::events::room::message::GalleryItemType;
+use harana_matrix_common::{
     MxcUri, OwnedEventId, OwnedTransactionId, TransactionId, event_id,
     events::{
         AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
@@ -1726,7 +1726,7 @@ async fn test_unwedge_unrecoverable_errors() {
 #[cfg(feature = "e2e-encryption")]
 async fn test_retry_requests_blocked_on_verification() {
     use client_base::store::QueueWedgeError;
-    use common_ruma::device_id;
+    use harana_matrix_common::device_id;
 
     let mock = MatrixMockServer::new().await;
 
@@ -1927,7 +1927,7 @@ async fn test_reloading_rooms_with_unsent_events() {
 
 #[async_test]
 async fn test_reply_to_an_already_sent_event_is_refused() {
-    use common_ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+    use harana_matrix_common::events::room::message::RoomMessageEventContentWithoutRelation;
 
     let mock = MatrixMockServer::new().await;
 
@@ -1960,7 +1960,7 @@ async fn test_reply_to_an_already_sent_event_is_refused() {
 
 #[async_test]
 async fn test_read_receipts_are_queued_and_superseded() {
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::receipt::create_receipt::v3::ReceiptType, events::receipt::ReceiptThread,
     };
 

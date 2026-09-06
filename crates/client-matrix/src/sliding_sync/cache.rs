@@ -8,7 +8,7 @@
 use client_base::to_device_token;
 use client_base::{StateStore, StoreError, event_cache::store::EventCacheStoreLockGuard};
 use client_common::{cross_process_lock::MappedCrossProcessLockState, timer};
-use common_ruma::UserId;
+use harana_matrix_common::UserId;
 use tracing::{trace, warn};
 
 use super::{FrozenSlidingSyncList, SlidingSync, SlidingSyncPositionMarkers};

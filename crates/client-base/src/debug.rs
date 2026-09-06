@@ -18,7 +18,7 @@ use std::fmt;
 
 pub use client_common::debug::*;
 use client_common::deserialized_responses::ProcessedToDeviceEvent;
-use common_ruma::{
+use harana_matrix_common::{
     api::client::sync::sync_events::v3::{InvitedRoom, KnockedRoom},
     serde::Raw,
 };

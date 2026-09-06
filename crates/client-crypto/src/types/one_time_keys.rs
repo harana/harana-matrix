@@ -20,10 +20,10 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{OneTimeKeyAlgorithm, serde::Raw};
+use harana_matrix_common::{OneTimeKeyAlgorithm, serde::Raw};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, value::to_raw_value};
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use super::{Signatures, deserialize_curve_key, serialize_curve_key};
 
@@ -110,7 +110,7 @@ impl OneTimeKey {
     /// JSON value.
     pub fn deserialize(
         algorithm: OneTimeKeyAlgorithm,
-        key: &Raw<common_ruma::encryption::OneTimeKey>,
+        key: &Raw<harana_matrix_common::encryption::OneTimeKey>,
     ) -> Result<Self, serde_json::Error> {
         match algorithm {
             OneTimeKeyAlgorithm::SignedCurve25519 => {
@@ -133,9 +133,9 @@ impl OneTimeKey {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{DeviceKeyAlgorithm, DeviceKeyId, device_id, user_id};
+    use harana_matrix_common::{DeviceKeyAlgorithm, DeviceKeyId, device_id, user_id};
     use serde_json::json;
-    use common_olm::{Curve25519PublicKey, Ed25519Signature};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519Signature};
 
     use crate::types::{Signature, SignedKey};
 

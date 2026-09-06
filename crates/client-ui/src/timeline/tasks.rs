@@ -25,9 +25,9 @@ use client_matrix::{
     send_queue::RoomSendQueueUpdate,
 };
 use client_base::RoomInfo;
-use common_ruma::OwnedEventId;
+use harana_matrix_common::OwnedEventId;
 #[cfg(feature = "unstable-msc4426")]
-use common_ruma::{OwnedUserId, UserId};
+use harana_matrix_common::{OwnedUserId, UserId};
 use tokio::sync::broadcast::{Receiver, error::RecvError};
 use tracing::{debug, error, instrument, trace, warn};
 

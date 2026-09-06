@@ -139,7 +139,7 @@ pub(crate) mod tests {
         Certificate, CertificateParams, CustomExtension, DnType, Issuer, KeyPair, PublicKeyData,
         SanType,
     };
-    use common_ruma::OwnedUserId;
+    use harana_matrix_common::OwnedUserId;
 
     use crate::x509::{RustRawX509Signer, RustRawX509Verifier, X509Signer, X509Verifier};
 

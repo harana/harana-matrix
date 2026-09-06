@@ -9,7 +9,7 @@ use client_base::crypto::types::events::room::encrypted::EncryptedToDeviceEvent;
 use common_test::{
     InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, RoomVersionId, device_id, event_id,
     events::{
         AnySyncTimelineEvent,

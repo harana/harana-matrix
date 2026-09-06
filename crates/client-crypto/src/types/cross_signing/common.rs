@@ -22,14 +22,14 @@
 use std::collections::BTreeMap;
 
 use as_variant::as_variant;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceKeyId, OwnedUserId, UserId,
     encryption::KeyUsage,
     serde::{JsonCastable, Raw},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::to_raw_value};
-use common_olm::{Ed25519PublicKey, KeyError};
+use harana_matrix_common::olm::{Ed25519PublicKey, KeyError};
 
 use super::{SelfSigningPubkey, UserSigningPubkey};
 use crate::types::{Signatures, SigningKeys};
@@ -87,7 +87,7 @@ impl CrossSigningKey {
     }
 }
 
-impl JsonCastable<CrossSigningKey> for common_ruma::encryption::CrossSigningKey {}
+impl JsonCastable<CrossSigningKey> for harana_matrix_common::encryption::CrossSigningKey {}
 
 /// An enum over the different key types a cross-signing key can have.
 ///

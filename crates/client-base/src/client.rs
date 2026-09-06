@@ -34,10 +34,10 @@ use client_crypto::{
     store::types::RoomPendingKeyBundleDetails, types::requests::ToDeviceRequest,
 };
 #[cfg(doc)]
-use common_ruma::DeviceId;
+use harana_matrix_common::DeviceId;
 #[cfg(feature = "e2e-encryption")]
-use common_ruma::events::room::history_visibility::HistoryVisibility;
-use common_ruma::{
+use harana_matrix_common::events::room::history_visibility::HistoryVisibility;
+use harana_matrix_common::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::{self as api, sync::sync_events::v5},
     events::{
@@ -388,7 +388,7 @@ impl BaseClient {
     ///
     /// This method panics if it is called twice.
     ///
-    /// [`UserId`]: common_ruma::UserId
+    /// [`UserId`]: harana_matrix_common::UserId
     pub async fn activate(
         &self,
         session_meta: SessionMeta,
@@ -517,7 +517,7 @@ impl BaseClient {
     ///
     /// ```rust
     /// # use client_base::{BaseClient, store::StoreConfig, RoomState, ThreadingSupport, DmRoomDefinition};
-    /// # use common_ruma::{OwnedRoomId, OwnedUserId, RoomId};
+    /// # use harana_matrix_common::{OwnedRoomId, OwnedUserId, RoomId};
     /// use client_common::cross_process_lock::CrossProcessLockConfig;
     /// # async {
     /// # let client = BaseClient::new(
@@ -1567,10 +1567,10 @@ mod tests {
         event_factory::EventFactory, ruma_response_from_json,
     };
     #[cfg(feature = "unstable-msc4426")]
-    use common_ruma::profile::{
+    use harana_matrix_common::profile::{
         ProfileFieldValue, StatusProfileField, UserProfileChanges, UserProfileUpdate,
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomId,
         api::client::{self as api, sync::sync_events::v5},
         event_id,
@@ -2073,7 +2073,7 @@ mod tests {
         client.receive_sync_response(response).await.unwrap();
         client
             .state_store()
-            .get_state_event_static::<common_ruma::events::room::name::RoomNameEventContent>(room_id)
+            .get_state_event_static::<harana_matrix_common::events::room::name::RoomNameEventContent>(room_id)
             .await
             .expect("Failed to fetch state event")
             .expect("State event not found")

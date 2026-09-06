@@ -40,7 +40,7 @@ use client_base::{
     ttl::TtlValue,
 };
 use client_store_encryption::{Error as EncryptionError, StoreCipher};
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri,
     OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UserId,
     api::client::discovery::get_capabilities::v3::Capabilities,
@@ -2162,7 +2162,7 @@ impl From<&StrippedRoomMemberEvent> for RoomMember {
 mod migration_tests {
     use assert_matches2::assert_matches;
     use client_base::store::{QueuedRequestKind, SerializableEventContent};
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedRoomId, OwnedTransactionId, TransactionId,
         events::room::message::RoomMessageEventContent, room_id,
     };

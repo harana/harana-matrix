@@ -78,8 +78,8 @@ impl From<client_ui::room_list_service::Error> for RoomListError {
     }
 }
 
-impl From<common_ruma::IdParseError> for RoomListError {
-    fn from(value: common_ruma::IdParseError) -> Self {
+impl From<harana_matrix_common::IdParseError> for RoomListError {
+    fn from(value: harana_matrix_common::IdParseError) -> Self {
         Self::InvalidRoomId { error: value.to_string() }
     }
 }

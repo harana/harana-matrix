@@ -24,7 +24,7 @@ use client_matrix::{
     ruma::events::push_rules::PushRulesEvent,
 };
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::{
+use harana_matrix_common::{
     Int, RoomId, UInt,
     events::push_rules::PushRulesEventContent,
     push::{

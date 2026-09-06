@@ -23,7 +23,7 @@ use futures_util::{StreamExt, stream_select};
 use client_base::crypto::{
     IdentityState, IdentityStatusChange, RoomIdentityChange, RoomIdentityState,
 };
-use common_ruma::{OwnedUserId, UserId, events::room::member::SyncRoomMemberEvent};
+use harana_matrix_common::{OwnedUserId, UserId, events::room::member::SyncRoomMemberEvent};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -606,7 +606,7 @@ mod tests {
             event_factory::EventFactory, test_json,
             test_json::keys_query_sets::IdentityChangeDataSet,
         };
-        use common_ruma::{
+        use harana_matrix_common::{
             OwnedUserId, TransactionId, UserId,
             api::client::keys::{get_keys, get_keys::v3::Response as KeyQueryResponse},
             events::room::member::MembershipState,

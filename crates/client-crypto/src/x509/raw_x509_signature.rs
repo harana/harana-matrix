@@ -32,8 +32,8 @@ use cms::{
     },
 };
 use pkcs1::{RsaPssParams, der::oid::AssociatedOid};
-use common_ruma::OwnedDeviceId;
-use common_olm::base64_encode;
+use harana_matrix_common::OwnedDeviceId;
+use harana_matrix_common::olm::base64_encode;
 
 #[cfg(doc)]
 use crate::x509::{RawX509Signer, RawX509Verifier};

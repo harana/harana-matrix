@@ -47,7 +47,7 @@ sha2 = { workspace =  true, features = ["alloc", "zeroize"], optional = true }
 tantivy = { version = "0.26.1", default-features = false, features = ["mmap", "stopwords", "stemmer", "lz4-compression", "columnar-zstd-compression"], optional = true }
 tracing = { workspace = true, features = ["attributes"] }
 thiserror.workspace = true
-common-ruma = { workspace = true, features = ["client", "rand", "unstable-msc1767"] }
+harana-matrix-common = { workspace = true, features = ["client", "rand", "unstable-msc1767"] }
 zeroize.workspace = true
 
 [dev-dependencies]

@@ -8,7 +8,7 @@ use client_matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
 use client_base::timeout::timeout;
 use common_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{EventSendState, RoomExt};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::{
         location::{AssetType, ZoomLevel},

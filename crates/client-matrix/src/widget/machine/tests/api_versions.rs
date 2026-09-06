@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use assert_matches2::assert_let;
-use common_ruma::owned_room_id;
+use harana_matrix_common::owned_room_id;
 use serde_json::{Value as JsonValue, json};
 
 use super::WIDGET_ID;

@@ -47,7 +47,11 @@ client-crypto = { workspace = true, optional = true }
 client-store-encryption.workspace = true
 num_cpus = { version = "1.17.0", default-features = false }
 rmp-serde.workspace = true
-common-ruma.workspace = true
+harana-matrix-common = { workspace = true, features = [
+    "olm",
+    "insecure-pk-encryption",
+    "experimental-session-config",
+] }
 rusqlite = { version = "0.40.1", default-features = false, features = ["limits", "fallible_uint", "cache"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -55,17 +59,16 @@ serde_path_to_error = { version = "0.1.20", default-features = false }
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-common-olm.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+harana-matrix-common = { workspace = true, features = ["testing"] }
 assert_matches.workspace = true
 erased-serde.workspace = true
 glob = "0.3.4"
 client-base = { workspace = true, features = ["testing"] }
 client-crypto = { workspace = true, features = ["testing"] }
 common-test.workspace = true
-common-test-utils.workspace = true
 similar-asserts.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

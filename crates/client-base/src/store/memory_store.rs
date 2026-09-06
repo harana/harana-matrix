@@ -21,7 +21,7 @@ use std::{
 use async_trait::async_trait;
 use growable_bloom_filter::GrowableBloom;
 use client_common::{ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK, ttl::TtlValue};
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri,
     OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UserId,
     api::client::discovery::get_capabilities::v3::Capabilities,

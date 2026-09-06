@@ -19,7 +19,7 @@ use eyeball_im::VectorDiff;
 use client_matrix::{assert_next_matches_with_timeout, send_queue::RoomSendQueueUpdate};
 use client_base::store::QueueWedgeError;
 use common_test::{ALICE, BOB, async_test};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
     user_id,

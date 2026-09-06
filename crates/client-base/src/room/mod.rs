@@ -45,8 +45,8 @@ pub use room_info::{
     apply_redaction,
 };
 #[cfg(feature = "unstable-msc4426")]
-use common_ruma::profile::{Call, Status};
-use common_ruma::{
+use harana_matrix_common::profile::{Call, Status};
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedUserId, RoomId,
     RoomVersionId, UserId,
     events::{
@@ -817,7 +817,7 @@ mod tests {
     use common_test::{
         JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
-    use common_ruma::{room_id, user_id};
+    use harana_matrix_common::{room_id, user_id};
     use serde_json::json;
 
     use super::*;
@@ -980,7 +980,7 @@ mod tests {
     #[cfg(feature = "unstable-msc4426")]
     #[async_test]
     async fn test_room_heroes_carry_global_profile() {
-        use common_ruma::{
+        use harana_matrix_common::{
             SecondsSinceUnixEpoch,
             profile::{
                 CallProfileField, ProfileFieldValue, StatusProfileField, UserProfileChanges,

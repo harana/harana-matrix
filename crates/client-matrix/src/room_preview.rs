@@ -22,7 +22,7 @@ use futures_util::future::join_all;
 use client_base::{
     RawStateEventWithKeys, RoomHeroWithProfile, RoomInfo, RoomInfoNotableUpdateReasons, RoomState,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedServerName, RoomId, RoomOrAliasId, ServerName,
     api::client::{membership::joined_members, state::get_state_events},
     events::room::history_visibility::HistoryVisibility,
@@ -279,7 +279,7 @@ impl RoomPreview {
         let own_server_name = client.session_meta().map(|s| s.user_id.server_name());
         let via = ensure_server_names_is_not_empty(own_server_name, via, room_or_alias_id);
 
-        let request = common_ruma::api::client::room::get_summary::v1::Request::new(
+        let request = harana_matrix_common::api::client::room::get_summary::v1::Request::new(
             room_or_alias_id.to_owned(),
             via,
         );
@@ -437,7 +437,7 @@ fn ensure_server_names_is_not_empty(
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{RoomOrAliasId, ServerName, owned_server_name, room_alias_id, room_id, server_name};
+    use harana_matrix_common::{RoomOrAliasId, ServerName, owned_server_name, room_alias_id, room_id, server_name};
 
     use crate::room_preview::ensure_server_names_is_not_empty;
 

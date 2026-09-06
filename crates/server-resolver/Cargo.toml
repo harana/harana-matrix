@@ -16,14 +16,14 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [dependencies]
-common-ruma.workspace = true
+harana-matrix-common.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+harana-matrix-common = { workspace = true, features = ["testing"] }
 harana-matrix-macros.workspace = true
-common-test-utils.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]

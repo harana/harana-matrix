@@ -10,7 +10,7 @@ use common_test::{
     InvitedRoomBuilder, JoinedRoomBuilder, SyncResponseBuilder, async_test,
     event_factory::EventFactory, stripped_state_event, sync_state_event,
 };
-use common_ruma::{
+use harana_matrix_common::{
     Int, OwnedRoomId, event_id,
     events::{AnyStrippedStateEvent, StateEventType},
     owned_user_id, room_id,

@@ -29,7 +29,7 @@
 //!
 //! The types and endpoints this SDK is built on model the [Matrix
 //! specification] up to **v1.19**, the newest value of
-//! [`MatrixVersion`][common_ruma::api::MatrixVersion]. That is the ceiling: it says
+//! [`MatrixVersion`][harana_matrix_common::api::MatrixVersion]. That is the ceiling: it says
 //! what the SDK knows how to speak, not what any given homeserver answers to.
 //!
 //! ## What the SDK does with the server's answer
@@ -170,7 +170,7 @@ pub use client_sqlite::{
 pub use media::Media;
 pub use pusher::Pusher;
 pub use room::Room;
-pub use common_ruma::{IdParseError, OwnedServerName, ServerName};
+pub use harana_matrix_common::{IdParseError, OwnedServerName, ServerName};
 pub use sliding_sync::{
     SlidingSync, SlidingSyncBuilder, SlidingSyncList, SlidingSyncListBuilder,
     SlidingSyncListLoadingState, SlidingSyncMode, UpdateSummary,
@@ -188,4 +188,4 @@ mod automatic_call_status;
 pub mod test_utils;
 
 #[cfg(test)]
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();

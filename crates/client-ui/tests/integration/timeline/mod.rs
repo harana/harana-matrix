@@ -30,7 +30,7 @@ use client_ui::timeline::{
     TimelineEventShieldState, TimelineFocus, TimelineItemContent, VirtualTimelineItem,
     default_event_filter,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, event_id,
     events::{
         MessageLikeEventType, TimelineEventType,

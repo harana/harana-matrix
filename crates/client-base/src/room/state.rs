@@ -16,7 +16,7 @@ use std::future::ready;
 
 use bitflags::bitflags;
 use futures_util::{Stream, StreamExt as _, stream};
-use common_ruma::events::room::member::MembershipState;
+use harana_matrix_common::events::room::member::MembershipState;
 use serde::{Deserialize, Serialize};
 
 use super::Room;
@@ -176,7 +176,7 @@ mod tests {
     use assert_matches::assert_matches;
     use futures_util::{FutureExt as _, StreamExt as _};
     use common_test::async_test;
-    use common_ruma::owned_room_id;
+    use harana_matrix_common::owned_room_id;
 
     use super::{RoomState, RoomStateFilter};
     use crate::test_utils::logged_in_base_client;

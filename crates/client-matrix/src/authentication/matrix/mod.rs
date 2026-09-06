@@ -21,7 +21,7 @@ use std::future::Future;
 use std::{borrow::Cow, fmt, time::Duration};
 
 use client_base::{SessionMeta, store::RoomLoadSettings};
-use common_ruma::{
+use harana_matrix_common::{
     api::{
         Metadata, OutgoingRequestExt,
         auth_scheme::SendAccessToken,
@@ -506,7 +506,7 @@ impl MatrixAuth {
     /// ```
     ///
     /// [refreshing access tokens]: https://spec.matrix.org/v1.3/client-server-api/#refreshing-access-tokens
-    /// [`UnknownToken`]: common_ruma::api::error::ErrorKind::UnknownToken
+    /// [`UnknownToken`]: harana_matrix_common::api::error::ErrorKind::UnknownToken
     /// [restore the session]: Client::restore_session
     /// [`ClientBuilder::handle_refresh_tokens()`]: crate::ClientBuilder::handle_refresh_tokens
     pub async fn refresh_access_token(&self) -> Result<(), RefreshTokenError> {
@@ -910,7 +910,7 @@ impl MatrixAuth {
 
         #[cfg(feature = "e2e-encryption")]
         {
-            use common_ruma::api::client::uiaa::{AuthData, Password};
+            use harana_matrix_common::api::client::uiaa::{AuthData, Password};
 
             let auth_data = match login_info {
                 Some(login::v3::LoginInfo::Password(login::v3::Password {
@@ -937,7 +937,7 @@ impl MatrixAuth {
 /// use client_matrix::{
 ///     SessionMeta, SessionTokens, authentication::matrix::MatrixSession,
 /// };
-/// use common_ruma::{owned_device_id, owned_user_id};
+/// use harana_matrix_common::{owned_device_id, owned_user_id};
 ///
 /// let session = MatrixSession {
 ///     meta: SessionMeta {

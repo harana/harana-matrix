@@ -28,7 +28,7 @@ use client_base::{
     sync::Timeline,
 };
 use client_common::executor::spawn;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     events::{
         receipt::ReceiptEventContent, relation::RelationType,
@@ -1074,7 +1074,7 @@ impl<'a> StateLockWriteGuard<'a, RoomEventCacheState> {
 mod tests {
     use client_base::RoomState;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{event_id, room_id, user_id};
+    use harana_matrix_common::{event_id, room_id, user_id};
 
     use crate::test_utils::logged_in_client;
 

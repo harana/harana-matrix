@@ -16,7 +16,7 @@
 
 use std::{borrow::Borrow, future::Future};
 
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId,
     room_version_rules::RoomVersionRules,
     state_res::{Event, StateMap, utils::event_id_set::EventIdSet},
@@ -30,7 +30,7 @@ use crate::{
 
 /// Resolves conflicting state maps into one room state.
 ///
-/// This is [`common_ruma::state_res::resolve`] driven against an asynchronous store.
+/// This is [`harana_matrix_common::state_res::resolve`] driven against an asynchronous store.
 /// The lookups are seeded with every event named by `state_maps` and
 /// `auth_chains`, which is what the algorithm reads in the ordinary case; if it
 /// asks for anything else, that is fetched and resolution is re-run, up to
@@ -89,7 +89,7 @@ where
             cache.insert(event_id, event);
         }
 
-        let result = common_ruma::state_res::resolve(
+        let result = harana_matrix_common::state_res::resolve(
             &rules.authorization,
             state_res_rules,
             state_maps.iter(),

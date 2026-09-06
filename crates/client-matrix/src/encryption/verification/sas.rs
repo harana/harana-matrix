@@ -16,7 +16,7 @@ use futures_core::Stream;
 use client_base::crypto::{
     AcceptSettings, CancelInfo, DeviceData, Emoji, Sas as BaseSas, SasState,
 };
-use common_ruma::{RoomId, UserId, events::key::verification::cancel::CancelCode};
+use harana_matrix_common::{RoomId, UserId, events::key::verification::cancel::CancelCode};
 
 use crate::{Client, error::Result};
 
@@ -44,7 +44,7 @@ impl SasVerification {
     /// ```no_run
     /// # use client_matrix::Client;
     /// # use url::Url;
-    /// # use common_ruma::user_id;
+    /// # use harana_matrix_common::user_id;
     /// use client_matrix::{
     ///     encryption::verification::{AcceptSettings, SasVerification},
     ///     ruma::events::key::verification::ShortAuthenticationString,
@@ -118,7 +118,7 @@ impl SasVerification {
     /// ```no_run
     /// # use client_matrix::Client;
     /// # use url::Url;
-    /// # use common_ruma::user_id;
+    /// # use harana_matrix_common::user_id;
     /// use client_matrix::{
     ///     encryption::verification::{AcceptSettings, SasVerification},
     ///     ruma::events::key::verification::ShortAuthenticationString,

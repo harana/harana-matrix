@@ -25,10 +25,10 @@ use client_base::{
 };
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
 use oauth2::VerificationUriComplete;
-use common_ruma::time::Instant;
+use harana_matrix_common::time::Instant;
 use url::Url;
 #[cfg(doc)]
-use common_olm::ecies::CheckCode;
+use harana_matrix_common::olm::ecies::CheckCode;
 
 use super::{
     LoginProtocolType, QrAuthMessage,
@@ -430,7 +430,7 @@ mod test {
     use client_common::executor::spawn;
     use common_test::async_test;
     use oauth2::{EndUserVerificationUrl, VerificationUriComplete};
-    use common_ruma::{owned_device_id, owned_user_id};
+    use harana_matrix_common::{owned_device_id, owned_user_id};
     use tokio::sync::oneshot;
     use tracing::debug;
 

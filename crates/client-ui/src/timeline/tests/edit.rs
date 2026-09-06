@@ -26,7 +26,7 @@ use client_base::{
     store::QueueWedgeError,
 };
 use common_test::{ALICE, BOB, async_test};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::{
         AnyMessageLikeEventContent,

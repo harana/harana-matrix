@@ -19,7 +19,7 @@ use std::{
 
 use itertools::{Either, Itertools};
 use client_common::deserialized_responses::WithheldCode;
-use common_ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
+use harana_matrix_common::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument, trace};
 
@@ -1168,7 +1168,7 @@ mod tests {
             VerificationViolationTestData,
         },
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, TransactionId, UserId, device_id,
         events::{dummy::ToDeviceDummyEventContent, room::history_visibility::HistoryVisibility},
         room_id,
@@ -2403,8 +2403,8 @@ mod tests {
                 KeyQueryResponseTemplateDeviceOptions,
             },
         };
-        use common_ruma::{DeviceId, TransactionId, UserId, device_id, user_id};
-        use common_olm::{Curve25519PublicKey, Ed25519SecretKey};
+        use harana_matrix_common::{DeviceId, TransactionId, UserId, device_id, user_id};
+        use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519SecretKey};
 
         use super::{
             all_devices_strategy_settings, create_test_outbound_group_session,
@@ -3237,7 +3237,7 @@ mod tests {
             let req = Arc::new(ToDeviceRequest::for_recipients(
                 dan_user,
                 vec![dan_dev2.to_owned()],
-                &common_ruma::events::AnyToDeviceEventContent::Dummy(ToDeviceDummyEventContent),
+                &harana_matrix_common::events::AnyToDeviceEventContent::Dummy(ToDeviceDummyEventContent),
                 txid.clone(),
             ));
             group_session.add_request(txid, req, share_infos);

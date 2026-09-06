@@ -11,7 +11,7 @@ use client_common::{
     locks::Mutex,
 };
 use common_test::{async_test, test_json};
-use common_ruma::{events::AnyToDeviceEvent, serde::Raw};
+use harana_matrix_common::{events::AnyToDeviceEvent, serde::Raw};
 use serde_json::json;
 use wiremock::{
     Mock, ResponseTemplate,

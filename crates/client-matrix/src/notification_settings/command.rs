@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId,
     push::{
         Action, EventMatchConditionData, NewConditionalPushRule, NewPatternedPushRule, NewPushRule,

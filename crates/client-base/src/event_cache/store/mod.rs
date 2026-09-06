@@ -32,7 +32,7 @@ use client_common::cross_process_lock::{
     CrossProcessLockGuard, MappedCrossProcessLockState, TryLock,
 };
 pub use client_store_encryption::Error as StoreEncryptionError;
-use common_ruma::{OwnedEventId, events::AnySyncTimelineEvent, serde::Raw};
+use harana_matrix_common::{OwnedEventId, events::AnySyncTimelineEvent, serde::Raw};
 use tracing::trace;
 
 #[cfg(any(test, feature = "testing"))]

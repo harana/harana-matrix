@@ -20,7 +20,7 @@ use eyeball::{SharedObservable, Subscriber};
 use js_int::UInt;
 use client_common::{SendOutsideWasm, SyncOutsideWasm, boxed_into_future};
 use oauth2::{RequestTokenError, basic::BasicErrorResponseType};
-use common_ruma::api::{
+use harana_matrix_common::api::{
     OutgoingRequest,
     client::media,
     error::{ErrorKind, FromHttpResponseError},

@@ -33,7 +33,7 @@ use client_base::{
     },
     timer,
 };
-use common_ruma::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
 use rusqlite::{OptionalExtension, params_from_iter};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, instrument, warn};
@@ -743,7 +743,7 @@ mod tests {
         media_store_integration_tests_time,
     };
     use common_test::async_test;
-    use common_ruma::{events::room::MediaSource, media::Method, mxc_uri, uint};
+    use harana_matrix_common::{events::room::MediaSource, media::Method, mxc_uri, uint};
     use tempfile::{TempDir, tempdir};
 
     use super::{DATABASE_NAME, SqliteMediaStore};
@@ -912,7 +912,7 @@ mod close_reopen_tests {
         store::{IgnoreMediaRetentionPolicy, MediaStore},
     };
     use common_test::async_test;
-    use common_ruma::{events::room::MediaSource, mxc_uri};
+    use harana_matrix_common::{events::room::MediaSource, mxc_uri};
     use tempfile::{TempDir, tempdir};
 
     use super::SqliteMediaStore;

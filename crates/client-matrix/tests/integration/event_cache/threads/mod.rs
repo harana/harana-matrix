@@ -16,7 +16,7 @@ use client_matrix::{
     },
 };
 use common_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedRoomId, event_id,
     events::{
         AnySyncTimelineEvent, Mentions, room::message::RoomMessageEventContentWithoutRelation,

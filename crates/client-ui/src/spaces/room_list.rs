@@ -26,7 +26,7 @@ use itertools::Itertools;
 use client_matrix::{
     Client, Error, locks::Mutex, paginators::PaginationToken, task_monitor::BackgroundTaskHandle,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId,
     api::client::space::get_hierarchy,
     events::space::child::{HierarchySpaceChildEvent, SpaceChildEventContent},
@@ -62,7 +62,7 @@ pub enum SpaceRoomListPaginationState {
 /// use client_ui::spaces::{
 ///     SpaceService, room_list::SpaceRoomListPaginationState,
 /// };
-/// use common_ruma::owned_room_id;
+/// use harana_matrix_common::owned_room_id;
 ///
 /// # async {
 /// # let client: Client = todo!();
@@ -430,7 +430,7 @@ mod tests {
     use common_test::{
         JoinedRoomBuilder, LeftRoomBuilder, async_test, event_factory::EventFactory,
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId,
         events::space::child::HierarchySpaceChildEvent,
         owned_room_id, owned_server_name,

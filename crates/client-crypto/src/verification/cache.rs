@@ -16,7 +16,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use as_variant::as_variant;
 use client_common::locks::RwLock as StdRwLock;
-use common_ruma::{DeviceId, OwnedTransactionId, OwnedUserId, TransactionId, UserId};
+use harana_matrix_common::{DeviceId, OwnedTransactionId, OwnedUserId, TransactionId, UserId};
 #[cfg(feature = "qrcode")]
 use tracing::debug;
 use tracing::{trace, warn};

@@ -20,7 +20,7 @@ use client_base::{
     event_cache::{store::extract_event_relation, thread::ThreadInfo},
     linked_chunk::{ChunkIdentifier, LinkedChunkId, OwnedLinkedChunkId},
 };
-use common_ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedRoomId, RoomId};
 use serde::{Deserialize, Serialize};
 
 /// Representation of a time-based lock on the entire
@@ -128,7 +128,7 @@ impl Event {
     }
 
     /// The [`OwnedEventId`] and
-    /// [`RelationType`](common_ruma::events::relation::RelationType) of the underlying
+    /// [`RelationType`](harana_matrix_common::events::relation::RelationType) of the underlying
     /// event as a [`String`].
     pub fn relation(&self) -> Option<(OwnedEventId, String)> {
         match self {
@@ -187,7 +187,7 @@ impl<P> GenericEvent<P> {
     /// The event that the underlying event relates to, if any.
     ///
     /// Returns the related [`OwnedEventId`] and the
-    /// [`RelationType`](common_ruma::events::relation::RelationType) as a [`String`].
+    /// [`RelationType`](harana_matrix_common::events::relation::RelationType) as a [`String`].
     pub fn relation(&self) -> Option<(OwnedEventId, String)> {
         extract_event_relation(self.content.raw())
     }

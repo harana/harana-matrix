@@ -17,7 +17,7 @@
 
 use std::time::Duration;
 
-use common_ruma::time::SystemTime;
+use harana_matrix_common::time::SystemTime;
 use serde::{Deserialize, Serialize};
 
 /// A value that expires after some time.

@@ -72,7 +72,7 @@ mod tests {
         test_utils::mocks::MatrixMockServer,
     };
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
         owned_event_id, room_id,

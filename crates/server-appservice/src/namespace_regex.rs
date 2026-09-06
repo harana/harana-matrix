@@ -18,7 +18,7 @@
 //! The compiled regular expressions of one registration namespace.
 
 use regex::{RegexSet, RegexSetBuilder};
-use common_ruma::api::appservice::Namespace;
+use harana_matrix_common::api::appservice::Namespace;
 
 use crate::Error;
 
@@ -103,7 +103,7 @@ impl NamespaceRegex {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::api::appservice::Namespace;
+    use harana_matrix_common::api::appservice::Namespace;
 
     use super::NamespaceRegex;
 

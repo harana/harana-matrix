@@ -31,7 +31,7 @@
 
 use std::fmt;
 
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, RoomId, UInt};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, RoomId, UInt};
 
 use crate::error::IndexError;
 

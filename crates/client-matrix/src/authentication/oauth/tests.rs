@@ -5,7 +5,7 @@ use assert_matches::assert_matches;
 use client_base::{sleep::sleep, store::RoomLoadSettings, ttl::TtlValue};
 use common_test::async_test;
 use oauth2::{ClientId, CsrfToken, PkceCodeChallenge, RedirectUrl, Scope};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, ServerName, api::client::discovery::get_authorization_server_metadata::v1::Prompt,
     device_id, owned_device_id, user_id,
 };

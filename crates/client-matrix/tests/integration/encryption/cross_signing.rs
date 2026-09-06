@@ -15,7 +15,7 @@
 use assert_matches2::assert_let;
 use client_matrix::{encryption::CrossSigningResetAuthType, test_utils::mocks::MatrixMockServer};
 use common_test::async_test;
-use common_ruma::api::{
+use harana_matrix_common::api::{
     client::uiaa,
     error::{ErrorKind, StandardErrorBody},
 };

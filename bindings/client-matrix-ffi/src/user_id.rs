@@ -12,7 +12,7 @@
 // See the License for that specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::UserId;
+use harana_matrix_common::UserId;
 
 use crate::error::ClientError;
 

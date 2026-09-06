@@ -9,8 +9,8 @@ use client_crypto::{
     VerificationRequestState as RustVerificationRequestState,
     qrcode::QrVerificationData,
 };
-use common_ruma::events::key::verification::VerificationMethod;
-use common_olm::{base64_decode, base64_encode};
+use harana_matrix_common::events::key::verification::VerificationMethod;
+use harana_matrix_common::olm::{base64_decode, base64_encode};
 
 use crate::{CryptoStoreError, OutgoingVerificationRequest, SignatureUploadRequest};
 

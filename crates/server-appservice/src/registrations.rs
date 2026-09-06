@@ -21,7 +21,7 @@
 
 use std::collections::{BTreeMap, btree_map::Values};
 
-use common_ruma::{RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration};
+use harana_matrix_common::{RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration};
 
 use crate::{Error, RegistrationInfo};
 
@@ -134,7 +134,7 @@ impl Registrations {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{
+    use harana_matrix_common::{
         ServerName, UserId,
         api::appservice::{Namespace, Namespaces, Registration, RegistrationInit},
     };

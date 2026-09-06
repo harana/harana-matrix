@@ -22,7 +22,7 @@ use client_base::{
     },
     media::{MediaFormat, MediaRequestParameters},
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, UserId,
     api::error::ErrorKind,
     events::room::{MediaSource, history_visibility::HistoryVisibility},
@@ -323,8 +323,8 @@ mod test {
     use common_test::{
         InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory,
     };
-    use common_ruma::{room_id, user_id};
-    use common_olm::Curve25519PublicKey;
+    use harana_matrix_common::{room_id, user_id};
+    use harana_matrix_common::olm::Curve25519PublicKey;
 
     use crate::{room::shared_room_history, test_utils::mocks::MatrixMockServer};
 

@@ -43,7 +43,7 @@
 
 use std::sync::Arc;
 
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId,
     api::client::dehydrated_device::{DehydratedDeviceData, put_dehydrated_device},
     assign,
@@ -52,7 +52,7 @@ use common_ruma::{
 };
 use thiserror::Error;
 use tracing::{instrument, trace};
-use common_olm::{DehydratedDeviceError, LibolmPickleError};
+use harana_matrix_common::olm::{DehydratedDeviceError, LibolmPickleError};
 
 use crate::{
     Account, CryptoStoreError, DecryptionSettings, EncryptionSyncChanges, OlmError, OlmMachine,
@@ -219,7 +219,7 @@ impl RehydratedDevice {
     /// # use client_crypto::{
     ///     DecryptionSettings, OlmMachine, TrustRequirement, store::types::DehydratedDeviceKey
     /// };
-    /// # use common_ruma::{api::client::dehydrated_device, DeviceId};
+    /// # use harana_matrix_common::{api::client::dehydrated_device, DeviceId};
     /// # async fn example() -> Result<()> {
     /// # let machine: OlmMachine = unimplemented!();
     /// async fn get_dehydrated_device() -> Result<dehydrated_device::get_dehydrated_device::unstable::Response> {
@@ -407,7 +407,7 @@ mod tests {
 
     use js_option::JsOption;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, RoomId, TransactionId, UserId,
         api::client::{
             dehydrated_device::put_dehydrated_device,

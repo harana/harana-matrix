@@ -19,7 +19,7 @@ use client_base::{
     event_cache::{Event, Gap},
     linked_chunk::{self, OwnedLinkedChunkId},
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId, events::AnySyncEphemeralRoomEvent,
     serde::Raw,
 };

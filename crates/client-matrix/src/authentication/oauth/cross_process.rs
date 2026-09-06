@@ -258,7 +258,7 @@ mod tests {
     use futures_util::future::join_all;
     use client_base::{SessionMeta, store::RoomLoadSettings};
     use common_test::async_test;
-    use common_ruma::{owned_device_id, owned_user_id};
+    use harana_matrix_common::{owned_device_id, owned_user_id};
 
     use super::compute_session_hash;
     use crate::{

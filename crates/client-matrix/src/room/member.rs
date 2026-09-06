@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use common_ruma::{
+use harana_matrix_common::{
     events::room::{MediaSource, power_levels::UserPowerLevel},
     int,
 };
@@ -107,7 +107,7 @@ pub enum RoomMemberRole {
     /// `explicitly_privilege_room_creators` in [`AuthorizationRules`] is set to
     /// `true`.
     ///
-    /// [`AuthorizationRules`]: common_ruma::room_version_rules::AuthorizationRules
+    /// [`AuthorizationRules`]: harana_matrix_common::room_version_rules::AuthorizationRules
     Creator,
     /// The member is an administrator.
     Administrator,

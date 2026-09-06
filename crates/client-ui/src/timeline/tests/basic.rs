@@ -23,7 +23,7 @@ use common_test::{
     ALICE, BOB, CAROL, JoinedRoomBuilder, async_test,
     event_factory::{EventFactory, PreviousMembership},
 };
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::{
         StateEventContentChange,

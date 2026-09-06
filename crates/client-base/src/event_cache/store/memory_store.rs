@@ -28,7 +28,7 @@ use client_common::{
         RawChunk, Update, relational::RelationalLinkedChunk,
     },
 };
-use common_ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId, events::relation::RelationType};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedRoomId, RoomId, events::relation::RelationType};
 use tracing::error;
 
 use super::{

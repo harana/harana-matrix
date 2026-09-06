@@ -16,10 +16,10 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{DeviceKeyAlgorithm, OwnedRoomId};
+use harana_matrix_common::{DeviceKeyAlgorithm, OwnedRoomId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey, megolm::ExportedSessionKey};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey, megolm::ExportedSessionKey};
 
 use super::{EventType, ToDeviceEvent};
 #[cfg(doc)]
@@ -126,7 +126,7 @@ pub struct ForwardedMegolmV1AesSha2Content {
     /// The key to be exchanged. Can be used to create a [`InboundGroupSession`]
     /// that can be used to decrypt room events.
     ///
-    /// [`InboundGroupSession`]: common_olm::megolm::InboundGroupSession
+    /// [`InboundGroupSession`]: harana_matrix_common::olm::megolm::InboundGroupSession
     pub session_key: ExportedSessionKey,
 
     /// Chain of Curve25519 keys. It starts out empty, but each time the key is
@@ -195,7 +195,7 @@ pub struct ForwardedMegolmV2AesSha2Content {
     /// The key to be exchanged. Can be used to create a [`InboundGroupSession`]
     /// that can be used to decrypt room events.
     ///
-    /// [`InboundGroupSession`]: common_olm::megolm::InboundGroupSession
+    /// [`InboundGroupSession`]: harana_matrix_common::olm::megolm::InboundGroupSession
     pub session_key: ExportedSessionKey,
 
     /// The Curve25519 key of the device which initiated the session originally.

@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceKeyId, UserId,
     events::{
         AnyMessageLikeEventContent, AnyToDeviceEventContent,
@@ -28,7 +28,7 @@ use common_ruma::{
 };
 use sha2::{Digest, Sha256};
 use tracing::{trace, warn};
-use common_olm::{Curve25519PublicKey, sas::EstablishedSas};
+use harana_matrix_common::olm::{Curve25519PublicKey, sas::EstablishedSas};
 
 use super::{FlowId, OutgoingContent, sas_state::SupportedMacMethod};
 use crate::{
@@ -491,11 +491,11 @@ pub fn get_decimal(
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use common_ruma::{
+    use harana_matrix_common::{
         events::key::verification::start::ToDeviceKeyVerificationStartEventContent, serde::Base64,
     };
     use serde_json::json;
-    use common_olm::Curve25519PublicKey;
+    use harana_matrix_common::olm::Curve25519PublicKey;
 
     use super::calculate_commitment;
     use crate::verification::event_enums::StartContent;

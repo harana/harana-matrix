@@ -77,7 +77,7 @@ use client_ui::{
 };
 use mime::Mime;
 use oauth2::Scope;
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedMxcUri, OwnedServerName, RoomAliasId,
     RoomOrAliasId, ServerName,
     api::{
@@ -2263,7 +2263,7 @@ impl Client {
         send_attempt: u64,
     ) -> Result<String, ClientError> {
         let request = request_registration_token_via_email::v3::Request::new(
-            common_ruma::ClientSecret::parse(client_secret)?,
+            harana_matrix_common::ClientSecret::parse(client_secret)?,
             email,
             u64_to_uint(send_attempt),
         );
@@ -2452,7 +2452,7 @@ impl Client {
 
     /// Checks if the server supports the report room API.
     pub async fn is_report_room_api_supported(&self) -> Result<bool, ClientError> {
-        Ok(self.inner.server_versions().await?.contains(&common_ruma::api::MatrixVersion::V1_13))
+        Ok(self.inner.server_versions().await?.contains(&harana_matrix_common::api::MatrixVersion::V1_13))
     }
 
     /// Checks if the server supports the LiveKit RTC focus for placing calls.
@@ -2501,7 +2501,7 @@ impl Client {
     /// Checks if the server supports login using a QR code.
     pub async fn is_login_with_qr_code_supported(&self) -> Result<bool, ClientError> {
         Ok(matches!(self.inner.auth_api(), Some(AuthApi::OAuth(_)))
-            && self.inner.unstable_features().await?.contains(&common_ruma::api::FeatureFlag::Msc4108))
+            && self.inner.unstable_features().await?.contains(&harana_matrix_common::api::FeatureFlag::Msc4108))
     }
 
     /// Get server vendor information from the federation API.
@@ -2919,10 +2919,10 @@ impl UserProfile {
         Self::from_profile(user_id, &response.data)
     }
 
-    /// Build a [`UserProfile`] from a [`common_ruma::profile::UserProfile`].
+    /// Build a [`UserProfile`] from a [`harana_matrix_common::profile::UserProfile`].
     fn from_profile(
         user_id: &UserId,
-        profile: &common_ruma::profile::UserProfile,
+        profile: &harana_matrix_common::profile::UserProfile,
     ) -> Result<Self, ClientError> {
         let display_name = Self::get_field::<DisplayName>(profile)?;
         let avatar_url = Self::get_field::<AvatarUrl>(profile)?.map(|url| url.to_string());
@@ -2935,7 +2935,7 @@ impl UserProfile {
     /// Reads a static profile field, tolerating an explicit `null` value by
     /// treating it as absent while still surfacing genuine decode errors.
     fn get_field<F: StaticProfileField>(
-        profile: &common_ruma::profile::UserProfile,
+        profile: &harana_matrix_common::profile::UserProfile,
     ) -> Result<Option<F::Value>, ClientError> {
         match profile.get(F::NAME) {
             Some(value) if !value.is_null() => Ok(Some(serde_json::from_value(value.clone())?)),
@@ -3071,7 +3071,7 @@ pub struct NotificationPowerLevels {
     pub room: i32,
 }
 
-impl From<NotificationPowerLevels> for common_ruma::power_levels::NotificationPowerLevels {
+impl From<NotificationPowerLevels> for harana_matrix_common::power_levels::NotificationPowerLevels {
     fn from(value: NotificationPowerLevels) -> Self {
         let mut notification_power_levels = Self::new();
         notification_power_levels.room = value.room.into();
@@ -3119,7 +3119,7 @@ impl From<PowerLevels> for RoomPowerLevelsContentOverride {
             .events
             .iter()
             .map(|(event_type, power_level)| {
-                let event_type: common_ruma::events::TimelineEventType = event_type.as_str().into();
+                let event_type: harana_matrix_common::events::TimelineEventType = event_type.as_str().into();
                 (event_type, (*power_level).into())
             })
             .collect();
@@ -3697,11 +3697,11 @@ impl TryFrom<JoinRule> for RumaJoinRule {
             JoinRule::Private => Ok(Self::Private),
             JoinRule::Restricted { rules } => {
                 let rules = ruma_allow_rules_from_ffi(rules)?;
-                Ok(Self::Restricted(common_ruma::events::room::join_rules::Restricted::new(rules)))
+                Ok(Self::Restricted(harana_matrix_common::events::room::join_rules::Restricted::new(rules)))
             }
             JoinRule::KnockRestricted { rules } => {
                 let rules = ruma_allow_rules_from_ffi(rules)?;
-                Ok(Self::KnockRestricted(common_ruma::events::room::join_rules::Restricted::new(rules)))
+                Ok(Self::KnockRestricted(harana_matrix_common::events::room::join_rules::Restricted::new(rules)))
             }
             JoinRule::Custom { repr } => Ok(serde_json::from_str(&repr)?),
         }
@@ -3719,7 +3719,7 @@ impl TryFrom<AllowRule> for RumaAllowRule {
         match value {
             AllowRule::RoomMembership { room_id } => {
                 let room_id = RoomId::parse(room_id)?;
-                Ok(Self::RoomMembership(common_ruma::room::RoomMembership::new(room_id)))
+                Ok(Self::RoomMembership(harana_matrix_common::room::RoomMembership::new(room_id)))
             }
             AllowRule::Custom { json } => Ok(serde_json::from_str(&json)?),
         }
@@ -3900,7 +3900,7 @@ pub enum PasswordChangeOutcome {
 mod tests {
     use std::time::Duration;
 
-    use common_ruma::{
+    use harana_matrix_common::{
         ServerName,
         api::client::room::{Visibility, create_room},
         authentication::TokenType,
@@ -4014,7 +4014,7 @@ mod tests {
 
     #[test]
     fn test_openid_token_mapping() {
-        let response = common_ruma::api::client::account::request_openid_token::v3::Response::new(
+        let response = harana_matrix_common::api::client::account::request_openid_token::v3::Response::new(
             "open-id-token".to_owned(),
             TokenType::Bearer,
             ServerName::parse("example.com").expect("valid server name"),
@@ -4113,12 +4113,12 @@ mod tests {
 
     #[test]
     fn test_from_profile_tolerates_null_fields() {
-        use common_ruma::profile::{ProfileFieldName, UserProfile as RumaUserProfile};
+        use harana_matrix_common::profile::{ProfileFieldName, UserProfile as RumaUserProfile};
         use serde_json::Value as JsonValue;
 
         use super::UserProfile;
 
-        let user_id = common_ruma::user_id!("@user:example.com");
+        let user_id = harana_matrix_common::user_id!("@user:example.com");
 
         // A display name with avatar/status/call explicitly set as `null` JSON values.
         let mut profile = RumaUserProfile::new();

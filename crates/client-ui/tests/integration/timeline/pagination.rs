@@ -32,7 +32,7 @@ use client_matrix::{
 };
 use common_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{AnyOtherStateEventContentChange, RoomExt, TimelineItemContent};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, event_id,
     events::{StateEventContentChange, room::message::MessageType},
     room_id, user_id,

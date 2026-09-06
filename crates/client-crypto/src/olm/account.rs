@@ -25,7 +25,7 @@ use js_option::JsOption;
 use client_common::deserialized_responses::{
     AlgorithmInfo, DeviceLinkProblem, EncryptionInfo, VerificationLevel, VerificationState,
 };
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonValue, DeviceId, DeviceKeyAlgorithm, DeviceKeyId, MilliSecondsSinceUnixEpoch,
     OneTimeKeyAlgorithm, OneTimeKeyId, OwnedDeviceId, OwnedDeviceKeyId, OwnedOneTimeKeyId,
     OwnedUserId, RoomId, SecondsSinceUnixEpoch, UInt, UserId,
@@ -43,7 +43,7 @@ use serde_json::value::{RawValue as RawJsonValue, to_raw_value};
 use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 use tracing::{Span, debug, field::debug, info, instrument, trace, warn};
-use common_olm::{
+use harana_matrix_common::olm::{
     Curve25519PublicKey, Ed25519Signature, KeyId, PickleError, base64_encode,
     olm::{
         Account as InnerAccount, AccountPickle, IdentityKeys, OlmMessage,
@@ -429,7 +429,7 @@ impl fmt::Debug for Account {
     }
 }
 
-pub type OneTimeKeys = BTreeMap<OwnedOneTimeKeyId, Raw<common_ruma::encryption::OneTimeKey>>;
+pub type OneTimeKeys = BTreeMap<OwnedOneTimeKeyId, Raw<harana_matrix_common::encryption::OneTimeKey>>;
 pub type FallbackKeys = OneTimeKeys;
 
 impl Account {
@@ -823,7 +823,7 @@ impl Account {
     /// of MSC3814.
     #[cfg(test)]
     pub(crate) fn legacy_dehydrate(&self, pickle_key: &[u8; 32]) -> Raw<DehydratedDeviceData> {
-        use common_ruma::api::client::dehydrated_device::DehydratedDeviceV1;
+        use harana_matrix_common::api::client::dehydrated_device::DehydratedDeviceV1;
 
         let pickle_key = expand_legacy_pickle_key(pickle_key, &self.device_id);
         let device_pickle = self
@@ -844,7 +844,7 @@ impl Account {
     /// * `pickle_mode` - The mode that was used to pickle the account, either
     ///   an unencrypted mode or an encrypted using passphrase.
     pub fn from_pickle(pickle: PickledAccount) -> Result<Self, PickleError> {
-        let account: common_olm::olm::Account = pickle.pickle.into();
+        let account: harana_matrix_common::olm::olm::Account = pickle.pickle.into();
         let identity_keys = account.identity_keys();
 
         Ok(Self {
@@ -1040,7 +1040,7 @@ impl Account {
         one_time_key: Curve25519PublicKey,
         fallback_used: bool,
         our_device_keys: DeviceKeys,
-    ) -> Result<Session, common_olm::olm::SessionCreationError> {
+    ) -> Result<Session, harana_matrix_common::olm::olm::SessionCreationError> {
         let session = self.inner.create_outbound_session(config, identity_key, one_time_key)?;
 
         let now = SecondsSinceUnixEpoch::now();
@@ -1224,7 +1224,7 @@ impl Account {
         &mut self,
         other: &mut Account,
     ) -> (Session, Session) {
-        use common_ruma::events::dummy::ToDeviceDummyEventContent;
+        use harana_matrix_common::events::dummy::ToDeviceDummyEventContent;
 
         other.generate_one_time_keys(1);
         let one_time_map = other.signed_one_time_keys();
@@ -1931,7 +1931,7 @@ impl Account {
     /// that we don't want the inner state to be shared.
     #[doc(hidden)]
     pub fn deep_clone(&self) -> Self {
-        // `common_olm::Account` isn't really cloneable, but... Don't tell anyone.
+        // `harana_matrix_common::olm::Account` isn't really cloneable, but... Don't tell anyone.
         Self::from_pickle(self.pickle()).unwrap()
     }
 
@@ -2051,7 +2051,7 @@ mod tests {
 
     use anyhow::Result;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OneTimeKeyId, UserId, device_id,
         events::room::history_visibility::HistoryVisibility, room_id, user_id,
     };
@@ -2202,7 +2202,7 @@ mod tests {
 
         let mut session = alice
             .create_outbound_session_helper(
-                common_olm::olm::SessionConfig::version_1(),
+                harana_matrix_common::olm::olm::SessionConfig::version_1(),
                 bob.identity_keys().curve25519,
                 one_time_key,
                 false,
@@ -2215,7 +2215,7 @@ mod tests {
             .encrypt(
                 &alice_device,
                 "m.dummy",
-                common_ruma::events::dummy::ToDeviceDummyEventContent::new(),
+                harana_matrix_common::events::dummy::ToDeviceDummyEventContent::new(),
                 None,
             )
             .await
@@ -2229,7 +2229,7 @@ mod tests {
         )
         .expect("we encrypt with the v1 algorithm by default");
 
-        let common_olm::olm::OlmMessage::PreKey(prekey) = content.ciphertext else {
+        let harana_matrix_common::olm::olm::OlmMessage::PreKey(prekey) = content.ciphertext else {
             panic!("the first message in a session is a pre-key message");
         };
 
@@ -2393,7 +2393,7 @@ mod tests {
 
     #[test]
     fn test_fallback_key_signing() -> Result<()> {
-        let key = common_olm::Curve25519PublicKey::from_base64(
+        let key = harana_matrix_common::olm::Curve25519PublicKey::from_base64(
             "7PUPP6Ijt5R8qLwK2c8uK5hqCNF9tOzWYgGaAay5JBs",
         )?;
         let account = Account::with_device_id(user_id(), device_id());
@@ -2554,7 +2554,7 @@ mod tests {
 
     #[test]
     fn test_stale_one_time_key_count_is_ignored() {
-        use common_ruma::{UInt, api::client::keys::upload_keys, uint};
+        use harana_matrix_common::{UInt, api::client::keys::upload_keys, uint};
 
         let mut account = Account::with_device_id(user_id!("@alice:localhost"), device_id!("DEV"));
 

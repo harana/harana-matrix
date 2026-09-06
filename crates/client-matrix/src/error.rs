@@ -32,7 +32,7 @@ use client_base::{
 };
 #[cfg(feature = "reqwest-transport")]
 use reqwest::Error as ReqwestError;
-use common_ruma::{
+use harana_matrix_common::{
     IdParseError,
     api::{
         client::uiaa::{UiaaInfo, UiaaResponse},
@@ -123,14 +123,14 @@ impl HttpError {
 impl HttpError {
     /// If `self` is a server error in the `errcode` + `error` format expected
     /// for client API endpoints, returns it.
-    pub fn as_client_api_error(&self) -> Option<&common_ruma::api::error::Error> {
+    pub fn as_client_api_error(&self) -> Option<&harana_matrix_common::api::error::Error> {
         self.as_ruma_api_error().and_then(as_variant!(UiaaResponse::MatrixError))
     }
 
     /// If `self` is a server error in the `errcode` + `error` format expected
     /// for client API endpoints, returns the error kind (`errcode`).
     pub fn client_api_error_kind(&self) -> Option<&ErrorKind> {
-        self.as_client_api_error().and_then(common_ruma::api::error::Error::error_kind)
+        self.as_client_api_error().and_then(harana_matrix_common::api::error::Error::error_kind)
     }
 
     /// Try to destructure the error into a user-interactive auth info.
@@ -490,14 +490,14 @@ impl Error {
 
     /// If `self` is a server error in the `errcode` + `error` format expected
     /// for client API endpoints, returns it.
-    pub fn as_client_api_error(&self) -> Option<&common_ruma::api::error::Error> {
+    pub fn as_client_api_error(&self) -> Option<&harana_matrix_common::api::error::Error> {
         self.as_ruma_api_error().and_then(as_variant!(UiaaResponse::MatrixError))
     }
 
     /// If `self` is a server error in the `errcode` + `error` format expected
     /// for client API endpoints, returns the error kind (`errcode`).
     pub fn client_api_error_kind(&self) -> Option<&ErrorKind> {
-        self.as_client_api_error().and_then(common_ruma::api::error::Error::error_kind)
+        self.as_client_api_error().and_then(harana_matrix_common::api::error::Error::error_kind)
     }
 
     /// Try to destructure the error into an universal interactive auth info.
@@ -668,8 +668,8 @@ pub enum RoomKeyImportError {
     Export(#[from] KeyExportError),
 }
 
-impl From<FromHttpResponseError<common_ruma::api::error::Error>> for HttpError {
-    fn from(err: FromHttpResponseError<common_ruma::api::error::Error>) -> Self {
+impl From<FromHttpResponseError<harana_matrix_common::api::error::Error>> for HttpError {
+    fn from(err: FromHttpResponseError<harana_matrix_common::api::error::Error>) -> Self {
         Self::Api(Box::new(err.map(Into::into)))
     }
 }

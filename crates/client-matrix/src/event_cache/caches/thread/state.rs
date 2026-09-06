@@ -26,7 +26,7 @@ use client_base::{
     sync::Timeline,
 };
 use client_common::executor::spawn;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     events::{
         receipt::ReceiptEventContent, relation::RelationType,

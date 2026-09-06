@@ -25,7 +25,7 @@ use client_base::{
     read_receipts::ReadReceipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId,
     events::{receipt::ReceiptEventContent, relation::RelationType},
     room_version_rules::RoomVersionRules,
@@ -418,7 +418,7 @@ mod timed_tests {
         sync::{JoinedRoomUpdate, Timeline},
     };
     use common_test::{ALICE, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         event_id,
         events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent},
         room_id, user_id,

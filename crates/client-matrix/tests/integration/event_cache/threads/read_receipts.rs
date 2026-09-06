@@ -28,7 +28,7 @@ use std::time::Duration;
 
 use client_matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
 use common_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::{
         Mentions,

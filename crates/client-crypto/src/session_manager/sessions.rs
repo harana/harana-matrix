@@ -19,7 +19,7 @@ use std::{
 };
 
 use client_common::{failures_cache::FailuresCache, locks::RwLock as StdRwLock};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OneTimeKeyAlgorithm, OwnedDeviceId, OwnedOneTimeKeyId, OwnedServerName,
     OwnedTransactionId, OwnedUserId, SecondsSinceUnixEpoch, ServerName, TransactionId, UserId,
     api::client::keys::claim_keys::v3::{
@@ -29,7 +29,7 @@ use common_ruma::{
     events::dummy::ToDeviceDummyEventContent,
 };
 use tracing::{debug, error, info, instrument, warn};
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use crate::{
     DeviceData,
@@ -598,7 +598,7 @@ mod tests {
 
     use client_common::{executor::spawn, locks::RwLock as StdRwLock};
     use common_test::{async_test, ruma_response_from_json};
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, OwnedUserId, UserId,
         api::client::keys::claim_keys::v3::Response as KeyClaimResponse, device_id,
         owned_server_name, user_id,
@@ -831,7 +831,7 @@ mod tests {
     #[async_test]
     #[cfg(target_os = "linux")]
     async fn test_session_unwedging() {
-        use common_ruma::{SecondsSinceUnixEpoch, time::SystemTime};
+        use harana_matrix_common::{SecondsSinceUnixEpoch, time::SystemTime};
 
         let (manager, _identity_manager) = session_manager_test_helper().await;
         let mut bob = bob_account();
@@ -920,7 +920,7 @@ mod tests {
 
     #[async_test]
     async fn test_the_session_which_last_decrypted_is_used_to_send() {
-        use common_ruma::{SecondsSinceUnixEpoch, uint};
+        use harana_matrix_common::{SecondsSinceUnixEpoch, uint};
 
         let (manager, _identity_manager) = session_manager_test_helper().await;
         let mut bob = bob_account();

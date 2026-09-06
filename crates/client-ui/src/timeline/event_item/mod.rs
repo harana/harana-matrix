@@ -27,8 +27,8 @@ use client_matrix::{
 };
 use client_base::deserialized_responses::ShieldStateCode;
 #[cfg(feature = "unstable-msc4426")]
-use common_ruma::profile::{CallProfileField, StatusProfileField};
-use common_ruma::{
+use harana_matrix_common::profile::{CallProfileField, StatusProfileField};
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedTransactionId,
     OwnedUserId, TransactionId, UserId,
     events::{
@@ -927,7 +927,7 @@ impl Profile {
 
 /// Some details of an [`EventTimelineItem`] that may require server requests
 /// other than just the regular
-/// [`sync_events`][common_ruma::api::client::sync::sync_events].
+/// [`sync_events`][harana_matrix_common::api::client::sync::sync_events].
 #[derive(Clone, Debug)]
 pub enum TimelineDetails<T> {
     /// The details are not available yet, and have not been requested from the
@@ -1122,7 +1122,7 @@ impl From<ShieldStateCode> for TimelineEventShieldStateCode {
 mod tests {
     use std::time::Duration;
 
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch,
         events::{
             AnySyncTimelineEvent,

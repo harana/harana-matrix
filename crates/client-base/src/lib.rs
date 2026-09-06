@@ -24,7 +24,7 @@
 #![cfg_attr(not(target_family = "wasm"), deny(clippy::future_not_send))]
 
 pub use client_common::*;
-use common_ruma::{OwnedDeviceId, OwnedUserId};
+use harana_matrix_common::{OwnedDeviceId, OwnedUserId};
 use serde::{Deserialize, Serialize};
 
 pub use crate::error::{Error, Result};
@@ -78,7 +78,7 @@ pub use store::{
 pub use utils::{MinimalRoomMemberEvent, MinimalStateEvent, RawStateEventWithKeys};
 
 #[cfg(test)]
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();
 
 /// The Matrix user session info.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]

@@ -64,7 +64,7 @@ pub use latest_event::{LatestEventValue, LocalLatestEventValue, RemoteLatestEven
 use client_base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons, timer};
 use client_common::task_monitor::{BackgroundTaskHandle, TaskMonitor};
 use room_latest_events::{RoomLatestEvents, RoomLatestEventsWriteGuard};
-use common_ruma::{EventId, OwnedRoomId, RoomId};
+use harana_matrix_common::{EventId, OwnedRoomId, RoomId};
 use tokio::{
     select,
     sync::{RwLock, RwLockReadGuard, RwLockWriteGuard, broadcast, mpsc},
@@ -687,7 +687,7 @@ async fn compute_latest_events(
 #[cfg(test)]
 fn local_room_message(body: &str) -> LocalLatestEventValue {
     use client_base::store::SerializableEventContent;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
     };
@@ -715,7 +715,7 @@ mod tests {
     use common_test::{
         InvitedRoomBuilder, JoinedRoomBuilder, async_test, event_factory::EventFactory,
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, OwnedTransactionId, event_id,
         events::{
             AnySyncMessageLikeEvent, AnySyncStateEvent, AnySyncTimelineEvent, SyncMessageLikeEvent,

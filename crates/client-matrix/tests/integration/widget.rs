@@ -36,7 +36,7 @@ use client_common::{
     deserialized_responses::EncryptionInfo, executor::spawn, locks::Mutex, timeout::timeout,
 };
 use common_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId,
     api::client::to_device::send_event_to_device::v3::Messages,
     device_id, event_id,

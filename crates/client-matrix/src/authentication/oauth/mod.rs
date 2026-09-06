@@ -155,8 +155,8 @@
 //! [MSC4108]: https://github.com/matrix-org/matrix-spec-proposals/pull/4108
 //! [RFC 8628]: https://datatracker.ietf.org/doc/html/rfc8628
 //! [`ClientBuilder::handle_refresh_tokens()`]: crate::ClientBuilder::handle_refresh_tokens()
-//! [`Error`]: common_ruma::api::error::Error
-//! [`ErrorKind::UnknownToken`]: common_ruma::api::error::ErrorKind::UnknownToken
+//! [`Error`]: harana_matrix_common::api::error::Error
+//! [`ErrorKind::UnknownToken`]: harana_matrix_common::api::error::ErrorKind::UnknownToken
 //! [`examples/oauth_cli`]: https://github.com/matrix-org/matrix-rust-sdk/tree/main/examples/oauth_cli
 
 #[cfg(feature = "e2e-encryption")]
@@ -183,7 +183,7 @@ use oauth2::{
     basic::BasicClient as OAuthClient,
 };
 pub use oauth2::{ClientId, CsrfToken};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId,
     api::client::discovery::get_authorization_server_metadata::{
         self, v1::AuthorizationServerMetadata,
@@ -391,7 +391,7 @@ impl OAuth {
     #[cfg(feature = "e2e-encryption")]
     pub async fn msc_4388_rendezvous_server_supported(&self) -> Result<bool, crate::HttpError> {
         use http::StatusCode;
-        use common_ruma::api::client::rendezvous::discover_rendezvous;
+        use harana_matrix_common::api::client::rendezvous::discover_rendezvous;
 
         match self.client.send(discover_rendezvous::unstable::Request::new()).await {
             Ok(response) => Ok(response.create_available),
@@ -633,7 +633,7 @@ impl OAuth {
     /// use client_matrix::{Client, ServerName};
     /// # use client_matrix::authentication::oauth::ClientId;
     /// # use client_matrix::authentication::oauth::registration::ClientMetadata;
-    /// # use common_ruma::serde::Raw;
+    /// # use harana_matrix_common::serde::Raw;
     /// # let client_metadata = unimplemented!();
     /// # fn persist_client_registration (_: url::Url, _: &ClientId) {}
     /// # _ = async {

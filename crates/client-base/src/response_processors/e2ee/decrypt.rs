@@ -14,7 +14,7 @@
 
 use client_common::deserialized_responses::TimelineEvent;
 use client_crypto::RoomEventDecryptionResult;
-use common_ruma::RoomId;
+use harana_matrix_common::RoomId;
 
 use super::{super::verification, E2EE};
 use crate::Result;

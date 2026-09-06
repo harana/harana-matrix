@@ -23,7 +23,7 @@ use client_matrix::{
     attachment::{BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo},
     utils::formatted_body_from_markdown,
 };
-use common_ruma::{
+use harana_matrix_common::{
     KeyDerivationAlgorithm as RumaKeyDerivationAlgorithm, MatrixToUri, MatrixUri as RumaMatrixUri,
     OwnedRoomId, OwnedUserId, SecondsSinceUnixEpoch, UInt, UserId, assign,
     events::{
@@ -163,15 +163,15 @@ pub struct AuthDataPasswordDetails {
     session: Option<String>,
 }
 
-impl TryFrom<AuthData> for common_ruma::api::client::uiaa::AuthData {
+impl TryFrom<AuthData> for harana_matrix_common::api::client::uiaa::AuthData {
     type Error = ClientError;
 
-    fn try_from(value: AuthData) -> Result<common_ruma::api::client::uiaa::AuthData, Self::Error> {
-        use common_ruma::api::client::uiaa;
+    fn try_from(value: AuthData) -> Result<harana_matrix_common::api::client::uiaa::AuthData, Self::Error> {
+        use harana_matrix_common::api::client::uiaa;
 
         match value {
             AuthData::Password { password_details } => {
-                let user_id = common_ruma::UserId::parse(password_details.identifier)?;
+                let user_id = harana_matrix_common::UserId::parse(password_details.identifier)?;
 
                 let mut password = uiaa::Password::new(user_id.into(), password_details.password);
                 password.session = password_details.session;
@@ -197,8 +197,8 @@ impl TryFrom<AuthData> for common_ruma::api::client::uiaa::AuthData {
                 // `EmailIdentity` is non-exhaustive and has no constructor, so it is
                 // built the way ruma builds it from a UIAA response.
                 let credentials = uiaa::ThirdpartyIdCredentials::new(
-                    common_ruma::SessionId::parse(email_session_id)?,
-                    common_ruma::ClientSecret::parse(client_secret)?,
+                    harana_matrix_common::SessionId::parse(email_session_id)?,
+                    harana_matrix_common::ClientSecret::parse(client_secret)?,
                 );
 
                 let mut data = serde_json::Map::new();
@@ -249,8 +249,8 @@ pub struct UiaaFlow {
     pub stages: Vec<String>,
 }
 
-impl From<&common_ruma::api::client::uiaa::UiaaInfo> for UiaaChallenge {
-    fn from(info: &common_ruma::api::client::uiaa::UiaaInfo) -> Self {
+impl From<&harana_matrix_common::api::client::uiaa::UiaaInfo> for UiaaChallenge {
+    fn from(info: &harana_matrix_common::api::client::uiaa::UiaaInfo) -> Self {
         let (error, error_code) = match &info.auth_error {
             Some(error) => {
                 (Some(error.message.clone()), Some(error.kind.errcode().as_str().to_owned()))
@@ -562,7 +562,7 @@ pub struct Mentions {
     pub room: bool,
 }
 
-impl From<Mentions> for common_ruma::events::Mentions {
+impl From<Mentions> for harana_matrix_common::events::Mentions {
     fn from(value: Mentions) -> Self {
         let mut user_ids = BTreeSet::<OwnedUserId>::new();
         for user_id in value.user_ids {
@@ -2022,7 +2022,7 @@ pub use galleries::*;
 
 #[cfg(feature = "unstable-msc4274")]
 mod galleries {
-    use common_ruma::{
+    use harana_matrix_common::{
         events::room::message::{
             GalleryItemType as RumaGalleryItemType,
             GalleryMessageEventContent as RumaGalleryMessageEventContent,
@@ -2119,7 +2119,7 @@ mod galleries {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use common_ruma::events::room::message::MessageType as RumaMessageType;
+    use harana_matrix_common::events::room::message::MessageType as RumaMessageType;
 
     use super::{
         message_event_content_from_markdown, message_event_content_from_markdown_as_emote,
@@ -2181,7 +2181,7 @@ mod tests {
 
 #[cfg(test)]
 mod uiaa_tests {
-    use common_ruma::api::client::uiaa;
+    use harana_matrix_common::api::client::uiaa;
 
     use super::{AuthData, AuthDataPasswordDetails, UiaaChallenge};
 

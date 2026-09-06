@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use eyeball::{AsyncLock, ObservableWriteGuard};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedUserId,
     events::{
         StateEventType, SyncStateEvent,

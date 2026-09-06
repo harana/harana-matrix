@@ -2,7 +2,7 @@ use std::{fmt, sync::LazyLock};
 
 use http::Response;
 pub use harana_matrix_macros::async_test;
-use common_ruma::{
+use harana_matrix_common::{
     RoomId, UserId,
     api::{IncomingResponse, IncomingResponseExt as _, OutgoingResponse, OutgoingResponseExt as _},
     room_id,
@@ -17,9 +17,9 @@ use sha2::{Digest, Sha256};
 #[macro_export]
 macro_rules! message_like_event_content {
     ($( $tt:tt )*) => {
-        ::common_ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+        ::harana_matrix_common::serde::Raw::new(&::serde_json::json!( $($tt)* ))
             .unwrap()
-            .cast_unchecked::<::common_ruma::events::AnyMessageLikeEventContent>()
+            .cast_unchecked::<::harana_matrix_common::events::AnyMessageLikeEventContent>()
     }
 }
 
@@ -29,9 +29,9 @@ macro_rules! message_like_event_content {
 #[macro_export]
 macro_rules! timeline_event {
     ($( $tt:tt )*) => {
-        ::common_ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+        ::harana_matrix_common::serde::Raw::new(&::serde_json::json!( $($tt)* ))
             .unwrap()
-            .cast_unchecked::<::common_ruma::events::AnyTimelineEvent>()
+            .cast_unchecked::<::harana_matrix_common::events::AnyTimelineEvent>()
     }
 }
 
@@ -41,9 +41,9 @@ macro_rules! timeline_event {
 #[macro_export]
 macro_rules! sync_timeline_event {
     ($( $tt:tt )*) => {
-        ::common_ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+        ::harana_matrix_common::serde::Raw::new(&::serde_json::json!( $($tt)* ))
             .unwrap()
-            .cast_unchecked::<::common_ruma::events::AnySyncTimelineEvent>()
+            .cast_unchecked::<::harana_matrix_common::events::AnySyncTimelineEvent>()
     }
 }
 
@@ -53,9 +53,9 @@ macro_rules! sync_timeline_event {
 #[macro_export]
 macro_rules! sync_state_event {
     ($( $tt:tt )*) => {
-        ::common_ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+        ::harana_matrix_common::serde::Raw::new(&::serde_json::json!( $($tt)* ))
             .unwrap()
-            .cast_unchecked::<::common_ruma::events::AnySyncStateEvent>()
+            .cast_unchecked::<::harana_matrix_common::events::AnySyncStateEvent>()
     }
 }
 
@@ -65,9 +65,9 @@ macro_rules! sync_state_event {
 #[macro_export]
 macro_rules! stripped_state_event {
     ($( $tt:tt )*) => {
-        ::common_ruma::serde::Raw::new(&::serde_json::json!( $($tt)* ))
+        ::harana_matrix_common::serde::Raw::new(&::serde_json::json!( $($tt)* ))
             .unwrap()
-            .cast_unchecked::<::common_ruma::events::AnyStrippedStateEvent>()
+            .cast_unchecked::<::harana_matrix_common::events::AnyStrippedStateEvent>()
     }
 }
 

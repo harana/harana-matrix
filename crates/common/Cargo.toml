@@ -1,0 +1,377 @@
+[package]
+name = "harana-matrix-common"
+version = "0.18.0"
+description = "Types, traits and cryptography for working with the Matrix protocol."
+categories = ["api-bindings", "web-programming"]
+keywords = ["matrix", "chat", "messaging", "ruma"]
+# The vendored ruma fork is MIT; the vendored vodozemac fork in `olm` is
+# Apache-2.0. See LICENSE and licenses/.
+license = "MIT AND Apache-2.0"
+homepage = "https://github.com/harana/harana-matrix"
+repository = "https://github.com/harana/harana-matrix"
+readme = "README.md"
+edition = "2024"
+rust-version = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+appservice-api = []
+appservice-api-c = ["appservice-api"]
+appservice-api-s = ["appservice-api"]
+client = []
+compat-arbitrary-length-ids = ["harana-matrix-macros/compat-arbitrary-length-ids"]
+compat-empty-string-null = []
+compat-encrypted-stickers = []
+compat-get-3pids = []
+compat-lax-room-create-deser = []
+compat-lax-room-topic-deser = []
+compat-null = []
+compat-optional = []
+compat-optional-txn-pdus = []
+compat-server-signing-key-version = ["harana-matrix-macros/compat-server-signing-key-version"]
+compat-tag-info = []
+compat-unset-avatar = []
+compat-upload-signatures = []
+default = []
+federation-api = [
+    "signatures",
+    "dep:headers",
+    "dep:http-auth",
+    "dep:httparse",
+    "dep:memchr",
+    "dep:mime",
+    "dep:rand",
+]
+full = [
+    "appservice-api-c",
+    "appservice-api-s",
+    "client",
+    "server",
+    "appservice-api",
+    "federation-api",
+    "signatures",
+    "state-res",
+    "html",
+    "markdown",
+    "rand",
+    "unstable-uniffi",
+    "compat-arbitrary-length-ids",
+    "compat-server-signing-key-version",
+    "compat-empty-string-null",
+    "compat-null",
+    "compat-optional",
+    "compat-unset-avatar",
+    "compat-get-3pids",
+    "compat-upload-signatures",
+    "compat-tag-info",
+    "compat-encrypted-stickers",
+    "compat-optional-txn-pdus",
+    "compat-lax-room-create-deser",
+    "compat-lax-room-topic-deser",
+    "unstable-compat-lax-syncv5-deser",
+    "unstable-extensible-events",
+    "unstable-msc1763",
+    "unstable-msc1767",
+    "unstable-msc2448",
+    "unstable-msc2654",
+    "unstable-msc2747",
+    "unstable-msc2867",
+    "unstable-msc2870",
+    "unstable-msc3230",
+    "unstable-msc3245",
+    "unstable-msc3245-v1-compat",
+    "unstable-msc3246",
+    "unstable-msc3381",
+    "unstable-msc3401",
+    "unstable-msc3417",
+    "unstable-msc3488",
+    "unstable-msc3489",
+    "unstable-msc3551",
+    "unstable-msc3552",
+    "unstable-msc3553",
+    "unstable-msc3554",
+    "unstable-msc3618",
+    "unstable-msc3723",
+    "unstable-msc3768",
+    "unstable-msc3814",
+    "unstable-msc3834",
+    "unstable-msc3843",
+    "unstable-msc3927",
+    "unstable-msc3930",
+    "unstable-msc3931",
+    "unstable-msc3932",
+    "unstable-msc3954",
+    "unstable-msc3955",
+    "unstable-msc3956",
+    "unstable-msc3983",
+    "unstable-msc4075",
+    "unstable-msc4095",
+    "unstable-msc4108",
+    "unstable-msc4121",
+    "unstable-msc4125",
+    "unstable-msc4140",
+    "unstable-msc4143",
+    "unstable-msc4171",
+    "unstable-msc4186",
+    "unstable-msc4195",
+    "unstable-msc4262",
+    "unstable-msc4274",
+    "unstable-msc4278",
+    "unstable-msc4286",
+    "unstable-msc4293",
+    "unstable-msc4306",
+    "unstable-msc4308",
+    "unstable-msc4310",
+    "unstable-msc4319",
+    "unstable-msc4334",
+    "unstable-msc4354",
+    "unstable-msc4359",
+    "unstable-msc4362",
+    "unstable-msc4380",
+    "unstable-msc4383",
+    "unstable-msc4385",
+    "unstable-msc4388",
+    "unstable-msc4406",
+    "unstable-msc4426",
+    "unstable-msc4439",
+    "unstable-msc4466",
+    "unstable-msc4471",
+    "unstable-msc4480",
+    "unstable-msc4494",
+    "unstable-msc4495",
+]
+html = [
+    "dep:html5ever",
+]
+js = ["getrandom?/wasm_js", "uuid?/js"]
+markdown = ["dep:pulldown-cmark"]
+rand = ["dep:getrandom", "dep:rand", "dep:uuid"]
+server = []
+signatures = [
+    "dep:ed25519-dalek",
+    "dep:pkcs8",
+    "dep:rand",
+    "dep:sha2",
+]
+state-res = ["signatures"]
+unstable-compat-lax-syncv5-deser = ["unstable-msc4186"]
+unstable-extensible-events = [
+    "unstable-msc3246",
+    "unstable-msc3488",
+    "unstable-msc3553",
+    "unstable-msc3954",
+    "unstable-msc3955",
+]
+unstable-msc1763 = []
+unstable-msc1767 = []
+unstable-msc2448 = []
+unstable-msc2654 = []
+unstable-msc2747 = []
+unstable-msc2867 = []
+unstable-msc2870 = []
+unstable-msc3230 = []
+unstable-msc3245 = ["unstable-msc3246"]
+unstable-msc3245-v1-compat = []
+unstable-msc3246 = ["unstable-msc3927"]
+unstable-msc3381 = ["unstable-msc1767"]
+unstable-msc3401 = []
+unstable-msc3417 = []
+unstable-msc3488 = ["unstable-msc1767"]
+unstable-msc3489 = ["unstable-msc3488"]
+unstable-msc3551 = ["unstable-msc3956"]
+unstable-msc3552 = ["unstable-msc3551"]
+unstable-msc3553 = ["unstable-msc3552"]
+unstable-msc3554 = ["unstable-msc1767"]
+unstable-msc3618 = []
+unstable-msc3723 = []
+unstable-msc3768 = []
+unstable-msc3814 = []
+unstable-msc3834 = []
+unstable-msc3843 = []
+unstable-msc3927 = ["unstable-msc3551"]
+unstable-msc3930 = []
+unstable-msc3931 = []
+unstable-msc3932 = ["unstable-msc3931"]
+unstable-msc3954 = ["unstable-msc1767"]
+unstable-msc3955 = ["unstable-msc1767"]
+unstable-msc3956 = ["unstable-msc1767"]
+unstable-msc3983 = []
+unstable-msc4075 = ["unstable-msc3401"]
+unstable-msc4095 = []
+unstable-msc4108 = []
+unstable-msc4121 = []
+unstable-msc4125 = []
+unstable-msc4140 = []
+unstable-msc4143 = []
+unstable-msc4171 = []
+unstable-msc4186 = []
+unstable-msc4195 = ["unstable-msc4143"]
+unstable-msc4262 = []
+unstable-msc4274 = []
+unstable-msc4278 = []
+unstable-msc4286 = []
+unstable-msc4293 = []
+unstable-msc4306 = []
+unstable-msc4308 = []
+unstable-msc4310 = []
+unstable-msc4319 = []
+unstable-msc4334 = ["dep:language-tags"]
+unstable-msc4354 = []
+unstable-msc4359 = []
+unstable-msc4362 = []
+unstable-msc4380 = []
+unstable-msc4383 = []
+unstable-msc4385 = []
+unstable-msc4388 = []
+unstable-msc4406 = []
+unstable-msc4426 = []
+unstable-msc4439 = []
+unstable-msc4466 = []
+unstable-msc4471 = []
+unstable-msc4480 = ["unstable-msc4354"]
+unstable-msc4494 = []
+unstable-msc4495 = []
+unstable-uniffi = ["dep:uniffi"]
+
+# The Olm and Megolm ratchets (a vendored fork of vodozemac), in `olm`.
+olm = [
+    "libolm-compat",
+    "precomputed-tables",
+    "dep:aes",
+    "dep:arrayvec",
+    "dep:base64ct",
+    "dep:cbc",
+    "dep:chacha20poly1305",
+    "dep:cipher",
+    "dep:curve25519-dalek",
+    "dep:ed25519-dalek",
+    "dep:getrandom",
+    "dep:hkdf",
+    "dep:hmac",
+    "dep:hpke",
+    "dep:matrix-pickle",
+    "dep:olm-base64",
+    "dep:prost",
+    "dep:rand",
+    "dep:serde_bytes",
+    "dep:sha2",
+    "dep:subtle",
+    "dep:x25519-dalek",
+]
+# Interoperate with pickles and messages produced by libolm.
+libolm-compat = []
+# Enable curve25519-dalek's precomputed basepoint tables, speeding up
+# fixed-base scalar multiplication (key generation and Ed25519 signing) at the
+# cost of embedding ~40 KB of lookup tables in the final binary.
+precomputed-tables = ["curve25519-dalek?/precomputed-tables"]
+# Public-key encryption as libolm implemented it, which is not secure against
+# an attacker who can pick the ciphertext.
+insecure-pk-encryption = ["libolm-compat"]
+# Let callers override the Olm session's ratchet configuration.
+experimental-session-config = []
+# Extra `olm` APIs that are only useful in advanced use cases and need extra
+# care to use correctly.
+low-level-api = []
+
+# Test helpers: `init_tracing_for_tests!` and the `async_test` attribute.
+testing = ["dep:ctor", "dep:tracing-subscriber"]
+
+[dependencies]
+harana-matrix-macros.workspace = true
+
+as_variant.workspace = true
+assign = "1.1.1"
+base64.workspace = true
+bytes = "1.11.1"
+date_header = "1.0.5"
+form_urlencoded = "1.2.2"
+http = { workspace = true, features = ["std"] }
+indexmap = { workspace = true, features = ["serde", "std"] }
+js_int = { version = "0.2.2", features = ["serde"] }
+js_option = "0.2.0"
+konst = { version = "0.4.3", default-features = false, features = ["cmp", "iter", "parsing"] }
+maplit = "1.0.2"
+percent-encoding = "2.3.2"
+regex = { workspace = true, features = ["perf"] }
+serde.workspace = true
+serde_html_form = "0.4.1"
+serde_json = { workspace = true, features = ["raw_value"] }
+thiserror.workspace = true
+time = "0.3.47"
+tracing = { workspace = true, features = ["attributes"] }
+url = { workspace = true, features = ["serde"] }
+web-time = "1.1.0"
+wildmatch = "2.6.1"
+zeroize = { workspace = true, features = ["derive"] }
+
+getrandom = { workspace = true, optional = true }
+language-tags = { version = "0.3.2", optional = true, features = ["serde"] }
+pulldown-cmark = { version = "0.13.0", optional = true, default-features = false, features = ["html"] }
+rand = { workspace = true, optional = true, features = ["sys_rng"] }
+uniffi = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true, features = ["v4"] }
+
+# `html`
+html5ever = { version = "0.39.0", optional = true }
+
+# `signatures`
+pkcs8 = { version = "0.11.0", optional = true, features = ["alloc"] }
+
+# `federation-api`
+headers = { version = "0.4.0", optional = true }
+http-auth = { version = "0.1.9", optional = true, default-features = false }
+httparse = { version = "1.9.0", optional = true }
+memchr = { version = "2.7.0", optional = true }
+mime = { workspace = true, optional = true }
+
+# Shared by `signatures` and `olm`.
+ed25519-dalek = { version = "3.0.0", optional = true, features = ["alloc", "pkcs8", "rand_core", "serde", "hazmat", "zeroize"] }
+sha2 = { workspace = true, optional = true }
+
+# `olm`. `base64` is aliased because this module's public API exposes
+# `base64::DecodeError` from 0.22, while the rest of the crate is on the
+# workspace's 0.23.
+aes = { version = "0.9.1", optional = true }
+arrayvec = { version = "0.7.8", optional = true, features = ["serde"] }
+base64ct = { version = "1.8.3", optional = true, features = ["std", "alloc"] }
+cbc = { version = "0.2.1", optional = true }
+chacha20poly1305 = { version = "0.11.0", optional = true }
+cipher = { version = "0.5.2", optional = true, features = ["alloc"] }
+curve25519-dalek = { version = "5.0.0", optional = true, default-features = false, features = ["zeroize"] }
+hkdf = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
+hpke = { version = "0.14.0", optional = true, default-features = false, features = ["alloc", "chacha", "getrandom", "x25519"] }
+matrix-pickle = { version = "0.2.3", optional = true }
+olm-base64 = { package = "base64", version = "0.22.1", optional = true }
+prost = { version = "0.14.4", optional = true }
+serde_bytes = { workspace = true, optional = true }
+subtle = { version = "2.6.1", optional = true }
+x25519-dalek = { version = "3.0.0", optional = true, default-features = false, features = ["serde", "reusable_secrets", "static_secrets", "zeroize"] }
+
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+# `testing`
+ctor = { version = "0.2.9", optional = true }
+tracing-subscriber = { workspace = true, optional = true, features = ["env-filter"] }
+
+[dev-dependencies]
+anyhow.workspace = true
+assert_matches2.workspace = true
+insta.workspace = true
+macro_rules_attribute = "0.2.2"
+ntest = "0.9.5"
+olm-rs = "2.2.0"
+proptest.workspace = true
+similar-asserts.workspace = true
+smol-macros = "0.1.1"
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

@@ -19,7 +19,7 @@ use std::{
 };
 
 use client_base::RoomInfoNotableUpdateReasons;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels,
 };
 use tokio::sync::{OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
@@ -368,7 +368,7 @@ mod tests {
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Update},
     };
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{event_id, room_id, user_id};
+    use harana_matrix_common::{event_id, room_id, user_id};
 
     use super::RoomLatestEvents;
     use crate::{

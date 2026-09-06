@@ -72,7 +72,7 @@ pub use self::media_store::SqliteMediaStore;
 pub use self::state_store::{DATABASE_NAME as STATE_STORE_DATABASE_NAME, SqliteStateStore};
 
 #[cfg(test)]
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();
 
 /// The `tracing` targets this store's modules log under.
 ///

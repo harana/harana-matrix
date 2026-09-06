@@ -15,7 +15,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use client_base::crypto::types::events::UtdCause;
-use common_ruma::events::{
+use harana_matrix_common::events::{
     MessageLikeEventContent, MessageLikeEventType, room::MediaSource as RumaMediaSource,
 };
 
@@ -243,8 +243,8 @@ impl TryFrom<client_ui::timeline::MsgLikeContent> for MsgLikeContent {
     }
 }
 
-impl From<common_ruma::events::Mentions> for Mentions {
-    fn from(value: common_ruma::events::Mentions) -> Self {
+impl From<harana_matrix_common::events::Mentions> for Mentions {
+    fn from(value: harana_matrix_common::events::Mentions) -> Self {
         Self {
             user_ids: value.user_ids.iter().map(|id| id.to_string()).collect(),
             room: value.room,

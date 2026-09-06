@@ -20,7 +20,7 @@ use http::{
     header::{CONTENT_TYPE, ETAG, EXPIRES, IF_MATCH, IF_NONE_MATCH, LAST_MODIFIED},
 };
 use client_base::sleep;
-use common_ruma::api::{
+use harana_matrix_common::api::{
     EndpointError,
     error::{FromHttpResponseError, HeaderDeserializationError, IntoHttpError},
 };
@@ -60,7 +60,7 @@ fn response_to_error(status: StatusCode, body: &[u8]) -> HttpError {
     match http::Response::builder().status(status).body(body).map_err(IntoHttpError::from) {
         Ok(response) => {
             let error = FromHttpResponseError::<RumaApiError>::Server(RumaApiError::MatrixError(
-                common_ruma::api::error::Error::from_http_response(response),
+                harana_matrix_common::api::error::Error::from_http_response(response),
             ));
 
             error.into()
@@ -116,7 +116,7 @@ impl Channel {
     ) -> Result<Self, HttpError> {
         use std::borrow::Cow;
 
-        use common_ruma::api::{SupportedVersions, client::rendezvous::create_rendezvous_session};
+        use harana_matrix_common::api::{SupportedVersions, client::rendezvous::create_rendezvous_session};
 
         let request = create_rendezvous_session::unstable_msc4108::Request::default();
         let response = client

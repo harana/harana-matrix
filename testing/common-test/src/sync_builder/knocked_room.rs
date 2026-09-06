@@ -1,4 +1,4 @@
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, RoomId, api::client::sync::sync_events::v3::KnockedRoom,
     events::AnyStrippedStateEvent, serde::Raw,
 };

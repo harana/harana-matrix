@@ -19,7 +19,7 @@ use client_common::deserialized_responses::{
     VerificationState,
 };
 use common_test::{async_test, ruma_response_from_json};
-use common_ruma::{
+use harana_matrix_common::{
     RoomId, TransactionId, events::AnyToDeviceEvent, room_id, serde::Raw,
     to_device::DeviceIdOrAllDevices,
 };
@@ -127,7 +127,7 @@ async fn test_encrypted_to_device_from_deleted_device() {
         get_machine_pair_with_session(tests::alice_id(), tests::user_id(), false).await;
 
     // Tell Bob that Alice's device has been deleted
-    let mut keys_query_response = common_ruma::api::client::keys::get_keys::v3::Response::default();
+    let mut keys_query_response = harana_matrix_common::api::client::keys::get_keys::v3::Response::default();
     keys_query_response.device_keys.insert(alice.user_id().to_owned(), Default::default());
     bob.receive_keys_query_response(&TransactionId::new(), &keys_query_response).await.unwrap();
 
@@ -750,7 +750,7 @@ async fn make_alice_unverified(alice: &OlmMachine, bob: &OlmMachine) {
 async fn test_share_strategy_prevents_encryption() {
     use client_common::deserialized_responses::WithheldCode;
     use common_test::test_json::keys_query_sets::KeyDistributionTestData as DataSet;
-    use common_ruma::TransactionId;
+    use harana_matrix_common::TransactionId;
 
     use crate::CrossSigningKeyExport;
 

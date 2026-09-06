@@ -14,7 +14,7 @@
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use common_ruma::owned_room_id;
+use harana_matrix_common::owned_room_id;
 use serde_json::{from_value, json};
 
 use super::{WIDGET_ID, parse_msg};

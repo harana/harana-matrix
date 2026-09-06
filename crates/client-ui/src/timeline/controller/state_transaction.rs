@@ -20,7 +20,7 @@ use client_matrix::deserialized_responses::{
     ThreadSummary as SdkThreadSummary, ThreadSummaryStatus, TimelineEvent, TimelineEventKind,
     UnsignedEventLocation,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId, UserId,
     events::{
         AnySyncStateEvent, AnySyncTimelineEvent, SyncStateEvent,
@@ -1260,7 +1260,7 @@ mod tests {
 
     use client_matrix::{Room, test_utils::mocks::MatrixMockServer};
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId,
         events::receipt::{Receipt, ReceiptThread},
         owned_event_id, owned_user_id, room_id,

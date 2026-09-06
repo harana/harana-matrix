@@ -63,14 +63,14 @@ use client_common::{
 use mime::Mime;
 use reply::Reply;
 #[cfg(feature = "e2e-encryption")]
-use common_ruma::events::AnySyncMessageLikeEvent;
+use harana_matrix_common::events::AnySyncMessageLikeEvent;
 #[cfg(feature = "unstable-msc4274")]
-use common_ruma::events::room::message::GalleryItemType;
+use harana_matrix_common::events::room::message::GalleryItemType;
 #[cfg(feature = "e2e-encryption")]
-use common_ruma::events::{
+use harana_matrix_common::events::{
     AnySyncTimelineEvent, SyncMessageLikeEvent, room::encrypted::OriginalSyncRoomEncryptedEvent,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, Int, MatrixToUri, MatrixUri, MilliSecondsSinceUnixEpoch, MxcUri, OwnedEventId,
     OwnedRoomId, OwnedServerName, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt,
     UserId,
@@ -147,7 +147,7 @@ use common_ruma::{
     uint,
 };
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::{
+use harana_matrix_common::{
     events::room::encrypted::unstable_state::OriginalSyncStateRoomEncryptedEvent,
     serde::JsonCastable,
 };
@@ -1379,7 +1379,7 @@ impl Room {
     /// ```
     pub async fn get_state_events_static<C>(&self) -> Result<Vec<RawSyncOrStrippedState<C>>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::Redacted: RedactedStateEventContent,
@@ -1425,7 +1425,7 @@ impl Room {
         state_keys: I,
     ) -> Result<Vec<RawSyncOrStrippedState<C>>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::StateKey: Borrow<K>,
@@ -1474,7 +1474,7 @@ impl Room {
     /// ```
     pub async fn get_state_event_static<C>(&self) -> Result<Option<RawSyncOrStrippedState<C>>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent<StateKey = EmptyStateKey>
             + RedactContent,
         C::Redacted: RedactedStateEventContent,
@@ -1506,7 +1506,7 @@ impl Room {
         state_key: &K,
     ) -> Result<Option<RawSyncOrStrippedState<C>>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::StateKey: Borrow<K>,
@@ -1627,7 +1627,7 @@ impl Room {
     /// ```
     pub async fn account_data_static<C>(&self) -> Result<Option<Raw<RoomAccountDataEvent<C>>>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False> + RoomAccountDataEventContent,
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False> + RoomAccountDataEventContent,
     {
         Ok(self.account_data(C::TYPE.into()).await?.map(Raw::cast_unchecked))
     }
@@ -1662,7 +1662,7 @@ impl Room {
     /// ```
     /// # async {
     /// # let room: client_matrix::Room = todo!();
-    /// # let event_id: common_ruma::OwnedEventId = todo!();
+    /// # let event_id: harana_matrix_common::OwnedEventId = todo!();
     /// use client_matrix::ruma::events::fully_read::FullyReadEventContent;
     /// let content = FullyReadEventContent::new(event_id);
     ///
@@ -1743,7 +1743,7 @@ impl Room {
     ///
     /// ```no_run
     /// # use std::str::FromStr;
-    /// # use common_ruma::events::tag::{TagInfo, TagName, UserTagName};
+    /// # use harana_matrix_common::events::tag::{TagInfo, TagName, UserTagName};
     /// # async {
     /// # let homeserver = url::Url::parse("http://localhost:8080")?;
     /// # let mut client = client_matrix::Client::new(homeserver).await?;
@@ -2359,7 +2359,7 @@ impl Room {
     /// `experimental-encrypted-state-events` feature is enabled.
     #[allow(unused_variables, unused_mut)]
     async fn enable_encryption_inner(&self, encrypted_state_events: bool) -> Result<()> {
-        use common_ruma::{
+        use harana_matrix_common::{
             EventEncryptionAlgorithm, events::room::encryption::RoomEncryptionEventContent,
         };
         const SYNC_WAIT_TIME: Duration = Duration::from_secs(3);
@@ -3363,7 +3363,7 @@ impl Room {
     /// let mut content = RoomMemberEventContent::new(MembershipState::Join);
     /// content.avatar_url = Some(avatar_url);
     ///
-    /// joined_room.send_state_event_for_key(common_ruma::user_id!("@foo:bar.com"), content).await?;
+    /// joined_room.send_state_event_for_key(harana_matrix_common::user_id!("@foo:bar.com"), content).await?;
     ///
     /// // Custom event:
     /// #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
@@ -3432,7 +3432,7 @@ impl Room {
     /// let mut content = RoomMemberEventContent::new(MembershipState::Join);
     /// content.avatar_url = Some(avatar_url);
     ///
-    /// joined_room.send_state_event_for_key(common_ruma::user_id!("@foo:bar.com"), content).await?;
+    /// joined_room.send_state_event_for_key(harana_matrix_common::user_id!("@foo:bar.com"), content).await?;
     ///
     /// // Custom event:
     /// #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
@@ -4565,7 +4565,7 @@ impl Room {
         &self,
         config: &get_retention_configuration::unstable::Response,
     ) -> Option<RoomRetentionEventContent> {
-        use common_ruma::api::client::retention::{
+        use harana_matrix_common::api::client::retention::{
             RoomIdOrAllRooms, get_retention_configuration::unstable::LifetimeLimits,
         };
 
@@ -5234,7 +5234,7 @@ mod tests {
     use common_test::{
         JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomVersionId, event_id,
         events::{
             relation::RelationType,
@@ -5829,7 +5829,7 @@ mod tests {
     const ONE_WEEK: Duration = Duration::from_secs(86_400 * 7);
     const ONE_HOUR: Duration = Duration::from_secs(3_600);
 
-    fn retention_room_id() -> &'static common_ruma::RoomId {
+    fn retention_room_id() -> &'static harana_matrix_common::RoomId {
         room_id!("!a:b.c")
     }
 

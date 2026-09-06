@@ -16,7 +16,7 @@ use std::{future::IntoFuture, pin::Pin};
 
 use futures_core::Future;
 use client_base::crypto::secret_storage::SecretStorageKey;
-use common_ruma::events::secret_storage::default_key::SecretStorageDefaultKeyEventContent;
+use harana_matrix_common::events::secret_storage::default_key::SecretStorageDefaultKeyEventContent;
 
 use super::{Result, SecretStorage, SecretStore};
 

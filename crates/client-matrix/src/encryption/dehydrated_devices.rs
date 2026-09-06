@@ -67,7 +67,7 @@ use client_base::crypto::{
 use client_common::{
     boxed_into_future, locks::Mutex as StdMutex, sleep::sleep, task_monitor::BackgroundTaskHandle,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedDeviceId,
     api::{
         client::dehydrated_device::{
@@ -152,7 +152,7 @@ pub enum DehydratedDeviceError {
 
     /// The pickle key stored in Secret Storage was not valid base64.
     #[error("the dehydrated-device pickle key in Secret Storage is not valid base64: {0}")]
-    PickleKeyDecode(#[from] common_olm::Base64DecodeError),
+    PickleKeyDecode(#[from] harana_matrix_common::olm::Base64DecodeError),
 
     /// The client is not logged in; the Olm machine is not available.
     #[error("the client is not logged in")]

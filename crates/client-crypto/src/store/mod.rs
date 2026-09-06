@@ -28,7 +28,7 @@
 //! #     OlmMachineBuilder,
 //! #     store::MemoryStore,
 //! # };
-//! # use common_ruma::{device_id, user_id};
+//! # use harana_matrix_common::{device_id, user_id};
 //! # let user_id = user_id!("@example:localhost");
 //! # let device_id = device_id!("TEST");
 //! let store = Arc::new(MemoryStore::new());
@@ -54,7 +54,7 @@ use as_variant::as_variant;
 use futures_core::Stream;
 use futures_util::StreamExt;
 use itertools::{Either, Itertools};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId, RoomId, UserId,
     encryption::KeyUsage, events::secret::request::SecretName,
 };
@@ -64,7 +64,7 @@ use tokio::sync::{Mutex, Notify, OwnedRwLockWriteGuard, RwLock};
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::{debug, info, instrument, trace, warn};
 use types::{RoomKeyBundleInfo, StoredRoomKeyBundleData};
-use common_olm::{Curve25519PublicKey, megolm::SessionOrdering};
+use harana_matrix_common::olm::{Curve25519PublicKey, megolm::SessionOrdering};
 
 use self::types::{
     BackupAuthenticity, Changes, CrossSigningKeyExport, DeviceChanges, DeviceUpdates,
@@ -545,7 +545,7 @@ pub enum SecretImportError {
         /// The name of the secret that was being imported.
         name: SecretName,
         /// The key error that occurred.
-        error: common_olm::KeyError,
+        error: harana_matrix_common::olm::KeyError,
     },
     /// The public key of the imported private key doesn't match the public
     /// key that was uploaded to the server.
@@ -1458,7 +1458,7 @@ impl Store {
     ///
     /// ```no_run
     /// # use client_crypto::OlmMachine;
-    /// # use common_ruma::{device_id, user_id};
+    /// # use harana_matrix_common::{device_id, user_id};
     /// # use futures_util::{pin_mut, StreamExt};
     /// # let machine: OlmMachine = unimplemented!();
     /// # futures_executor::block_on(async {
@@ -1514,7 +1514,7 @@ impl Store {
     ///
     /// ```no_run
     /// # use client_crypto::OlmMachine;
-    /// # use common_ruma::{device_id, user_id};
+    /// # use harana_matrix_common::{device_id, user_id};
     /// # use futures_util::{pin_mut, StreamExt};
     /// # let machine: OlmMachine = unimplemented!();
     /// # futures_executor::block_on(async {
@@ -1596,7 +1596,7 @@ impl Store {
     ///
     /// ```no_run
     /// # use client_crypto::OlmMachine;
-    /// # use common_ruma::{device_id, owned_user_id};
+    /// # use harana_matrix_common::{device_id, owned_user_id};
     /// # use futures_util::{pin_mut, StreamExt};
     /// # let alice = owned_user_id!("@alice:example.org");
     /// # futures_executor::block_on(async {
@@ -1632,7 +1632,7 @@ impl Store {
     /// #    store::types::StoredRoomKeyBundleData,
     /// #    types::room_history::RoomKeyBundle
     /// # };
-    /// # use common_ruma::{device_id, owned_user_id};
+    /// # use harana_matrix_common::{device_id, owned_user_id};
     /// # use futures_util::{pin_mut, StreamExt};
     /// # let alice = owned_user_id!("@alice:example.org");
     /// # async {
@@ -1709,7 +1709,7 @@ impl Store {
     /// ```no_run
     /// # use std::io::Cursor;
     /// # use client_crypto::{OlmMachine, decrypt_room_key_export};
-    /// # use common_ruma::{device_id, user_id};
+    /// # use harana_matrix_common::{device_id, user_id};
     /// # let alice = user_id!("@alice:example.org");
     /// # async {
     /// # let machine = OlmMachine::new(&alice, device_id!("DEVICEID")).await;
@@ -1859,7 +1859,7 @@ impl Store {
     ///
     /// ```no_run
     /// # use client_crypto::{OlmMachine, encrypt_room_key_export};
-    /// # use common_ruma::{device_id, user_id, room_id};
+    /// # use harana_matrix_common::{device_id, user_id, room_id};
     /// # let alice = user_id!("@alice:example.org");
     /// # async {
     /// # let machine = OlmMachine::new(&alice, device_id!("DEVICEID")).await;
@@ -1901,7 +1901,7 @@ impl Store {
     /// use std::pin::pin;
     ///
     /// use client_crypto::{OlmMachine, olm::ExportedRoomKey};
-    /// use common_ruma::{device_id, room_id, user_id};
+    /// use harana_matrix_common::{device_id, room_id, user_id};
     /// use tokio_stream::StreamExt;
     /// # async {
     /// let alice = user_id!("@alice:example.org");
@@ -2207,13 +2207,13 @@ mod tests {
     use insta::{_macro_support::Content, assert_json_snapshot, internals::ContentPath};
     use common_test::async_test;
     use rand::RngExt;
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomId, device_id,
         events::room::{EncryptedFile, EncryptedFileHashes, V2EncryptedFileInfo},
         owned_device_id, owned_mxc_uri, room_id, user_id,
     };
     use serde_json::json;
-    use common_olm::{Ed25519Keypair, megolm::SessionKey};
+    use harana_matrix_common::olm::{Ed25519Keypair, megolm::SessionKey};
 
     use crate::{
         Account, OlmMachine,
@@ -2378,7 +2378,7 @@ mod tests {
             )),
             None,
             EventEncryptionAlgorithm::MegolmV1AesSha2,
-            Some(common_ruma::events::room::history_visibility::HistoryVisibility::Shared),
+            Some(harana_matrix_common::events::room::history_visibility::HistoryVisibility::Shared),
             true,
         )
         .unwrap()
@@ -2579,7 +2579,7 @@ mod tests {
 
         /* We use hardcoded megolm session data, to get a stable output snapshot. These were all created with:
 
-           println!("{}", common_olm::megolm::GroupSession::new(Default::default()).session_key().to_base64());
+           println!("{}", harana_matrix_common::olm::megolm::GroupSession::new(Default::default()).session_key().to_base64());
         */
         let session_key1 = "AgAAAAC2XHVzsMBKs4QCRElJ92CJKyGtknCSC8HY7cQ7UYwndMKLQAejXLh5UA0l6s736mgctcUMNvELScUWrObdflrHo+vth/gWreXOaCnaSxmyjjKErQwyIYTkUfqbHy40RJfEesLwnN23on9XAkch/iy8R2+Jz7B8zfG01f2Ow2SxPQFnAndcO1ZSD2GmXgedy6n4B20MWI1jGP2wiexOWbFSya8DO/VxC9m5+/mF+WwYqdpKn9g4Y05Yw4uz7cdjTc3rXm7xK+8E7hI//5QD1nHPvuKYbjjM9u2JSL+Bzp61Cw";
         let session_key2 = "AgAAAAC1BXreFTUQQSBGekTEuYxhdytRKyv4JgDGcG+VOBYdPNGgs807SdibCGJky4lJ3I+7ZDGHoUzZPZP/4ogGu4kxni0PWdtWuN7+5zsuamgoFF/BkaGeUUGv6kgIkx8pyPpM5SASTUEP9bN2loDSpUPYwfiIqz74DgC4WQ4435sTBctYvKz8n+TDJwdLXpyT6zKljuqADAioud+s/iqx9LYn9HpbBfezZcvbg67GtE113pLrvde3IcPI5s6dNHK2onGO2B2eoaobcen18bbEDnlUGPeIivArLya7Da6us14jBQ";

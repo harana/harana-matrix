@@ -19,14 +19,14 @@ use futures_core::Stream;
 use futures_util::{FutureExt, StreamExt};
 use client_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
 use common_test::async_test;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyId, RoomId, TransactionId, UserId, canonical_json::to_canonical_value, owned_user_id,
     room_id, user_id,
 };
 use serde::Serialize;
 use serde_json::json;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-use common_olm::Curve25519SecretKey;
+use harana_matrix_common::olm::Curve25519SecretKey;
 
 use crate::{
     Account, DecryptionSettings, DeviceData, EncryptionSettings, EncryptionSyncChanges, EventError,
@@ -473,7 +473,7 @@ async fn get_machine_pair() -> (OlmMachine, OlmMachine) {
 /// Tell the given [`OlmMachine`] to forget about any keys it has seen for the
 /// given user.
 async fn forget_devices_for_user(machine: &OlmMachine, other_user: &UserId) {
-    let mut keys_query_response = common_ruma::api::client::keys::get_keys::v3::Response::default();
+    let mut keys_query_response = harana_matrix_common::api::client::keys::get_keys::v3::Response::default();
     keys_query_response.device_keys.insert(other_user.to_owned(), Default::default());
     machine.receive_keys_query_response(&TransactionId::new(), &keys_query_response).await.unwrap();
 }

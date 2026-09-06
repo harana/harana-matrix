@@ -57,7 +57,7 @@ pub use identities::room_identity_state::{
     IdentityState, IdentityStatusChange, RoomIdentityChange, RoomIdentityProvider,
     RoomIdentityState,
 };
-use common_ruma::OwnedRoomId;
+use harana_matrix_common::OwnedRoomId;
 
 /// Return type for the room key importing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,13 +117,13 @@ pub use verification::{
 #[cfg(feature = "qrcode")]
 pub use verification::{QrVerification, QrVerificationState, ScanError};
 #[doc(no_inline)]
-pub use common_olm as vodozemac;
+pub use harana_matrix_common::olm as vodozemac;
 
 /// The version of the matrix-cypto crate being used
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
@@ -375,7 +375,7 @@ pub enum RoomEventDecryptionResult {
 /// ```
 /// use anyhow::Result;
 /// use client_crypto::OlmMachine;
-/// use common_ruma::user_id;
+/// use harana_matrix_common::user_id;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
@@ -392,7 +392,7 @@ pub enum RoomEventDecryptionResult {
 /// use anyhow::Result;
 /// use client_crypto::OlmMachine;
 /// use client_sqlite::SqliteCryptoStore;
-/// use common_ruma::user_id;
+/// use harana_matrix_common::user_id;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
@@ -462,7 +462,7 @@ pub enum RoomEventDecryptionResult {
 ///
 /// ```no_run
 /// # use std::collections::BTreeMap;
-/// # use common_ruma::api::client::keys::upload_keys::v3::Response;
+/// # use harana_matrix_common::api::client::keys::upload_keys::v3::Response;
 /// # use anyhow::Result;
 /// # use client_crypto::{OlmMachine, types::requests::OutgoingRequest};
 /// # async fn send_request(request: OutgoingRequest) -> Result<Response> {
@@ -507,7 +507,7 @@ pub enum RoomEventDecryptionResult {
 /// A more complete example, which uses a helper method, might look like this:
 /// ```no_run
 /// # use std::collections::BTreeMap;
-/// # use common_ruma::api::client::keys::upload_keys::v3::Response;
+/// # use harana_matrix_common::api::client::keys::upload_keys::v3::Response;
 /// # use anyhow::Result;
 /// # use client_crypto::{OlmMachine, types::requests::OutgoingRequest};
 /// # async fn send_request(request: &OutgoingRequest) -> Result<Response> {
@@ -608,7 +608,7 @@ pub enum RoomEventDecryptionResult {
 /// # use client_crypto::{
 ///     DecryptionSettings, EncryptionSyncChanges, OlmMachine, TrustRequirement
 /// };
-/// # use common_ruma::api::client::sync::sync_events::v3::Response;
+/// # use harana_matrix_common::api::client::sync::sync_events::v3::Response;
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
 /// # struct Client {
@@ -792,8 +792,8 @@ pub enum RoomEventDecryptionResult {
 /// # use client_crypto::{
 /// #     DecryptionSettings, EncryptionSyncChanges, OlmMachine, TrustRequirement
 /// # };
-/// # use common_ruma::api::client::sync::sync_events::v3::{Response, State, JoinedRoom};
-/// # use common_ruma::{OwnedUserId, serde::Raw, events::AnySyncStateEvent};
+/// # use harana_matrix_common::api::client::sync::sync_events::v3::{Response, State, JoinedRoom};
+/// # use harana_matrix_common::{OwnedUserId, serde::Raw, events::AnySyncStateEvent};
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
 /// # struct Client {
@@ -902,8 +902,8 @@ pub enum RoomEventDecryptionResult {
 /// # use std::collections::{BTreeMap, HashSet};
 /// # use std::ops::Deref;
 /// # use anyhow::Result;
-/// # use common_ruma::UserId;
-/// # use common_ruma::api::client::keys::claim_keys::v3::{Response, Request};
+/// # use harana_matrix_common::UserId;
+/// # use harana_matrix_common::api::client::keys::claim_keys::v3::{Response, Request};
 /// # use client_crypto::OlmMachine;
 /// # async fn send_request(request: &Request) -> Result<Response> {
 /// #     let response = unimplemented!();
@@ -948,8 +948,8 @@ pub enum RoomEventDecryptionResult {
 /// # use std::collections::{BTreeMap, HashSet};
 /// # use std::ops::Deref;
 /// # use anyhow::Result;
-/// # use common_ruma::UserId;
-/// # use common_ruma::api::client::keys::claim_keys::v3::{Response, Request};
+/// # use harana_matrix_common::UserId;
+/// # use harana_matrix_common::api::client::keys::claim_keys::v3::{Response, Request};
 /// # use client_crypto::{OlmMachine, types::requests::ToDeviceRequest, EncryptionSettings};
 /// # async fn send_request(request: &ToDeviceRequest) -> Result<Response> {
 /// #     let response = unimplemented!();
@@ -991,7 +991,7 @@ pub enum RoomEventDecryptionResult {
 /// ```no_run
 /// # use anyhow::Result;
 /// # use client_crypto::{DecryptionSettings, OlmMachine, TrustRequirement};
-/// # use common_ruma::events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent};
+/// # use harana_matrix_common::events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent};
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
 /// # let room_id = unimplemented!();
@@ -1014,8 +1014,8 @@ pub enum RoomEventDecryptionResult {
 /// # use std::ops::Deref;
 /// # use anyhow::Result;
 /// # use serde_json::json;
-/// # use common_ruma::{UserId, RoomId, serde::Raw};
-/// # use common_ruma::api::client::keys::claim_keys::v3::{Response, Request};
+/// # use harana_matrix_common::{UserId, RoomId, serde::Raw};
+/// # use harana_matrix_common::api::client::keys::claim_keys::v3::{Response, Request};
 /// # use client_crypto::{EncryptionSettings, OlmMachine, types::requests::ToDeviceRequest};
 /// # use tokio::sync::MutexGuard;
 /// # async fn send_request(request: &Request) -> Result<Response> {

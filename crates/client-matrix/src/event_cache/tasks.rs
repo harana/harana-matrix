@@ -23,7 +23,7 @@ use client_base::{
     event_cache::Event, linked_chunk::OwnedLinkedChunkId,
     serde_helpers::extract_thread_root_from_content, sync::RoomUpdates,
 };
-use common_ruma::{EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId};
 use tokio::{
     select,
     sync::{

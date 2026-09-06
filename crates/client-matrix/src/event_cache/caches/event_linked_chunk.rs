@@ -522,7 +522,7 @@ impl EventLinkedChunk {
     /// Find an event in the event linked chunk by its event ID, and return its
     /// location.
     #[cfg(feature = "e2e-encryption")]
-    pub fn find_event(&self, event_id: &common_ruma::EventId) -> Option<(Position, Event)> {
+    pub fn find_event(&self, event_id: &harana_matrix_common::EventId) -> Option<(Position, Event)> {
         for (position, event) in self.revents() {
             if event.event_id() == Some(event_id) {
                 return Some((position, event.clone()));
@@ -717,7 +717,7 @@ mod tests {
     use assert_matches2::assert_let;
     use client_base::linked_chunk::Update;
     use common_test::{ALICE, DEFAULT_TEST_ROOM_ID, event_factory::EventFactory};
-    use common_ruma::{EventId, OwnedEventId, event_id, user_id};
+    use harana_matrix_common::{EventId, OwnedEventId, event_id, user_id};
 
     use super::*;
 

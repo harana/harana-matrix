@@ -24,7 +24,7 @@ use client_base::{
     media::{MediaFormat, MediaRequestParameters},
     sync::State,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedDeviceId, OwnedMxcUri, OwnedUserId, RoomId, TransactionId,
     api::client::{
         account::request_openid_token::v3::{Request as OpenIdRequest, Response as OpenIdResponse},
@@ -95,7 +95,7 @@ impl MatrixDriver {
     /// [`ClientBuilder::disable_well_known_lookup`]: crate::ClientBuilder::disable_well_known_lookup
     pub(crate) async fn get_rtc_transports(
         &self,
-    ) -> Result<Vec<common_ruma::api::client::rtc::RtcTransport>> {
+    ) -> Result<Vec<harana_matrix_common::api::client::rtc::RtcTransport>> {
         self.room
             .client
             .discover_rtc_transports()
@@ -625,7 +625,7 @@ fn attach_room_id_state(raw_ev: &Raw<AnySyncStateEvent>, room_id: &RoomId) -> Ra
 #[cfg(test)]
 mod tests {
     use insta;
-    use common_ruma::{events::AnyTimelineEvent, room_id, serde::Raw};
+    use harana_matrix_common::{events::AnyTimelineEvent, room_id, serde::Raw};
     use serde_json::{Value, json};
 
     use super::attach_room_id;

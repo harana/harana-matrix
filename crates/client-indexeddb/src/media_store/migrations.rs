@@ -172,7 +172,7 @@ pub mod v1 {
     /// * Index - `retention` - tracks all retention metadata - i.e., joins
     ///   `content_size` and `last_access`
     ///
-    /// [1]: common_ruma::MxcUri
+    /// [1]: harana_matrix_common::MxcUri
     /// [2]: client_base::media::store::MediaRetentionPolicy
     fn create_media_metadata_object_store(db: &Database) -> Result<(), Error> {
         let media = db

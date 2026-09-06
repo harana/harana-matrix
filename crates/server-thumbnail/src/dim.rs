@@ -19,7 +19,7 @@
 
 use std::num::Saturating as Sat;
 
-use common_ruma::{UInt, media::Method};
+use harana_matrix_common::{UInt, media::Method};
 
 use crate::Error;
 
@@ -151,7 +151,7 @@ impl Default for Dim {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::media::Method;
+    use harana_matrix_common::media::Method;
 
     use super::Dim;
 

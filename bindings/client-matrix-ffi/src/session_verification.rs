@@ -25,7 +25,7 @@ use client_matrix::{
     ruma::events::key::verification::VerificationMethod,
 };
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::UserId;
+use harana_matrix_common::UserId;
 use tracing::{error, warn};
 
 use crate::{

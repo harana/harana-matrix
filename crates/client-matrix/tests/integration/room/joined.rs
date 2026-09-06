@@ -21,7 +21,7 @@ use common_test::{
     mocks::mock_encryption_state,
     test_json::{self, sync::CUSTOM_ROOM_POWER_LEVELS},
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, RoomVersionId, TransactionId,
     api::client::{
         membership::Invite3pidInit, receipt::create_receipt::v3::ReceiptType,
@@ -492,7 +492,7 @@ async fn test_unban_user() {
 ///
 /// Read receipts and unread markers go through the send queue, so they land on
 /// the server a moment after the call that asked for them returned.
-async fn wait_for_empty_send_queue(client: &client_matrix::Client, room_id: &common_ruma::RoomId) {
+async fn wait_for_empty_send_queue(client: &client_matrix::Client, room_id: &harana_matrix_common::RoomId) {
     for _ in 0..200 {
         let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
         if requests.is_empty() {
@@ -759,7 +759,7 @@ async fn test_typing_notice() {
 
 #[async_test]
 async fn test_room_state_event_send() {
-    use common_ruma::events::room::member::{MembershipState, RoomMemberEventContent};
+    use harana_matrix_common::events::room::member::{MembershipState, RoomMemberEventContent};
 
     let (client, server) = logged_in_client_with_server().await;
 

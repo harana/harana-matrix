@@ -14,7 +14,7 @@
 
 //! The Matrix types the SDK's API is written in terms of.
 //!
-//! These come from [`common_ruma`], which models the Matrix specification. They are
+//! These come from [`harana_matrix_common`], which models the Matrix specification. They are
 //! re-exported here so that using the SDK doesn't require adding a direct
 //! dependency on `ruma` and matching its version: `client_matrix::ruma` (or
 //! [`crate::ruma`]) gives access to all of it, and this module collects the
@@ -49,7 +49,7 @@
 //! and that redactions and signatures can be checked against exactly what the
 //! server sent.
 
-pub use common_ruma::{
+pub use harana_matrix_common::{
     DeviceId, EventId, MilliSecondsSinceUnixEpoch, MxcUri, OwnedDeviceId, OwnedEventId,
     OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedServerName, OwnedTransactionId, OwnedUserId,
     RoomAliasId, RoomId, RoomVersionId, SecondsSinceUnixEpoch, ServerName, TransactionId, UInt,

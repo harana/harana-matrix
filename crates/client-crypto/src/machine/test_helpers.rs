@@ -20,7 +20,7 @@ use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use as_variant::as_variant;
 use client_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
 use common_test::{ruma_response_from_json, test_json};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedOneTimeKeyId, TransactionId, UserId,
     api::client::keys::{
         claim_keys,
@@ -292,7 +292,7 @@ pub async fn build_session_for_pair(
     alice: OlmMachine,
     bob: OlmMachine,
     mut one_time_keys: BTreeMap<
-        common_ruma::OwnedKeyId<common_ruma::OneTimeKeyAlgorithm, common_ruma::OneTimeKeyName>,
+        harana_matrix_common::OwnedKeyId<harana_matrix_common::OneTimeKeyAlgorithm, harana_matrix_common::OneTimeKeyName>,
         Raw<OneTimeKey>,
     >,
 ) -> (OlmMachine, OlmMachine) {

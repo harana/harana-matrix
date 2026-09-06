@@ -14,7 +14,7 @@ mod verification;
 const BACKUP_DECRYPTION_KEY_BASE64: &str = "IeJv45zHC4AamrFtCi3MedkLMBZYXjPbKUnv53Iqzho";
 
 async fn mock_secret_store_with_backup_key(
-    user_id: &common_ruma::UserId,
+    user_id: &harana_matrix_common::UserId,
     key_id: &str,
     server: &wiremock::MockServer,
 ) {

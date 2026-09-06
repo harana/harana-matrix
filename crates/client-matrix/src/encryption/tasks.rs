@@ -26,10 +26,10 @@ use client_common::{
     task_monitor::{BackgroundTaskHandle, TaskMonitor},
 };
 #[cfg(not(feature = "experimental-encrypted-state-events"))]
-use common_ruma::events::room::encrypted::{EncryptedEventScheme, OriginalSyncRoomEncryptedEvent};
+use harana_matrix_common::events::room::encrypted::{EncryptedEventScheme, OriginalSyncRoomEncryptedEvent};
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::serde::JsonCastable;
-use common_ruma::{OwnedEventId, OwnedRoomId, serde::Raw};
+use harana_matrix_common::serde::JsonCastable;
+use harana_matrix_common::{OwnedEventId, OwnedRoomId, serde::Raw};
 use tokio::{
     select,
     sync::{Mutex, mpsc},
@@ -694,8 +694,8 @@ impl BundleReceiverTask {
 mod test {
     use common_test::async_test;
     #[cfg(not(feature = "experimental-encrypted-state-events"))]
-    use common_ruma::events::room::encrypted::OriginalSyncRoomEncryptedEvent;
-    use common_ruma::{event_id, room_id};
+    use harana_matrix_common::events::room::encrypted::OriginalSyncRoomEncryptedEvent;
+    use harana_matrix_common::{event_id, room_id};
     use serde_json::json;
     use wiremock::MockServer;
 

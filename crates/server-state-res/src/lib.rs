@@ -26,7 +26,7 @@ mod fetch;
 mod resolve;
 
 #[doc(no_inline)]
-pub use common_ruma::state_res::{
+pub use harana_matrix_common::state_res::{
     Error as ResolutionError, Event, StateMap, auth_types_for_event, check_pdu_format, events,
     reverse_topological_power_sort, utils,
 };

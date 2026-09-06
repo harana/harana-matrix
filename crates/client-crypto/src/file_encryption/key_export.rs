@@ -18,7 +18,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use rand::{Rng, rng};
 use serde_json::Error as SerdeError;
 use thiserror::Error;
-use common_olm::{base64_decode, base64_encode};
+use harana_matrix_common::olm::{base64_decode, base64_encode};
 use zeroize::Zeroize;
 
 use crate::{
@@ -51,7 +51,7 @@ pub enum KeyExportError {
     Json(#[from] SerdeError),
     /// The key export string isn't valid base64.
     #[error(transparent)]
-    Decode(#[from] common_olm::Base64DecodeError),
+    Decode(#[from] harana_matrix_common::olm::Base64DecodeError),
     /// The key export doesn't all the required fields.
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -68,7 +68,7 @@ pub enum KeyExportError {
 /// ```no_run
 /// # use std::io::Cursor;
 /// # use client_crypto::{OlmMachine, decrypt_room_key_export};
-/// # use common_ruma::{device_id, user_id};
+/// # use harana_matrix_common::{device_id, user_id};
 /// # let alice = user_id!("@alice:example.org");
 /// # async {
 /// # let machine = OlmMachine::new(&alice, device_id!("DEVICEID")).await;
@@ -125,7 +125,7 @@ pub fn decrypt_room_key_export(
 ///
 /// ```no_run
 /// # use client_crypto::{OlmMachine, encrypt_room_key_export};
-/// # use common_ruma::{device_id, user_id, room_id};
+/// # use harana_matrix_common::{device_id, user_id, room_id};
 /// # let alice = user_id!("@alice:example.org");
 /// # async {
 /// # let machine = OlmMachine::new(&alice, device_id!("DEVICEID")).await;
@@ -235,7 +235,7 @@ mod tests {
     };
 
     use common_test::async_test;
-    use common_ruma::{room_id, user_id};
+    use harana_matrix_common::{room_id, user_id};
 
     use super::{
         base64_decode, decrypt_helper, decrypt_room_key_export, encrypt_helper,

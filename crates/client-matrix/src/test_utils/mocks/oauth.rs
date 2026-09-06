@@ -16,7 +16,7 @@
 
 use std::time::Duration;
 
-use common_ruma::{
+use harana_matrix_common::{
     api::client::discovery::get_authorization_server_metadata::v1::AuthorizationServerMetadata,
     serde::Raw,
 };

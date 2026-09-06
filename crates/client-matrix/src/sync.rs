@@ -35,7 +35,7 @@ use client_base::{
     timer,
 };
 use client_common::deserialized_responses::ProcessedToDeviceEvent;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, RoomId,
     api::client::sync::sync_events::{
         self,

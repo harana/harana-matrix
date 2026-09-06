@@ -21,7 +21,7 @@ use std::{future::IntoFuture, io::Read};
 
 use eyeball::{SharedObservable, Subscriber};
 use client_common::boxed_into_future;
-use common_ruma::events::room::EncryptedFile;
+use harana_matrix_common::events::room::EncryptedFile;
 
 use crate::{Client, Media, Result, TransmissionProgress, config::RequestConfig};
 

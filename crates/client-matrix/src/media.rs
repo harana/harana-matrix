@@ -29,7 +29,7 @@ pub use client_base::media::{store::MediaRetentionPolicy, *};
 use client_common::executor::spawn_blocking;
 use client_common::{BoxFuture, SendOutsideWasm, SyncOutsideWasm};
 use mime::Mime;
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, MxcUri, OwnedMxcUri, TransactionId, UInt,
     api::{
         client::{authenticated_media, media},
@@ -1015,7 +1015,7 @@ impl MediaFetcher for DefaultMediaFetcher {
 mod tests {
     use std::ops::Not;
 
-    use common_ruma::{
+    use harana_matrix_common::{
         MxcUri,
         events::room::{EncryptedFile, MediaSource},
         mxc_uri, owned_mxc_uri,

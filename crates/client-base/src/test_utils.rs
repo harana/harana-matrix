@@ -17,7 +17,7 @@
 #![allow(dead_code)]
 
 use client_common::cross_process_lock::CrossProcessLockConfig;
-use common_ruma::{UserId, owned_user_id};
+use harana_matrix_common::{UserId, owned_user_id};
 
 use crate::{
     BaseClient, DmRoomDefinition, SessionMeta,

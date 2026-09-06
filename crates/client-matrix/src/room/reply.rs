@@ -15,7 +15,7 @@
 //! Facilities to reply to existing events.
 
 use as_variant::as_variant;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, UserId,
     events::{
         AnySyncTimelineEvent,
@@ -61,7 +61,7 @@ pub enum ReplyError {
 
 /// Whether or not to enforce a [`Relation::Thread`] when sending a reply.
 ///
-/// [`Relation::Thread`]: common_ruma::events::room::message::Relation::Thread
+/// [`Relation::Thread`]: harana_matrix_common::events::room::message::Relation::Thread
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnforceThread {
     /// A thread relation is enforced. If the original message does not have a
@@ -152,7 +152,7 @@ mod tests {
     use assert_matches2::{assert_let, assert_matches};
     use client_base::deserialized_responses::TimelineEvent;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, OwnedEventId, event_id,
         events::{
             AnySyncTimelineEvent,

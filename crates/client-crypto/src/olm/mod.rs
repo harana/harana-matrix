@@ -38,13 +38,13 @@ pub(crate) use group_sessions::{
 pub use session::{PickledSession, Session};
 pub use signing::{CrossSigningStatus, PickledCrossSigningIdentity, PrivateCrossSigningIdentity};
 pub(crate) use utility::{SignedJsonObject, VerifyJson};
-pub use common_olm::{Curve25519PublicKey, olm::IdentityKeys};
+pub use harana_matrix_common::olm::{Curve25519PublicKey, olm::IdentityKeys};
 
 #[cfg(test)]
 pub(crate) mod tests {
     use assert_matches::assert_matches;
     use common_test::{async_test, message_like_event_content};
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, UserId, device_id, event_id,
         events::{
             AnyMessageLikeEvent, AnyTimelineEvent, MessageLikeEvent,
@@ -56,7 +56,7 @@ pub(crate) mod tests {
         user_id,
     };
     use serde_json::{Value, from_value, json};
-    use common_olm::olm::{OlmMessage, SessionConfig};
+    use harana_matrix_common::olm::olm::{OlmMessage, SessionConfig};
 
     use crate::{
         olm::{Account, ExportedRoomKey, InboundGroupSession, Session},

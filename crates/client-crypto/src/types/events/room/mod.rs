@@ -16,7 +16,7 @@
 
 use std::{collections::BTreeMap, fmt::Debug};
 
-use common_ruma::{EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, UserId};
+use harana_matrix_common::{EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, UserId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

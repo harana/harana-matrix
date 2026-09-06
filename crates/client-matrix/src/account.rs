@@ -29,12 +29,12 @@ use client_base::{
 };
 use mime::Mime;
 #[cfg(feature = "unstable-msc4426")]
-use common_ruma::SecondsSinceUnixEpoch;
+use harana_matrix_common::SecondsSinceUnixEpoch;
 #[cfg(feature = "experimental-element-recent-emojis")]
-use common_ruma::api::client::config::set_global_account_data::v3::Request as UpdateGlobalAccountDataRequest;
+use harana_matrix_common::api::client::config::set_global_account_data::v3::Request as UpdateGlobalAccountDataRequest;
 #[cfg(feature = "unstable-msc4426")]
-use common_ruma::profile::{CallProfileField, StatusProfileField};
-use common_ruma::{
+use harana_matrix_common::profile::{CallProfileField, StatusProfileField};
+use harana_matrix_common::{
     ClientSecret, MxcUri, OwnedMxcUri, OwnedRoomId, OwnedUserId, RoomId, SessionId, UInt, UserId,
     api::{
         client::{
@@ -336,7 +336,7 @@ impl Account {
     ///
     /// ```no_run
     /// # use client_matrix::Client;
-    /// use common_ruma::api::client::profile::{AvatarUrl, DisplayName};
+    /// use harana_matrix_common::api::client::profile::{AvatarUrl, DisplayName};
     /// # use url::Url;
     /// # async {
     /// # let homeserver = Url::parse("http://localhost:8080")?;
@@ -389,7 +389,7 @@ impl Account {
     /// response, which would result in `Ok(None)`. Note that this error code
     /// might also mean that the given user ID doesn't exist.
     ///
-    /// [`ErrorCode::NotFound`]: common_ruma::api::error::ErrorCode::NotFound
+    /// [`ErrorCode::NotFound`]: harana_matrix_common::api::error::ErrorCode::NotFound
     pub async fn fetch_profile_field_of(
         &self,
         user_id: OwnedUserId,
@@ -421,7 +421,7 @@ impl Account {
     /// response, which would result in `Ok(None)`. Note that this error code
     /// might also mean that the given user ID doesn't exist.
     ///
-    /// [`ErrorCode::NotFound`]: common_ruma::api::error::ErrorCode::NotFound
+    /// [`ErrorCode::NotFound`]: harana_matrix_common::api::error::ErrorCode::NotFound
     pub async fn fetch_profile_field_of_static<F>(
         &self,
         user_id: OwnedUserId,
@@ -568,8 +568,8 @@ impl Account {
     /// # anyhow::Ok(()) };
     /// ```
     /// [uiaa]: https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
-    /// [`UiaaResponse`]: common_ruma::api::client::uiaa::UiaaResponse
-    /// [`ErrorKind::WeakPassword`]: common_ruma::api::error::ErrorKind::WeakPassword
+    /// [`UiaaResponse`]: harana_matrix_common::api::client::uiaa::UiaaResponse
+    /// [`ErrorKind::WeakPassword`]: harana_matrix_common::api::error::ErrorKind::WeakPassword
     pub async fn change_password(
         &self,
         new_password: &str,
@@ -620,7 +620,7 @@ impl Account {
     /// ```
     /// [3pid]: https://spec.matrix.org/v1.2/appendices/#3pid-types
     /// [uiaa]: https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
-    /// [`UiaaResponse`]: common_ruma::api::client::uiaa::UiaaResponse
+    /// [`UiaaResponse`]: harana_matrix_common::api::client::uiaa::UiaaResponse
     pub async fn deactivate(
         &self,
         id_server: Option<&str>,
@@ -720,8 +720,8 @@ impl Account {
     /// # anyhow::Ok(()) };
     /// ```
     /// [3pid]: https://spec.matrix.org/v1.2/appendices/#3pid-types
-    /// [`ErrorKind::ThreepidInUse`]: common_ruma::api::error::ErrorKind::ThreepidInUse
-    /// [`ErrorKind::ThreepidDenied`]: common_ruma::api::error::ErrorKind::ThreepidDenied
+    /// [`ErrorKind::ThreepidInUse`]: harana_matrix_common::api::error::ErrorKind::ThreepidInUse
+    /// [`ErrorKind::ThreepidDenied`]: harana_matrix_common::api::error::ErrorKind::ThreepidDenied
     pub async fn request_3pid_email_token(
         &self,
         client_secret: &ClientSecret,
@@ -795,8 +795,8 @@ impl Account {
     /// # anyhow::Ok(()) };
     /// ```
     /// [3pid]: https://spec.matrix.org/v1.2/appendices/#3pid-types
-    /// [`ErrorKind::ThreepidInUse`]: common_ruma::api::error::ErrorKind::ThreepidInUse
-    /// [`ErrorKind::ThreepidDenied`]: common_ruma::api::error::ErrorKind::ThreepidDenied
+    /// [`ErrorKind::ThreepidInUse`]: harana_matrix_common::api::error::ErrorKind::ThreepidInUse
+    /// [`ErrorKind::ThreepidDenied`]: harana_matrix_common::api::error::ErrorKind::ThreepidDenied
     pub async fn request_3pid_msisdn_token(
         &self,
         client_secret: &ClientSecret,
@@ -841,7 +841,7 @@ impl Account {
     ///
     /// [3pid]: https://spec.matrix.org/v1.2/appendices/#3pid-types
     /// [uiaa]: https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
-    /// [`UiaaResponse`]: common_ruma::api::client::uiaa::UiaaResponse
+    /// [`UiaaResponse`]: harana_matrix_common::api::client::uiaa::UiaaResponse
     pub async fn add_3pid(
         &self,
         client_secret: &ClientSecret,
@@ -902,8 +902,8 @@ impl Account {
     /// # anyhow::Ok(()) };
     /// ```
     /// [3pid]: https://spec.matrix.org/v1.2/appendices/#3pid-types
-    /// [`ThirdPartyIdRemovalStatus::Success`]: common_ruma::api::client::account::ThirdPartyIdRemovalStatus::Success
-    /// [`ThirdPartyIdRemovalStatus::NoSupport`]: common_ruma::api::client::account::ThirdPartyIdRemovalStatus::NoSupport
+    /// [`ThirdPartyIdRemovalStatus::Success`]: harana_matrix_common::api::client::account::ThirdPartyIdRemovalStatus::Success
+    /// [`ThirdPartyIdRemovalStatus::NoSupport`]: harana_matrix_common::api::client::account::ThirdPartyIdRemovalStatus::NoSupport
     pub async fn delete_3pid(
         &self,
         address: &str,
@@ -940,7 +940,7 @@ impl Account {
     /// ```
     pub async fn account_data<C>(&self) -> Result<Option<Raw<C>>>
     where
-        C: GlobalAccountDataEventContent + StaticEventContent<IsPrefix = common_ruma::events::False>,
+        C: GlobalAccountDataEventContent + StaticEventContent<IsPrefix = harana_matrix_common::events::False>,
     {
         get_raw_content(self.client.state_store().get_account_data_event_static::<C>().await?)
     }
@@ -999,7 +999,7 @@ impl Account {
     /// Fetch an account data event of statically-known type from the server.
     pub async fn fetch_account_data_static<C>(&self) -> Result<Option<Raw<C>>>
     where
-        C: GlobalAccountDataEventContent + StaticEventContent<IsPrefix = common_ruma::events::False>,
+        C: GlobalAccountDataEventContent + StaticEventContent<IsPrefix = harana_matrix_common::events::False>,
     {
         Ok(self.fetch_account_data(C::TYPE.into()).await?.map(Raw::cast_unchecked))
     }
@@ -1067,7 +1067,7 @@ impl Account {
     /// * `user_ids` - The user IDs to be associated with this direct message
     ///   room.
     pub async fn mark_as_dm(&self, room_id: &RoomId, user_ids: &[OwnedUserId]) -> Result<()> {
-        use common_ruma::events::direct::DirectEventContent;
+        use harana_matrix_common::events::direct::DirectEventContent;
 
         // This function does a read/update/store of an account data event stored on the
         // homeserver. We first fetch the existing account data event, the event

@@ -19,7 +19,7 @@ use client_base::media::{
     MediaRequestParameters,
     store::{IgnoreMediaRetentionPolicy, MediaRetentionPolicy},
 };
-use common_ruma::MxcUri;
+use harana_matrix_common::MxcUri;
 use uuid::Uuid;
 
 use crate::{

@@ -30,7 +30,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
 use client_base::linked_chunk::{ChunkIdentifier, LinkedChunkId};
 use client_crypto::CryptoStoreError;
-use common_ruma::{EventId, RoomId, events::relation::RelationType};
+use harana_matrix_common::{EventId, RoomId, events::relation::RelationType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -86,7 +86,7 @@ pub type IndexedEventId = String;
 pub type IndexedEventPositionIndex = usize;
 
 /// A (possibly) hashed representation of the relationship between two events
-/// (see [`RelationType`](common_ruma::events::relation::RelationType)) which is
+/// (see [`RelationType`](harana_matrix_common::events::relation::RelationType)) which is
 /// suitable for use in an IndexedDB key
 pub type IndexedRelationType = String;
 

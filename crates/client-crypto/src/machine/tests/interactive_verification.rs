@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_test::async_test;
-use common_ruma::{
+use harana_matrix_common::{
     api::client::to_device::send_event_to_device::v3::Response as ToDeviceResponse,
     events::key::verification::VerificationMethod,
 };

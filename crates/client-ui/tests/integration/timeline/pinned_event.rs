@@ -14,7 +14,7 @@ use client_base::deserialized_responses::TimelineEvent;
 use client_common::executor::spawn;
 use common_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{RoomExt, TimelineBuilder, TimelineFocus};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, RoomId, UserId, assign,
     event_id,
     events::{

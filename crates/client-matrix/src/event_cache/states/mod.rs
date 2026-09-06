@@ -27,7 +27,7 @@ use client_base::{
     tracing_timer::TracingTimer,
 };
 use client_common::SyncOutsideWasm;
-use common_ruma::{OwnedEventId, OwnedRoomId, RoomId};
+use harana_matrix_common::{OwnedEventId, OwnedRoomId, RoomId};
 use tokio::sync::{Mutex, RwLock, RwLockMappedWriteGuard, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{instrument, trace};
 

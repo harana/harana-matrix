@@ -17,7 +17,7 @@
 
 //! One registration and the namespaces it claims.
 
-use common_ruma::{OwnedUserId, RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration};
+use harana_matrix_common::{OwnedUserId, RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration};
 
 use crate::{Error, NamespaceRegex};
 
@@ -123,7 +123,7 @@ impl RegistrationInfo {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomAliasId, ServerName, UserId,
         api::appservice::{Namespace, Namespaces, Registration, RegistrationInit},
     };

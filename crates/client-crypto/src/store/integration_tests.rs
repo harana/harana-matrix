@@ -39,7 +39,7 @@ macro_rules! cryptostore_integration_tests {
 
             use assert_matches::assert_matches;
             use common_test::async_test;
-            use common_ruma::{
+            use harana_matrix_common::{
                 device_id, events::secret::request::SecretName, room_id, serde::Raw, owned_room_id,
                 to_device::DeviceIdOrAllDevices, user_id, DeviceId, RoomId, TransactionId, UserId,
             };
@@ -1507,7 +1507,7 @@ macro_rules! cryptostore_integration_tests {
 
             #[async_test]
             async fn test_clear_received_room_key_bundle_data() {
-                use common_ruma::owned_room_id;
+                use harana_matrix_common::owned_room_id;
 
                 use $crate::{
                     store::types::StoredRoomKeyBundleData,
@@ -1584,10 +1584,10 @@ macro_rules! cryptostore_integration_tests {
                 let test_room = room_id!("!room:example.org");
 
                 fn make_bundle_data(sender_user: &UserId, bundle_uri: &str) -> StoredRoomKeyBundleData {
-                    let info = common_ruma::events::room::V2EncryptedFileInfo::encode([0; 32], [0;16]).into();
+                    let info = harana_matrix_common::events::room::V2EncryptedFileInfo::encode([0; 32], [0;16]).into();
 
-                    let file = common_ruma::events::room::EncryptedFile::new(
-                        common_ruma::OwnedMxcUri::from(bundle_uri),
+                    let file = harana_matrix_common::events::room::EncryptedFile::new(
+                        harana_matrix_common::OwnedMxcUri::from(bundle_uri),
                         info,
                         Default::default()
                     );
@@ -1627,7 +1627,7 @@ macro_rules! cryptostore_integration_tests {
                 let store = get_store("room_pending_key_bundle", None, true).await;
                 let test_room = room_id!("!room:example.org");
                 let test_user = user_id!("@user:example.com");
-                let timestamp = common_ruma::MilliSecondsSinceUnixEpoch::now();
+                let timestamp = harana_matrix_common::MilliSecondsSinceUnixEpoch::now();
 
                 // Empty to start with
                 assert!(store.get_pending_key_bundle_details_for_room(test_room).await.unwrap().is_none());

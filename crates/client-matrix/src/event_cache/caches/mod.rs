@@ -25,7 +25,7 @@ use client_base::{
     serde_helpers::extract_read_receipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate},
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, RoomId,
     events::{AnySyncEphemeralRoomEvent, receipt::ReceiptEventContent},
     room_version_rules::RoomVersionRules,
@@ -362,7 +362,7 @@ impl Caches {
             serde_helpers::{extract_thread_root, extract_timestamp},
             sync::Timeline,
         };
-        use common_ruma::MilliSecondsSinceUnixEpoch;
+        use harana_matrix_common::MilliSecondsSinceUnixEpoch;
 
         let mut events_by_thread = BTreeMap::<OwnedEventId, Vec<Event>>::new();
 

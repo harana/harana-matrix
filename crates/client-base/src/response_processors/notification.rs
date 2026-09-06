@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId,
     push::{Action, PushConditionRoomCtx, Ruleset},
     serde::Raw,

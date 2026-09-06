@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{
+use harana_matrix_common::{
     events::{
         AnyMessageLikeEvent, AnyStateEvent, AnyTimelineEvent, AnyToDeviceEvent,
         MessageLikeEventType, StateEventType, ToDeviceEventType,
@@ -300,7 +300,7 @@ impl<'a> From<&'a SendEventRequest> for FilterInput<'a> {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{
+    use harana_matrix_common::{
         events::{AnyTimelineEvent, MessageLikeEventType, StateEventType, TimelineEventType},
         serde::Raw,
     };

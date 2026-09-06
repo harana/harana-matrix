@@ -1,4 +1,4 @@
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, UserId,
     events::{
         AnyPossiblyRedactedStateEventContent, AnyStrippedStateEvent, AnySyncStateEvent,
@@ -485,7 +485,7 @@ impl AnyStateEventEnum for AnyStrippedStateEvent {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{event_id, events::room::name::PossiblyRedactedRoomNameEventContent};
+    use harana_matrix_common::{event_id, events::room::name::PossiblyRedactedRoomNameEventContent};
 
     use super::MinimalStateEvent;
 

@@ -14,7 +14,7 @@
 
 use eyeball_im::VectorDiff;
 use common_test::{ALICE, async_test, event_factory::EventFactory};
-use common_ruma::event_id;
+use harana_matrix_common::event_id;
 use stream_assert::assert_next_matches;
 
 use crate::timeline::{

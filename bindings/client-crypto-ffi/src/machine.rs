@@ -21,7 +21,7 @@ use client_crypto::{
     store::types::{BackupDecryptionKey, Changes},
     types::requests::ToDeviceRequest,
 };
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, EventId, OneTimeKeyAlgorithm, OwnedTransactionId, OwnedUserId, RoomId,
     UserId,
     api::{

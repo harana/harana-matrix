@@ -15,7 +15,7 @@
 use std::slice;
 
 use js_int::UInt;
-use common_ruma::{EventId, OwnedEventId, OwnedMxcUri, OwnedUserId, RoomId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedMxcUri, OwnedUserId, RoomId};
 
 use crate::{Error, Room, room::RoomMember};
 
@@ -108,7 +108,7 @@ impl KnockRequestMemberInfo {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, event_id, events::room::member::MembershipState, owned_user_id, room_id, user_id,
     };
 

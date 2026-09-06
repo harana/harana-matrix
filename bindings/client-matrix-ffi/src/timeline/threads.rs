@@ -29,7 +29,7 @@ use client_ui::timeline::{
         ThreadListServiceError as UIThreadListServiceError,
     },
 };
-use common_ruma::api::client::threads::get_threads::v1::IncludeThreads as SdkIncludeThreads;
+use harana_matrix_common::api::client::threads::get_threads::v1::IncludeThreads as SdkIncludeThreads;
 
 use crate::{
     TaskHandle,
@@ -79,7 +79,7 @@ impl From<ListThreadsOptions> for SdkListThreadsOptions {
         Self {
             include_threads: opts.include_threads.into(),
             from: opts.from,
-            limit: opts.limit.and_then(common_ruma::UInt::new),
+            limit: opts.limit.and_then(harana_matrix_common::UInt::new),
         }
     }
 }

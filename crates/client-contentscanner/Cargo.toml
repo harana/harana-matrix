@@ -22,7 +22,7 @@ rustls-ring = ["client-matrix/rustls-ring"]
 assert_matches2.workspace = true
 client-matrix = { workspace = true, features = ["e2e-encryption", "testing"] }
 client-crypto.workspace = true
-common-ruma.workspace = true
+harana-matrix-common.workspace = true
 serde.workspace = true
 tracing.workspace = true
 uniffi = { workspace = true, optional = true }

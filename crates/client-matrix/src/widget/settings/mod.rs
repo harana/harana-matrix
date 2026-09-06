@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use language_tags::LanguageTag;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, RoomId, UserId,
     api::client::profile::{AvatarUrl, DisplayName, get_profile},
 };

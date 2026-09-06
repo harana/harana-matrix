@@ -28,7 +28,7 @@ use std::{
     sync::Arc,
 };
 
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, DeviceKeyAlgorithm, OwnedDeviceId, OwnedRoomId, OwnedTransactionId, RoomId,
     TransactionId,
     api::client::backup::{KeyBackupData, RoomKeyBackup},
@@ -653,7 +653,7 @@ impl BackupMachine {
             BTreeMap<OwnedRoomId, RoomKeyBackup>,
             BTreeMap<OwnedRoomId, BTreeMap<SenderKey, BTreeSet<SessionId>>>,
         ),
-        common_olm::pk_encryption::Error,
+        harana_matrix_common::olm::pk_encryption::Error,
     > {
         let mut backup: BTreeMap<OwnedRoomId, RoomKeyBackup> = BTreeMap::new();
         let mut session_record: BTreeMap<OwnedRoomId, BTreeMap<SenderKey, BTreeSet<SessionId>>> =
@@ -732,7 +732,7 @@ mod tests {
 
     use assert_matches2::{assert_let, assert_matches};
     use common_test::async_test;
-    use common_ruma::{CanonicalJsonValue, DeviceId, RoomId, UserId, device_id, room_id, user_id};
+    use harana_matrix_common::{CanonicalJsonValue, DeviceId, RoomId, UserId, device_id, room_id, user_id};
     use serde_json::json;
 
     use super::BackupMachine;

@@ -35,7 +35,7 @@ use client_matrix::{
 #[cfg(feature = "e2e-encryption")]
 use client_crypto::AttachmentDecryptor;
 use client_crypto::olm::Curve25519PublicKey;
-use common_ruma::{
+use harana_matrix_common::{
     events::room::EncryptedFile,
     serde::{Base64, base64::Standard},
 };
@@ -294,7 +294,7 @@ mod tests {
     use client_matrix::media::{MediaFormat, MediaRequestParameters};
     use client_matrix::{HttpError, RumaApiError, test_utils::mocks::MatrixMockServer};
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         api::{
             MatrixVersion,
             error::{ErrorBody, FromHttpResponseError},
@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn test_error_mapping() {
         let error = HttpError::Api(Box::new(FromHttpResponseError::Server(
-            RumaApiError::MatrixError(common_ruma::api::error::Error::new(
+            RumaApiError::MatrixError(harana_matrix_common::api::error::Error::new(
                 StatusCode::FORBIDDEN,
                 ErrorBody::Json(json!({
                     "info": "***VIRUS DETECTED***",

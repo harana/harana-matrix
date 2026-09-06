@@ -60,9 +60,9 @@ impl_partial_eq!(UserSigningPubkey);
 #[cfg(test)]
 mod tests {
     use common_test::async_test;
-    use common_ruma::{DeviceKeyId, encryption::KeyUsage, user_id};
+    use harana_matrix_common::{DeviceKeyId, encryption::KeyUsage, user_id};
     use serde_json::json;
-    use common_olm::Ed25519Signature;
+    use harana_matrix_common::olm::Ed25519Signature;
 
     use crate::{
         identities::{
@@ -128,7 +128,7 @@ mod tests {
                 let mut other_key: CrossSigningKey = raw.deserialize_as().unwrap();
                 other_key.signatures.add_signature(
                     user_id.to_owned(),
-                    DeviceKeyId::from_parts(common_ruma::DeviceKeyAlgorithm::Ed25519, "DEVICEID".into()),
+                    DeviceKeyId::from_parts(harana_matrix_common::DeviceKeyAlgorithm::Ed25519, "DEVICEID".into()),
                     signature,
                 );
                 let other_key = other_key.try_into().unwrap();

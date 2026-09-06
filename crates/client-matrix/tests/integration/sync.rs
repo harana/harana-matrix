@@ -18,7 +18,7 @@ use common_test::{
     InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, async_test,
     event_factory::EventFactory,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventEncryptionAlgorithm, MilliSecondsSinceUnixEpoch, RoomVersionId, event_id,
     events::{
         AnyStrippedStateEvent, AnySyncStateEvent, AnySyncTimelineEvent, SyncStateEvent,

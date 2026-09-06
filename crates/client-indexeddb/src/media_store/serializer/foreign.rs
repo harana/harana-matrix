@@ -70,7 +70,7 @@ pub mod unix_time {
     use crate::media_store::types::UnixTime;
 
     /// Serializes a [`UnixTime`] as an `i64` which represents an amount of
-    /// seconds relative to the [`UNIX_EPOCH`](common_ruma::time::UNIX_EPOCH).
+    /// seconds relative to the [`UNIX_EPOCH`](harana_matrix_common::time::UNIX_EPOCH).
     /// [`UnixTime::BeforeEpoch`] is represented as a negative value
     /// and [`UnixTime::AfterEpoch`] is represented as a positive value.
     pub fn serialize<S>(unix_time: &UnixTime, s: S) -> Result<S::Ok, S::Error>
@@ -93,7 +93,7 @@ pub mod unix_time {
     /// the number of seconds after the [`UNIX_EPOCH`][1] and are deserialized
     /// into [`UnixTime::AfterEpoch`].
     ///
-    /// [1]: common_ruma::time::UNIX_EPOCH
+    /// [1]: harana_matrix_common::time::UNIX_EPOCH
     pub fn deserialize<'de, D>(d: D) -> Result<UnixTime, D::Error>
     where
         D: Deserializer<'de>,

@@ -14,7 +14,7 @@
 
 use eyeball::SharedObservable;
 use client_common::timer;
-use common_ruma::{
+use harana_matrix_common::{
     events::{GlobalAccountDataEventType, ignored_user_list::IgnoredUserListEvent},
     serde::Raw,
 };

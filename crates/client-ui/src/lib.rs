@@ -22,7 +22,7 @@
 #![cfg_attr(not(target_family = "wasm"), deny(clippy::future_not_send))]
 
 pub use eyeball_im;
-use common_ruma::html::HtmlSanitizerMode;
+use harana_matrix_common::html::HtmlSanitizerMode;
 
 pub mod encryption_sync_service;
 pub mod notification_client;
@@ -40,7 +40,7 @@ pub use self::{room_list_service::RoomListService, timeline::Timeline};
 const DEFAULT_SANITIZER_MODE: HtmlSanitizerMode = HtmlSanitizerMode::Compat;
 
 #[cfg(test)]
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();
 
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();

@@ -22,7 +22,7 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::events::secret::request::SecretName;
+use harana_matrix_common::events::secret::request::SecretName;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::{Zeroize, ZeroizeOnDrop};

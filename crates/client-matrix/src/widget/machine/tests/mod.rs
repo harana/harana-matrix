@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use assert_matches2::assert_let;
-use common_ruma::serde::JsonObject;
+use harana_matrix_common::serde::JsonObject;
 use serde_json::Value as JsonValue;
 
 /// Create a JSON string from a [`json!`][serde_json::json] "literal".

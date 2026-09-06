@@ -3,7 +3,7 @@
 //! There is no formal spec for this, only the implementation in Element Web:
 //! <https://github.com/element-hq/element-web/commit/a7f92f35f5a27a53a5a030ea7c471be97751a67a>
 
-use common_ruma::{UInt, events::macros::EventContent};
+use harana_matrix_common::{UInt, events::macros::EventContent};
 use serde::{Deserialize, Serialize};
 
 /// An event type containing a list of recently used emojis for reactions.
@@ -30,7 +30,7 @@ impl RecentEmojisContent {
 #[cfg(feature = "experimental-element-recent-emojis")]
 #[cfg(test)]
 mod tests {
-    use common_ruma::uint;
+    use harana_matrix_common::uint;
     use serde_json::{from_value, json, to_value};
 
     use crate::recent_emojis::RecentEmojisContent;

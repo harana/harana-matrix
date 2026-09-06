@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 
 use as_variant::as_variant;
 use client_common::timer;
-use common_ruma::{
+use harana_matrix_common::{
     JsOption, OwnedRoomId, RoomId, UserId,
     api::client::sync::sync_events::{
         v3::{InviteState, InvitedRoom, KnockState, KnockedRoom},

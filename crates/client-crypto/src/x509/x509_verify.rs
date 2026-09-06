@@ -21,7 +21,7 @@ use cms::cert::x509::{
     der::oid as const_oid,
     ext::pkix::{SubjectAltName, name::GeneralName},
 };
-use common_ruma::{MatrixUri, OwnedUserId, UserId, matrix_uri::MatrixId};
+use harana_matrix_common::{MatrixUri, OwnedUserId, UserId, matrix_uri::MatrixId};
 
 use crate::{
     olm::SignedJsonObject,
@@ -252,8 +252,8 @@ pub(crate) mod tests {
     use cms::cert::x509::der::Decode;
     use common_test::async_test;
     use rcgen::generate_simple_self_signed;
-    use common_ruma::{DeviceKeyAlgorithm, DeviceKeyId, encryption::KeyUsage, user_id};
-    use common_olm::Ed25519SecretKey;
+    use harana_matrix_common::{DeviceKeyAlgorithm, DeviceKeyId, encryption::KeyUsage, user_id};
+    use harana_matrix_common::olm::Ed25519SecretKey;
 
     use super::*;
     use crate::{

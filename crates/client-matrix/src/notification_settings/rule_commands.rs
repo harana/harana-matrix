@@ -1,4 +1,4 @@
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     push::{
         Action, NewPushRule, PredefinedContentRuleId, PredefinedOverrideRuleId,
@@ -242,7 +242,7 @@ mod tests {
             get_server_default_ruleset, server_default_ruleset_with_legacy_mentions,
         },
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedRoomId, RoomId,
         push::{
             Action, NewPushRule, NewSimplePushRule, PredefinedContentRuleId,

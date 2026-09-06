@@ -7,7 +7,7 @@ use client_matrix::{
     test_utils::mocks::MatrixMockServer,
 };
 use common_test::{ALICE, DEFAULT_TEST_ROOM_ID, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::{
         Mentions,

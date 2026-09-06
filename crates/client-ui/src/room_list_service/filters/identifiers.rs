@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::OwnedRoomId;
+use harana_matrix_common::OwnedRoomId;
 
 use super::Filter;
 
@@ -26,7 +26,7 @@ pub fn new_filter(identifiers: Vec<OwnedRoomId>) -> impl Filter {
 mod tests {
     use client_matrix::test_utils::mocks::MatrixMockServer;
     use common_test::async_test;
-    use common_ruma::{owned_room_id, room_id};
+    use harana_matrix_common::{owned_room_id, room_id};
 
     use super::{super::new_rooms, *};
 

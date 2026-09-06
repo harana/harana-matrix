@@ -14,7 +14,7 @@
 
 //! Facilities to edit existing events.
 
-use common_ruma::{
+use harana_matrix_common::{
     EventId, UserId,
     events::{
         AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
@@ -289,7 +289,7 @@ mod tests {
     use assert_matches2::{assert_let, assert_matches};
     use client_base::deserialized_responses::TimelineEvent;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, OwnedEventId, event_id,
         events::{
             AnyMessageLikeEventContent, AnySyncTimelineEvent, Mentions,

@@ -15,7 +15,7 @@
 use std::{matches, sync::Arc, time::Duration};
 
 use client_common::locks::Mutex;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedTransactionId, TransactionId, UserId,
     events::{
         AnyMessageLikeEventContent, AnyToDeviceEventContent,
@@ -41,7 +41,7 @@ use common_ruma::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
-use common_olm::{
+use harana_matrix_common::olm::{
     Curve25519PublicKey,
     sas::{EstablishedSas, Mac, Sas},
 };
@@ -1501,7 +1501,7 @@ impl SasState<Cancelled> {
 #[cfg(test)]
 mod tests {
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, TransactionId, UserId, device_id,
         events::key::verification::{
             HashAlgorithm, KeyAgreementProtocol, MessageAuthenticationCode,

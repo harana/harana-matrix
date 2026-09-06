@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{RoomId, events::AnySyncEphemeralRoomEvent, serde::Raw};
+use harana_matrix_common::{RoomId, events::AnySyncEphemeralRoomEvent, serde::Raw};
 use tracing::info;
 
 use super::Context;
@@ -52,7 +52,7 @@ pub(super) fn dispatch_receipt(
 #[cfg(test)]
 mod tests {
     use common_test::event_factory::EventFactory;
-    use common_ruma::{
+    use harana_matrix_common::{
         event_id,
         events::receipt::{ReceiptThread, ReceiptType},
         room_id,

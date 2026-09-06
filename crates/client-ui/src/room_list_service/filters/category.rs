@@ -54,7 +54,7 @@ mod tests {
     use client_matrix::{Client, test_utils::mocks::MatrixMockServer};
     use client_base::DmRoomDefinition;
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{UserId, room_id};
+    use harana_matrix_common::{UserId, room_id};
 
     use crate::room_list_service::{
         RoomListItem,

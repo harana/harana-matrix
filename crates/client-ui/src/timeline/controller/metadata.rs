@@ -19,7 +19,7 @@ use std::{
 
 use imbl::Vector;
 use client_matrix::deserialized_responses::EncryptionInfo;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedUserId, UserId,
     events::{
         AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent,

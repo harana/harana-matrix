@@ -22,7 +22,7 @@ pub use language_tags;
 use language_tags::LanguageTag;
 use client_base::deserialized_responses::PrivOwnedStr;
 use oauth2::{AsyncHttpClient, ClientId, HttpClientError, RequestTokenError};
-use common_ruma::{
+use harana_matrix_common::{
     SecondsSinceUnixEpoch,
     api::client::discovery::get_authorization_server_metadata::v1::{GrantType, ResponseType},
     serde::{Raw, StringEnum},

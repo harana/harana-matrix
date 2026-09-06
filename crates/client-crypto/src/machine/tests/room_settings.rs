@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use assert_matches2::assert_matches;
 use common_test::async_test;
-use common_ruma::room_id;
+use harana_matrix_common::room_id;
 
 use crate::{
     OlmMachine, SetRoomSettingsError, machine::tests, store::types::RoomSettings,

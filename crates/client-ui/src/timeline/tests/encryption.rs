@@ -34,7 +34,7 @@ use client_base::{
     deserialized_responses::{TimelineEvent, UnableToDecryptReason},
 };
 use common_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     RoomId, UserId, assign, event_id,
     events::room::encrypted::{
         EncryptedEventScheme, MegolmV1AesSha2ContentInit, Relation, Replacement,

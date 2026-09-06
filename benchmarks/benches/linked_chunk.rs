@@ -10,7 +10,7 @@ use client_base::event_cache::{
     store::{DEFAULT_CHUNK_CAPACITY, DynEventCacheStore, IntoEventCacheStore, MemoryStore},
 };
 use common_test::{ALICE, event_factory::EventFactory};
-use common_ruma::room_id;
+use harana_matrix_common::room_id;
 use tempfile::tempdir;
 use tokio::runtime::Builder;
 

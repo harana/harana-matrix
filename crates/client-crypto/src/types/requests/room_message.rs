@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{OwnedRoomId, OwnedTransactionId, events::AnyMessageLikeEventContent};
+use harana_matrix_common::{OwnedRoomId, OwnedTransactionId, events::AnyMessageLikeEventContent};
 
 /// Customized owned request type for sending out room messages.
 #[derive(Clone, Debug)]

@@ -14,7 +14,7 @@
 
 use std::{pin::Pin, sync::Arc, time::Duration};
 
-use common_ruma::{DeviceKeyId, UserId, canonical_json::to_canonical_value};
+use harana_matrix_common::{DeviceKeyId, UserId, canonical_json::to_canonical_value};
 use thiserror::Error;
 use tracing::info;
 
@@ -175,8 +175,8 @@ mod tests {
     use assert_matches::assert_matches;
     use common_test::async_test;
     use rcgen::{CertificateParams, KeyPair};
-    use common_ruma::{DeviceKeyAlgorithm, DeviceKeyId, encryption::KeyUsage, user_id};
-    use common_olm::Ed25519SecretKey;
+    use harana_matrix_common::{DeviceKeyAlgorithm, DeviceKeyId, encryption::KeyUsage, user_id};
+    use harana_matrix_common::olm::Ed25519SecretKey;
 
     use crate::{
         types::{CrossSigningKey, Signature, SigningKeys},

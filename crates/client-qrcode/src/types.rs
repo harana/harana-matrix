@@ -16,8 +16,8 @@ use std::io::{Cursor, Read};
 
 use byteorder::{BigEndian, ReadBytesExt};
 use qrcode::QrCode;
-use common_ruma::serde::Base64;
-use common_olm::Ed25519PublicKey;
+use harana_matrix_common::serde::Base64;
+use harana_matrix_common::olm::Ed25519PublicKey;
 
 use crate::{
     error::{DecodingError, EncodingError},

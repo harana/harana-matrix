@@ -34,7 +34,7 @@ use client_base::media::{
     store::{IgnoreMediaRetentionPolicy, MediaRetentionPolicy},
 };
 use client_crypto::CryptoStoreError;
-use common_ruma::MxcUri;
+use harana_matrix_common::MxcUri;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;

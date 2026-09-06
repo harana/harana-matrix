@@ -15,7 +15,7 @@
 use client_common::deserialized_responses::{
     UnableToDecryptInfo, UnableToDecryptReason, VerificationLevel, WithheldCode,
 };
-use common_ruma::{MilliSecondsSinceUnixEpoch, events::AnySyncTimelineEvent, serde::Raw};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, events::AnySyncTimelineEvent, serde::Raw};
 use serde::Deserialize;
 
 /// Our best guess at the reason why an event can't be decrypted.
@@ -241,7 +241,7 @@ mod tests {
         DeviceLinkProblem, UnableToDecryptInfo, UnableToDecryptReason, VerificationLevel,
         WithheldCode,
     };
-    use common_ruma::{MilliSecondsSinceUnixEpoch, events::AnySyncTimelineEvent, serde::Raw};
+    use harana_matrix_common::{MilliSecondsSinceUnixEpoch, events::AnySyncTimelineEvent, serde::Raw};
     use serde_json::{json, value::to_raw_value};
 
     use crate::types::events::{UtdCause, utd_cause::CryptoContextInfo};

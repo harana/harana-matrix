@@ -15,7 +15,7 @@
 //! Trait and macro of integration tests for `MediaStoreInner`
 //! implementations.
 
-use common_ruma::{
+use harana_matrix_common::{
     events::room::MediaSource,
     media::Method,
     mxc_uri, owned_mxc_uri,

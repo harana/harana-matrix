@@ -25,7 +25,7 @@ use itertools::Itertools;
 use client_store_encryption::{
     CodecError, CodecKind, EncryptableValue, StoreCipherBackend, StoreCodec, StoreCodecExt as _,
 };
-use common_ruma::{OwnedEventId, OwnedRoomId, serde::Raw, time::SystemTime};
+use harana_matrix_common::{OwnedEventId, OwnedRoomId, serde::Raw, time::SystemTime};
 use rusqlite::{OptionalExtension, Params, Row, Statement, Transaction, limits::Limit};
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::{error, trace, warn};

@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use language_tags::LanguageTag;
 use client_matrix::widget::{MessageLikeEventFilter, StateEventFilter, ToDeviceEventFilter};
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::UserId;
+use harana_matrix_common::UserId;
 use tracing::error;
 
 use crate::{error::ClientError, room::Room, runtime::get_runtime_handle};

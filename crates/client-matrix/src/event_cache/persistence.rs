@@ -20,7 +20,7 @@ use client_base::{
     executor::spawn,
     linked_chunk::{ChunkMetadata, LinkedChunkId, OwnedLinkedChunkId, Update},
 };
-use common_ruma::{EventId, RoomId, events::relation::RelationType, serde::Raw};
+use harana_matrix_common::{EventId, RoomId, events::relation::RelationType, serde::Raw};
 use tokio::sync::broadcast::Sender;
 use tracing::trace;
 

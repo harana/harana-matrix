@@ -22,7 +22,7 @@ use std::{
 };
 
 use client_common::locks::RwLock;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, DeviceKeyAlgorithm, DeviceKeyId, MilliSecondsSinceUnixEpoch, OwnedDeviceId,
     OwnedDeviceKeyId, UInt, UserId,
     api::client::keys::upload_signatures::v3::Request as SignatureUploadRequest,
@@ -32,7 +32,7 @@ use common_ruma::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{instrument, trace};
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey, olm::SessionConfig};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey, olm::SessionConfig};
 
 use super::{atomic_bool_deserializer, atomic_bool_serializer};
 #[cfg(any(test, feature = "testing", doc))]
@@ -1168,9 +1168,9 @@ pub(crate) mod testing {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use common_ruma::{MilliSecondsSinceUnixEpoch, user_id};
+    use harana_matrix_common::{MilliSecondsSinceUnixEpoch, user_id};
     use serde_json::json;
-    use common_olm::{Curve25519PublicKey, Ed25519PublicKey};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey};
 
     use super::testing::{device_keys, get_device};
     use crate::{DeviceData, identities::LocalTrust};
@@ -1290,8 +1290,8 @@ pub(crate) mod tests {
     async fn test_most_recent_session_is_the_last_one_that_decrypted() {
         use std::time::Duration;
 
-        use common_ruma::{SecondsSinceUnixEpoch, device_id, time::SystemTime};
-        use common_olm::olm::SessionConfig;
+        use harana_matrix_common::{SecondsSinceUnixEpoch, device_id, time::SystemTime};
+        use harana_matrix_common::olm::olm::SessionConfig;
 
         use crate::{
             olm::Account,
@@ -1368,7 +1368,7 @@ pub(crate) mod tests {
     /// changed on the stored copy since (#128).
     #[common_test::async_test]
     async fn test_set_local_trust_does_not_revert_other_changes() {
-        use common_ruma::user_id;
+        use harana_matrix_common::user_id;
 
         use crate::{
             machine::test_helpers::get_machine_pair,
@@ -1416,7 +1416,7 @@ pub(crate) mod tests {
     async fn test_x509_verified_owner_confers_device_trust() {
         use std::sync::Arc;
 
-        use common_ruma::device_id;
+        use harana_matrix_common::device_id;
 
         use crate::{
             machine::test_helpers::create_signed_device_of_unverified_user,

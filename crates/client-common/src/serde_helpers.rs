@@ -15,7 +15,7 @@
 //! A collection of serde helpers to avoid having to deserialize an entire event
 //! to access some fields.
 
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedEventId,
     events::{
         AnyMessageLikeEventContent, AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent,
@@ -194,7 +194,7 @@ pub fn extract_read_receipts(
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use common_ruma::{
+    use harana_matrix_common::{
         UInt, event_id,
         events::receipt::{ReceiptThread, ReceiptType},
         owned_event_id, user_id,

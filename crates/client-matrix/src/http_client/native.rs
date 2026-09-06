@@ -28,7 +28,7 @@ use eyeball::SharedObservable;
 use http::header::CONTENT_LENGTH;
 #[cfg(feature = "reqwest-transport")]
 use reqwest::{Certificate, tls};
-use common_ruma::api::{IncomingResponseExt as _, OutgoingRequest, error::FromHttpResponseError};
+use harana_matrix_common::api::{IncomingResponseExt as _, OutgoingRequest, error::FromHttpResponseError};
 use tracing::debug;
 #[cfg(feature = "reqwest-transport")]
 use tracing::{info, warn};
@@ -86,12 +86,12 @@ impl HttpClient {
         ) -> HttpResult<http::Response<Bytes>> {
             let num_attempt = retry_count.fetch_add(1, Ordering::SeqCst);
             debug!(num_attempt, "Sending request");
-            let before = common_ruma::time::Instant::now();
+            let before = harana_matrix_common::time::Instant::now();
 
             let response =
                 http_client.send_request_with_progress(request.clone(), timeout, progress).await?;
 
-            let request_duration = common_ruma::time::Instant::now().saturating_duration_since(before);
+            let request_duration = harana_matrix_common::time::Instant::now().saturating_duration_since(before);
 
             let status_code = response.status();
             let response_size = ByteSize(response.body().len().try_into().unwrap_or(u64::MAX));

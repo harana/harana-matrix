@@ -18,13 +18,15 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 [dependencies]
 # This crate is the store-backed adapter over `ruma::state_res`, which the
 # vendored `ruma` exposes behind its `state-res` feature.
-common-ruma = { workspace = true, features = ["state-res"] }
+harana-matrix-common = { workspace = true, features = [
+    "state-res",
+] }
 thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+harana-matrix-common = { workspace = true, features = ["testing"] }
 harana-matrix-macros.workspace = true
-common-test-utils.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
 

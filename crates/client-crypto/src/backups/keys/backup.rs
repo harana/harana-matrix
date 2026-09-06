@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use client_common::locks::Mutex;
-use common_ruma::{
+use harana_matrix_common::{
     api::client::backup::{EncryptedSessionDataInit, KeyBackupData, KeyBackupDataInit},
     serde::Base64,
 };
-use common_olm::{Curve25519PublicKey, pk_encryption::PkEncryption};
+use harana_matrix_common::olm::{Curve25519PublicKey, pk_encryption::PkEncryption};
 use zeroize::Zeroizing;
 
 use super::decryption::DecodeError;
@@ -104,7 +104,7 @@ impl MegolmV1BackupKey {
     pub async fn encrypt(
         &self,
         session: InboundGroupSession,
-    ) -> Result<KeyBackupData, common_olm::pk_encryption::Error> {
+    ) -> Result<KeyBackupData, harana_matrix_common::olm::pk_encryption::Error> {
         let pk = PkEncryption::from_key(self.inner.key);
 
         // The forwarding chains don't mean much, we only care whether we received the

@@ -46,7 +46,7 @@ use std::{
 
 use client_base::{locks::Mutex, task_monitor::TaskMonitor};
 use client_common::executor::{AbortOnDrop, JoinHandleExt as _, spawn};
-use common_ruma::OwnedRoomId;
+use harana_matrix_common::OwnedRoomId;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::{debug, info, instrument, trace, warn};
@@ -601,7 +601,7 @@ mod tests {
     use std::{collections::HashMap, ops::ControlFlow};
 
     use client_base::locks::Mutex;
-    use common_ruma::room_id;
+    use harana_matrix_common::room_id;
 
     use super::{
         BackPaginationRequest, PendingRequest, Priority, cancellation_for, next_runnable,
@@ -609,7 +609,7 @@ mod tests {
     };
 
     /// Build a queued request for a room, at a priority, with an insertion seq.
-    fn queued(room_id: common_ruma::OwnedRoomId, priority: Priority, seq: u64) -> PendingRequest {
+    fn queued(room_id: harana_matrix_common::OwnedRoomId, priority: Priority, seq: u64) -> PendingRequest {
         PendingRequest {
             request: BackPaginationRequest {
                 room_id,

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::events::{
+use harana_matrix_common::events::{
     AnySyncStateEvent, AnySyncTimelineEvent, SyncStateEvent, TimelineEventType,
     room::member::{MembershipChange, MembershipState},
 };

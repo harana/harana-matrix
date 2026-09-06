@@ -22,7 +22,7 @@ use client_matrix::{
     paginators::{PaginableRoom, thread::PaginableThread},
 };
 use client_base::{RoomInfo, crypto::types::events::CryptoContextInfo};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedTransactionId, OwnedUserId, RoomId, UserId,
     events::{
         AnyMessageLikeEventContent,

@@ -28,8 +28,8 @@ use client_common::{
     SyncOutsideWasm, deserialized_responses::WithheldCode, locks::RwLock as StdRwLock,
 };
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::events::AnyStateEventContent;
-use common_ruma::{
+use harana_matrix_common::events::AnyStateEventContent;
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId, OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId,
     SecondsSinceUnixEpoch, TransactionId, UserId,
     events::{
@@ -44,8 +44,8 @@ use common_ruma::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
-use common_olm::{Curve25519PublicKey, megolm::SessionConfig};
-pub use common_olm::{
+use harana_matrix_common::olm::{Curve25519PublicKey, megolm::SessionConfig};
+pub use harana_matrix_common::olm::{
     PickleError,
     megolm::{GroupSession, GroupSessionPickle, MegolmMessage, SessionKey},
     olm::IdentityKeys,
@@ -990,7 +990,7 @@ pub struct PickledOutboundGroupSession {
 mod tests {
     use std::time::Duration;
 
-    use common_ruma::{
+    use harana_matrix_common::{
         EventEncryptionAlgorithm,
         events::room::{
             encryption::RoomEncryptionEventContent, history_visibility::HistoryVisibility,
@@ -1086,7 +1086,7 @@ mod tests {
         use std::{sync::atomic::Ordering, time::Duration};
 
         use common_test::async_test;
-        use common_ruma::{
+        use harana_matrix_common::{
             SecondsSinceUnixEpoch, device_id, events::room::message::RoomMessageEventContent,
             room_id, serde::Raw, uint, user_id,
         };

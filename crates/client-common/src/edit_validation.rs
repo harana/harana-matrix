@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{events::AnySyncTimelineEvent, serde::Raw};
+use harana_matrix_common::{events::AnySyncTimelineEvent, serde::Raw};
 use serde::Deserialize;
 
 use crate::deserialized_responses::EncryptionInfo;

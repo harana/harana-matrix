@@ -22,7 +22,7 @@ use client_matrix::{Error, assert_let_timeout, test_utils::mocks::MatrixMockServ
 use client_base::store::QueueWedgeError;
 use common_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{EventItemOrigin, EventSendState, RoomExt};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, event_id, events::room::message::RoomMessageEventContent, room_id,
 };
 use serde_json::json;
@@ -217,7 +217,7 @@ async fn test_reloaded_failed_local_echoes_are_marked_as_failed() {
     // And it's properly pattern-matched as an HTTP error.
     assert_matches!(
         error.as_client_api_error().unwrap().error_kind(),
-        Some(common_ruma::api::error::ErrorKind::TooLarge)
+        Some(harana_matrix_common::api::error::ErrorKind::TooLarge)
     );
 
     assert_pending!(timeline_stream);

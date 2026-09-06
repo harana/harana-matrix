@@ -7,7 +7,7 @@ use common_test::{
     DEFAULT_TEST_ROOM_ID, LeftRoomBuilder, SyncResponseBuilder, async_test,
     event_factory::EventFactory, test_json,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomOrAliasId,
     events::direct::{DirectEventContent, DirectUserIdentifier},
     user_id,

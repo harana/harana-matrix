@@ -24,7 +24,7 @@ pub use client_base::latest_event::{
     LatestEventValue, LocalLatestEventValue, RemoteLatestEventValue,
 };
 use client_base::{RoomInfoNotableUpdateReasons, RoomState};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, UserId, events::room::power_levels::RoomPowerLevels,
 };
 use tracing::{error, info, instrument, trace, warn};
@@ -362,7 +362,7 @@ mod tests_latest_event {
     };
     use client_common::cross_process_lock::CrossProcessLockConfig;
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, OwnedTransactionId, event_id,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
         owned_event_id, owned_room_id, owned_user_id, room_id, user_id,

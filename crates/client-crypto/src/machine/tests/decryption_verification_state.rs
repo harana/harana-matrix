@@ -19,7 +19,7 @@ use client_common::deserialized_responses::{
     DeviceLinkProblem, ShieldState, VerificationLevel, VerificationState,
 };
 use common_test::{async_test, ruma_response_from_json, test_json};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, RoomId, TransactionId,
     events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
     room_id,
@@ -27,7 +27,7 @@ use common_ruma::{
     user_id,
 };
 use serde_json::json;
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey};
 
 use crate::{
     CryptoStoreError, DecryptionSettings, DeviceData, EncryptionSettings, LocalTrust, MegolmError,

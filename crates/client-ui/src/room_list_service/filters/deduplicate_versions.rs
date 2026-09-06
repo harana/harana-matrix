@@ -85,7 +85,7 @@ mod tests {
     use client_matrix::test_utils::mocks::MatrixMockServer;
     use client_base::RoomState;
     use common_test::async_test;
-    use common_ruma::room_id;
+    use harana_matrix_common::room_id;
 
     use super::{super::new_rooms, *};
 

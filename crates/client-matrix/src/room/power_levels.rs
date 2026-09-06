@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId,
     events::{
         MessageLikeEventType, StateEventType,
@@ -245,7 +245,7 @@ pub fn power_level_user_changes(
 mod tests {
     use std::collections::BTreeMap;
 
-    use common_ruma::{
+    use harana_matrix_common::{
         int, power_levels::NotificationPowerLevels, room_version_rules::AuthorizationRules,
     };
 

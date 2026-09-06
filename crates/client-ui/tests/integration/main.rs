@@ -24,4 +24,4 @@ mod sliding_sync;
 mod sync_service;
 mod timeline;
 
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();

@@ -23,7 +23,7 @@ use std::{
 
 use as_variant::as_variant;
 use client_common::locks::RwLock;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, EventId, OwnedDeviceId, OwnedUserId, RoomId, UserId,
     api::client::keys::upload_signatures::v3::{Request as SignatureUploadRequest, SignedKeys},
     events::{key::verification::VerificationMethod, room::message::MessageType},
@@ -1420,7 +1420,7 @@ where
 #[allow(dead_code)]
 pub(crate) mod testing {
     use common_test::ruma_response_from_json;
-    use common_ruma::{
+    use harana_matrix_common::{
         UserId,
         api::client::keys::{
             get_keys::v3::Response as KeyQueryResponse,
@@ -1626,7 +1626,7 @@ pub(crate) mod tests {
     use common_test::{async_test, test_json};
     #[cfg(feature = "experimental-x509-identity-verification")]
     use rcgen::{Certificate, KeyPair};
-    use common_ruma::{TransactionId, device_id, user_id};
+    use harana_matrix_common::{TransactionId, device_id, user_id};
     use serde_json::{Value, json};
     use tokio::sync::Mutex;
 

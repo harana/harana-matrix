@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{OwnedRoomId, api::client::backup::RoomKeyBackup};
+use harana_matrix_common::{OwnedRoomId, api::client::backup::RoomKeyBackup};
 
 /// A request that will back up a batch of room keys to the server.
 #[derive(Clone, Debug)]

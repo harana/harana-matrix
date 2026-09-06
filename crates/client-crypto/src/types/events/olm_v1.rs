@@ -17,10 +17,10 @@
 
 use std::fmt::Debug;
 
-use common_ruma::{OwnedUserId, UserId};
+use harana_matrix_common::{OwnedUserId, UserId};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use common_olm::Ed25519PublicKey;
+use harana_matrix_common::olm::Ed25519PublicKey;
 
 #[cfg(feature = "experimental-push-secrets")]
 use super::secret_push::SecretPushContent;
@@ -368,14 +368,14 @@ mod tests {
 
     use assert_matches::assert_matches;
     use insta::{assert_json_snapshot, with_settings};
-    use common_ruma::{
+    use harana_matrix_common::{
         KeyId, OwnedMxcUri, device_id,
         events::room::{EncryptedFile, V2EncryptedFileInfo},
         owned_room_id, owned_user_id, user_id,
     };
     use serde_json::{Value, json};
     use similar_asserts::assert_eq;
-    use common_olm::{Curve25519PublicKey, Ed25519PublicKey, Ed25519Signature};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey, Ed25519Signature};
 
     use super::AnyDecryptedOlmEvent;
     use crate::types::{
@@ -547,10 +547,10 @@ mod tests {
         let device_id = device_id!("DEV");
         let ssk_id = device_id!("ssk");
 
-        let ed25519_device_key_id = KeyId::from_parts(common_ruma::DeviceKeyAlgorithm::Ed25519, device_id);
+        let ed25519_device_key_id = KeyId::from_parts(harana_matrix_common::DeviceKeyAlgorithm::Ed25519, device_id);
         let curve25519_device_key_id =
-            KeyId::from_parts(common_ruma::DeviceKeyAlgorithm::Curve25519, device_id);
-        let ed25519_ssk_id = KeyId::from_parts(common_ruma::DeviceKeyAlgorithm::Ed25519, ssk_id);
+            KeyId::from_parts(harana_matrix_common::DeviceKeyAlgorithm::Curve25519, device_id);
+        let ed25519_ssk_id = KeyId::from_parts(harana_matrix_common::DeviceKeyAlgorithm::Ed25519, ssk_id);
 
         let mut keys = BTreeMap::new();
         keys.insert(

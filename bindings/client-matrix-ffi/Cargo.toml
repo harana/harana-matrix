@@ -86,7 +86,7 @@ client-contentscanner = { workspace = true, features = ["uniffi", "e2e-encryptio
 client-ui = { workspace = true, features = ["uniffi", "unstable-msc4426"] }
 client-crypto = { workspace = true, optional = true }
 mime = { version = "0.3.17", default-features = false }
-common-ruma = { workspace = true, features = [
+harana-matrix-common = { workspace = true, features = [
     "html",
     "unstable-msc3488",
     "compat-unset-avatar",

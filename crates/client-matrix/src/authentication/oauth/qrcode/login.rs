@@ -23,14 +23,14 @@ use client_base::{
 };
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
 use oauth2::{DeviceCodeErrorResponseType, StandardDeviceAuthorizationResponse};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedDeviceId,
     api::client::discovery::get_authorization_server_metadata::v1::AuthorizationServerMetadata,
 };
 use tracing::trace;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 #[cfg(doc)]
-use common_olm::ecies::CheckCode;
+use harana_matrix_common::olm::ecies::CheckCode;
 
 use super::{
     DeviceAuthorizationOAuthError, QRCodeLoginError, SecureChannelError,
@@ -70,7 +70,7 @@ async fn finish_login<Q: SendOutsideWasm + SyncOutsideWasm>(
 
     // We want to use the Curve25519 public key for the device ID, so let's generate
     // a new vodozemac `Account` now.
-    let account = common_olm::olm::Account::new();
+    let account = harana_matrix_common::olm::olm::Account::new();
     let public_key = account.identity_keys().curve25519;
     let device_id = public_key;
 

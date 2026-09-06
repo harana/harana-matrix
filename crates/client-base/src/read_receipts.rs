@@ -24,7 +24,7 @@
 use std::num::NonZeroUsize;
 
 use client_common::ring_buffer::RingBuffer;
-use common_ruma::OwnedEventId;
+use harana_matrix_common::OwnedEventId;
 use serde::{Deserialize, Serialize};
 
 /// The latest read receipt known for a room.

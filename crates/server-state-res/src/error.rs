@@ -24,7 +24,7 @@ use crate::fetch::MAX_FETCH_ROUNDS;
 pub enum Error {
     /// State resolution itself failed.
     #[error(transparent)]
-    Resolution(#[from] common_ruma::state_res::Error),
+    Resolution(#[from] harana_matrix_common::state_res::Error),
 
     /// The room version resolves state with the first version of the algorithm.
     ///

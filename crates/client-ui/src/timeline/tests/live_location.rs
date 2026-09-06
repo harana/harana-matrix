@@ -19,7 +19,7 @@ use std::time::Duration;
 use assert_matches2::assert_matches;
 use eyeball_im::VectorDiff;
 use common_test::{ALICE, BOB, async_test};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, event_id,
     events::beacon_info::{BeaconInfoEventContent, RedactedBeaconInfoEventContent},
     owned_event_id, uint,
@@ -1049,7 +1049,7 @@ impl TestTimeline {
     /// Convenience: send a `beacon_info` state event from `sender`.
     async fn send_beacon_info(
         &self,
-        sender: &common_ruma::UserId,
+        sender: &harana_matrix_common::UserId,
         event_id: &EventId,
         info: BeaconInfoFields,
     ) {
@@ -1066,7 +1066,7 @@ impl TestTimeline {
     /// `prev_content`, to model replacement of a previous session.
     async fn send_beacon_info_with_prev_content(
         &self,
-        sender: &common_ruma::UserId,
+        sender: &harana_matrix_common::UserId,
         event_id: &EventId,
         info: BeaconInfoFields,
         prev_content: BeaconInfoEventContent,
@@ -1084,7 +1084,7 @@ impl TestTimeline {
     /// Convenience: send a `beacon` location-update event from `sender`.
     async fn send_beacon_location(
         &self,
-        sender: &common_ruma::UserId,
+        sender: &harana_matrix_common::UserId,
         beacon_info_event_id: &EventId,
         latitude: f64,
         longitude: f64,

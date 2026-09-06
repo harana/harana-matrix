@@ -14,7 +14,7 @@
 
 use std::{collections::BTreeMap, iter};
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedDeviceId, OwnedTransactionId, OwnedUserId, TransactionId, UserId,
     events::{AnyToDeviceEventContent, ToDeviceEventContent, ToDeviceEventType},
     serde::Raw,

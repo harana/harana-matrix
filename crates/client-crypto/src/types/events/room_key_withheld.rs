@@ -17,12 +17,12 @@
 use std::collections::BTreeMap;
 
 use client_common::deserialized_responses::WithheldCode;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedDeviceId, OwnedRoomId, RoomId, events::AnyToDeviceEventContent, serde::JsonCastable,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use super::{EventType, ToDeviceEvent};
 use crate::types::{EventEncryptionAlgorithm, deserialize_curve_key, serialize_curve_key};
@@ -586,9 +586,9 @@ pub(super) mod tests {
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
     use client_common::deserialized_responses::WithheldCode;
-    use common_ruma::{device_id, room_id, serde::Raw, to_device::DeviceIdOrAllDevices, user_id};
+    use harana_matrix_common::{device_id, room_id, serde::Raw, to_device::DeviceIdOrAllDevices, user_id};
     use serde_json::{Value, json};
-    use common_olm::Curve25519PublicKey;
+    use harana_matrix_common::olm::Curve25519PublicKey;
 
     use super::RoomKeyWithheldEvent;
     use crate::types::{

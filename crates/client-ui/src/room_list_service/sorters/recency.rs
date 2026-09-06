@@ -111,7 +111,7 @@ mod tests {
     use client_base::RoomInfoNotableUpdateReasons;
     use common_test::async_test;
     use proptest::prelude::*;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
         room_id,

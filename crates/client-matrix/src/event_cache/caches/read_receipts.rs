@@ -115,7 +115,7 @@ use client_common::{
     SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent,
     ring_buffer::RingBuffer, serde_helpers::extract_thread_root,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedUserId, RoomId, UserId,
     events::{
         AnySyncTimelineEvent, MessageLikeEventType,
@@ -738,7 +738,7 @@ mod tests {
     use client_base::{read_receipts::ReadReceipts, store::MemoryStore};
     use client_common::{deserialized_responses::TimelineEvent, ring_buffer::RingBuffer};
     use common_test::{ALICE, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, RoomId, UserId, event_id,
         events::{
             receipt::{ReceiptThread, ReceiptType},

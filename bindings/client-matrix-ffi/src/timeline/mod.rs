@@ -37,7 +37,7 @@ use client_ui::timeline::{
 };
 use mime::Mime;
 use reply::{EmbeddedEventDetails, InReplyToDetails};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, UInt, assign,
     events::{
         AnyMessageLikeEventContent,
@@ -1159,8 +1159,8 @@ pub struct Receipt {
     pub timestamp: Option<Timestamp>,
 }
 
-impl From<common_ruma::events::receipt::Receipt> for Receipt {
-    fn from(value: common_ruma::events::receipt::Receipt) -> Self {
+impl From<harana_matrix_common::events::receipt::Receipt> for Receipt {
+    fn from(value: harana_matrix_common::events::receipt::Receipt) -> Self {
         Receipt { timestamp: value.ts.map(|ts| ts.into()) }
     }
 }
@@ -1348,7 +1348,7 @@ pub enum ReceiptType {
     FullyRead,
 }
 
-impl From<ReceiptType> for common_ruma::api::client::receipt::create_receipt::v3::ReceiptType {
+impl From<ReceiptType> for harana_matrix_common::api::client::receipt::create_receipt::v3::ReceiptType {
     fn from(value: ReceiptType) -> Self {
         match value {
             ReceiptType::Read => Self::Read,
@@ -1358,7 +1358,7 @@ impl From<ReceiptType> for common_ruma::api::client::receipt::create_receipt::v3
     }
 }
 
-impl TryFrom<ReceiptType> for common_ruma::events::receipt::ReceiptType {
+impl TryFrom<ReceiptType> for harana_matrix_common::events::receipt::ReceiptType {
     type Error = ClientError;
 
     fn try_from(value: ReceiptType) -> Result<Self, Self::Error> {
@@ -1366,7 +1366,7 @@ impl TryFrom<ReceiptType> for common_ruma::events::receipt::ReceiptType {
             ReceiptType::Read => Self::Read,
             ReceiptType::ReadPrivate => Self::ReadPrivate,
             // `m.fully_read` is a marker, not an event receipt: it has no
-            // counterpart in `common_ruma::events::receipt::ReceiptType`.
+            // counterpart in `harana_matrix_common::events::receipt::ReceiptType`.
             ReceiptType::FullyRead => {
                 return Err(ClientError::Generic {
                     msg: "FullyRead is a marker, not an event receipt".to_owned(),
@@ -1391,8 +1391,8 @@ pub enum ReceiptThread {
     },
 }
 
-impl TryFrom<ReceiptThread> for common_ruma::events::receipt::ReceiptThread {
-    type Error = common_ruma::IdParseError;
+impl TryFrom<ReceiptThread> for harana_matrix_common::events::receipt::ReceiptThread {
+    type Error = harana_matrix_common::IdParseError;
 
     fn try_from(value: ReceiptThread) -> Result<Self, Self::Error> {
         Ok(match value {
@@ -1574,7 +1574,7 @@ mod galleries {
     use client_common::executor::{AbortHandle, JoinHandle};
     use client_ui::timeline::GalleryConfig;
     use mime::Mime;
-    use common_ruma::{EventId, assign, events::room::message::TextMessageEventContent};
+    use harana_matrix_common::{EventId, assign, events::room::message::TextMessageEventContent};
     use tokio::sync::Mutex;
     use tracing::error;
 
@@ -1818,7 +1818,7 @@ mod galleries {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{event_id, events::receipt::ReceiptThread as RumaReceiptThread};
+    use harana_matrix_common::{event_id, events::receipt::ReceiptThread as RumaReceiptThread};
 
     use super::ReceiptThread;
 

@@ -34,7 +34,7 @@ use common_test::{
         },
     },
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, Int, MilliSecondsSinceUnixEpoch, OwnedUserId, RoomId, RoomVersionId,
     api::client::{
         directory::{
@@ -181,7 +181,7 @@ async fn test_resolve_room_alias() {
         .mount(&server)
         .await;
 
-    let alias = common_ruma::room_alias_id!("#alias:example.org");
+    let alias = harana_matrix_common::room_alias_id!("#alias:example.org");
     client.resolve_room_alias(alias).await.unwrap();
 }
 
@@ -713,7 +713,7 @@ async fn test_cross_signing_status() {
 async fn test_encrypt_room_event() {
     use std::sync::Arc;
 
-    use common_ruma::events::room::encrypted::RoomEncryptedEventContent;
+    use harana_matrix_common::events::room::encrypted::RoomEncryptedEventContent;
 
     let (client, server) = logged_in_client_with_server().await;
     let user_id = client.user_id().unwrap();
@@ -836,8 +836,8 @@ async fn test_encrypt_room_event() {
         .expect("We should be able to deserialize the decrypted event");
 
     assert_let!(
-        common_ruma::events::AnySyncTimelineEvent::MessageLike(
-            common_ruma::events::AnySyncMessageLikeEvent::RoomMessage(message_event)
+        harana_matrix_common::events::AnySyncTimelineEvent::MessageLike(
+            harana_matrix_common::events::AnySyncMessageLikeEvent::RoomMessage(message_event)
         ) = event
     );
 

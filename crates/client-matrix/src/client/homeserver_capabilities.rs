@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use client_base::{StateStoreDataKey, StateStoreDataValue, StoreError, ttl::TtlValue};
-use common_ruma::{
+use harana_matrix_common::{
     api::client::{
         discovery::get_capabilities::{
             self,
@@ -313,7 +313,7 @@ mod tests {
     use client_base::sleep::sleep;
     use common_test::async_test;
     #[allow(deprecated)]
-    use common_ruma::api::{
+    use harana_matrix_common::api::{
         MatrixVersion,
         client::discovery::get_capabilities::v3::{
             SetAvatarUrlCapability, SetDisplayNameCapability,

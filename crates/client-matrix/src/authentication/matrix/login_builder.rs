@@ -18,7 +18,7 @@ use std::future::Future;
 use std::future::IntoFuture;
 
 use client_common::boxed_into_future;
-use common_ruma::{
+use harana_matrix_common::{
     api::client::{session::login, uiaa::UserIdentifier},
     assign,
     serde::JsonObject,

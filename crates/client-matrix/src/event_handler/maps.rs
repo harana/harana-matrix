@@ -17,7 +17,7 @@ use std::{
     collections::{BTreeMap, btree_map},
 };
 
-use common_ruma::{OwnedRoomId, RoomId};
+use harana_matrix_common::{OwnedRoomId, RoomId};
 
 use super::{
     EventHandlerFn, EventHandlerHandle, EventHandlerWrapper, HandlerKind, StaticEventTypePart,

@@ -14,7 +14,7 @@
 
 use std::{mem::ManuallyDrop, ops::Deref};
 
-use common_ruma::{MilliSecondsSinceUnixEpoch, UInt};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, UInt};
 use tracing::warn;
 
 use crate::runtime::get_runtime_handle;

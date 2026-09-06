@@ -17,7 +17,7 @@ use client_base::crypto::{
     CancelInfo, DeviceData, QrVerification as BaseQrVerification, QrVerificationState,
     qrcode::{EncodingError, qrcode::QrCode},
 };
-use common_ruma::{RoomId, UserId};
+use harana_matrix_common::{RoomId, UserId};
 
 use crate::{Client, Result};
 

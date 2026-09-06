@@ -36,7 +36,7 @@ use client_base::RequestedRequiredStates;
 #[cfg(feature = "e2e-encryption")]
 use client_common::executor::JoinHandleExt as _;
 use client_common::{executor::spawn, timer};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, RoomId,
     api::{client::sync::sync_events::v5 as http, error::ErrorKind},
     assign,
@@ -1143,7 +1143,7 @@ mod tests {
     use client_base::{RequestedRequiredStates, RoomMemberships};
     use client_common::executor::spawn;
     use common_test::{ALICE, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedRoomId, assign,
         events::{direct::DirectEvent, room::member::MembershipState},
         owned_room_id,
@@ -2021,7 +2021,7 @@ mod tests {
     async fn test_no_pos_without_marking_tracked_users_dirty() -> anyhow::Result<()> {
         use client_base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
         use common_test::ruma_response_from_json;
-        use common_ruma::user_id;
+        use harana_matrix_common::user_id;
 
         let server = MockServer::start().await;
         let client = logged_in_client(Some(server.uri())).await;
@@ -2093,7 +2093,7 @@ mod tests {
     async fn test_no_pos_with_e2ee_marks_all_tracked_users_as_dirty() -> anyhow::Result<()> {
         use client_base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
         use common_test::ruma_response_from_json;
-        use common_ruma::user_id;
+        use harana_matrix_common::user_id;
 
         let server = MockServer::start().await;
         let client = logged_in_client(Some(server.uri())).await;
@@ -2232,7 +2232,7 @@ mod tests {
     async fn test_no_pos_with_e2ee_can_keep_tracked_users_clean() -> anyhow::Result<()> {
         use client_base::crypto::types::requests::{AnyIncomingResponse, AnyOutgoingRequest};
         use common_test::ruma_response_from_json;
-        use common_ruma::user_id;
+        use harana_matrix_common::user_id;
 
         let server = MockServer::start().await;
         let client = logged_in_client(Some(server.uri())).await;
@@ -2822,7 +2822,7 @@ mod tests {
     #[async_test]
     #[cfg(feature = "e2e-encryption")]
     async fn test_process_only_encryption_events() -> Result<()> {
-        use common_ruma::OneTimeKeyAlgorithm;
+        use harana_matrix_common::OneTimeKeyAlgorithm;
 
         let room = owned_room_id!("!croissant:example.org");
 

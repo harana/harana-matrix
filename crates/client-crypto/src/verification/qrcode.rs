@@ -23,7 +23,7 @@ use client_qrcode::{
     VerificationData, qrcode::QrCode,
 };
 use rand::{Rng, rng};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId, OwnedUserId, RoomId, TransactionId, UserId,
     api::client::keys::upload_signatures::v3::Request as SignatureUploadRequest,
     events::{
@@ -42,7 +42,7 @@ use common_ruma::{
 };
 use thiserror::Error;
 use tracing::{debug, trace};
-use common_olm::Ed25519PublicKey;
+use harana_matrix_common::olm::Ed25519PublicKey;
 
 use super::{
     CancelInfo, Cancelled, Done, FlowId, IdentitiesBeingVerified, VerificationResult,
@@ -893,7 +893,7 @@ mod tests {
     use assert_matches::assert_matches;
     use client_qrcode::QrVerificationData;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, UserId, device_id, owned_event_id, owned_room_id, owned_user_id, user_id,
     };
     use tokio::sync::Mutex;

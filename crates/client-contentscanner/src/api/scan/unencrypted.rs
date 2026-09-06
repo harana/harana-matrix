@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use client_matrix::RumaApiError;
-use common_ruma::{
+use harana_matrix_common::{
     api::{
         EmptyBody, Metadata, OutgoingRequest, auth_scheme::AccessTokenOptional,
         error::IntoHttpError, path_builder::PathBuilder,

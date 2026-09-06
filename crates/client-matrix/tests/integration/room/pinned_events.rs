@@ -11,7 +11,7 @@ use client_matrix::{
 use client_base::event_cache::store::MemoryStore;
 use client_common::cross_process_lock::CrossProcessLockConfig;
 use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{EventId, event_id, owned_event_id, room_id, user_id};
+use harana_matrix_common::{EventId, event_id, owned_event_id, room_id, user_id};
 use serde_json::json;
 use tokio::time::Duration;
 use wiremock::{
@@ -21,7 +21,7 @@ use wiremock::{
 
 struct PinningTestSetup<'a> {
     event_id: &'a EventId,
-    room_id: &'a common_ruma::RoomId,
+    room_id: &'a harana_matrix_common::RoomId,
     room: Room,
     client: client_matrix::Client,
     server: MatrixMockServer,

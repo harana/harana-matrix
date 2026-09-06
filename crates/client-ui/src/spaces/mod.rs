@@ -41,7 +41,7 @@ use client_matrix::{
     Client, Error as SDKError, Room, deserialized_responses::SyncOrStrippedState,
     task_monitor::BackgroundTaskHandle,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, RoomId, SpaceChildOrder,
     events::{
         self, StateEventType, SyncStateEvent,
@@ -114,7 +114,7 @@ struct SpaceState {
 /// use futures_util::StreamExt;
 /// use client_matrix::Client;
 /// use client_ui::spaces::SpaceService;
-/// use common_ruma::owned_room_id;
+/// use harana_matrix_common::owned_room_id;
 ///
 /// # async {
 /// # let client: Client = todo!();
@@ -258,7 +258,7 @@ impl SpaceService {
     ///     room_list_service::{RoomListService, filters},
     ///     spaces::SpaceService,
     /// };
-    /// use common_ruma::owned_room_id;
+    /// use harana_matrix_common::owned_room_id;
     ///
     /// # async {
     /// # let client: Client = todo!();
@@ -722,7 +722,7 @@ mod tests {
         JoinedRoomBuilder, LeftRoomBuilder, async_test, event_factory::EventFactory,
     };
     use proptest::prelude::*;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, OwnedSpaceChildOrder, RoomVersionId, UserId, event_id,
         owned_room_id, room_id, serde::Raw,
     };

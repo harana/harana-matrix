@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, default::Default};
 
 use insta::{assert_json_snapshot, with_settings};
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonValue, CrossSigningKeyId, CrossSigningOrDeviceSignatures,
     CrossSigningOrDeviceSigningKeyId, DeviceId, OwnedBase64PublicKey,
     OwnedBase64PublicKeyOrDeviceId, OwnedDeviceId, OwnedUserId, SigningKeyAlgorithm, UserId,
@@ -13,7 +13,7 @@ use common_ruma::{
     user_id,
 };
 use serde_json::{Value, json};
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature};
 
 use super::keys_query::{KeysQueryUser, keys_query, master_keys};
 use crate::{
@@ -29,8 +29,8 @@ use crate::{
 /// A simple case with no cross-signing identity and a single device:
 ///
 /// ```
-/// # use common_ruma::{device_id, owned_user_id};
-/// # use common_olm::{Curve25519PublicKey, Ed25519SecretKey};
+/// # use harana_matrix_common::{device_id, owned_user_id};
+/// # use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519SecretKey};
 /// # use common_test::test_json::keys_query_sets::{KeyQueryResponseTemplate, KeyQueryResponseTemplateDeviceOptions};
 ///
 /// // Note that (almost) any 32-byte sequence can be used as a private Ed25519 or Curve25519 key.
@@ -51,8 +51,8 @@ use crate::{
 /// A more complex case, with cross-signing keys and a signed device:
 ///
 /// ```
-/// # use common_ruma::{device_id, owned_user_id, user_id};
-/// # use common_olm::{Curve25519PublicKey, Ed25519SecretKey};
+/// # use harana_matrix_common::{device_id, owned_user_id, user_id};
+/// # use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519SecretKey};
 /// # use common_test::test_json::keys_query_sets::{KeyQueryResponseTemplate, KeyQueryResponseTemplateDeviceOptions};
 ///
 /// let template = KeyQueryResponseTemplate::new(owned_user_id!("@me:localhost"))

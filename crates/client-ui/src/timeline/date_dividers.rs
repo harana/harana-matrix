@@ -18,7 +18,7 @@
 use std::{fmt::Display, sync::Arc};
 
 use chrono::{Datelike, Local, TimeZone};
-use common_ruma::MilliSecondsSinceUnixEpoch;
+use harana_matrix_common::MilliSecondsSinceUnixEpoch;
 use tracing::{Level, error, event_enabled, instrument, trace, warn};
 
 use super::{
@@ -693,7 +693,7 @@ enum DateDividerInsertError {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, owned_event_id, owned_user_id,
         room_version_rules::RoomVersionRules, uint,
     };

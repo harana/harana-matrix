@@ -21,7 +21,7 @@ use futures_util::StreamExt;
 use client_common::SyncOutsideWasm;
 #[cfg(feature = "qrcode")]
 use client_qrcode::QrVerificationData;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId, RoomId, TransactionId,
     UserId,
     events::{
@@ -1665,7 +1665,7 @@ mod tests {
     #[cfg(feature = "qrcode")]
     use client_qrcode::QrVerificationData;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         UserId, event_id,
         events::{
             key::verification::{VerificationMethod, done::KeyVerificationDoneEventContent},
@@ -1921,7 +1921,7 @@ mod tests {
     /// shows once verification succeeds (#60).
     #[async_test]
     async fn test_done_keeps_the_other_device_data() {
-        use common_ruma::events::key::verification::done::ToDeviceKeyVerificationDoneEventContent;
+        use harana_matrix_common::events::key::verification::done::ToDeviceKeyVerificationDoneEventContent;
 
         use crate::verification::event_enums::DoneContent;
 

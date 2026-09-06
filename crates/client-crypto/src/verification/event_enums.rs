@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use as_variant::as_variant;
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonValue, DeviceId, MilliSecondsSinceUnixEpoch, OwnedRoomId, UserId,
     events::{
         AnyMessageLikeEvent, AnyMessageLikeEventContent, AnyToDeviceEventContent, MessageLikeEvent,
@@ -717,7 +717,7 @@ impl TryFrom<ToDeviceRequest> for OutgoingContent {
     type Error = String;
 
     fn try_from(request: ToDeviceRequest) -> Result<Self, Self::Error> {
-        use common_ruma::events::ToDeviceEventType;
+        use harana_matrix_common::events::ToDeviceEventType;
         use serde_json::Value;
 
         let json: Value = serde_json::from_str(

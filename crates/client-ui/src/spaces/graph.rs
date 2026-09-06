@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common_ruma::{OwnedRoomId, RoomId};
+use harana_matrix_common::{OwnedRoomId, RoomId};
 
 #[derive(Debug)]
 struct SpaceGraphNode {
@@ -175,7 +175,7 @@ impl SpaceGraph {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{owned_room_id, room_id};
+    use harana_matrix_common::{owned_room_id, room_id};
 
     use super::*;
 

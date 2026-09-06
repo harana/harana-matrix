@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use common_ruma::api::{
+use harana_matrix_common::api::{
     SupportedVersions, auth_scheme::SendAccessToken, client::discovery::get_supported_versions,
 };
 
@@ -60,7 +60,7 @@ impl ClientBuilder {
     /// Unless the supported Matrix versions were manually set via
     /// [`supported_matrix_versions`][Self::supported_matrix_versions], this will do a
     /// [`get_supported_versions`] request to find out about the supported versions.
-    pub async fn build<C>(self) -> Result<Client<C>, Error<C::Error, common_ruma::api::error::Error>>
+    pub async fn build<C>(self) -> Result<Client<C>, Error<C::Error, harana_matrix_common::api::error::Error>>
     where
         C: DefaultConstructibleHttpClient,
     {
@@ -75,7 +75,7 @@ impl ClientBuilder {
     pub async fn http_client<C>(
         self,
         http_client: C,
-    ) -> Result<Client<C>, Error<C::Error, common_ruma::api::error::Error>>
+    ) -> Result<Client<C>, Error<C::Error, harana_matrix_common::api::error::Error>>
     where
         C: HttpClient,
     {

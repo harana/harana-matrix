@@ -29,7 +29,7 @@ use client_ui::timeline::{
     EventSendState, RoomExt as _, TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode,
     TimelineEventItemId, TimelineFocus, VirtualTimelineItem,
 };
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, RoomId,
     api::client::receipt::create_receipt::v3::ReceiptType as SendReceiptType,
     event_id,
@@ -1194,7 +1194,7 @@ async fn test_thread_timeline_gets_local_echoes() {
         let event = raw_event.deserialize().unwrap();
         assert_let!(
             AnySyncTimelineEvent::MessageLike(
-                common_ruma::events::AnySyncMessageLikeEvent::RoomMessage(event)
+                harana_matrix_common::events::AnySyncMessageLikeEvent::RoomMessage(event)
             ) = event
         );
         let event = event.as_original().unwrap();

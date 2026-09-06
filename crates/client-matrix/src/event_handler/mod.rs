@@ -60,7 +60,7 @@ use client_base::{
 };
 use client_common::deserialized_responses::ProcessedToDeviceEvent;
 use pin_project_lite::pin_project;
-use common_ruma::{EventId, OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedRoomId, events::BooleanType, push::Action, serde::Raw};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::value::RawValue as RawJsonValue;
 use tracing::{debug, error, field::debug, instrument, trace, warn};
@@ -813,7 +813,7 @@ mod tests {
     use assert_matches2::assert_let;
     use client_common::{deserialized_responses::EncryptionInfo, locks::Mutex};
     use common_test::SyncResponseBuilder;
-    use common_ruma::{
+    use harana_matrix_common::{
         event_id,
         events::{
             AnySyncStateEvent, AnySyncTimelineEvent, AnyToDeviceEvent,

@@ -18,7 +18,7 @@ use std::{fmt, sync::Arc};
 
 use async_trait::async_trait;
 use client_common::{AsyncTraitDeps, cross_process_lock::CrossProcessLockGeneration};
-use common_ruma::{MxcUri, time::SystemTime};
+use harana_matrix_common::{MxcUri, time::SystemTime};
 
 #[cfg(doc)]
 use crate::media::store::MediaService;

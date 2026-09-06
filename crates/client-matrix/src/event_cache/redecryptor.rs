@@ -140,7 +140,7 @@ use client_base::{
 };
 #[cfg(doc)]
 use client_common::deserialized_responses::EncryptionInfo;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedRoomId, RoomId,
     events::{AnySyncTimelineEvent, room::encrypted::OriginalSyncRoomEncryptedEvent},
     push::Action,
@@ -1058,7 +1058,7 @@ impl EventCache {
     /// ```no_run
     /// # use client_matrix::{Client, event_cache::DecryptionRetryRequest};
     /// # use url::Url;
-    /// # use common_ruma::owned_room_id;
+    /// # use harana_matrix_common::owned_room_id;
     /// # use std::collections::BTreeSet;
     /// # async {
     /// # let homeserver = Url::parse("http://localhost:8080")?;
@@ -1474,7 +1474,7 @@ mod tests {
     };
     use client_common::cross_process_lock::CrossProcessLockConfig;
     use common_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, OwnedEventId, RoomId, RoomVersionId, device_id, event_id,
         events::{AnySyncTimelineEvent, relation::RelationType},
         room_id,

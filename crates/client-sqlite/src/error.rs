@@ -101,7 +101,7 @@ pub enum Error {
     DecodeStr(#[from] std::str::Utf8Error),
 
     #[error(transparent)]
-    DecodeRuma(#[from] common_ruma::IdParseError),
+    DecodeRuma(#[from] harana_matrix_common::IdParseError),
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
@@ -116,13 +116,13 @@ pub enum Error {
     AccountUnset,
 
     #[error(transparent)]
-    Pickle(#[from] common_olm::PickleError),
+    Pickle(#[from] harana_matrix_common::olm::PickleError),
 
     #[error("An object failed to be decrypted while unpickling")]
     Unpickle,
 
     #[error("Redaction failed: {0}")]
-    Redaction(#[source] common_ruma::canonical_json::CanonicalJsonFieldError),
+    Redaction(#[source] harana_matrix_common::canonical_json::CanonicalJsonFieldError),
 
     #[error("An update keyed by unique ID touched more than one entry")]
     InconsistentUpdate,

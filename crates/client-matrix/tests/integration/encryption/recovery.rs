@@ -32,7 +32,7 @@ use client_matrix::{
 };
 use client_base::SessionMeta;
 use common_test::async_test;
-use common_ruma::{UserId, api::client::uiaa, owned_device_id, user_id};
+use harana_matrix_common::{UserId, api::client::uiaa, owned_device_id, user_id};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::spawn;

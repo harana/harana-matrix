@@ -122,7 +122,7 @@ mod tests {
     use imbl::vector;
     use client_matrix::deserialized_responses::{AlgorithmInfo, EncryptionInfo, VerificationState};
     use client_base::crypto::types::events::UtdCause;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, OwnedTransactionId,
         events::room::{
             encrypted::{

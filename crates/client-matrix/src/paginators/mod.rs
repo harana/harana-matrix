@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use client_base::deserialized_responses::TimelineEvent;
 pub use room::*;
-use common_ruma::OwnedEventId;
+use harana_matrix_common::OwnedEventId;
 
 /// Pagination token data, indicating in which state is the current pagination.
 #[derive(Clone, Debug, PartialEq)]

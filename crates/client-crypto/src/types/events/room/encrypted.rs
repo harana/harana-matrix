@@ -16,10 +16,10 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{OwnedDeviceId, RoomId, events::AnyToDeviceEventContent, serde::JsonCastable};
+use harana_matrix_common::{OwnedDeviceId, RoomId, events::AnyToDeviceEventContent, serde::JsonCastable};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use common_olm::{Curve25519PublicKey, megolm::MegolmMessage, olm::OlmMessage};
+use harana_matrix_common::olm::{Curve25519PublicKey, megolm::MegolmMessage, olm::OlmMessage};
 
 use super::Event;
 use crate::types::{
@@ -66,13 +66,13 @@ impl EncryptedEvent {
 }
 
 impl JsonCastable<EncryptedEvent>
-    for common_ruma::events::room::encrypted::OriginalSyncRoomEncryptedEvent
+    for harana_matrix_common::events::room::encrypted::OriginalSyncRoomEncryptedEvent
 {
 }
 
 #[cfg(feature = "experimental-encrypted-state-events")]
 impl JsonCastable<EncryptedEvent>
-    for common_ruma::events::room::encrypted::unstable_state::OriginalSyncStateRoomEncryptedEvent
+    for harana_matrix_common::events::room::encrypted::unstable_state::OriginalSyncStateRoomEncryptedEvent
 {
 }
 
@@ -234,10 +234,10 @@ impl EventType for RoomEncryptedEventContent {
     const EVENT_TYPE: &'static str = "m.room.encrypted";
 }
 
-impl JsonCastable<common_ruma::events::AnyMessageLikeEventContent> for RoomEncryptedEventContent {}
+impl JsonCastable<harana_matrix_common::events::AnyMessageLikeEventContent> for RoomEncryptedEventContent {}
 
 #[cfg(feature = "experimental-encrypted-state-events")]
-impl JsonCastable<common_ruma::events::AnyStateEventContent> for RoomEncryptedEventContent {}
+impl JsonCastable<harana_matrix_common::events::AnyStateEventContent> for RoomEncryptedEventContent {}
 
 /// An enum for per encryption algorithm event contents.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -442,7 +442,7 @@ pub(crate) mod tests {
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
     use serde_json::{Value, json};
-    use common_olm::Curve25519PublicKey;
+    use harana_matrix_common::olm::Curve25519PublicKey;
 
     use super::{
         EncryptedEvent, EncryptedToDeviceEvent, OlmV1Curve25519AesSha2Content,

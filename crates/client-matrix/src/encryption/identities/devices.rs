@@ -18,7 +18,7 @@ use client_base::crypto::{
     Device as BaseDevice, DeviceData, LocalTrust, UserDevices as BaseUserDevices,
     store::CryptoStoreError,
 };
-use common_ruma::{DeviceId, OwnedDeviceId, OwnedUserId, events::key::verification::VerificationMethod};
+use harana_matrix_common::{DeviceId, OwnedDeviceId, OwnedUserId, events::key::verification::VerificationMethod};
 
 use super::ManualVerifyError;
 use crate::{

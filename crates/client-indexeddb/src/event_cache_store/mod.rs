@@ -30,7 +30,7 @@ use client_base::{
     },
     timer,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, RoomId, events::relation::RelationType,
 };
 use tracing::{error, instrument, trace};

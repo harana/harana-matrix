@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use client_matrix::Room;
 use client_base::{SendOutsideWasm, SyncOutsideWasm, ThreadingSupport};
-use common_ruma::{events::AnySyncTimelineEvent, room_version_rules::RoomVersionRules};
+use harana_matrix_common::{events::AnySyncTimelineEvent, room_version_rules::RoomVersionRules};
 use tracing::{Instrument, Span, info_span, warn};
 
 use super::{
@@ -353,7 +353,7 @@ impl TimelineBuilder {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::owned_event_id;
+    use harana_matrix_common::owned_event_id;
 
     use super::focus_is_threaded;
     use crate::timeline::{TimelineEventFocusThreadMode, TimelineFocus};

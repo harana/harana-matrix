@@ -23,7 +23,7 @@ use client_ui::spaces::{
     leave::{LeaveSpaceHandle as UILeaveSpaceHandle, LeaveSpaceRoom as UILeaveSpaceRoom},
     room_list::SpaceRoomListPaginationState,
 };
-use common_ruma::RoomId;
+use harana_matrix_common::RoomId;
 
 use crate::{
     TaskHandle,

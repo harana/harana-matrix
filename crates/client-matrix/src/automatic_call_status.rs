@@ -24,7 +24,7 @@ use std::{
 };
 
 use client_common::executor::spawn;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, SecondsSinceUnixEpoch,
     events::{OriginalSyncStateEvent, call::member::CallMemberEventContent},
 };

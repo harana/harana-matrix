@@ -25,7 +25,7 @@ use client_base::{
     store::{StoredThreadSubscription, ThreadSubscriptionStatus},
     task_monitor::BackgroundTaskHandle,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedRoomId, RoomId,
     api::client::threads::get_thread_subscriptions_changes::unstable::{
         ThreadSubscription, ThreadUnsubscription,
@@ -292,7 +292,7 @@ impl ThreadSubscriptionCatchup {
             drop(guard);
 
             // Start the actual catchup!
-            let req = assign!(common_ruma::api::client::threads::get_thread_subscriptions_changes::unstable::Request::new(), {
+            let req = assign!(harana_matrix_common::api::client::threads::get_thread_subscriptions_changes::unstable::Request::new(), {
                 from: Some(last.from.clone()),
                 to: last.to.clone(),
             });

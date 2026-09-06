@@ -92,7 +92,7 @@
 
 use futures_core::{Future, Stream};
 use futures_util::StreamExt as _;
-use common_ruma::{
+use harana_matrix_common::{
     api::client::keys::get_keys,
     events::{
         GlobalAccountDataEventType,
@@ -853,7 +853,7 @@ impl IdentityResetHandle {
 pub(crate) mod tests {
     use assert_matches::assert_matches;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         events::{secret::request::SecretName, secret_storage::key},
         serde::Base64,
     };

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{DeviceKeyAlgorithm, OwnedRoomId};
+use harana_matrix_common::{DeviceKeyAlgorithm, OwnedRoomId};
 use serde::{Deserialize, Serialize};
 
 mod forwarder_data;
@@ -30,8 +30,8 @@ pub use outbound::{
 };
 pub use sender_data::{KnownSenderData, SenderData, SenderDataType};
 use thiserror::Error;
-pub use common_olm::megolm::{ExportedSessionKey, SessionKey};
-use common_olm::{Curve25519PublicKey, megolm::SessionKeyDecodeError};
+pub use harana_matrix_common::olm::megolm::{ExportedSessionKey, SessionKey};
+use harana_matrix_common::olm::{Curve25519PublicKey, megolm::SessionKeyDecodeError};
 
 #[cfg(feature = "experimental-algorithms")]
 use crate::types::events::forwarded_room_key::ForwardedMegolmV2AesSha2Content;
@@ -179,7 +179,7 @@ impl ExportedRoomKey {
 }
 
 impl RoomKeyExport for &ExportedRoomKey {
-    fn room_id(&self) -> &common_ruma::RoomId {
+    fn room_id(&self) -> &harana_matrix_common::RoomId {
         &self.room_id
     }
 

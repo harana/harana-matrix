@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::time::Instant;
+use harana_matrix_common::time::Instant;
 use tracing::{Callsite as _, callsite::DefaultCallsite};
 
 /// A named RAII that will show on `Drop` how long its covered section took to
@@ -128,7 +128,7 @@ mod tests {
         mod time123 {
             pub async fn run() {
                 let _timer_guard = timer!(tracing::Level::DEBUG, "test");
-                tokio::time::sleep(common_ruma::time::Duration::from_millis(123)).await;
+                tokio::time::sleep(harana_matrix_common::time::Duration::from_millis(123)).await;
                 // Displays: 2023-08-25T15:18:31.169498Z DEBUG
                 // client_common::tracing_timer::tests: Timer _test_
                 // finished in 124ms
@@ -141,7 +141,7 @@ mod tests {
         let _guard = span.enter();
 
         let _timer_guard = timer!("in span");
-        tokio::time::sleep(common_ruma::time::Duration::from_millis(256)).await;
+        tokio::time::sleep(harana_matrix_common::time::Duration::from_millis(256)).await;
 
         tracing::warn!("Test about to finish.");
         // Displays: 2023-08-25T15:18:31.427070Z DEBUG le 256ms span:

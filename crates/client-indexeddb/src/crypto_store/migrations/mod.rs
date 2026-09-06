@@ -304,7 +304,7 @@ mod tests {
     };
     use client_store_encryption::StoreCipher;
     use common_test::async_test;
-    use common_ruma::{OwnedRoomId, RoomId, owned_device_id, owned_user_id, room_id};
+    use harana_matrix_common::{OwnedRoomId, RoomId, owned_device_id, owned_user_id, room_id};
     use serde::Serialize;
     use tracing_subscriber::util::SubscriberInitExt;
     use wasm_bindgen::JsValue;
@@ -949,7 +949,7 @@ mod tests {
                 secret_send::SecretSendContent,
             },
         };
-        use common_ruma::{TransactionId, events::secret::request::SecretName};
+        use harana_matrix_common::{TransactionId, events::secret::request::SecretName};
 
         let serializer = SafeEncodeSerializer::new(store_cipher.clone());
 

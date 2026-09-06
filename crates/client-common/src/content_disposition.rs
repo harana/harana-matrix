@@ -27,7 +27,7 @@
 //!
 //! [MSC2702]: https://github.com/matrix-org/matrix-spec-proposals/pull/2702
 
-use common_ruma::http_headers::{ContentDisposition, ContentDispositionType};
+use harana_matrix_common::http_headers::{ContentDisposition, ContentDispositionType};
 use sanitize_filename::{Options, sanitize_with_options};
 use tracing::debug;
 
@@ -152,7 +152,7 @@ pub fn make_content_disposition(
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::http_headers::{ContentDisposition, ContentDispositionType};
+    use harana_matrix_common::http_headers::{ContentDisposition, ContentDispositionType};
 
     use super::{
         content_disposition_type, content_type_essence, content_type_is, make_content_disposition,

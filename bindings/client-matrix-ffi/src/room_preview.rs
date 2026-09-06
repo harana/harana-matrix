@@ -14,7 +14,7 @@
 
 use anyhow::Context as _;
 use client_matrix::{Client, room_preview::RoomPreview as SdkRoomPreview};
-use common_ruma::room::{JoinRuleSummary, RoomType as RumaRoomType};
+use harana_matrix_common::room::{JoinRuleSummary, RoomType as RumaRoomType};
 
 use crate::{
     client::{AllowRule, JoinRule},

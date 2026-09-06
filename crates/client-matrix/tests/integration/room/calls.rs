@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use assert_matches2::assert_matches;
 use client_matrix::{room::calls::CallError, test_utils::mocks::MatrixMockServer};
 use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, events::rtc::notification::NotificationType, owned_event_id, room_id, user_id,
 };
 use tokio::spawn;

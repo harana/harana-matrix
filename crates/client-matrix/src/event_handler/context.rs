@@ -17,7 +17,7 @@ use std::ops::Deref;
 
 use client_base::deserialized_responses::EncryptionInfo;
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::push::Action;
+use harana_matrix_common::push::Action;
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::{EventHandlerData, EventHandlerHandle};

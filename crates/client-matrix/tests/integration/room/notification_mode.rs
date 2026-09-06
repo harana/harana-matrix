@@ -10,7 +10,7 @@ use common_test::{
     DEFAULT_TEST_ROOM_ID, InvitedRoomBuilder, JoinedRoomBuilder, SyncResponseBuilder, async_test,
     event_factory::EventFactory,
 };
-use common_ruma::{
+use harana_matrix_common::{
     api::client::sync::sync_events::v5,
     events::AnyGlobalAccountDataEvent,
     push::{Action, ConditionalPushRule, NewSimplePushRule, Ruleset, SoundTweakValue, Tweak},

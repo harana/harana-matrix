@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use client_matrix::{Client, ROOM_VERSION_RULES_FALLBACK, RoomState, room::RoomMemberRole};
-use common_ruma::{Int, OwnedRoomId, events::room::member::MembershipState};
+use harana_matrix_common::{Int, OwnedRoomId, events::room::member::MembershipState};
 use tracing::info;
 
 use crate::spaces::{Error, SpaceRoom};
@@ -82,13 +82,13 @@ impl LeaveSpaceHandle {
                     };
 
                     if are_creators_privileged {
-                        power_level >= common_ruma::int!(150)
+                        power_level >= harana_matrix_common::int!(150)
                     } else {
                         RoomMemberRole::suggested_role_for_power_level(power_level.into())
                             == RoomMemberRole::Administrator
                     }
                 })
-                .map(|p: (common_ruma::OwnedUserId, i64)| p.0)
+                .map(|p: (harana_matrix_common::OwnedUserId, i64)| p.0)
                 .chain(privileged_creator_ids);
 
             let mut joined_owner_ids = Vec::new();
@@ -140,7 +140,7 @@ mod tests {
         InvitedRoomBuilder, JoinedRoomBuilder, LeftRoomBuilder, async_test,
         event_factory::EventFactory,
     };
-    use common_ruma::{RoomVersionId, owned_user_id, room_id};
+    use harana_matrix_common::{RoomVersionId, owned_user_id, room_id};
 
     use crate::spaces::SpaceService;
 

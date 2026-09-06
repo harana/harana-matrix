@@ -21,7 +21,7 @@ use client_base::{
     event_cache::store::EventCacheStoreLockGuard,
     linked_chunk::{LinkedChunkId, Position},
 };
-use common_ruma::{OwnedEventId, UserId};
+use harana_matrix_common::{OwnedEventId, UserId};
 
 use super::{
     EventCacheError,
@@ -229,7 +229,7 @@ mod tests {
     };
     use client_common::cross_process_lock::CrossProcessLockConfig;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{EventId, owned_event_id, serde::Raw, user_id};
+    use harana_matrix_common::{EventId, owned_event_id, serde::Raw, user_id};
 
     use super::*;
 
@@ -249,7 +249,7 @@ mod tests {
             event_cache::store::{EventCacheStore, MemoryStore},
             linked_chunk::Update,
         };
-        use common_ruma::room_id;
+        use harana_matrix_common::room_id;
 
         let user_id = user_id!("@user:example.com");
         let event_id_0 = owned_event_id!("$ev0");
@@ -388,7 +388,7 @@ mod tests {
             event_cache::store::{EventCacheStore, MemoryStore},
             linked_chunk::Update,
         };
-        use common_ruma::room_id;
+        use harana_matrix_common::room_id;
 
         let user_id = user_id!("@user:example.com");
         let room_id = room_id!("!fondue:raclette.ch");
@@ -484,7 +484,7 @@ mod tests {
             linked_chunk::{ChunkIdentifier, Position, Update},
         };
         use common_test::{ALICE, BOB};
-        use common_ruma::{event_id, room_id};
+        use harana_matrix_common::{event_id, room_id};
 
         let user_id = user_id!("@user:example.com");
         let room_id = room_id!("!galette:saucisse.bzh");

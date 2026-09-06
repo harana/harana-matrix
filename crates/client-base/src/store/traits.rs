@@ -24,7 +24,7 @@ use as_variant::as_variant;
 use async_trait::async_trait;
 use growable_bloom_filter::GrowableBloom;
 use client_common::{AsyncTraitDeps, ttl::TtlValue};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId,
     OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UserId,
     api::{
@@ -1967,7 +1967,7 @@ pub trait StateStoreExt: StateStore {
         room_id: &RoomId,
     ) -> Result<Option<RawSyncOrStrippedState<C>>, Self::Error>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent<StateKey = EmptyStateKey>
             + RedactContent,
         C::Redacted: RedactedStateEventContent,
@@ -1986,7 +1986,7 @@ pub trait StateStoreExt: StateStore {
         state_key: &K,
     ) -> Result<Option<RawSyncOrStrippedState<C>>, Self::Error>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::StateKey: Borrow<K>,
@@ -2009,7 +2009,7 @@ pub trait StateStoreExt: StateStore {
         room_id: &RoomId,
     ) -> Result<Vec<RawSyncOrStrippedState<C>>, Self::Error>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::Redacted: RedactedStateEventContent,
@@ -2037,7 +2037,7 @@ pub trait StateStoreExt: StateStore {
         state_keys: I,
     ) -> Result<Vec<RawSyncOrStrippedState<C>>, Self::Error>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::StateKey: Borrow<K>,
@@ -2063,7 +2063,7 @@ pub trait StateStoreExt: StateStore {
         &self,
     ) -> Result<Option<Raw<GlobalAccountDataEvent<C>>>, Self::Error>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False> + GlobalAccountDataEventContent,
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False> + GlobalAccountDataEventContent,
     {
         Ok(self.get_account_data_event(C::TYPE.into()).await?.map(Raw::cast_unchecked))
     }
@@ -2080,7 +2080,7 @@ pub trait StateStoreExt: StateStore {
         room_id: &RoomId,
     ) -> Result<Option<Raw<RoomAccountDataEvent<C>>>, Self::Error>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False> + RoomAccountDataEventContent,
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False> + RoomAccountDataEventContent,
     {
         Ok(self
             .get_room_account_data_event(room_id, C::TYPE.into())
@@ -2655,7 +2655,7 @@ mod tests {
         use gloo_timers::future::sleep;
         use client_common::executor::spawn;
         use common_test::async_test;
-        use common_ruma::room_id;
+        use harana_matrix_common::room_id;
         use tokio::sync::Mutex;
         #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         use tokio::time::sleep;

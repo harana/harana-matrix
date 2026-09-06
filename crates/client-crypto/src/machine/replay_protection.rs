@@ -27,7 +27,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedEventId};
 
 /// How many Megolm sessions we keep replay records for.
 ///
@@ -121,7 +121,7 @@ impl ReplayProtection {
         &mut self,
         session_id: &str,
         message_index: u32,
-        event_id: &common_ruma::EventId,
+        event_id: &harana_matrix_common::EventId,
         origin_server_ts: MilliSecondsSinceUnixEpoch,
     ) -> ReplayCheck {
         let fingerprint = EventFingerprint { event_id: event_id.to_owned(), origin_server_ts };
@@ -151,7 +151,7 @@ impl ReplayProtection {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{MilliSecondsSinceUnixEpoch, event_id};
+    use harana_matrix_common::{MilliSecondsSinceUnixEpoch, event_id};
 
     use super::{
         MAX_TRACKED_INDICES_PER_SESSION, MAX_TRACKED_SESSIONS, ReplayCheck, ReplayProtection,

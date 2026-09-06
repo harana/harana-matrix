@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId,
     events::{StateEventContentChange, room::pinned_events::RoomPinnedEventsEventContent},
 };
@@ -76,7 +76,7 @@ impl From<&StateEventContentChange<RoomPinnedEventsEventContent>> for RoomPinned
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use common_ruma::{
+    use harana_matrix_common::{
         events::{
             StateEventContentChange,
             room::pinned_events::{

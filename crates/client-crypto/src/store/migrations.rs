@@ -216,7 +216,7 @@ mod tests {
 
     use async_trait::async_trait;
     use common_test::async_test;
-    use common_ruma::{device_id, user_id};
+    use harana_matrix_common::{device_id, user_id};
 
     use super::{
         DataMigration, DataMigrationContext, HAS_MIGRATED_VERIFICATION_LATCH,

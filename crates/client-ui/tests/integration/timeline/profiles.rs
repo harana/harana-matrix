@@ -22,7 +22,7 @@ use common_test::{
     event_factory::{EventFactory, PreviousMembership},
 };
 use client_ui::timeline::{RoomExt, TimelineDetails};
-use common_ruma::events::room::member::MembershipState;
+use harana_matrix_common::events::room::member::MembershipState;
 
 #[async_test]
 async fn test_user_profile_after_being_banned() {

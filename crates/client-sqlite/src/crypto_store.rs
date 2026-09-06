@@ -38,14 +38,14 @@ use client_crypto::{
         },
     },
 };
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedRoomId, RoomId, TransactionId,
     UserId, events::secret::request::SecretName,
 };
 use rusqlite::{OptionalExtension, named_params, params_from_iter};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, instrument, warn};
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 use zeroize::Zeroizing;
 
 use crate::{
@@ -1990,7 +1990,7 @@ mod tests {
         store::{CryptoStore, types::Changes},
     };
     use common_test::async_test;
-    use common_ruma::{device_id, room_id, user_id};
+    use harana_matrix_common::{device_id, room_id, user_id};
     use similar_asserts::assert_eq;
     use tempfile::{TempDir, tempdir};
 
@@ -2399,7 +2399,7 @@ mod tests {
             },
             vodozemac::Ed25519SecretKey,
         };
-        use common_ruma::{TransactionId, events::secret::request::SecretName, owned_user_id};
+        use harana_matrix_common::{TransactionId, events::secret::request::SecretName, owned_user_id};
 
         use crate::utils::{EncryptableStore, SqliteAsyncConnExt};
 
@@ -2472,7 +2472,7 @@ mod tests {
     #[async_test]
     async fn test_key_requests_migration() {
         use client_crypto::{GossipRequest, SecretInfo};
-        use common_ruma::{TransactionId, events::secret::request::SecretName, owned_user_id};
+        use harana_matrix_common::{TransactionId, events::secret::request::SecretName, owned_user_id};
 
         use crate::utils::{EncryptableStore, SqliteAsyncConnExt};
 
@@ -2614,7 +2614,7 @@ mod tests {
             olm::{Account, InboundGroupSession, SenderData},
             types::EventEncryptionAlgorithm,
         };
-        use common_olm::megolm::{GroupSession, SessionConfig};
+        use harana_matrix_common::olm::megolm::{GroupSession, SessionConfig};
 
         let account = Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICE"));
         let session_key = GroupSession::new(SessionConfig::default()).session_key();

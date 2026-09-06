@@ -32,7 +32,7 @@ use client_base::{
     task_monitor::BackgroundTaskHandle,
 };
 use client_common::executor::spawn;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId,
     events::{relation::RelationType, room::redaction::SyncRoomRedactionEvent},
     room_version_rules::RoomVersionRules,
@@ -917,7 +917,7 @@ fn compare_by_optional_timestamp(
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
-    use common_ruma::UInt;
+    use harana_matrix_common::UInt;
 
     use super::*;
 
@@ -985,7 +985,7 @@ mod timed_tests {
     use client_base::event_cache::store::{EventCacheStoreLock, MemoryStore};
     use client_common::cross_process_lock::CrossProcessLockConfig;
     use common_test::{ALICE, async_test, event_factory::EventFactory};
-    use common_ruma::{event_id, room_id, room_version_rules::RoomVersionRules};
+    use harana_matrix_common::{event_id, room_id, room_version_rules::RoomVersionRules};
     use tokio::sync::broadcast::Sender;
 
     use super::*;

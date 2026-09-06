@@ -33,11 +33,11 @@ pub use oauth2::{
     RequestTokenError, StandardErrorResponse,
     basic::{BasicErrorResponse, BasicRequestTokenError},
 };
-use common_ruma::api::error::ErrorKind;
+use harana_matrix_common::api::error::ErrorKind;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use url::Url;
-pub use common_olm::ecies::{Error as EciesError, MessageDecodeError};
+pub use harana_matrix_common::olm::ecies::{Error as EciesError, MessageDecodeError};
 
 mod grant;
 mod login;

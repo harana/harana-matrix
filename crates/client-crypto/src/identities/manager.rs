@@ -23,8 +23,8 @@ use futures_util::future::join_all;
 use itertools::Itertools;
 use client_common::{executor::spawn, failures_cache::FailuresCache};
 #[cfg(feature = "experimental-x509-identity-verification")]
-use common_ruma::api::client::keys::upload_signatures::v3::Request as SignatureUploadRequest;
-use common_ruma::{
+use harana_matrix_common::api::client::keys::upload_signatures::v3::Request as SignatureUploadRequest;
+use harana_matrix_common::{
     OwnedDeviceId, OwnedServerName, OwnedTransactionId, OwnedUserId, ServerName, TransactionId,
     UserId, api::client::keys::get_keys::v3::Response as KeysQueryResponse, serde::Raw,
 };
@@ -392,7 +392,7 @@ impl IdentityManager {
     async fn update_user_devices(
         store: Store,
         user_id: OwnedUserId,
-        device_map: BTreeMap<OwnedDeviceId, Raw<common_ruma::encryption::DeviceKeys>>,
+        device_map: BTreeMap<OwnedDeviceId, Raw<harana_matrix_common::encryption::DeviceKeys>>,
     ) -> StoreResult<DeviceChanges> {
         let own_device_id = store.static_account().device_id().to_owned();
 
@@ -477,7 +477,7 @@ impl IdentityManager {
         &self,
         device_keys_map: BTreeMap<
             OwnedUserId,
-            BTreeMap<OwnedDeviceId, Raw<common_ruma::encryption::DeviceKeys>>,
+            BTreeMap<OwnedDeviceId, Raw<harana_matrix_common::encryption::DeviceKeys>>,
         >,
     ) -> StoreResult<DeviceChanges> {
         let mut changes = DeviceChanges::default();
@@ -1301,7 +1301,7 @@ pub(crate) mod testing {
     use std::sync::Arc;
 
     use common_test::ruma_response_from_json;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, UserId, api::client::keys::get_keys::v3::Response as KeyQueryResponse, device_id,
         user_id,
     };
@@ -1608,7 +1608,7 @@ pub(crate) mod tests {
 
     use futures_util::pin_mut;
     use common_test::{async_test, ruma_response_from_json, test_json};
-    use common_ruma::{
+    use harana_matrix_common::{
         TransactionId, api::client::keys::get_keys::v3::Response as KeysQueryResponse, device_id,
         user_id,
     };
@@ -2685,7 +2685,7 @@ pub(crate) mod tests {
     mod update_sender_data {
         use assert_matches::assert_matches;
         use common_test::async_test;
-        use common_ruma::room_id;
+        use harana_matrix_common::room_id;
 
         use super::{device_id, manager_test_helper};
         use crate::{

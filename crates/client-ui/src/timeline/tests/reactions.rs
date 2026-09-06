@@ -21,7 +21,7 @@ use futures_util::{FutureExt as _, StreamExt as _};
 use imbl::vector;
 use client_matrix::assert_next_matches_with_timeout;
 use common_test::{ALICE, BOB, async_test};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, event_id,
     events::AnyMessageLikeEventContent, server_name, uint,
 };

@@ -14,7 +14,7 @@
 
 use std::collections::BTreeSet;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, OwnedServerName, UserId,
     events::room::tombstone::PossiblyRedactedRoomTombstoneEventContent,
 };
@@ -192,7 +192,7 @@ mod tests {
     use common_test::{
         JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
-    use common_ruma::{RoomVersionId, room_id, server_name, user_id};
+    use harana_matrix_common::{RoomVersionId, room_id, server_name, user_id};
 
     use crate::{RoomState, test_utils::logged_in_base_client};
 

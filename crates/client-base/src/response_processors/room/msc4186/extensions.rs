@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, RoomId,
     api::client::sync::sync_events::v5 as http,
     events::{AnySyncEphemeralRoomEvent, SyncEphemeralRoomEvent, receipt::ReceiptEventContent},

@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::serde::JsonCastable;
+use harana_matrix_common::serde::JsonCastable;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use super::{Signatures, deserialize_curve_key, serialize_curve_key};
 
@@ -63,9 +63,9 @@ pub enum RoomKeyBackupInfo {
     },
 }
 
-impl JsonCastable<common_ruma::api::client::backup::BackupAlgorithm> for RoomKeyBackupInfo {}
+impl JsonCastable<harana_matrix_common::api::client::backup::BackupAlgorithm> for RoomKeyBackupInfo {}
 
-impl JsonCastable<RoomKeyBackupInfo> for common_ruma::api::client::backup::BackupAlgorithm {}
+impl JsonCastable<RoomKeyBackupInfo> for harana_matrix_common::api::client::backup::BackupAlgorithm {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct BackupInfoHelper {
@@ -117,9 +117,9 @@ mod tests {
 
     use assert_matches::assert_matches;
     use insta::{assert_json_snapshot, with_settings};
-    use common_ruma::{DeviceKeyAlgorithm, KeyId, owned_user_id};
+    use harana_matrix_common::{DeviceKeyAlgorithm, KeyId, owned_user_id};
     use serde_json::{Value, json};
-    use common_olm::{Curve25519PublicKey, Ed25519Signature};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519Signature};
 
     use super::RoomKeyBackupInfo;
     use crate::types::{MegolmV1AuthData, Signatures};

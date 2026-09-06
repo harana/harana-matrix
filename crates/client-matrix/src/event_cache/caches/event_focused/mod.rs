@@ -41,7 +41,7 @@ use client_common::{
     linked_chunk::ChunkIdentifier,
     serde_helpers::{extract_relation, extract_thread_root},
 };
-use common_ruma::{OwnedEventId, UInt, api::Direction, events::relation::RelationType};
+use harana_matrix_common::{OwnedEventId, UInt, api::Direction, events::relation::RelationType};
 use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::{instrument, trace, warn};
 
@@ -797,7 +797,7 @@ pub type EventFocusedCacheUpdateSender = Sender<TimelineVectorDiffs>;
 #[cfg(test)]
 mod tests {
     use common_test::{ALICE, BOB, event_factory::EventFactory};
-    use common_ruma::{event_id, events::room::message::RoomMessageEventContentWithoutRelation, room_id};
+    use harana_matrix_common::{event_id, events::room::message::RoomMessageEventContentWithoutRelation, room_id};
 
     use super::aggregations_to_append;
 

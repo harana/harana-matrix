@@ -11,7 +11,7 @@ use common_test::{
     InvitedRoomBuilder, JoinedRoomBuilder, KnockedRoomBuilder, SyncResponseBuilder, async_test,
     event_factory::EventFactory,
 };
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     api::client::sync::sync_events::v5::{self as sliding_sync_http, response::Hero},
     assign,

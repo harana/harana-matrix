@@ -32,7 +32,7 @@ pub mod secret_send;
 mod to_device;
 mod utd_cause;
 
-use common_ruma::serde::Raw;
+use harana_matrix_common::serde::Raw;
 pub use to_device::{ToDeviceCustomEvent, ToDeviceEvent, ToDeviceEvents};
 pub use utd_cause::{CryptoContextInfo, UtdCause};
 

@@ -28,7 +28,7 @@
 //! [HPKE]: https://www.rfc-editor.org/rfc/rfc9180.html
 //! [MSC4108]: https://github.com/matrix-org/matrix-spec-proposals/pull/4108
 
-use common_olm::{
+use harana_matrix_common::olm::{
     Curve25519PublicKey,
     ecies::{Ecies, EstablishedEcies, InboundCreationResult, InitialMessage, Message},
     hpke::DigitMode,

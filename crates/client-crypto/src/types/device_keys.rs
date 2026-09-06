@@ -21,13 +21,13 @@
 use std::collections::BTreeMap;
 
 use js_option::JsOption;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceId, OwnedDeviceKeyId, OwnedUserId,
     serde::{JsonCastable, Raw},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::to_raw_value};
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey};
 
 use super::{EventEncryptionAlgorithm, Signatures};
 use crate::{
@@ -43,7 +43,7 @@ use crate::{
 /// Specification, encapsulating essential elements such as the public device
 /// identity keys.
 ///
-/// See also [`common_ruma::encryption::DeviceKeys`] which is similar, but slightly
+/// See also [`harana_matrix_common::encryption::DeviceKeys`] which is similar, but slightly
 /// less comprehensive (it lacks some fields, and  the `keys` are represented as
 /// base64 strings rather than type-safe [`DeviceKey`]s). We always use this
 /// struct to build `/keys/upload` requests and to deserialize `/keys/query`
@@ -144,7 +144,7 @@ impl DeviceKeys {
     }
 }
 
-impl JsonCastable<DeviceKeys> for common_ruma::encryption::DeviceKeys {}
+impl JsonCastable<DeviceKeys> for harana_matrix_common::encryption::DeviceKeys {}
 
 /// Additional data added to device key information by intermediate servers.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -225,10 +225,10 @@ struct DeviceKeyHelper {
 }
 
 impl TryFrom<DeviceKeyHelper> for DeviceKeys {
-    type Error = common_olm::KeyError;
+    type Error = harana_matrix_common::olm::KeyError;
 
     fn try_from(value: DeviceKeyHelper) -> Result<Self, Self::Error> {
-        let keys: Result<BTreeMap<OwnedDeviceKeyId, DeviceKey>, common_olm::KeyError> = value
+        let keys: Result<BTreeMap<OwnedDeviceKeyId, DeviceKey>, harana_matrix_common::olm::KeyError> = value
             .keys
             .into_iter()
             .map(|(k, v)| {
@@ -281,9 +281,9 @@ impl From<DeviceKeys> for DeviceKeyHelper {
 mod tests {
     use std::str::FromStr;
 
-    use common_ruma::{OwnedDeviceKeyId, device_id, user_id};
+    use harana_matrix_common::{OwnedDeviceKeyId, device_id, user_id};
     use serde_json::json;
-    use common_olm::{Curve25519PublicKey, Curve25519SecretKey};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Curve25519SecretKey};
 
     use super::DeviceKeys;
 

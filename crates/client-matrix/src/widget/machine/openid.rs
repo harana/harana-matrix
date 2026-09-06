@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedServerName, api::client::account::request_openid_token, authentication::TokenType,
 };
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) struct OpenIdState {
     pub(crate) original_request_id: String,
     pub(crate) access_token: String,
-    #[serde(with = "common_ruma::serde::duration::secs")]
+    #[serde(with = "harana_matrix_common::serde::duration::secs")]
     pub(crate) expires_in: Duration,
     pub(crate) matrix_server_name: OwnedServerName,
     pub(crate) token_type: TokenType,

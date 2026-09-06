@@ -66,7 +66,7 @@ use client_matrix::{
     event_cache::EventCacheError, sliding_sync::PollTimeout, timeout::timeout,
 };
 pub use room_list::*;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, RoomId, UInt, api::client::sync::sync_events::v5 as http, assign,
     events::StateEventType,
 };
@@ -187,7 +187,7 @@ impl RoomListService {
                 builder = builder.with_thread_subscriptions_extension(
                     assign!(http::request::ThreadSubscriptions::default(), {
                         enabled: Some(true),
-                        limit: Some(common_ruma::uint!(10))
+                        limit: Some(harana_matrix_common::uint!(10))
                     }),
                 );
             }
@@ -622,7 +622,7 @@ mod tests {
     use futures_util::{StreamExt, pin_mut};
     use client_matrix::{SlidingSyncMode, test_utils::mocks::MatrixMockServer};
     use common_test::{TestError, async_test};
-    use common_ruma::{api::client::sync::sync_events::v5, assign, uint};
+    use harana_matrix_common::{api::client::sync::sync_events::v5, assign, uint};
 
     use super::{ALL_ROOMS_LIST_NAME, Error, RoomListService, State};
 

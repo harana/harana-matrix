@@ -14,7 +14,7 @@
 
 use std::{collections::BTreeMap, fmt, ops::Not, sync::Arc};
 
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, EventId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedEventId,
     OwnedUserId,
     events::{
@@ -1201,7 +1201,7 @@ pub enum UnableToDecryptReason {
     /// We found the Megolm session, but were unable to decrypt the event using
     /// that session for some reason (e.g. incorrect MAC).
     ///
-    /// This represents all `common_olm::megolm::DecryptionError`s, except
+    /// This represents all `harana_matrix_common::olm::megolm::DecryptionError`s, except
     /// `UnknownMessageIndex`, which is represented as
     /// `UnknownMegolmMessageIndex`.
     MegolmDecryptionFailure,
@@ -1542,7 +1542,7 @@ mod tests {
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
     use insta::{assert_json_snapshot, with_settings};
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceKeyAlgorithm, MilliSecondsSinceUnixEpoch, UInt, event_id,
         events::{AnySyncTimelineEvent, room::message::RoomMessageEventContent},
         owned_device_id, owned_user_id,

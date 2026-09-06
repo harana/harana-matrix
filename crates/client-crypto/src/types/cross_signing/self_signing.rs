@@ -1,8 +1,8 @@
 use std::collections::btree_map::Iter;
 
-use common_ruma::{OwnedDeviceKeyId, UserId, encryption::KeyUsage};
+use harana_matrix_common::{OwnedDeviceKeyId, UserId, encryption::KeyUsage};
 use serde::{Deserialize, Serialize};
-use common_olm::Ed25519PublicKey;
+use harana_matrix_common::olm::Ed25519PublicKey;
 
 use super::{CrossSigningKey, SigningKey};
 use crate::{

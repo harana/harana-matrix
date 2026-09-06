@@ -399,7 +399,7 @@ impl WidgetSettings {
 mod tests {
     use std::collections::BTreeSet;
 
-    use common_ruma::api::client::profile::get_profile;
+    use harana_matrix_common::api::client::profile::get_profile;
     use url::Url;
 
     use crate::widget::{

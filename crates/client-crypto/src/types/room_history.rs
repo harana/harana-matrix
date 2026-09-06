@@ -20,9 +20,9 @@ limitations under the License.
 
 use std::fmt::Debug;
 
-use common_ruma::{DeviceKeyAlgorithm, OwnedRoomId};
+use harana_matrix_common::{DeviceKeyAlgorithm, OwnedRoomId};
 use serde::{Deserialize, Serialize};
-use common_olm::{Curve25519PublicKey, megolm::ExportedSessionKey};
+use harana_matrix_common::olm::{Curve25519PublicKey, megolm::ExportedSessionKey};
 
 use super::RoomKeyExport;
 use crate::{
@@ -99,7 +99,7 @@ impl Debug for HistoricRoomKey {
 }
 
 impl RoomKeyExport for &HistoricRoomKey {
-    fn room_id(&self) -> &common_ruma::RoomId {
+    fn room_id(&self) -> &harana_matrix_common::RoomId {
         &self.room_id
     }
 
@@ -140,8 +140,8 @@ impl From<ExportedRoomKey> for HistoricRoomKey {
 #[cfg(test)]
 mod tests {
     use insta::assert_debug_snapshot;
-    use common_ruma::{DeviceKeyAlgorithm, owned_room_id};
-    use common_olm::{
+    use harana_matrix_common::{DeviceKeyAlgorithm, owned_room_id};
+    use harana_matrix_common::olm::{
         Curve25519PublicKey, Curve25519SecretKey, Ed25519SecretKey, megolm::ExportedSessionKey,
     };
 

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonValue, DeviceKeyAlgorithm, DeviceKeyId, OwnedUserId,
     canonical_json::to_canonical_value, encryption::KeyUsage,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Error as JsonError;
 use thiserror::Error;
-use common_olm::{DecodeError, Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature, KeyError};
+use harana_matrix_common::olm::{DecodeError, Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature, KeyError};
 use zeroize::Zeroize;
 
 use crate::{

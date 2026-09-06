@@ -14,7 +14,7 @@ use common_test::{
     BOB, DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, LeftRoomBuilder, SyncResponseBuilder, async_test,
     bulk_room_members, event_factory::EventFactory, sync_state_event, test_json,
 };
-use common_ruma::{
+use harana_matrix_common::{
     RoomVersionId, event_id,
     events::{
         AnyGlobalAccountDataEvent, AnySyncStateEvent, AnySyncTimelineEvent, StateEventType,

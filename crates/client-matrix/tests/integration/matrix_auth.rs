@@ -12,7 +12,7 @@ use client_matrix::{
 };
 use client_base::SessionMeta;
 use common_test::{async_test, test_json};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId,
     api::{
         self, MatrixVersion,

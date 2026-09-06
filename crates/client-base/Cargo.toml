@@ -21,7 +21,7 @@ e2e-encryption = ["dep:client-crypto"]
 js = [
     "client-common/js",
     "client-crypto?/js",
-    "common-ruma/js",
+    "harana-matrix-common/js",
     "client-store-encryption/js",
 ]
 qrcode = ["client-crypto?/qrcode"]
@@ -36,7 +36,7 @@ experimental-send-custom-to-device = [
 # https://github.com/matrix-org/matrix-rust-sdk/issues/5397.
 experimental-encrypted-state-events = [
     "e2e-encryption",
-    "common-ruma/unstable-msc4362",
+    "harana-matrix-common/unstable-msc4362",
     "client-crypto?/experimental-encrypted-state-events"
 ]
 
@@ -69,7 +69,7 @@ testing = [
 unstable-msc4274 = []
 
 # Add support for user status profile fields (m.status, m.call).
-unstable-msc4426 = ["common-ruma/unstable-msc4426"]
+unstable-msc4426 = ["harana-matrix-common/unstable-msc4426"]
 
 experimental-element-recent-emojis = []
 experimental-x509-identity-verification = ["e2e-encryption", "client-crypto/experimental-x509-identity-verification"]
@@ -96,7 +96,7 @@ client-crypto = { workspace = true, optional = true }
 client-store-encryption.workspace = true
 common-test = { workspace = true, optional = true }
 regex.workspace = true
-common-ruma = { workspace = true, features = [
+harana-matrix-common = { workspace = true, features = [
     "unstable-msc2867",
     "unstable-msc3381",
     "unstable-msc4186",
@@ -112,6 +112,7 @@ unicode-normalization.workspace = true
 uniffi = { workspace = true, optional = true }
 
 [dev-dependencies]
+harana-matrix-common = { workspace = true, features = ["testing"] }
 anyhow.workspace = true
 assert_matches.workspace = true
 assert_matches2.workspace = true
@@ -119,7 +120,6 @@ assign = "1.1.1"
 futures-executor.workspace = true
 http.workspace = true
 common-test.workspace = true
-common-test-utils.workspace = true
 proptest.workspace = true
 similar-asserts.workspace = true
 stream_assert.workspace = true

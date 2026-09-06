@@ -4,7 +4,7 @@ use assert_matches2::assert_let;
 use futures_util::StreamExt;
 use client_matrix::{Client, config::SyncSettings, room::ParentSpace};
 use common_test::{DEFAULT_TEST_ROOM_ID, async_test, test_json};
-use common_ruma::{RoomId, room_id};
+use harana_matrix_common::{RoomId, room_id};
 use serde_json::{Value as JsonValue, json};
 use wiremock::{
     Mock, ResponseTemplate,

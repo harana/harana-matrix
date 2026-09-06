@@ -9,7 +9,7 @@ use client_matrix::{
 use common_test::{
     DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, async_test, event_factory::EventFactory, test_json,
 };
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::{AnySyncStateEvent, StateEventType, location::AssetType},
     user_id,

@@ -18,7 +18,7 @@ use client_base::{
     RoomMemberships,
     crypto::{CryptoStoreError, UserIdentity as CryptoUserIdentity, types::MasterPubkey},
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, UserId,
     events::{key::verification::VerificationMethod, room::message::RoomMessageEventContent},
 };

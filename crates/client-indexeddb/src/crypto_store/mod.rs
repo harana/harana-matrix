@@ -51,7 +51,7 @@ use client_crypto::{
     vodozemac::base64_encode,
 };
 use client_store_encryption::StoreCipher;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, RoomId, TransactionId, UserId,
     events::secret::request::SecretName,
 };
@@ -2203,12 +2203,12 @@ mod durability_tests {
         assert!(!needs_strict_durability(&Changes::default()));
 
         let mut alice = client_crypto::olm::Account::with_device_id(
-            common_ruma::user_id!("@alice:localhost"),
-            common_ruma::device_id!("ALICE"),
+            harana_matrix_common::user_id!("@alice:localhost"),
+            harana_matrix_common::device_id!("ALICE"),
         );
         let mut bob = client_crypto::olm::Account::with_device_id(
-            common_ruma::user_id!("@bob:localhost"),
-            common_ruma::device_id!("BOB"),
+            harana_matrix_common::user_id!("@bob:localhost"),
+            harana_matrix_common::device_id!("BOB"),
         );
         let (session, _) = alice.create_session_for_test_helper(&mut bob).await;
 
@@ -2228,7 +2228,7 @@ mod unit_tests {
     };
     use client_store_encryption::EncryptedValueBase64;
     use common_test::async_test;
-    use common_ruma::{device_id, room_id, user_id};
+    use harana_matrix_common::{device_id, room_id, user_id};
 
     use super::InboundGroupSessionIndexedDbObject;
     use crate::serializer::{MaybeEncrypted, SafeEncodeSerializer};
@@ -2325,7 +2325,7 @@ mod wasm_unit_tests {
         types::{DeviceKeys, Signatures},
     };
     use common_test::async_test;
-    use common_ruma::{owned_device_id, owned_user_id};
+    use harana_matrix_common::{owned_device_id, owned_user_id};
     use wasm_bindgen::JsValue;
 
     use crate::crypto_store::unit_tests::sender_data_test_session;
@@ -2418,7 +2418,7 @@ mod encrypted_tests {
         vodozemac::base64_encode,
     };
     use common_test::async_test;
-    use common_ruma::{device_id, user_id};
+    use harana_matrix_common::{device_id, user_id};
 
     use super::IndexeddbCryptoStore;
 

@@ -35,8 +35,8 @@ use client_common::{
     timer,
 };
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::events::{AnyStateEventContent, StateEventContent};
-use common_ruma::{
+use harana_matrix_common::events::{AnyStateEventContent, StateEventContent};
+use harana_matrix_common::{
     DeviceId, DeviceKeyAlgorithm, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm, OwnedDeviceId,
     OwnedDeviceKeyId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt, UserId,
     api::client::{
@@ -64,7 +64,7 @@ use tracing::{
     field::{debug, display},
     info, instrument, trace, warn,
 };
-use common_olm::{Curve25519PublicKey, Ed25519Signature, megolm::DecryptionError};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519Signature, megolm::DecryptionError};
 
 #[cfg(feature = "experimental-push-secrets")]
 use crate::error::SecretPushError;
@@ -144,7 +144,7 @@ pub struct OlmMachineBuilder {
 
     /// Optional override for the vodozemac `Account` that will be used for this
     /// OlmMachine.
-    custom_account: Option<common_olm::olm::Account>,
+    custom_account: Option<harana_matrix_common::olm::olm::Account>,
 
     /// Optional X509 verifier to be used for verifying people's identities.
     #[cfg(feature = "experimental-x509-identity-verification")]
@@ -183,7 +183,7 @@ impl OlmMachineBuilder {
         self
     }
 
-    /// Set a custom [`common_olm::olm::Account`] to be used for the identity and
+    /// Set a custom [`harana_matrix_common::olm::olm::Account`] to be used for the identity and
     /// one-time keys of this [`OlmMachine`]. If this is not set before
     /// [`OlmMachineBuilder::build`] is called, a new default one or one
     /// from the store will be used.
@@ -192,7 +192,7 @@ impl OlmMachineBuilder {
     /// [`UserId`]/[`DeviceId`] combination, an error will be raised. This is
     /// useful if one wishes to create identity keys before knowing the
     /// user/device IDs, e.g., to use the identity key as the device ID.
-    pub fn with_custom_account(mut self, custom_account: Option<common_olm::olm::Account>) -> Self {
+    pub fn with_custom_account(mut self, custom_account: Option<harana_matrix_common::olm::olm::Account>) -> Self {
         self.custom_account = custom_account;
         self
     }
@@ -3043,7 +3043,7 @@ impl OlmMachine {
     ///
     /// ```
     /// # use client_crypto::OlmMachine;
-    /// # use common_ruma::{device_id, owned_user_id};
+    /// # use harana_matrix_common::{device_id, owned_user_id};
     /// # let alice = owned_user_id!("@alice:example.org");
     /// # futures_executor::block_on(async {
     /// # let machine = OlmMachine::new(&alice, device_id!("DEVICEID")).await;
@@ -3101,7 +3101,7 @@ impl OlmMachine {
     ///
     /// ```
     /// # use client_crypto::OlmMachine;
-    /// # use common_ruma::{device_id, owned_user_id};
+    /// # use harana_matrix_common::{device_id, owned_user_id};
     /// # let alice = owned_user_id!("@alice:example.org");
     /// # futures_executor::block_on(async {
     /// # let machine = OlmMachine::new(&alice, device_id!("DEVICEID")).await;

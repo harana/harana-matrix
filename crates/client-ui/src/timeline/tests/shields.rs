@@ -7,7 +7,7 @@ use client_matrix::deserialized_responses::{
 };
 use client_common::deserialized_responses::TimelineEvent;
 use common_test::{ALICE, DEFAULT_TEST_ROOM_ID, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::{
         AnyMessageLikeEventContent,
@@ -172,7 +172,7 @@ async fn test_live_location_no_sent_in_clear_shield() {
     assert_eq!(shield_strict, TimelineEventShieldState::None);
 
     // Send an *encrypted* beacon location update.
-    let ts_enc = common_ruma::MilliSecondsSinceUnixEpoch(common_ruma::uint!(500_000));
+    let ts_enc = harana_matrix_common::MilliSecondsSinceUnixEpoch(harana_matrix_common::uint!(500_000));
     let encrypted_beacon_raw = timeline
         .factory
         .beacon(beacon_id.to_owned(), 48.8566, 2.3522, 20, Some(ts_enc))
@@ -211,7 +211,7 @@ async fn test_live_location_no_sent_in_clear_shield() {
     assert_eq!(shield_strict, TimelineEventShieldState::None);
 
     // Send a beacon location update (plain-text, no encryption info).
-    let ts = common_ruma::MilliSecondsSinceUnixEpoch(common_ruma::uint!(1_000_000));
+    let ts = harana_matrix_common::MilliSecondsSinceUnixEpoch(harana_matrix_common::uint!(1_000_000));
     let beacon_event =
         timeline.factory.beacon(beacon_id.to_owned(), 51.5008, 0.1247, 35, Some(ts)).sender(&ALICE);
     timeline.handle_live_event(beacon_event).await;

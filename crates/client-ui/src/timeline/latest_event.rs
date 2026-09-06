@@ -14,7 +14,7 @@
 
 use client_matrix::{Client, Room, latest_events::LocalLatestEventValue};
 use client_base::latest_event::LatestEventValue as BaseLatestEventValue;
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedUserId};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedUserId};
 use tracing::trace;
 
 use crate::timeline::{
@@ -182,7 +182,7 @@ mod tests {
         test_utils::mocks::MatrixMockServer,
     };
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, event_id,
         events::{
             AnyMessageLikeEventContent, beacon_info::BeaconInfoEventContent,

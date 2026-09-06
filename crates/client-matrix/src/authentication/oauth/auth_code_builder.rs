@@ -17,7 +17,7 @@ use std::borrow::Cow;
 use oauth2::{
     AuthUrl, CsrfToken, PkceCodeChallenge, RedirectUrl, Scope, basic::BasicClient as OAuthClient,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedDeviceId, UserId, api::client::discovery::get_authorization_server_metadata::v1::Prompt,
 };
 use tracing::{info, instrument};

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::events::room::encryption::PossiblyRedactedRoomEncryptionEventContent;
+use harana_matrix_common::events::room::encryption::PossiblyRedactedRoomEncryptionEventContent;
 
 use super::Room;
 
@@ -86,7 +86,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use common_test::{ALICE, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventEncryptionAlgorithm, MilliSecondsSinceUnixEpoch, event_id,
         events::{
             AnyStrippedStateEvent, AnySyncStateEvent, room::encryption::RoomEncryptionEventContent,

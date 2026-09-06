@@ -18,7 +18,7 @@ use std::{
 };
 
 use client_common::timer;
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     events::{
         AnyGlobalAccountDataEvent, GlobalAccountDataEventType, direct::OwnedDirectUserIdentifier,
@@ -181,7 +181,7 @@ fn map_info<F: FnOnce(&mut RoomInfo)>(
 mod tests {
     use assert_matches2::assert_let;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         events::{
             AnyGlobalAccountDataEvent, GlobalAccountDataEventType,
             direct::OwnedDirectUserIdentifier,
@@ -221,11 +221,11 @@ mod tests {
 
         for (user_id, room_ids) in pairs {
             let user_id: OwnedDirectUserIdentifier =
-                <&common_ruma::UserId>::try_from(*user_id).unwrap().into();
+                <&harana_matrix_common::UserId>::try_from(*user_id).unwrap().into();
 
             for room_id in *room_ids {
                 builder =
-                    builder.add_user(user_id.clone(), <&common_ruma::RoomId>::try_from(*room_id).unwrap());
+                    builder.add_user(user_id.clone(), <&harana_matrix_common::RoomId>::try_from(*room_id).unwrap());
             }
         }
 

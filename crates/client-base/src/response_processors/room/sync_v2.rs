@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, OwnedUserId, RoomId, UserId,
     api::client::sync::sync_events::v3::{
         InvitedRoom, JoinedRoom, KnockedRoom, LeftRoom, State as RumaState,

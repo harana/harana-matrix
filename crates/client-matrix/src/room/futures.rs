@@ -27,8 +27,8 @@ use client_base::deserialized_responses::EncryptionInfo;
 use client_common::boxed_into_future;
 use mime::Mime;
 #[cfg(doc)]
-use common_ruma::events::{MessageLikeUnsigned, SyncMessageLikeEvent};
-use common_ruma::{
+use harana_matrix_common::events::{MessageLikeUnsigned, SyncMessageLikeEvent};
+use harana_matrix_common::{
     OwnedTransactionId, TransactionId,
     api::client::message::send_message_event,
     assign,
@@ -36,7 +36,7 @@ use common_ruma::{
     serde::Raw,
 };
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::{
+use harana_matrix_common::{
     api::client::state::send_state_event,
     events::{AnyStateEventContent, StateEventContent},
 };
@@ -433,7 +433,7 @@ impl<'a> IntoFuture for SendRawStateEvent<'a> {
             // What the room state actually becomes, and so what gets stored once the send
             // succeeds, whether or not the event goes out encrypted.
             let plaintext = (
-                common_ruma::events::StateEventType::from(event_type),
+                harana_matrix_common::events::StateEventType::from(event_type),
                 state_key.clone(),
                 content.clone(),
             );
@@ -645,7 +645,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use client_base::crypto::{OlmError, SessionRecipientCollectionError};
-    use common_ruma::{
+    use harana_matrix_common::{
         device_id,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
         serde::Raw,

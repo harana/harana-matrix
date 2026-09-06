@@ -20,7 +20,7 @@ use client_matrix::{
     deserialized_responses::{TimelineEvent, TimelineEventKind},
 };
 use client_base::crypto::types::events::UtdCause;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedDeviceId, OwnedEventId, OwnedMxcUri, OwnedUserId, UserId,
     events::{
         AnyMessageLikeEventContent, AnyStateEventContentChange, Mentions, MessageLikeEventType,
@@ -388,7 +388,7 @@ impl TimelineItemContent {
         full_content: StateEventContentChange<RoomMemberEventContent>,
         sender: OwnedUserId,
     ) -> Self {
-        use common_ruma::events::room::member::MembershipChange as MChange;
+        use harana_matrix_common::events::room::member::MembershipChange as MChange;
         match &full_content {
             StateEventContentChange::Original { content, prev_content } => {
                 let membership_change = content.membership_change(
@@ -1001,7 +1001,7 @@ impl OtherState {
 mod tests {
     use assert_matches2::assert_let;
     use common_test::ALICE;
-    use common_ruma::{
+    use harana_matrix_common::{
         assign,
         events::{
             AnySyncStateEvent, StateEventContentChange, StateEventType,

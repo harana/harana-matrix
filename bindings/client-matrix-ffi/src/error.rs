@@ -26,7 +26,7 @@ use client_matrix::{
 };
 use client_contentscanner::ContentScannerError;
 use client_ui::{encryption_sync_service, notification_client, spaces, sync_service, timeline};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch,
     api::error::{ErrorBody, ErrorKind as RumaApiErrorKind, RetryAfter, StandardErrorBody},
 };
@@ -333,7 +333,7 @@ impl From<SdkQueueWedgeError> for QueueWedgeError {
                     .collect(),
             },
             SdkQueueWedgeError::IdentityViolations { users } => Self::IdentityViolations {
-                users: users.iter().map(common_ruma::OwnedUserId::to_string).collect(),
+                users: users.iter().map(harana_matrix_common::OwnedUserId::to_string).collect(),
             },
             SdkQueueWedgeError::CrossVerificationRequired => Self::CrossVerificationRequired,
             SdkQueueWedgeError::MissingMediaContent => Self::MissingMediaContent,

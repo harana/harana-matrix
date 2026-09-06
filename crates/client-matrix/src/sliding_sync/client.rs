@@ -5,7 +5,7 @@ use client_base::{
     RequestedRequiredStates, ThreadSubscriptionCatchupToken, sync::SyncResponse, timer,
 };
 use client_common::deserialized_responses::ProcessedToDeviceEvent;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId,
     api::{
         FeatureFlag, SupportedVersions,
@@ -378,7 +378,7 @@ mod tests {
         notification_settings::RoomNotificationMode,
     };
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::discovery::get_supported_versions, assign, event_id, room_id, serde::Raw,
         user_id,
     };
@@ -683,7 +683,7 @@ mod tests {
 
     #[async_test]
     async fn test_read_receipt_can_trigger_a_notable_update_reason() {
-        use common_ruma::api::client::sync::sync_events::v5 as http;
+        use harana_matrix_common::api::client::sync::sync_events::v5 as http;
 
         // Given a logged-in client.
         let client = MockClientBuilder::new(None).build().await;

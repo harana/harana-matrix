@@ -3,7 +3,7 @@
 use std::fmt::{self, Debug, Display, Formatter};
 
 use as_variant::as_variant;
-use common_ruma::api::error::{FromHttpResponseError, FromHttpResponseErrorExt as _, IntoHttpError};
+use harana_matrix_common::api::error::{FromHttpResponseError, FromHttpResponseErrorExt as _, IntoHttpError};
 
 /// An error that can occur during client operations.
 #[derive(Debug)]
@@ -25,10 +25,10 @@ pub enum Error<E, F> {
     FromHttpResponse(FromHttpResponseError<F>),
 }
 
-impl<E> Error<E, common_ruma::api::error::Error> {
+impl<E> Error<E, harana_matrix_common::api::error::Error> {
     /// If `self` is a server error in the `errcode` + `error` format expected
     /// for Matrix API endpoints, returns the error kind (`errcode`).
-    pub fn error_kind(&self) -> Option<&common_ruma::api::error::ErrorKind> {
+    pub fn error_kind(&self) -> Option<&harana_matrix_common::api::error::ErrorKind> {
         as_variant!(self, Self::FromHttpResponse)?.error_kind()
     }
 }

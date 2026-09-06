@@ -26,7 +26,7 @@ use eyeball_im::{
     ObservableVectorTransactionEntry, VectorSubscriber,
 };
 use imbl::Vector;
-use common_ruma::EventId;
+use harana_matrix_common::EventId;
 
 use super::{TimelineItem, metadata::EventMeta};
 
@@ -714,7 +714,7 @@ mod observable_items_tests {
 
     use assert_matches::assert_matches;
     use eyeball_im::VectorDiff;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch,
         events::room::message::{MessageType, TextMessageEventContent},
         owned_user_id, uint,
@@ -2062,7 +2062,7 @@ impl AllRemoteEvents {
 #[cfg(test)]
 mod all_remote_events_tests {
     use assert_matches::assert_matches;
-    use common_ruma::event_id;
+    use harana_matrix_common::event_id;
 
     use super::{AllRemoteEvents, EventMeta};
 

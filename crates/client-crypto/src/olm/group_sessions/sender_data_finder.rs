@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::UserId;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::UserId;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use super::{InboundGroupSession, SenderData};
 use crate::{
@@ -330,9 +330,9 @@ mod tests {
 
     use assert_matches2::assert_let;
     use common_test::async_test;
-    use common_ruma::{DeviceId, OwnedUserId, RoomId, UserId, device_id, room_id, user_id};
+    use harana_matrix_common::{DeviceId, OwnedUserId, RoomId, UserId, device_id, room_id, user_id};
     use tokio::sync::Mutex;
-    use common_olm::{Curve25519PublicKey, Ed25519PublicKey, megolm::SessionKey};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey, megolm::SessionKey};
 
     use super::SenderDataFinder;
     use crate::{

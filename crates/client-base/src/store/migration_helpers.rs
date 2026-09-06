@@ -17,7 +17,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use client_common::deserialized_responses::TimelineEvent;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, OwnedUserId, RoomId,
     events::{
         direct::OwnedDirectUserIdentifier,

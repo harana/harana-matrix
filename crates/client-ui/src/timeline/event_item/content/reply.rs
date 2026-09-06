@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use imbl::Vector;
 use client_matrix::deserialized_responses::TimelineEvent;
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
 use tracing::{debug, instrument, warn};
 
 use super::TimelineItemContent;

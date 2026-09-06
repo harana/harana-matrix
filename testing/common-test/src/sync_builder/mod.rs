@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use http::Response;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, OwnedUserId, UserId,
     api::{
         IncomingResponseExt as _,

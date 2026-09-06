@@ -21,7 +21,7 @@ use client_matrix::{
     send_queue::SendHandle,
 };
 use client_base::crypto::types::events::UtdCause;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId,
     TransactionId,
     events::{

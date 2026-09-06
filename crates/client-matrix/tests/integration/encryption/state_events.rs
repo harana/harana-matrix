@@ -1,6 +1,6 @@
 use client_matrix::{encryption::EncryptionSettings, test_utils::mocks::MatrixMockServer};
 use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     RoomVersionId, device_id, event_id,
     events::{StateEventType, room::topic::RoomTopicEventContent},
     room_id, user_id,

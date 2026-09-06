@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::EventId;
+use harana_matrix_common::EventId;
 use tantivy::{IndexWriter, TantivyDocument, TantivyError, Term};
 
 use crate::{

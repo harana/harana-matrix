@@ -15,7 +15,7 @@
 use std::{collections::HashMap, ops::Deref};
 
 use client_common::BoxFuture;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, UserId,
     events::{
         SyncStateEvent,
@@ -329,7 +329,7 @@ mod tests {
 
     use client_common::BoxFuture;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedUserId, UserId, device_id, events::room::member::MembershipState, owned_user_id,
         user_id,
     };
@@ -1095,7 +1095,7 @@ mod tests {
     async fn other_user_identity(user_id: &UserId) -> UserIdentity {
         use std::sync::Arc;
 
-        use common_ruma::owned_device_id;
+        use harana_matrix_common::owned_device_id;
         use tokio::sync::Mutex;
 
         use crate::{
@@ -1156,7 +1156,7 @@ mod tests {
     async fn own_user_identity(user_id: &UserId) -> UserIdentity {
         use std::sync::Arc;
 
-        use common_ruma::owned_device_id;
+        use harana_matrix_common::owned_device_id;
         use tokio::sync::Mutex;
 
         use crate::{

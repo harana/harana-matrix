@@ -18,7 +18,7 @@ use eyeball_im::VectorDiff;
 use imbl::vector;
 use client_matrix::deserialized_responses::TimelineEvent;
 use common_test::{ALICE, BOB, async_test, sync_timeline_event};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::{
         StateEventContentChange, reaction::RedactedReactionEventContent,

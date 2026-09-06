@@ -9,7 +9,7 @@ use client_crypto::{
     },
     store::types::DehydratedDeviceKey as InnerDehydratedDeviceKey,
 };
-use common_ruma::{OwnedDeviceId, api::client::dehydrated_device, events::AnyToDeviceEvent, serde::Raw};
+use harana_matrix_common::{OwnedDeviceId, api::client::dehydrated_device, events::AnyToDeviceEvent, serde::Raw};
 use serde_json::json;
 
 use crate::{CryptoStoreError, DehydratedDeviceKey};

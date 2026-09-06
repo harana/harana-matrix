@@ -16,7 +16,7 @@
 
 use std::fmt;
 
-use common_ruma::serde::Raw;
+use harana_matrix_common::serde::Raw;
 
 pub trait DebugStructExt<'a, 'b> {
     fn maybe_field<T: fmt::Debug>(

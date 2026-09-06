@@ -33,11 +33,11 @@ use common_test::{
     },
 };
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::events::{
+use harana_matrix_common::events::{
     StateEvent,
     room::topic::{OriginalRoomTopicEvent, RoomTopicEventContent},
 };
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, DeviceKeyAlgorithm, DeviceKeyId, MilliSecondsSinceUnixEpoch, OneTimeKeyAlgorithm,
     RoomId, TransactionId, UserId,
     api::client::{
@@ -58,7 +58,7 @@ use common_ruma::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use common_olm::{
+use harana_matrix_common::olm::{
     Ed25519PublicKey, Ed25519SecretKey,
     megolm::{GroupSession, SessionConfig},
 };
@@ -585,13 +585,13 @@ async fn build_keys_query_for_device(device: &Device, machine: &OlmMachine) -> K
 /// This function will fail if the serialization format of vodozemac's
 /// `AccountPickle` struct changes.
 async fn steal_account_private_key(machine: &OlmMachine) -> Box<Ed25519SecretKey> {
-    /// Fake version of `common_olm::types::ed25519::SecretKeys`
+    /// Fake version of `harana_matrix_common::olm::types::ed25519::SecretKeys`
     #[derive(Deserialize)]
     enum SecretKeysHack {
         Normal(Box<Ed25519SecretKey>),
     }
 
-    /// Fake version of `common_olm::olm::account::AccountPickle`
+    /// Fake version of `harana_matrix_common::olm::olm::account::AccountPickle`
     #[derive(Deserialize)]
     struct AccountPickleHack {
         /// In the real `AccountPickle`, `signing_key` is an
@@ -1402,7 +1402,7 @@ async fn test_a_replayed_megolm_ciphertext_is_rejected() {
         Err(MegolmError::ReplayedMessage { original_event_id, message_index, .. }) =
             bob.decrypt_room_event(&replay, room_id, &decryption_settings).await
     );
-    assert_eq!(original_event_id, common_ruma::event_id!("$original:example.org"));
+    assert_eq!(original_event_id, harana_matrix_common::event_id!("$original:example.org"));
     assert_eq!(message_index, 0);
 
     // `try_decrypt_room_event` reports it as a UTD rather than an error.
@@ -1413,7 +1413,7 @@ async fn test_a_replayed_megolm_ciphertext_is_rejected() {
     assert_eq!(
         utd_info.reason,
         UnableToDecryptReason::ReplayedMessageIndex {
-            original_event_id: common_ruma::event_id!("$original:example.org").to_owned()
+            original_event_id: harana_matrix_common::event_id!("$original:example.org").to_owned()
         }
     );
 }
@@ -1473,7 +1473,7 @@ async fn megolm_encryption_setup_helper(room_id: &RoomId) -> (OlmMachine, OlmMac
 #[cfg(feature = "experimental-encrypted-state-events")]
 #[async_test]
 async fn test_megolm_state_encryption() {
-    use common_ruma::events::{AnyStateEvent, EmptyStateKey};
+    use harana_matrix_common::events::{AnyStateEvent, EmptyStateKey};
 
     let room_id = room_id!("!test:example.org");
     let (alice, bob) = megolm_encryption_setup_helper(room_id).await;
@@ -1521,7 +1521,7 @@ async fn test_megolm_state_encryption() {
 #[cfg(feature = "experimental-encrypted-state-events")]
 #[async_test]
 async fn test_megolm_state_encryption_bad_type() {
-    use common_ruma::events::EmptyStateKey;
+    use harana_matrix_common::events::EmptyStateKey;
 
     let room_id = room_id!("!test:example.org");
     let (alice, bob) = megolm_encryption_setup_helper(room_id).await;
@@ -1563,7 +1563,7 @@ async fn test_megolm_state_encryption_bad_type() {
 #[cfg(feature = "experimental-encrypted-state-events")]
 #[async_test]
 async fn test_megolm_state_encryption_bad_state_key() {
-    use common_ruma::events::EmptyStateKey;
+    use harana_matrix_common::events::EmptyStateKey;
 
     let room_id = room_id!("!test:example.org");
     let (alice, bob) = megolm_encryption_setup_helper(room_id).await;
@@ -1646,7 +1646,7 @@ async fn test_megolm_state_encryption_outer_state_key_no_inner() {
 #[cfg(feature = "experimental-encrypted-state-events")]
 #[async_test]
 async fn test_megolm_state_encryption_inner_state_key_no_outer() {
-    use common_ruma::events::EmptyStateKey;
+    use harana_matrix_common::events::EmptyStateKey;
 
     let room_id = room_id!("!test:example.org");
     let (alice, bob) = megolm_encryption_setup_helper(room_id).await;
@@ -2140,7 +2140,7 @@ async fn test_query_ratcheted_key() {
         bob.decrypt_room_event(&room_event, room_id, &decryption_settings).await.unwrap_err();
 
     if let MegolmError::Decryption(vodo_error) = decrypt_error {
-        if let common_olm::megolm::DecryptionError::UnknownMessageIndex(_, _) = vodo_error {
+        if let harana_matrix_common::olm::megolm::DecryptionError::UnknownMessageIndex(_, _) = vodo_error {
             // check that key has been requested
             let outgoing_to_devices =
                 bob.inner.key_request_machine.outgoing_to_device_requests().await.unwrap();
@@ -2495,7 +2495,7 @@ async fn test_fix_incorrect_usage_of_backup_key_causing_decryption_errors() {
 #[async_test]
 async fn test_olm_machine_with_custom_account() {
     let store = MemoryStore::new();
-    let account = common_olm::olm::Account::new();
+    let account = harana_matrix_common::olm::olm::Account::new();
     let curve_key = account.identity_keys().curve25519;
 
     let alice = OlmMachineBuilder::new(user_id(), alice_device_id())
@@ -2566,9 +2566,9 @@ async fn test_retry_decryption_of_bundled_events() {
     alice.discard_room_key(room_id).await.unwrap();
     let edit_session = give_bob_the_room_key(&alice, &bob).await;
 
-    let original_event_id = common_ruma::event_id!("$original:example.org");
+    let original_event_id = harana_matrix_common::event_id!("$original:example.org");
     let edit_content = RoomMessageEventContent::text_plain("edited").make_replacement(
-        common_ruma::events::room::message::ReplacementMetadata::new(original_event_id.to_owned(), None),
+        harana_matrix_common::events::room::message::ReplacementMetadata::new(original_event_id.to_owned(), None),
     );
     let edit = alice.encrypt_room_event(room_id, edit_content).await.unwrap();
 
@@ -2953,7 +2953,7 @@ async fn test_unsigned_decryption() {
 #[async_test]
 async fn test_mark_all_tracked_users_as_dirty() {
     let store = MemoryStore::new();
-    let account = common_olm::olm::Account::new();
+    let account = harana_matrix_common::olm::olm::Account::new();
 
     // Put some tracked users
     let damir = user_id!("@damir:localhost");
@@ -2991,7 +2991,7 @@ async fn test_mark_all_tracked_users_as_dirty() {
 #[async_test]
 async fn test_verified_latch_migration() {
     let store = MemoryStore::new();
-    let account = common_olm::olm::Account::new();
+    let account = harana_matrix_common::olm::olm::Account::new();
 
     // put some tracked users
     let bob_id = user_id!("@bob:localhost");

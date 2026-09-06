@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use client_common::timer;
 use client_crypto::OlmMachine;
-use common_ruma::{OwnedUserId, RoomId};
+use harana_matrix_common::{OwnedUserId, RoomId};
 
 use crate::{EncryptionState, Result, RoomMemberships, StateStore, store::BaseStateStore};
 

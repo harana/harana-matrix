@@ -18,7 +18,7 @@ use std::{future::ready, sync::Mutex};
 
 use eyeball::{SharedObservable, Subscriber};
 use client_matrix::{SlidingSync, SlidingSyncMode, sliding_sync::Range};
-use common_ruma::time::{Duration, Instant};
+use harana_matrix_common::time::{Duration, Instant};
 
 use super::Error;
 

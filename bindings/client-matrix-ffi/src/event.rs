@@ -15,7 +15,7 @@
 use anyhow::{Context, bail};
 use client_matrix::IdParseError;
 use client_ui::timeline::TimelineEventItemId;
-use common_ruma::{
+use harana_matrix_common::{
     EventId,
     events::{
         AnySyncMessageLikeEvent, AnySyncStateEvent, AnySyncTimelineEvent, AnyTimelineEvent,
@@ -509,7 +509,7 @@ where
 fn get_message_like_event_original_content<C>(event: SyncMessageLikeEvent<C>) -> anyhow::Result<C>
 where
     C: RumaMessageLikeEventContent + RedactContent + Clone,
-    <C as common_ruma::events::RedactContent>::Redacted: common_ruma::events::RedactedMessageLikeEventContent,
+    <C as harana_matrix_common::events::RedactContent>::Redacted: harana_matrix_common::events::RedactedMessageLikeEventContent,
 {
     let original_content =
         event.as_original().context("Failed to get original content")?.content.clone();
@@ -534,7 +534,7 @@ pub enum RoomMessageEventMessageType {
 }
 
 impl From<RumaMessageType> for RoomMessageEventMessageType {
-    fn from(val: common_ruma::events::room::message::MessageType) -> Self {
+    fn from(val: harana_matrix_common::events::room::message::MessageType) -> Self {
         match val {
             RumaMessageType::Audio { .. } => Self::Audio,
             RumaMessageType::Emote { .. } => Self::Emote,

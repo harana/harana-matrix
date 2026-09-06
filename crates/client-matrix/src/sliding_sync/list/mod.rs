@@ -10,7 +10,7 @@ use std::{
 
 use eyeball::{SharedObservable, Subscriber};
 use futures_core::Stream;
-use common_ruma::{api::client::sync::sync_events::v5 as http, assign, events::StateEventType};
+use harana_matrix_common::{api::client::sync::sync_events::v5 as http, assign, events::StateEventType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::Sender;
 use tracing::{instrument, warn};
@@ -509,7 +509,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use common_test::async_test;
-    use common_ruma::uint;
+    use harana_matrix_common::uint;
     use serde_json::json;
     use tokio::sync::broadcast::{channel, error::TryRecvError};
 

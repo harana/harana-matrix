@@ -16,14 +16,17 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [features]
-js = ["common-olm/wasm_js"]
+js = ["harana-matrix-common/js"]
 
 [dependencies]
 byteorder.workspace = true
 qrcode = { version = "0.14.1", default-features = false }
-common-ruma.workspace = true
+harana-matrix-common = { workspace = true, features = [
+    "olm",
+    "insecure-pk-encryption",
+    "experimental-session-config",
+] }
 thiserror.workspace = true
-common-olm.workspace = true
 
 [dev-dependencies]
 image = { version = "0.25.10", default-features = false }

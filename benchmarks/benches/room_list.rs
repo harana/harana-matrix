@@ -7,7 +7,7 @@ use client_ui::{
     RoomListService, eyeball_im::VectorDiff, room_list_service::filters::new_filter_non_left,
 };
 use rand::{distr::Uniform, prelude::Distribution};
-use common_ruma::{OwnedRoomId, RoomId, owned_user_id};
+use harana_matrix_common::{OwnedRoomId, RoomId, owned_user_id};
 use tokio::runtime::Builder;
 
 /// Benchmark the time it takes to create a room list.

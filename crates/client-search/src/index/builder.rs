@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf, sync::Arc};
 
-use common_ruma::{OwnedRoomId, RoomId};
+use harana_matrix_common::{OwnedRoomId, RoomId};
 use tantivy::{
     Index,
     directory::{MmapDirectory, error::OpenDirectoryError},

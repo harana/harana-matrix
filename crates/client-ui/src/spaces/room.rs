@@ -15,7 +15,7 @@
 use std::cmp::Ordering;
 
 use client_matrix::{Room, RoomHero, RoomHeroWithProfile, RoomState};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedServerName,
     OwnedSpaceChildOrder, RoomId,
     events::{
@@ -225,7 +225,7 @@ mod tests {
 
     use common_test::async_test;
     use proptest::prelude::*;
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId, SpaceChildOrder, UInt, room_id, uint,
     };
 

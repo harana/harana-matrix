@@ -10,7 +10,7 @@ use client_matrix::{
 };
 use client_base::event_cache::store::{DynEventCacheStore, IntoEventCacheStore, MemoryStore};
 use common_test::{ALICE, base64_sha256_hash, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, RoomId,
     events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
     room_id,

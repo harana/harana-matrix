@@ -29,7 +29,7 @@ use bytesize::ByteSize;
 use eyeball::SharedObservable;
 use http::Method;
 use client_base::SendOutsideWasm;
-use common_ruma::api::{
+use harana_matrix_common::api::{
     OutgoingRequest, OutgoingRequestExt, SupportedVersions,
     auth_scheme::{self, AuthScheme, SendAccessToken},
     error::{FromHttpResponseError, IntoHttpError},

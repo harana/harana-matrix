@@ -21,7 +21,7 @@ use client_ui::timeline::{
         TimelineEventFilter as InnerTimelineEventFilter,
     },
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId,
     events::{AnySyncTimelineEvent, MessageLikeEventType, StateEventType, TimelineEventType},
 };

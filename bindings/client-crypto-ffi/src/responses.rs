@@ -11,7 +11,7 @@ use client_crypto::{
         UploadSigningKeysRequest as RustUploadSigningKeysRequest,
     },
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedTransactionId, UserId,
     api::client::{
         backup::add_backup_keys::v3::Response as KeysBackupResponse,

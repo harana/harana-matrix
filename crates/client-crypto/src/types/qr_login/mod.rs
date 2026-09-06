@@ -27,7 +27,7 @@ mod msc_4388;
 
 pub use msc_4108::Msc4108IntentData;
 use url::Url;
-use common_olm::{Curve25519PublicKey, base64_decode, base64_encode};
+use harana_matrix_common::olm::{Curve25519PublicKey, base64_decode, base64_encode};
 
 /// Error type for the decoding of the [`QrCodeData`].
 #[derive(Debug, Error)]
@@ -66,7 +66,7 @@ pub enum LoginQrCodeDecodeError {
     /// The base64 encoded variant of the QR code data is not a valid base64
     /// string.
     #[error("The QR code data could not have been decoded from a base64 string: {0:?}")]
-    Base64(#[from] common_olm::Base64DecodeError),
+    Base64(#[from] harana_matrix_common::olm::Base64DecodeError),
     /// The QR code data doesn't contain the expected `MATRIX` prefix.
     #[error("The QR code data has an unexpected prefix, expected: {expected:?}, got {got:?}")]
     InvalidPrefix {

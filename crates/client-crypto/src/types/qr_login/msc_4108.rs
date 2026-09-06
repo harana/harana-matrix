@@ -19,7 +19,7 @@ use std::{
 
 use byteorder::{BigEndian, ReadBytesExt};
 use url::Url;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use super::LoginQrCodeDecodeError;
 

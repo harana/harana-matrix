@@ -39,7 +39,7 @@ use client_base::{
     },
     timer,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, RoomId, events::relation::RelationType,
 };
 use rusqlite::{
@@ -2118,7 +2118,7 @@ mod tests {
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Update},
     };
     use common_test::{DEFAULT_TEST_ROOM_ID, async_test};
-    use common_ruma::{OwnedEventId, event_id};
+    use harana_matrix_common::{OwnedEventId, event_id};
     use tempfile::{TempDir, tempdir};
 
     use super::{DATABASE_NAME, SqliteEventCacheStore, keys};
@@ -2337,7 +2337,7 @@ mod encrypted_tests {
         event_cache_store_integration_tests, event_cache_store_integration_tests_time,
     };
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         event_id,
         events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
         room_id, user_id,

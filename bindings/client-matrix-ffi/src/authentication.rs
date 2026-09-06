@@ -26,7 +26,7 @@ use client_matrix::{
         registration::{ApplicationType, ClientMetadata, Localized, OAuthGrantType},
     },
 };
-use common_ruma::serde::Raw;
+use harana_matrix_common::serde::Raw;
 use url::Url;
 
 use crate::client::{Client, OAuthPrompt, SlidingSyncVersion};

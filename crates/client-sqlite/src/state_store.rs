@@ -19,7 +19,7 @@ use client_base::{
         StoredThreadSubscription, ThreadSubscriptionStatus, migration_helpers::RoomInfoV1,
     },
 };
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
     OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UInt, UserId,
     canonical_json::{RedactedBecause, redact},
@@ -2598,7 +2598,7 @@ fn state_event_keys(raw_event: &Raw<AnySyncStateEvent>) -> Option<StateEventKeys
 #[cfg(test)]
 mod unit_tests {
     use assert_matches::assert_matches;
-    use common_ruma::serde::Raw;
+    use harana_matrix_common::serde::Raw;
     use serde_json::json;
 
     use super::state_event_keys;
@@ -2699,7 +2699,7 @@ mod tests {
         use client_base::{
             RoomInfo, RoomMemberships, RoomState, StateChanges, store::StateStoreExt,
         };
-        use common_ruma::{
+        use harana_matrix_common::{
             events::{
                 StateEventType,
                 room::member::{MembershipState, RoomMemberEventContent},
@@ -2714,7 +2714,7 @@ mod tests {
         let user_id = user_id!("@u:localhost");
 
         // Invited: all we know about the room is its stripped state.
-        let member: Raw<common_ruma::events::room::member::StrippedRoomMemberEvent> =
+        let member: Raw<harana_matrix_common::events::room::member::StrippedRoomMemberEvent> =
             Raw::new(&serde_json::json!({
                 "type": "m.room.member",
                 "content": RoomMemberEventContent::new(MembershipState::Invite),
@@ -2862,7 +2862,7 @@ mod migration_tests {
         sync::UnreadNotificationsCount,
     };
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, MilliSecondsSinceUnixEpoch, OwnedTransactionId, RoomId, TransactionId, UserId,
         events::{
             StateEventType,

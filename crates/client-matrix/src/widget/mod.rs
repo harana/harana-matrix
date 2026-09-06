@@ -20,7 +20,7 @@ use std::{fmt, time::Duration};
 use async_channel::{Receiver, Sender};
 use futures_util::StreamExt;
 use client_common::executor::spawn;
-use common_ruma::api::client::delayed_events::DelayParameters;
+use harana_matrix_common::api::client::delayed_events::DelayParameters;
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio_stream::wrappers::UnboundedReceiverStream;

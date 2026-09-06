@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use common_ruma::{OwnedTransactionId, TransactionId};
+use harana_matrix_common::{OwnedTransactionId, TransactionId};
 
 mod enums;
 mod keys_backup;

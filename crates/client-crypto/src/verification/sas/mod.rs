@@ -23,7 +23,7 @@ use eyeball::{ObservableWriteGuard, SharedObservable};
 use futures_core::Stream;
 use futures_util::StreamExt;
 use inner_sas::InnerSas;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedEventId, OwnedRoomId, OwnedTransactionId, RoomId, TransactionId, UserId,
     api::client::keys::upload_signatures::v3::Request as SignatureUploadRequest,
     events::{
@@ -308,7 +308,7 @@ impl Sas {
 
     #[cfg(test)]
     #[allow(dead_code)]
-    pub(crate) fn set_creation_time(&self, time: common_ruma::time::Instant) {
+    pub(crate) fn set_creation_time(&self, time: harana_matrix_common::time::Instant) {
         self.inner.update(|inner| {
             inner.set_creation_time(time);
         });
@@ -870,7 +870,7 @@ mod tests {
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, TransactionId, UserId, device_id,
         events::key::verification::{ShortAuthenticationString, accept::AcceptMethod},
         user_id,

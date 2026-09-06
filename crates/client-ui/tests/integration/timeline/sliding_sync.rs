@@ -27,7 +27,7 @@ use common_test::async_test;
 use client_ui::timeline::{
     TimelineBuilder, TimelineItem, TimelineItemKind, TimelineReadReceiptTracking,
 };
-use common_ruma::{RoomId, room_id, user_id};
+use harana_matrix_common::{RoomId, room_id, user_id};
 use serde_json::json;
 use wiremock::{Match, Mock, Request, ResponseTemplate, http::Method};
 
@@ -654,7 +654,7 @@ async fn test_timeline_read_receipts_are_updated_live() -> Result<()> {
 #[async_test]
 async fn test_timeline_refreshes_sender_profile_on_global_profile_update() -> Result<()> {
     use client_ui::timeline::TimelineDetails;
-    use common_ruma::profile::StatusProfileField;
+    use harana_matrix_common::profile::StatusProfileField;
 
     let (client, server, sliding_sync) = new_sliding_sync(vec![
         SlidingSyncList::builder("foo")

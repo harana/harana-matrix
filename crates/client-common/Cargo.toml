@@ -41,7 +41,7 @@ futures-channel.workspace = true
 futures-core.workspace = true
 futures-util.workspace = true
 imbl.workspace = true
-common-ruma.workspace = true
+harana-matrix-common.workspace = true
 sanitize-filename.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -62,11 +62,11 @@ wasm-bindgen-futures = { version = "0.4.76", optional = true }
 web-sys = { workspace = true, features = ["console"] }
 
 [dev-dependencies]
+harana-matrix-common = { workspace = true, features = ["testing"] }
 assert_matches.workspace = true
 assert_matches2.workspace = true
 insta.workspace = true
 harana-matrix-macros.workspace = true
-common-test-utils.workspace = true
 proptest.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
 wasm-bindgen-test.workspace = true

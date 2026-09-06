@@ -39,7 +39,7 @@ use client_search::{
     backend::{IndexableEvent, RoomIndexOperation, RoomSearchIndex, SearchIndexProvider},
     error::IndexError,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, RoomId,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent,
@@ -301,7 +301,7 @@ async fn get_most_recent_edit(
     cache: &RoomEventCache,
     original: &EventId,
 ) -> Option<OriginalSyncRoomMessageEvent> {
-    use common_ruma::events::{AnySyncTimelineEvent, relation::RelationType};
+    use harana_matrix_common::events::{AnySyncTimelineEvent, relation::RelationType};
 
     let Ok(Some((original_ev, related))) =
         cache.find_event_with_relations(original, Some(vec![RelationType::Replacement])).await
@@ -542,7 +542,7 @@ async fn parse_timeline_event(
     event: TimelineEvent,
     redaction_rules: &RedactionRules,
 ) -> Option<RoomIndexOperation> {
-    use common_ruma::events::AnySyncTimelineEvent;
+    use harana_matrix_common::events::AnySyncTimelineEvent;
 
     if event.kind.is_utd() {
         return None;
@@ -585,7 +585,7 @@ mod tests {
         error::IndexError,
     };
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedEventId, RoomId, event_id,
         events::room::message::RoomMessageEventContentWithoutRelation, room_id, user_id,
     };
@@ -734,7 +734,7 @@ mod tests {
     #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_sync_media_message_is_indexed() {
-        use common_ruma::owned_mxc_uri;
+        use harana_matrix_common::owned_mxc_uri;
 
         let mock_server = MatrixMockServer::new().await;
         let client = mock_server.client_builder().build().await;
@@ -783,7 +783,7 @@ mod tests {
     #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_sync_sticker_and_poll_are_indexed() {
-        use common_ruma::{events::room::ImageInfo, owned_mxc_uri};
+        use harana_matrix_common::{events::room::ImageInfo, owned_mxc_uri};
 
         let mock_server = MatrixMockServer::new().await;
         let client = mock_server.client_builder().build().await;
@@ -833,7 +833,7 @@ mod tests {
     #[cfg(feature = "experimental-search-core")]
     #[async_test]
     async fn test_sync_stable_poll_is_indexed() {
-        use common_ruma::events::{
+        use harana_matrix_common::events::{
             message::TextContentBlock,
             poll::start::{PollAnswer, PollAnswers, PollContentBlock, PollStartEventContent},
         };

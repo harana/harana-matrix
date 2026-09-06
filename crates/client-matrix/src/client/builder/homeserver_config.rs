@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedServerName, ServerName,
     api::client::discovery::{discover_homeserver, get_supported_versions},
 };
@@ -242,7 +242,7 @@ pub(super) async fn get_supported_versions(
 mod tests {
     use assert_matches::assert_matches;
     use common_test::async_test;
-    use common_ruma::OwnedServerName;
+    use harana_matrix_common::OwnedServerName;
     use serde_json::json;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,

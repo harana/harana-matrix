@@ -21,7 +21,7 @@ use assert_matches::assert_matches;
 use client_matrix::{assert_next_matches_with_timeout, test_utils::mocks::MatrixMockServer};
 use common_test::async_test;
 use client_ui::sync_service::{State, SyncService};
-use common_ruma::presence::PresenceState;
+use harana_matrix_common::presence::PresenceState;
 use serde_json::json;
 use stream_assert::{assert_next_matches, assert_pending};
 use wiremock::{Match as _, Mock, MockGuard, MockServer, Request, ResponseTemplate};

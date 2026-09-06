@@ -1,7 +1,7 @@
 use assert_matches2::assert_let;
 use fakes::poll_a2;
 use common_test::{ALICE, BOB, async_test};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, UserId, event_id,
     events::poll::unstable_start::{
         NewUnstablePollStartEventContent, ReplacementUnstablePollStartEventContent,
@@ -301,7 +301,7 @@ fn assert_poll_start_eq(a: &UnstablePollStartContentBlock, b: &UnstablePollStart
 
 mod fakes {
     use common_test::event_factory::{EventBuilder, EventFactory};
-    use common_ruma::events::poll::{
+    use harana_matrix_common::events::poll::{
         start::PollKind,
         unstable_start::{
             UnstablePollAnswer, UnstablePollAnswers, UnstablePollStartContentBlock,

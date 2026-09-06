@@ -185,7 +185,7 @@ impl BackupRecoveryKey {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::api::client::backup::KeyBackupData;
+    use harana_matrix_common::api::client::backup::KeyBackupData;
     use serde_json::json;
 
     use super::BackupRecoveryKey;

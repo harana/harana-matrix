@@ -17,9 +17,9 @@ use std::{
     ops::DerefMut,
 };
 
-use common_ruma::api::client::backup::EncryptedSessionData;
+use harana_matrix_common::api::client::backup::EncryptedSessionData;
 use thiserror::Error;
-use common_olm::{
+use harana_matrix_common::olm::{
     Curve25519PublicKey, Curve25519SecretKey,
     pk_encryption::{Message, PkDecryption},
 };
@@ -49,13 +49,13 @@ pub enum DecodeError {
     Base58(#[from] bs58::decode::Error),
     /// The  recovery key isn't valid base64.
     #[error(transparent)]
-    Base64(#[from] common_olm::Base64DecodeError),
+    Base64(#[from] harana_matrix_common::olm::Base64DecodeError),
     /// The recovery key is too short, we couldn't read enough data.
     #[error(transparent)]
     Io(#[from] std::io::Error),
     /// The recovery key, a Curve25519 public key, couldn't be decoded.
     #[error(transparent)]
-    PublicKey(#[from] common_olm::KeyError),
+    PublicKey(#[from] harana_matrix_common::olm::KeyError),
 }
 
 /// Error type describing the failure cases the Pk decryption step can have.
@@ -63,10 +63,10 @@ pub enum DecodeError {
 pub enum DecryptionError {
     /// The message failed to decrypt.
     #[error("The MAC of the ciphertext didn't pass validation {0}")]
-    Encryption(#[from] common_olm::pk_encryption::Error),
+    Encryption(#[from] harana_matrix_common::olm::pk_encryption::Error),
     /// The message failed to be decoded.
     #[error("The message could not been decoded: {0}")]
-    Decoding(#[from] common_olm::pk_encryption::MessageDecodeError),
+    Decoding(#[from] harana_matrix_common::olm::pk_encryption::MessageDecodeError),
     /// The decrypted message should contain a backed up room key, but the
     /// plaintext isn't valid JSON.
     #[error("The decrypted message isn't valid JSON: {0}")]
@@ -131,7 +131,7 @@ impl BackupDecryptionKey {
 
     /// Try to create a [`BackupDecryptionKey`] from a base64 export.
     pub fn from_base64(key: &str) -> Result<Self, DecodeError> {
-        let decoded = Zeroizing::new(common_olm::base64_decode(key)?);
+        let decoded = Zeroizing::new(harana_matrix_common::olm::base64_decode(key)?);
 
         if decoded.len() != Self::KEY_SIZE {
             Err(DecodeError::Length(Self::KEY_SIZE, decoded.len()))
@@ -240,7 +240,7 @@ impl BackupDecryptionKey {
             ciphertext: session_data.ciphertext.into_inner(),
             mac: session_data.mac.into_inner(),
             ephemeral_key: Curve25519PublicKey::from_slice(session_data.ephemeral.as_bytes())
-                .map_err(common_olm::pk_encryption::MessageDecodeError::from)?,
+                .map_err(harana_matrix_common::olm::pk_encryption::MessageDecodeError::from)?,
         };
 
         let pk = self.get_pk_decryption();
@@ -271,7 +271,7 @@ impl BackupDecryptionKey {
 #[cfg(test)]
 mod tests {
     use common_test::async_test;
-    use common_ruma::api::client::backup::KeyBackupData;
+    use harana_matrix_common::api::client::backup::KeyBackupData;
     use serde_json::json;
 
     use super::{BackupDecryptionKey, DecodeError};

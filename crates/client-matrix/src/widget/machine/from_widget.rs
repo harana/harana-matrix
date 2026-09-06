@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use as_variant::as_variant;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedRoomId,
     api::{
         client::{
@@ -74,7 +74,7 @@ impl FromWidgetErrorResponse {
         let message = error.to_string();
         let matrix_api_error = match error {
             HttpError::Api(error) => {
-                as_variant!(*error, common_ruma::api::error::FromHttpResponseError::Server(RumaApiError::MatrixError(err)) => err)
+                as_variant!(*error, harana_matrix_common::api::error::FromHttpResponseError::Server(RumaApiError::MatrixError(err)) => err)
             }
             _ => None,
         };

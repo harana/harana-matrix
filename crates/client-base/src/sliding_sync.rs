@@ -17,7 +17,7 @@
 #[cfg(feature = "e2e-encryption")]
 use client_common::deserialized_responses::ProcessedToDeviceEvent;
 use client_common::timer;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, api::client::sync::sync_events::v5 as http, events::receipt::SyncReceiptEvent,
     serde::Raw,
 };
@@ -310,7 +310,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         JsOption, MxcUri, OwnedRoomId, OwnedUserId, RoomAliasId, RoomId, UserId,
         api::client::sync::sync_events::UnreadNotificationsCount,
         assign, event_id,
@@ -370,7 +370,7 @@ mod tests {
     }
 
     use client_common::cross_process_lock::CrossProcessLockConfig;
-    use common_ruma::events::AnyStrippedStateEvent;
+    use harana_matrix_common::events::AnyStrippedStateEvent;
 
     fn invite_state_for(
         user_id: &UserId,

@@ -16,7 +16,7 @@
 
 use std::fmt;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent, BundledMessageLikeRelations, Mentions,

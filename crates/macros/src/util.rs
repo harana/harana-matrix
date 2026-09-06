@@ -6,18 +6,19 @@ use syn::{
     Attribute, Field, Ident, LitStr, meta::ParseNestedMeta, punctuated::Punctuated, visit::Visit,
 };
 
-/// The path to the `common` crate, which holds the types that used to live in `ruma-common`.
+/// The path to the root of `harana-matrix-common`, which holds the types that used to live in
+/// `ruma-common`.
 ///
 /// To access a reexported crate, prefer to use the [`reexported()`](Self::reexported) method.
 pub(crate) struct RumaCommon(TokenStream);
 
-/// The path to use for imports from `wanted`, one of the crates the vendored ruma was split into.
+/// The path to `harana-matrix-common`, optionally to `module` inside it.
 ///
-/// Each of them declares `extern crate self as <name>;`, so this also works inside the crate
-/// itself. Crates that depend only on the `ruma` facade, or on the SDK that re-exports it, reach
-/// the same items through `facade_module` of those.
-fn split_crate_path(wanted: &str, facade_module: Option<&str>) -> TokenStream {
-    let facade = |path: TokenStream| match facade_module {
+/// The crate declares `extern crate self as harana_matrix_common;`, so this also works inside the
+/// crate itself. Crates that only depend on `harana-matrix-client` reach the same items through
+/// its `ruma` re-export.
+fn common_path(module: Option<&str>) -> TokenStream {
+    let with_module = |path: TokenStream| match module {
         Some(module) => {
             let module = Ident::new(module, Span::call_site());
             quote! { #path::#module }
@@ -25,30 +26,19 @@ fn split_crate_path(wanted: &str, facade_module: Option<&str>) -> TokenStream {
         None => path,
     };
 
-    match crate_name(wanted) {
-        Ok(FoundCrate::Itself) => {
-            let import = format_ident!("{}", wanted.replace('-', "_"));
-            quote! { ::#import }
-        }
+    match crate_name("harana-matrix-common") {
+        Ok(FoundCrate::Itself) => with_module(quote! { ::harana_matrix_common }),
         Ok(FoundCrate::Name(name)) => {
             let import = format_ident!("{name}");
-            quote! { ::#import }
+            with_module(quote! { ::#import })
         }
-        // Crates that depend on the `ruma` facade reach the split crates through it.
-        Err(_) => match crate_name("common-ruma") {
-            Ok(FoundCrate::Itself) => facade(quote! { ::common_ruma }),
+        Err(_) => match crate_name("harana-matrix-client").or_else(|_| crate_name("client-matrix")) {
+            Ok(FoundCrate::Itself) => with_module(quote! { ::harana_matrix_client::ruma }),
             Ok(FoundCrate::Name(name)) => {
                 let import = format_ident!("{name}");
-                facade(quote! { ::#import })
+                with_module(quote! { ::#import::ruma })
             }
-            // Downstream crates that only depend on matrix reach `ruma` through its re-export.
-            Err(_) => match crate_name("client-matrix") {
-                Ok(FoundCrate::Name(name)) => {
-                    let import = format_ident!("{name}");
-                    facade(quote! { ::#import::ruma })
-                }
-                _ => facade(quote! { ::common_ruma }),
-            },
+            Err(_) => with_module(quote! { ::harana_matrix_common }),
         },
     }
 }
@@ -57,7 +47,7 @@ impl RumaCommon {
     /// Construct a new `RumaCommon`.
     pub(crate) fn new() -> Self {
         // The facade re-exports the whole of `common` at its root.
-        Self(split_crate_path("common-types", None))
+        Self(common_path(None))
     }
 
     /// The path to use for imports from the given reexported crate.
@@ -117,7 +107,7 @@ pub(crate) struct RumaEvents(TokenStream);
 impl RumaEvents {
     /// Construct a new `RumaEvents`.
     pub(crate) fn new() -> Self {
-        Self(split_crate_path("common-events", Some("events")))
+        Self(common_path(Some("events")))
     }
 
     /// The path to use for imports from the given reexported crate.

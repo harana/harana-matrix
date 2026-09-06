@@ -14,12 +14,12 @@
 
 use std::{fmt, sync::Arc};
 
-use common_ruma::{SecondsSinceUnixEpoch, serde::Raw};
+use harana_matrix_common::{SecondsSinceUnixEpoch, serde::Raw};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
 use tracing::{Span, debug, warn};
-use common_olm::{
+use harana_matrix_common::olm::{
     Curve25519PublicKey,
     olm::{DecryptionError, OlmMessage, Session as InnerSession, SessionConfig, SessionPickle},
 };
@@ -309,7 +309,7 @@ impl Session {
             return Err(SessionUnpickleError::MissingSigningKey);
         }
 
-        let session: common_olm::olm::Session = pickle.pickle.into();
+        let session: harana_matrix_common::olm::olm::Session = pickle.pickle.into();
         let session_id = session.session_id();
 
         // The timestamps come from whoever produced the pickle, which may be another
@@ -403,9 +403,9 @@ pub struct PickledSession {
 mod tests {
     use assert_matches2::assert_let;
     use common_test::async_test;
-    use common_ruma::{device_id, user_id};
+    use harana_matrix_common::{device_id, user_id};
     use serde_json::{self, Value};
-    use common_olm::olm::{OlmMessage, SessionConfig};
+    use harana_matrix_common::olm::olm::{OlmMessage, SessionConfig};
 
     use super::Session;
     use crate::{
@@ -429,7 +429,7 @@ mod tests {
 
     #[async_test]
     async fn test_pickle_timestamps_in_the_future_are_clamped() {
-        use common_ruma::{SecondsSinceUnixEpoch, UInt};
+        use harana_matrix_common::{SecondsSinceUnixEpoch, UInt};
 
         use crate::olm::PickledSession;
 
@@ -473,7 +473,7 @@ mod tests {
 
     #[async_test]
     async fn test_decryption_records_the_decryption_time() {
-        use common_ruma::events::dummy::ToDeviceDummyEventContent;
+        use harana_matrix_common::events::dummy::ToDeviceDummyEventContent;
 
         // Given a session pair,
         let alice =
@@ -530,7 +530,7 @@ mod tests {
 
     #[async_test]
     async fn test_encryption_and_decryption() {
-        use common_ruma::events::dummy::ToDeviceDummyEventContent;
+        use harana_matrix_common::events::dummy::ToDeviceDummyEventContent;
 
         // Given users Alice and Bob
         let alice =

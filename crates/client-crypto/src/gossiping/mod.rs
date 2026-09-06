@@ -21,7 +21,7 @@ use std::{
 
 pub(crate) use machine::GossipMachine;
 use client_common::locks::RwLock as StdRwLock;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId, OwnedTransactionId, OwnedUserId, TransactionId, UserId,
     events::{
         AnyToDeviceEventContent, ToDeviceEventType,
@@ -479,7 +479,7 @@ impl ServedSecretRequests {
 
 #[cfg(test)]
 mod served_secret_requests_tests {
-    use common_ruma::{device_id, user_id};
+    use harana_matrix_common::{device_id, user_id};
 
     use super::{OwnedTransactionId, ServedSecretRequests};
 

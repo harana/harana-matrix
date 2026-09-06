@@ -21,7 +21,7 @@ use as_variant::as_variant;
 use bitflags::bitflags;
 use eyeball::Subscriber;
 use client_common::{ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId, OwnedUserId,
     RoomAliasId, RoomId, RoomVersionId, UserId,
     api::client::sync::sync_events::v3::RoomSummary as RumaSummary,
@@ -1260,7 +1260,7 @@ impl RoomInfo {
     pub fn is_device_in_active_room_call(
         &self,
         user_id: &UserId,
-        device_id: &common_ruma::DeviceId,
+        device_id: &harana_matrix_common::DeviceId,
     ) -> bool {
         self.active_room_call_memberships().iter().any(|(state_key, membership)| {
             state_key.user_id() == user_id && membership.device_id() == device_id
@@ -1649,7 +1649,7 @@ pub fn apply_redaction(
     raw_redaction: &Raw<SyncRoomRedactionEvent>,
     rules: &RedactionRules,
 ) -> Option<Raw<AnySyncTimelineEvent>> {
-    use common_ruma::canonical_json::{RedactedBecause, redact_in_place};
+    use harana_matrix_common::canonical_json::{RedactedBecause, redact_in_place};
 
     let mut event_json = match event.deserialize_as() {
         Ok(json) => json,
@@ -1757,7 +1757,7 @@ mod tests {
     use gloo_timers::future::sleep;
     use client_common::executor::spawn;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         assign,
         events::{
             AnyRoomAccountDataEvent,
@@ -2630,7 +2630,7 @@ mod tests {
 /// [redaction algorithm]: https://spec.matrix.org/v1.16/client-server-api/#redactions
 #[cfg(test)]
 mod redaction_tests {
-    use common_ruma::{
+    use harana_matrix_common::{
         events::{AnySyncTimelineEvent, room::redaction::SyncRoomRedactionEvent},
         room_version_rules::RedactionRules,
         serde::Raw,
@@ -2836,7 +2836,7 @@ mod redaction_tests {
 mod state_event_tests {
     use assert_matches2::assert_let;
     use common_test::event_factory::EventFactory;
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomVersionId,
         events::{
             AnySyncStateEvent, False, StaticEventContent,

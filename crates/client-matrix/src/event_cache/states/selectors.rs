@@ -17,7 +17,7 @@
 
 use std::collections::hash_map::Entry;
 
-use common_ruma::{OwnedEventId, OwnedRoomId};
+use harana_matrix_common::{OwnedEventId, OwnedRoomId};
 
 use super::{
     super::EventCacheError, EventFocusedCacheKey, EventFocusedCacheState, PinnedEventsCacheState,

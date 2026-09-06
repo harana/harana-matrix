@@ -4,7 +4,7 @@
 
 use assert_matches2::assert_let;
 use client_base::{deserialized_responses::TimelineEvent, store::RoomLoadSettings};
-use common_ruma::{
+use harana_matrix_common::{
     api::MatrixVersion,
     events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent, room::message::MessageType},
 };
@@ -309,8 +309,8 @@ macro_rules! assert_next_eq_with_timeout {
 /// ```no_run
 /// # async {
 /// # let client: client_matrix::Client = unreachable!();
-/// # let room_id: common_ruma::OwnedRoomId = unreachable!();
-/// # let event_id: common_ruma::OwnedEventId = unreachable!();
+/// # let room_id: harana_matrix_common::OwnedRoomId = unreachable!();
+/// # let event_id: harana_matrix_common::OwnedEventId = unreachable!();
 /// use client_matrix::assert_decrypted_message_eq;
 ///
 /// let room =
@@ -360,8 +360,8 @@ macro_rules! assert_decrypted_message_eq {
 /// ```no_run
 /// # async {
 /// # let client: client_matrix::Client = unreachable!();
-/// # let room_id: common_ruma::OwnedRoomId = unreachable!();
-/// # let event_id: common_ruma::OwnedEventId = unreachable!();
+/// # let room_id: harana_matrix_common::OwnedRoomId = unreachable!();
+/// # let event_id: harana_matrix_common::OwnedEventId = unreachable!();
 /// use client_matrix::assert_let_decrypted_state_event_content;
 ///
 /// let room =
@@ -370,8 +370,8 @@ macro_rules! assert_decrypted_message_eq {
 /// let event = room.event(&event_id, None).await?;
 ///
 /// assert_let_decrypted_state_event_content!(
-///     common_ruma::events::AnyStateEventContent::RoomTopic(
-///         common_ruma::events::room::topic::RoomTopicEventContent { topic, .. }
+///     harana_matrix_common::events::AnyStateEventContent::RoomTopic(
+///         harana_matrix_common::events::room::topic::RoomTopicEventContent { topic, .. }
 ///     ) = event
 /// );
 /// assert_eq!(topic, "Encrypted topic!");

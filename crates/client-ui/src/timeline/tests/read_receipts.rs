@@ -20,7 +20,7 @@ use client_matrix::assert_next_with_timeout;
 use common_test::{
     ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, event_id,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent,
@@ -256,7 +256,7 @@ async fn test_read_receipts_updates_on_filtered_events_with_stored() {
             BOB.to_owned(),
             (
                 event_with_bob_receipt_id.to_owned(),
-                Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(5))),
+                Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(5))),
             ),
         );
 
@@ -327,7 +327,7 @@ async fn test_read_receipts_updates_on_back_paginated_filtered_events() {
             BOB.to_owned(),
             (
                 event_with_bob_receipt_id.to_owned(),
-                Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(5))),
+                Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(5))),
             ),
         );
 
@@ -394,7 +394,7 @@ async fn test_read_receipts_updates_on_message_decryption() {
 
     use assert_matches2::assert_let;
     use client_base::crypto::decrypt_room_key_export;
-    use common_ruma::events::room::encrypted::{
+    use harana_matrix_common::events::room::encrypted::{
         EncryptedEventScheme, MegolmV1AesSha2ContentInit, RoomEncryptedEventContent,
     };
 
@@ -543,7 +543,7 @@ async fn test_initial_public_unthreaded_receipt() {
         .or_default()
         .insert(
             ALICE.to_owned(),
-            (event_id.clone(), Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(10)))),
+            (event_id.clone(), Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(10)))),
         );
 
     let timeline = TestTimelineBuilder::new()
@@ -572,7 +572,7 @@ async fn test_initial_public_main_thread_receipt() {
         .or_default()
         .insert(
             ALICE.to_owned(),
-            (event_id.clone(), Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(10)))),
+            (event_id.clone(), Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(10)))),
         );
 
     let timeline = TestTimelineBuilder::new()
@@ -601,7 +601,7 @@ async fn test_initial_private_unthreaded_receipt() {
         .or_default()
         .insert(
             ALICE.to_owned(),
-            (event_id.clone(), Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(10)))),
+            (event_id.clone(), Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(10)))),
         );
 
     let timeline = TestTimelineBuilder::new()
@@ -630,7 +630,7 @@ async fn test_initial_private_main_thread_receipt() {
         .or_default()
         .insert(
             ALICE.to_owned(),
-            (event_id.clone(), Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(10)))),
+            (event_id.clone(), Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(10)))),
         );
 
     let timeline = TestTimelineBuilder::new()
@@ -724,15 +724,15 @@ async fn test_implicit_read_receipt_before_explicit_read_receipt() {
         .or_default();
     unthreaded_read_receipts.insert(
         ALICE.to_owned(),
-        (carol_event_id.clone(), Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(10)))),
+        (carol_event_id.clone(), Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(10)))),
     );
     unthreaded_read_receipts.insert(
         BOB.to_owned(),
-        (carol_event_id.clone(), Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(5)))),
+        (carol_event_id.clone(), Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(5)))),
     );
     unthreaded_read_receipts.insert(
         CAROL.to_owned(),
-        (carol_event_id.clone(), Receipt::new(common_ruma::MilliSecondsSinceUnixEpoch(uint!(1)))),
+        (carol_event_id.clone(), Receipt::new(harana_matrix_common::MilliSecondsSinceUnixEpoch(uint!(1)))),
     );
 
     let timeline = TestTimelineBuilder::new()

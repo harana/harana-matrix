@@ -37,8 +37,8 @@ use client_matrix::{
     task_monitor::BackgroundTaskHandle,
 };
 #[cfg(test)]
-use common_ruma::events::receipt::ReceiptEventContent;
-use common_ruma::{
+use harana_matrix_common::events::receipt::ReceiptEventContent;
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId,
     TransactionId, UserId,
     api::client::receipt::create_receipt::v3::ReceiptType as SendReceiptType,
@@ -2128,7 +2128,7 @@ async fn fetch_replied_to_event<P: RoomDataProvider>(
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use common_ruma::{
+    use harana_matrix_common::{
         TransactionId,
         events::{
             AnyMessageLikeEventContent, AnySyncTimelineEvent, reaction::ReactionEventContent,
@@ -2182,7 +2182,7 @@ mod tests {
         // own? A message would; a reaction is an aggregation, and is applied to the
         // item it targets rather than added as one.
         let settings = TimelineSettings::default();
-        let rules = common_ruma::room_version_rules::RoomVersionRules::V1;
+        let rules = harana_matrix_common::room_version_rules::RoomVersionRules::V1;
         let sender = user_id!("@alice:example.org");
         let txn_id = TransactionId::new();
 
@@ -2217,7 +2217,7 @@ mod tests {
             &AnyMessageLikeEventContent::RoomMessage(RoomMessageEventContent::text_plain("hi")),
             user_id!("@alice:example.org"),
             &TransactionId::new(),
-            &common_ruma::room_version_rules::RoomVersionRules::V1,
+            &harana_matrix_common::room_version_rules::RoomVersionRules::V1,
         ));
     }
 }

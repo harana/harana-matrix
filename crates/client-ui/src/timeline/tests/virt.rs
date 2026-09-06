@@ -18,7 +18,7 @@ use chrono::{Datelike, TimeZone, Utc};
 use eyeball_im::VectorDiff;
 use futures_util::{FutureExt, StreamExt as _};
 use common_test::{ALICE, BOB, async_test};
-use common_ruma::{
+use harana_matrix_common::{
     events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
     owned_event_id,
 };

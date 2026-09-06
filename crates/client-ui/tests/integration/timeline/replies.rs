@@ -13,7 +13,7 @@ use client_ui::timeline::{
     Error as TimelineError, EventSendState, MsgLikeContent, MsgLikeKind, RoomExt, TimelineDetails,
     TimelineEventItemId, TimelineFocus, TimelineItemContent,
 };
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, UInt, event_id,
     events::{
         Mentions,
@@ -680,7 +680,7 @@ async fn test_send_reply() {
     server
         .mock_room_send()
         .respond_with(move |req: &Request| {
-            use common_ruma::events::room::message::RoomMessageEventContent;
+            use harana_matrix_common::events::room::message::RoomMessageEventContent;
 
             let reply_event = req
                 .body_json::<RoomMessageEventContent>()
@@ -828,7 +828,7 @@ async fn test_send_reply_to_self() {
     server
         .mock_room_send()
         .respond_with(move |req: &Request| {
-            use common_ruma::events::room::message::RoomMessageEventContent;
+            use harana_matrix_common::events::room::message::RoomMessageEventContent;
 
             let reply_event = req
                 .body_json::<RoomMessageEventContent>()
@@ -993,7 +993,7 @@ async fn test_send_reply_with_event_id() {
     server
         .mock_room_send()
         .respond_with(move |req: &Request| {
-            use common_ruma::events::room::message::RoomMessageEventContent;
+            use harana_matrix_common::events::room::message::RoomMessageEventContent;
 
             let reply_event = req
                 .body_json::<RoomMessageEventContent>()
@@ -1080,7 +1080,7 @@ async fn test_send_reply_enforce_thread() {
     server
         .mock_room_send()
         .respond_with(move |req: &Request| {
-            use common_ruma::events::room::message::RoomMessageEventContent;
+            use harana_matrix_common::events::room::message::RoomMessageEventContent;
 
             let reply_event = req
                 .body_json::<RoomMessageEventContent>()
@@ -1178,7 +1178,7 @@ async fn test_send_reply_enforce_thread_is_reply() {
     server
         .mock_room_send()
         .respond_with(move |req: &Request| {
-            use common_ruma::events::room::message::RoomMessageEventContent;
+            use harana_matrix_common::events::room::message::RoomMessageEventContent;
 
             let reply_event = req
                 .body_json::<RoomMessageEventContent>()
@@ -1280,7 +1280,7 @@ async fn test_send_reply_with_event_id_that_is_redacted() {
     server
         .mock_room_send()
         .respond_with(move |req: &Request| {
-            use common_ruma::events::room::message::RoomMessageEventContent;
+            use harana_matrix_common::events::room::message::RoomMessageEventContent;
 
             let reply_event = req
                 .body_json::<RoomMessageEventContent>()

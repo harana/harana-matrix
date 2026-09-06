@@ -5,7 +5,7 @@ use client_matrix::{
     test_utils::mocks::{MatrixMockServer, PushRuleIdSpec},
 };
 use common_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{event_id, owned_event_id, push::RuleKind, room_id};
+use harana_matrix_common::{event_id, owned_event_id, push::RuleKind, room_id};
 
 #[async_test]
 async fn test_subscribe_thread() {

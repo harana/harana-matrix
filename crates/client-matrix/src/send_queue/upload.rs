@@ -32,8 +32,8 @@ use client_base::{
 use client_base::{media::UniqueKey, store::FinishGalleryItemInfo};
 use mime::Mime;
 #[cfg(feature = "unstable-msc4274")]
-use common_ruma::events::room::message::{GalleryItemType, GalleryMessageEventContent};
-use common_ruma::{
+use harana_matrix_common::events::room::message::{GalleryItemType, GalleryMessageEventContent};
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedTransactionId, TransactionId,
     events::{
         AnyMessageLikeEventContent, Mentions,
@@ -522,7 +522,7 @@ pub(super) fn merge_extra_content(
         }
     }
 
-    let raw = common_ruma::serde::Raw::from_json(
+    let raw = harana_matrix_common::serde::Raw::from_json(
         serde_json::value::to_raw_value(&object)
             .map_err(RoomSendQueueStorageError::JsonSerialization)?,
     );

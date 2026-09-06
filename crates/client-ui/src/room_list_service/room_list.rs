@@ -26,7 +26,7 @@ use client_matrix::{
     task_monitor::BackgroundTaskHandle,
 };
 use client_base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons};
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedRoomId};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedRoomId};
 use tokio::{
     select,
     sync::broadcast::{self, error::RecvError},
@@ -510,7 +510,7 @@ mod tests {
     use client_matrix::test_utils::mocks::MatrixMockServer;
     use client_base::{RoomInfoNotableUpdate, RoomInfoNotableUpdateReasons};
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{room_id, user_id};
+    use harana_matrix_common::{room_id, user_id};
     use tokio::sync::broadcast;
 
     use super::{RoomListItem, merge_stream_and_receiver};

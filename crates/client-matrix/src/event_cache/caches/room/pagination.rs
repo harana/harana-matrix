@@ -32,7 +32,7 @@ use client_base::{
     linked_chunk::{ChunkContent, LinkedChunkId, Update},
 };
 use pin_project_lite::pin_project;
-use common_ruma::api::Direction;
+use harana_matrix_common::api::Direction;
 use tracing::{error, trace};
 
 pub use super::super::pagination::PaginationStatus;

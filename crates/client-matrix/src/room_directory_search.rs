@@ -18,7 +18,7 @@
 use eyeball_im::{ObservableVector, VectorDiff};
 use futures_core::Stream;
 use imbl::Vector;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId,
     api::client::directory::get_public_rooms_filtered::v3::Request as PublicRoomsFilterRequest,
     directory::Filter, room::JoinRuleKind,
@@ -49,8 +49,8 @@ pub struct RoomDescription {
     pub joined_members: u64,
 }
 
-impl From<common_ruma::directory::PublicRoomsChunk> for RoomDescription {
-    fn from(value: common_ruma::directory::PublicRoomsChunk) -> Self {
+impl From<harana_matrix_common::directory::PublicRoomsChunk> for RoomDescription {
+    fn from(value: harana_matrix_common::directory::PublicRoomsChunk) -> Self {
         Self {
             room_id: value.room_id,
             name: value.name,
@@ -217,7 +217,7 @@ mod tests {
     use eyeball_im::VectorDiff;
     use futures_util::StreamExt;
     use common_test::{async_test, test_json};
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomAliasId, RoomId, directory::Filter, owned_server_name, room::JoinRuleKind, serde::Raw,
     };
     use serde_json::Value as JsonValue;

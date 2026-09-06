@@ -40,7 +40,7 @@
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use client_matrix::{check_validity_of_replacement_events, deserialized_responses::EncryptionInfo};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId,
     events::{
         AnySyncTimelineEvent, beacon_info::BeaconInfoEventContent,
@@ -1262,7 +1262,7 @@ pub(crate) enum AggregationError {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{MilliSecondsSinceUnixEpoch, TransactionId, event_id, owned_event_id, user_id};
+    use harana_matrix_common::{MilliSecondsSinceUnixEpoch, TransactionId, event_id, owned_event_id, user_id};
 
     use super::{Aggregation, AggregationKind, Aggregations};
     use crate::timeline::{ReactionStatus, TimelineEventItemId};
@@ -1271,7 +1271,7 @@ mod tests {
         AggregationKind::Reaction {
             key: "👍".to_owned(),
             sender: user_id!("@alice:localhost").to_owned(),
-            timestamp: MilliSecondsSinceUnixEpoch(common_ruma::uint!(42)),
+            timestamp: MilliSecondsSinceUnixEpoch(harana_matrix_common::uint!(42)),
             reaction_status: ReactionStatus::RemoteToRemote(owned_event_id!("$reaction")),
         }
     }

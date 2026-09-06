@@ -17,7 +17,7 @@ use client_ui::{
     },
     sync_service::SyncService,
 };
-use common_ruma::{
+use harana_matrix_common::{
     RoomVersionId,
     api::client::sync::sync_events::v5::{Response, response},
     assign, event_id,

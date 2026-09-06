@@ -26,7 +26,7 @@
 //! [`MediaStore::set_media_retention_policy()`]: crate::media::store::MediaStore::set_media_retention_policy
 //! [`MediaStore::clean()`]: crate::media::store::MediaStore::clean
 
-use common_ruma::time::{Duration, SystemTime};
+use harana_matrix_common::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 
 #[cfg(doc)]
@@ -241,7 +241,7 @@ impl Default for MediaRetentionPolicy {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::time::{Duration, SystemTime};
+    use harana_matrix_common::time::{Duration, SystemTime};
 
     use super::MediaRetentionPolicy;
 

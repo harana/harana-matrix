@@ -33,7 +33,7 @@ use futures_core::stream::Stream;
 use futures_util::{StreamExt, pin_mut};
 use client_matrix::{Client, LEASE_DURATION_MS, SlidingSync, sleep::sleep};
 use client_common::cross_process_lock::CrossProcessLockConfig;
-use common_ruma::{api::client::sync::sync_events::v5 as http, assign};
+use harana_matrix_common::{api::client::sync::sync_events::v5 as http, assign};
 use tokio::sync::OwnedMutexGuard;
 use tracing::{debug, instrument, trace};
 

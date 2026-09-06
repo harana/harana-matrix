@@ -26,7 +26,7 @@ use client_matrix::{
 };
 use client_base::{RoomState, StoreError, deserialized_responses::TimelineEvent};
 use client_common::cross_process_lock::CrossProcessLockConfig;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedRoomId, RoomId, UserId,
     api::client::sync::sync_events::v5 as http,
     assign,
@@ -840,7 +840,7 @@ fn is_event_encrypted(event_type: TimelineEventType) -> bool {
 
     #[cfg(feature = "unstable-msc3956")]
     let is_still_encrypted =
-        is_still_encrypted || matches!(event_type, common_ruma::events::TimelineEventType::Encrypted);
+        is_still_encrypted || matches!(event_type, harana_matrix_common::events::TimelineEventType::Encrypted);
 
     is_still_encrypted
 }
@@ -1148,7 +1148,7 @@ mod tests {
     use assert_matches2::assert_let;
     use client_matrix::test_utils::mocks::MatrixMockServer;
     use common_test::{ALICE, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::sync::sync_events::v5,
         assign, event_id,
         events::room::{member::MembershipState, message::RedactedRoomMessageEventContent},

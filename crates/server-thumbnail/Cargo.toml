@@ -17,7 +17,7 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [dependencies]
 image.workspace = true
-common-ruma.workspace = true
+harana-matrix-common.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

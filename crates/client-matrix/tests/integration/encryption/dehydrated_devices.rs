@@ -27,7 +27,7 @@ use client_matrix::{
 };
 use client_base::crypto::store::types::DehydratedDeviceKey;
 use common_test::async_test;
-use common_ruma::{OwnedDeviceId, owned_device_id, owned_user_id};
+use harana_matrix_common::{OwnedDeviceId, owned_device_id, owned_user_id};
 use serde_json::{Value, json};
 use wiremock::{
     Request,

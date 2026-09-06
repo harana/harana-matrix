@@ -551,9 +551,9 @@ dependencies = [
  "client-sqlite",
  "client-ui",
  "codspeed-criterion-compat",
- "common-ruma",
  "common-test",
  "futures-util",
+ "harana-matrix-common",
  "rand 0.10.2",
  "serde",
  "serde_json",
@@ -980,9 +980,7 @@ dependencies = [
  "client-common",
  "client-crypto",
  "client-store-encryption",
- "common-ruma",
  "common-test",
- "common-test-utils",
  "decancer",
  "eyeball",
  "eyeball-im",
@@ -991,6 +989,7 @@ dependencies = [
  "getrandom 0.3.4",
  "gloo-timers",
  "growable-bloom-filter",
+ "harana-matrix-common",
  "http",
  "proptest",
  "regex",
@@ -1012,8 +1011,6 @@ version = "0.18.0"
 dependencies = [
  "assert_matches",
  "assert_matches2",
- "common-ruma",
- "common-test-utils",
  "eyeball-im",
  "futures-channel",
  "futures-core",
@@ -1022,6 +1019,7 @@ dependencies = [
  "getrandom 0.3.4",
  "getrandom 0.4.3",
  "gloo-timers",
+ "harana-matrix-common",
  "harana-matrix-macros",
  "imbl",
  "insta",
@@ -1048,8 +1046,8 @@ dependencies = [
  "assert_matches2",
  "client-crypto",
  "client-matrix",
- "common-ruma",
  "common-test",
+ "harana-matrix-common",
  "serde",
  "tokio",
  "tracing",
@@ -1073,15 +1071,13 @@ dependencies = [
  "client-common",
  "client-qrcode",
  "cms",
- "common-olm",
- "common-ruma",
  "common-test",
- "common-test-utils",
  "ctr",
  "eyeball",
  "futures-core",
  "futures-executor",
  "futures-util",
+ "harana-matrix-common",
  "hkdf",
  "hmac",
  "http",
@@ -1126,9 +1122,8 @@ dependencies = [
  "client-crypto",
  "client-matrix-ffi-macros",
  "client-sqlite",
- "common-olm",
- "common-ruma",
  "futures-util",
+ "harana-matrix-common",
  "hmac",
  "http",
  "js_int",
@@ -1159,13 +1154,13 @@ dependencies = [
  "client-common",
  "client-crypto",
  "client-store-encryption",
- "common-ruma",
  "common-test",
  "futures-util",
  "getrandom 0.4.3",
  "gloo-timers",
  "gloo-utils",
  "growable-bloom-filter",
+ "harana-matrix-common",
  "hkdf",
  "js-sys",
  "matrix_indexed_db_futures",
@@ -1202,12 +1197,12 @@ dependencies = [
  "client-matrix",
  "client-ui",
  "common-test",
- "common-test-utils",
  "eyeball",
  "eyeball-im",
  "futures",
  "futures-core",
  "futures-util",
+ "harana-matrix-common",
  "http",
  "json-structural-diff",
  "rand 0.10.2",
@@ -1249,10 +1244,7 @@ dependencies = [
  "client-matrix-ffi-macros",
  "client-search",
  "client-sqlite",
- "common-olm",
- "common-ruma",
  "common-test",
- "common-test-utils",
  "ctor 1.0.12",
  "dirs",
  "event-listener",
@@ -1263,6 +1255,7 @@ dependencies = [
  "futures-executor",
  "futures-util",
  "gloo-timers",
+ "harana-matrix-common",
  "hex",
  "http",
  "image",
@@ -1323,13 +1316,13 @@ dependencies = [
  "client-matrix",
  "client-matrix-ffi-macros",
  "client-ui",
- "common-ruma",
  "common-test",
  "console_error_panic_hook",
  "extension-trait",
  "eyeball-im",
  "futures-executor",
  "futures-util",
+ "harana-matrix-common",
  "http",
  "jni",
  "jvm-getter",
@@ -1375,8 +1368,7 @@ name = "client-qrcode"
 version = "0.18.0"
 dependencies = [
  "byteorder",
- "common-olm",
- "common-ruma",
+ "harana-matrix-common",
  "image",
  "qrcode",
  "thiserror 2.0.19",
@@ -1390,8 +1382,8 @@ dependencies = [
  "assign",
  "async-stream",
  "bytes",
- "common-ruma",
  "futures-core",
+ "harana-matrix-common",
  "http",
  "reqwest",
  "tokio-stream",
@@ -1404,9 +1396,9 @@ version = "0.18.0"
 dependencies = [
  "aes",
  "byteorder",
- "common-ruma",
  "common-test",
  "ctr",
+ "harana-matrix-common",
  "hkdf",
  "hmac",
  "once_cell",
@@ -1431,13 +1423,11 @@ dependencies = [
  "client-common",
  "client-crypto",
  "client-store-encryption",
- "common-olm",
- "common-ruma",
  "common-test",
- "common-test-utils",
  "deadpool 0.13.0",
  "erased-serde",
  "glob",
+ "harana-matrix-common",
  "itertools 0.15.0",
  "num_cpus",
  "rmp-serde",
@@ -1493,9 +1483,7 @@ dependencies = [
  "client-base",
  "client-common",
  "client-matrix",
- "common-ruma",
  "common-test",
- "common-test-utils",
  "emojis",
  "eyeball",
  "eyeball-im",
@@ -1504,6 +1492,7 @@ dependencies = [
  "futures-util",
  "fuzzy-matcher",
  "growable-bloom-filter",
+ "harana-matrix-common",
  "imbl",
  "indexmap",
  "itertools 0.15.0",
@@ -1668,218 +1657,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-appservice-api"
-version = "0.16.0"
-dependencies = [
- "common-types",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "common-client-api"
-version = "0.16.0"
-dependencies = [
- "as_variant",
- "assert_matches2",
- "assign",
- "bytes",
- "common-events",
- "common-ruma",
- "common-types",
- "http",
- "js_int",
- "js_option",
- "maplit",
- "serde",
- "serde_html_form",
- "serde_json",
- "thiserror 2.0.19",
- "time",
- "url",
- "web-time",
-]
-
-[[package]]
-name = "common-events"
-version = "0.16.0"
-dependencies = [
- "as_variant",
- "assert_matches2",
- "assign",
- "base64 0.23.0",
- "common-html",
- "common-ruma",
- "common-types",
- "harana-matrix-macros",
- "indexmap",
- "js_int",
- "js_option",
- "language-tags",
- "maplit",
- "pulldown-cmark",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "time",
- "tracing",
- "uniffi",
- "web-time",
- "wildmatch",
- "zeroize",
-]
-
-[[package]]
-name = "common-federation-api"
-version = "0.16.0"
-dependencies = [
- "assert_matches2",
- "bytes",
- "common-events",
- "common-ruma",
- "common-signatures",
- "common-types",
- "headers",
- "http",
- "http-auth",
- "httparse",
- "js_int",
- "memchr",
- "mime",
- "rand 0.10.2",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tracing",
-]
-
-[[package]]
-name = "common-html"
-version = "0.16.0"
-dependencies = [
- "as_variant",
- "common-types",
- "html5ever",
- "tracing",
- "wildmatch",
-]
-
-[[package]]
-name = "common-identifiers-validation"
-version = "0.12.1"
-dependencies = [
- "js_int",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "common-olm"
-version = "0.10.0"
-dependencies = [
- "aes",
- "anyhow",
- "arrayvec",
- "assert_matches2",
- "base64 0.22.1",
- "base64ct",
- "cbc",
- "chacha20poly1305",
- "cipher",
- "curve25519-dalek",
- "ed25519-dalek",
- "getrandom 0.4.3",
- "hkdf",
- "hmac",
- "hpke",
- "insta",
- "matrix-pickle",
- "ntest",
- "olm-rs",
- "proptest",
- "prost",
- "rand 0.10.2",
- "serde",
- "serde_bytes",
- "serde_json",
- "sha2 0.11.0",
- "subtle",
- "thiserror 2.0.19",
- "x25519-dalek",
- "zeroize",
-]
-
-[[package]]
-name = "common-ruma"
-version = "0.16.0"
-dependencies = [
- "assert_matches2",
- "assign",
- "bytes",
- "common-appservice-api",
- "common-client-api",
- "common-events",
- "common-federation-api",
- "common-html",
- "common-signatures",
- "common-state-res",
- "common-types",
- "harana-matrix-macros",
- "http",
- "insta",
- "js_int",
- "maplit",
- "serde",
- "serde_json",
- "similar-asserts",
- "tracing",
-]
-
-[[package]]
-name = "common-signatures"
-version = "0.16.0"
-dependencies = [
- "assert_matches2",
- "base64 0.23.0",
- "common-events",
- "common-ruma",
- "common-types",
- "ed25519-dalek",
- "pkcs8",
- "rand 0.10.2",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "common-state-res"
-version = "0.16.0"
-dependencies = [
- "assert_matches2",
- "base64 0.23.0",
- "common-events",
- "common-ruma",
- "common-signatures",
- "common-types",
- "js_int",
- "serde",
- "serde_json",
- "test-log",
- "thiserror 2.0.19",
- "tracing",
-]
-
-[[package]]
 name = "common-test"
 version = "0.18.0"
 dependencies = [
  "as_variant",
  "client-common",
- "common-olm",
- "common-ruma",
  "ctor 0.2.9",
  "getrandom 0.4.3",
+ "harana-matrix-common",
  "harana-matrix-macros",
  "http",
  "insta",
@@ -1890,55 +1675,6 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen-test",
  "wiremock",
-]
-
-[[package]]
-name = "common-test-utils"
-version = "0.18.0"
-dependencies = [
- "ctor 0.2.9",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "common-types"
-version = "0.16.0"
-dependencies = [
- "as_variant",
- "assert_matches2",
- "assign",
- "base64 0.23.0",
- "bytes",
- "common-identifiers-validation",
- "common-ruma",
- "date_header",
- "form_urlencoded",
- "getrandom 0.4.3",
- "harana-matrix-macros",
- "http",
- "indexmap",
- "js_int",
- "js_option",
- "konst",
- "language-tags",
- "macro_rules_attribute",
- "maplit",
- "percent-encoding",
- "rand 0.10.2",
- "regex",
- "serde",
- "serde_html_form",
- "serde_json",
- "smol-macros",
- "thiserror 2.0.19",
- "time",
- "tracing",
- "uniffi",
- "url",
- "uuid",
- "web-time",
- "wildmatch",
- "zeroize",
 ]
 
 [[package]]
@@ -3457,6 +3193,80 @@ checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
 dependencies = [
  "cfg-if",
  "crunchy",
+]
+
+[[package]]
+name = "harana-matrix-common"
+version = "0.18.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "arrayvec",
+ "as_variant",
+ "assert_matches2",
+ "assign",
+ "base64 0.22.1",
+ "base64 0.23.0",
+ "base64ct",
+ "bytes",
+ "cbc",
+ "chacha20poly1305",
+ "cipher",
+ "ctor 0.2.9",
+ "curve25519-dalek",
+ "date_header",
+ "ed25519-dalek",
+ "form_urlencoded",
+ "getrandom 0.4.3",
+ "harana-matrix-macros",
+ "headers",
+ "hkdf",
+ "hmac",
+ "hpke",
+ "html5ever",
+ "http",
+ "http-auth",
+ "httparse",
+ "indexmap",
+ "insta",
+ "js_int",
+ "js_option",
+ "konst",
+ "language-tags",
+ "macro_rules_attribute",
+ "maplit",
+ "matrix-pickle",
+ "memchr",
+ "mime",
+ "ntest",
+ "olm-rs",
+ "percent-encoding",
+ "pkcs8",
+ "proptest",
+ "prost",
+ "pulldown-cmark",
+ "rand 0.10.2",
+ "regex",
+ "serde",
+ "serde_bytes",
+ "serde_html_form",
+ "serde_json",
+ "sha2 0.11.0",
+ "similar-asserts",
+ "smol-macros",
+ "subtle",
+ "test-log",
+ "thiserror 2.0.19",
+ "time",
+ "tracing",
+ "tracing-subscriber",
+ "uniffi",
+ "url",
+ "uuid",
+ "web-time",
+ "wildmatch",
+ "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]
@@ -6479,7 +6289,7 @@ dependencies = [
 name = "server-appservice"
 version = "0.18.0"
 dependencies = [
- "common-ruma",
+ "harana-matrix-common",
  "regex",
  "thiserror 2.0.19",
 ]
@@ -6488,8 +6298,7 @@ dependencies = [
 name = "server-resolver"
 version = "0.18.0"
 dependencies = [
- "common-ruma",
- "common-test-utils",
+ "harana-matrix-common",
  "harana-matrix-macros",
  "serde",
  "serde_json",
@@ -6501,8 +6310,7 @@ dependencies = [
 name = "server-state-res"
 version = "0.18.0"
 dependencies = [
- "common-ruma",
- "common-test-utils",
+ "harana-matrix-common",
  "harana-matrix-macros",
  "serde_json",
  "thiserror 2.0.19",
@@ -6524,7 +6332,7 @@ dependencies = [
 name = "server-thumbnail"
 version = "0.18.0"
 dependencies = [
- "common-ruma",
+ "harana-matrix-common",
  "image",
  "thiserror 2.0.19",
  "tracing",

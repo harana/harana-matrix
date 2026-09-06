@@ -14,7 +14,7 @@
 
 //!  Facilities to handle incoming calls.
 
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedUserId, UserId,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent,
@@ -79,7 +79,7 @@ impl Room {
     /// # async fn show_incoming_call_ui() {}
     /// # async fn dismiss_incoming_call_ui() {}
     /// #
-    /// # async fn on_push_for_call_notify(room: client_matrix::Room, notify_event_id: &common_ruma::EventId) {
+    /// # async fn on_push_for_call_notify(room: client_matrix::Room, notify_event_id: &harana_matrix_common::EventId) {
     ///     // 1) We just received a push for an `m.rtc.notification` in `room`.
     ///     show_incoming_call_ui().await;
     ///     start_ringing().await;

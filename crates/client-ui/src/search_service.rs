@@ -33,7 +33,7 @@ use futures_util::{Stream, StreamExt as _};
 use client_matrix::{
     Client, deserialized_responses::TimelineEvent, message_search::SearchError, room::Room,
 };
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId};
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::timeline::{Profile, TimelineDetails, TimelineItemContent};
@@ -227,7 +227,7 @@ mod tests {
     use futures_util::pin_mut;
     use client_matrix::test_utils::mocks::MatrixMockServer;
     use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{event_id, room_id, user_id};
+    use harana_matrix_common::{event_id, room_id, user_id};
     use stream_assert::{assert_next_matches, assert_pending};
     use tokio::time::sleep;
 

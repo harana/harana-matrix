@@ -15,7 +15,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use client_common::locks::RwLock as StdRwLock;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, EventId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId, RoomId,
     SecondsSinceUnixEpoch, TransactionId, UInt, UserId,
     events::{
@@ -780,7 +780,7 @@ mod tests {
     use std::sync::Arc;
 
     use common_test::async_test;
-    use common_ruma::TransactionId;
+    use harana_matrix_common::TransactionId;
     use tokio::sync::Mutex;
 
     use super::{Sas, VerificationMachine};
@@ -840,7 +840,7 @@ mod tests {
 
     #[async_test]
     async fn test_verification_request_from_an_unknown_device_is_retried() {
-        use common_ruma::{
+        use harana_matrix_common::{
             MilliSecondsSinceUnixEpoch, device_id,
             events::{ToDeviceEvent, key::verification::VerificationMethod},
             user_id,
@@ -861,7 +861,7 @@ mod tests {
         let carol_device = DeviceData::from_account(&carol);
 
         let flow_id = TransactionId::new();
-        let content = common_ruma::events::key::verification::request::ToDeviceKeyVerificationRequestEventContent::new(
+        let content = harana_matrix_common::events::key::verification::request::ToDeviceKeyVerificationRequestEventContent::new(
             carol.device_id().to_owned(),
             flow_id.clone(),
             vec![VerificationMethod::SasV1],
@@ -896,7 +896,7 @@ mod tests {
 
     #[async_test]
     async fn test_verification_ready_from_an_unknown_device_is_retried() {
-        use common_ruma::{
+        use harana_matrix_common::{
             device_id,
             events::{
                 ToDeviceEvent,
@@ -1021,7 +1021,7 @@ mod tests {
     async fn test_timing_out() {
         use std::time::Duration;
 
-        use common_ruma::time::Instant;
+        use harana_matrix_common::time::Instant;
 
         let (alice_machine, bob) = setup_verification_machine().await;
         let alice = alice_machine.get_sas(bob.user_id(), bob.flow_id().as_str()).unwrap();

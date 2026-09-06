@@ -21,7 +21,7 @@ use client_base::{
     cross_process_lock::CrossProcessLockGeneration,
     media::{MediaRequestParameters, store::IgnoreMediaRetentionPolicy},
 };
-use common_ruma::time::{SystemTime, UNIX_EPOCH};
+use harana_matrix_common::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

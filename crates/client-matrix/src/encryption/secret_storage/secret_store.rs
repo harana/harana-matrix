@@ -17,7 +17,7 @@ use std::fmt;
 use client_base::crypto::{
     CrossSigningKeyExport, secret_storage::SecretStorageKey,
 };
-use common_ruma::{
+use harana_matrix_common::{
     events::{
         GlobalAccountDataEventType, secret::request::SecretName,
         secret_storage::secret::SecretEventContent,
@@ -76,7 +76,7 @@ use crate::{Client, encryption::backups::EnableBackupError};
 /// # async {
 /// # let homeserver = Url::parse("http://example.com")?;
 /// # let client = Client::new(homeserver).await?;
-/// use common_ruma::events::secret::request::SecretName;
+/// use harana_matrix_common::events::secret::request::SecretName;
 ///
 /// let secret_store = client
 ///     .encryption()
@@ -135,7 +135,7 @@ impl SecretStore {
     /// # async {
     /// # let homeserver = Url::parse("http://example.com")?;
     /// # let client = Client::new(homeserver).await?;
-    /// use common_ruma::events::secret::request::SecretName;
+    /// use harana_matrix_common::events::secret::request::SecretName;
     ///
     /// let secret_store = client
     ///     .encryption()
@@ -217,7 +217,7 @@ impl SecretStore {
     /// # async {
     /// # let homeserver = Url::parse("http://example.com")?;
     /// # let client = Client::new(homeserver).await?;
-    /// use common_ruma::events::secret::request::SecretName;
+    /// use harana_matrix_common::events::secret::request::SecretName;
     ///
     /// let secret_store = client
     ///     .encryption()
@@ -379,7 +379,7 @@ impl SecretStore {
     /// # async {
     /// # let homeserver = Url::parse("http://example.com")?;
     /// # let client = Client::new(homeserver).await?;
-    /// use common_ruma::events::secret::request::SecretName;
+    /// use harana_matrix_common::events::secret::request::SecretName;
     ///
     /// let secret_store = client
     ///     .encryption()

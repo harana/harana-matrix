@@ -22,7 +22,7 @@ use client_matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
 use client_common::executor::spawn;
 use common_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{RoomExt, TimelineDetails};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::room::{
         member::MembershipState,

@@ -16,7 +16,7 @@ use std::{fmt, sync::Arc};
 
 use indexmap::IndexMap;
 use client_matrix::deserialized_responses::EncryptionInfo;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedTransactionId, OwnedUserId,
     events::{AnySyncTimelineEvent, receipt::Receipt},
     serde::Raw,

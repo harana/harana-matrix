@@ -34,9 +34,9 @@ use std::{
 };
 
 use client_common::deserialized_responses::PrivOwnedStr;
-use common_ruma::{DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceKeyId, RoomId, serde::StringEnum};
+use harana_matrix_common::{DeviceKeyAlgorithm, DeviceKeyId, OwnedDeviceKeyId, RoomId, serde::StringEnum};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey, KeyError};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey, KeyError};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 mod backup;

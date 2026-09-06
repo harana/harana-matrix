@@ -15,7 +15,7 @@
 use std::{ops::Deref, sync::Arc};
 
 use imbl::Vector;
-use common_ruma::EventId;
+use harana_matrix_common::EventId;
 
 #[cfg(doc)]
 use super::controller::TimelineMetadata;

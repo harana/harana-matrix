@@ -1,0 +1,32 @@
+//! (De)serializable types for the [Matrix Server-Server API][federation-api].
+//! These types are used by server code.
+//!
+//! [federation-api]: https://spec.matrix.org/v1.19/server-server-api/
+
+// This crate is not useful without either of those features, so export nothing if they are not
+// enabled to avoid errors when running checks wrongly without enabling any of them.
+
+
+mod serde;
+
+pub mod authenticated_media;
+pub mod authentication;
+pub mod authorization;
+pub mod backfill;
+pub mod device;
+pub mod directory;
+pub mod discovery;
+pub mod event;
+pub mod keys;
+pub mod membership;
+pub mod openid;
+pub mod policy;
+pub mod query;
+pub mod room;
+pub mod space;
+pub mod thirdparty;
+pub mod transactions;
+
+#[doc(hidden)]
+pub use crate::__ruma::PrivOwnedStr;
+

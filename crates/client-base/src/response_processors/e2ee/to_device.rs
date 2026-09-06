@@ -18,7 +18,7 @@ use client_common::deserialized_responses::{
     ProcessedToDeviceEvent, ToDeviceUnableToDecryptInfo, ToDeviceUnableToDecryptReason,
 };
 use client_crypto::{DecryptionSettings, EncryptionSyncChanges, OlmMachine};
-use common_ruma::{
+use harana_matrix_common::{
     OneTimeKeyAlgorithm, UInt,
     api::client::sync::sync_events::{DeviceLists, v3, v5},
     events::AnyToDeviceEvent,

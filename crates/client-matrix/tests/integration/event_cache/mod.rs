@@ -25,7 +25,7 @@ use client_base::event_cache::{
 };
 use client_common::cross_process_lock::CrossProcessLockConfig;
 use common_test::{ALICE, BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, event_id,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent, TimelineEventType,
@@ -2331,7 +2331,7 @@ async fn test_timeline_then_empty_timeline_then_deduplication_with_storage() {
             JoinedRoomBuilder::new(room_id)
                 .set_timeline_limited()
                 .set_timeline_prev_batch("token-before-latest")
-                .add_timeline_bulk(latest_events.clone().into_iter().map(common_ruma::serde::Raw::cast)),
+                .add_timeline_bulk(latest_events.clone().into_iter().map(harana_matrix_common::serde::Raw::cast)),
         )
         .await;
 
@@ -2606,7 +2606,7 @@ async fn test_sync_while_back_paginate() {
             &client,
             JoinedRoomBuilder::new(room_id)
                 .set_timeline_prev_batch("token-before-sync-from-sync")
-                .add_timeline_bulk(sync_events.into_iter().map(common_ruma::serde::Raw::cast)),
+                .add_timeline_bulk(sync_events.into_iter().map(harana_matrix_common::serde::Raw::cast)),
         )
         .await;
 

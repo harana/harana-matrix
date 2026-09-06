@@ -4,7 +4,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use client_matrix::test_utils::mocks::MatrixMockServer;
 use common_test::{JoinedRoomBuilder, event_factory::EventFactory};
 use client_ui::timeline::{TimelineBuilder, TimelineReadReceiptTracking};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, events::room::message::RoomMessageEventContentWithoutRelation, owned_room_id,
     owned_user_id,
 };

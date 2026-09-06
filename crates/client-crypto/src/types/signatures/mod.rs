@@ -20,9 +20,9 @@ mod x509_signature;
 
 use std::collections::{BTreeMap, btree_map::IntoIter};
 
-use common_ruma::{DeviceKeyId, OwnedDeviceKeyId, OwnedUserId, UserId};
+use harana_matrix_common::{DeviceKeyId, OwnedDeviceKeyId, OwnedUserId, UserId};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use common_olm::Ed25519Signature;
+use harana_matrix_common::olm::Ed25519Signature;
 
 pub use self::signature::Signature;
 #[cfg(feature = "experimental-x509-identity-verification")]
@@ -169,7 +169,7 @@ impl Serialize for Signatures {
 #[cfg(test)]
 mod test {
     use insta::{assert_json_snapshot, with_settings};
-    use common_ruma::{DeviceKeyAlgorithm, device_id, owned_user_id};
+    use harana_matrix_common::{DeviceKeyAlgorithm, device_id, owned_user_id};
 
     use super::*;
 

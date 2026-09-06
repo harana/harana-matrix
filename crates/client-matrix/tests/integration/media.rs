@@ -5,7 +5,7 @@ use client_matrix::{
     test_utils::mocks::MatrixMockServer,
 };
 use common_test::async_test;
-use common_ruma::{
+use harana_matrix_common::{
     api::client::media::get_content_thumbnail::v3::Method,
     assign,
     events::room::{ImageInfo, MediaSource, message::ImageMessageEventContent},

@@ -22,7 +22,7 @@ use client_common::deserialized_responses::{
     ProcessedToDeviceEvent, ToDeviceUnableToDecryptReason,
 };
 use common_test::async_test;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, DeviceKeyId, SecondsSinceUnixEpoch,
     canonical_json::to_canonical_value,
     device_id,
@@ -30,7 +30,7 @@ use common_ruma::{
     user_id,
 };
 use serde_json::json;
-use common_olm::Ed25519SecretKey;
+use harana_matrix_common::olm::Ed25519SecretKey;
 
 use crate::{
     DecryptionSettings, DeviceData, OlmMachine, TrustRequirement,

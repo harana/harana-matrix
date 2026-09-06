@@ -47,7 +47,7 @@
 //!
 //! Beyond these basic convenience methods, `ruma-client` gives you access to the entire Matrix
 //! client-server API via the `request` method. You can pass it any of the `Request` types found in
-//! `common_ruma::api::*` and get back a corresponding response from the homeserver.
+//! `harana_matrix_common::api::*` and get back a corresponding response from the homeserver.
 //!
 //! For example:
 //!
@@ -60,7 +60,7 @@
 //! #     .build::<HttpClient>()
 //! #     .await?;
 //!
-//! use common_ruma::{
+//! use harana_matrix_common::{
 //!     api::{MatrixVersion, client::alias::get_alias},
 //!     owned_room_alias_id, room_id,
 //! };
@@ -94,8 +94,8 @@
 use std::{any::type_name, future::Future};
 
 #[doc(no_inline)]
-pub use common_ruma as ruma;
-use common_ruma::api::{
+pub use harana_matrix_common as ruma;
+use harana_matrix_common::api::{
     OutgoingRequest, OutgoingRequestExt as _,
     auth_scheme::{AuthScheme, SendAccessToken},
     path_builder::PathBuilder,
@@ -163,7 +163,7 @@ where
             info_span!("deserialize_response", response_type = type_name::<R::IncomingResponse>())
                 .in_scope(move || {
                     let (parts, body) = http_res.into_parts();
-                    common_ruma::api::IncomingResponseExt::try_from_http_response(
+                    harana_matrix_common::api::IncomingResponseExt::try_from_http_response(
                         http::Response::from_parts(parts, body.as_ref()),
                     )
                 })?;

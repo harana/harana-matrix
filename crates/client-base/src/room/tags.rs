@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use bitflags::bitflags;
-use common_ruma::events::{AnyRoomAccountDataEvent, RoomAccountDataEventType, tag::Tags};
+use harana_matrix_common::events::{AnyRoomAccountDataEvent, RoomAccountDataEventType, tag::Tags};
 use serde::{Deserialize, Serialize};
 
 use super::Room;
@@ -72,7 +72,7 @@ mod tests {
 
     use client_common::cross_process_lock::CrossProcessLockConfig;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         events::tag::{TagInfo, TagName, Tags},
         room_id,
         serde::Raw,
@@ -102,7 +102,7 @@ mod tests {
             .activate(
                 SessionMeta {
                     user_id: user_id!("@alice:example.org").into(),
-                    device_id: common_ruma::device_id!("AYEAYEAYE").into(),
+                    device_id: harana_matrix_common::device_id!("AYEAYEAYE").into(),
                 },
                 RoomLoadSettings::default(),
                 #[cfg(feature = "e2e-encryption")]
@@ -201,7 +201,7 @@ mod tests {
             .activate(
                 SessionMeta {
                     user_id: user_id!("@alice:example.org").into(),
-                    device_id: common_ruma::device_id!("AYEAYEAYE").into(),
+                    device_id: harana_matrix_common::device_id!("AYEAYEAYE").into(),
                 },
                 RoomLoadSettings::default(),
                 #[cfg(feature = "e2e-encryption")]

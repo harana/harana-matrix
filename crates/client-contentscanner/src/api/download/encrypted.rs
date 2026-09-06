@@ -14,7 +14,7 @@
 
 use client_matrix::RumaApiError;
 use client_crypto::olm::Curve25519PublicKey;
-use common_ruma::{
+use harana_matrix_common::{
     api::{
         BytesBody, Metadata, OutgoingRequest, auth_scheme::AccessTokenOptional,
         error::IntoHttpError, path_builder::PathBuilder,
@@ -68,7 +68,7 @@ impl OutgoingRequest for DownloadAndScanEncryptedMediaRequest {
         let url = Self::make_endpoint_url(path_builder_input, &self.scanner_url, &[], "")?;
 
         let body = encrypted_file_request_from(self.public_key, &self.encrypted_file)?;
-        let body = BytesBody(common_ruma::serde::json_to_buf(&body)?);
+        let body = BytesBody(harana_matrix_common::serde::json_to_buf(&body)?);
 
         Ok(Request::builder().method(Self::METHOD).uri(url).body(body)?)
     }

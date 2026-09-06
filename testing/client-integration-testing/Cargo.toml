@@ -38,7 +38,7 @@ client-base = { workspace = true, default-features = true, features = ["testing"
 client-crypto = { workspace = true, features = ["rust-x509-verifier-impl"] }
 client-common.workspace = true
 common-test.workspace = true
-common-test-utils.workspace = true
+harana-matrix-common = { workspace = true, features = ["testing"] }
 client-ui = { workspace = true, default-features = true }
 rand.workspace = true
 rcgen = { workspace = true, features = ["aws_lc_rs", "pem", "x509-parser"] }

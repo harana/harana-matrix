@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonValue, DeviceKeyAlgorithm, DeviceKeyId, UserId, canonical_json::to_canonical_value,
 };
 use serde::Serialize;
-use common_olm::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature, olm::Account};
+use harana_matrix_common::olm::{Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature, olm::Account};
 
 use crate::{
     error::SignatureError,
@@ -200,9 +200,9 @@ impl SignedJsonObject for crate::types::MegolmV1AuthData {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{DeviceKeyAlgorithm, DeviceKeyId, device_id, user_id};
+    use harana_matrix_common::{DeviceKeyAlgorithm, DeviceKeyId, device_id, user_id};
     use serde_json::json;
-    use common_olm::Ed25519PublicKey;
+    use harana_matrix_common::olm::Ed25519PublicKey;
 
     use super::VerifyJson;
     use crate::types::DeviceKeys;

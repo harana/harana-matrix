@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
     events::room::member::{MembershipState, SyncRoomMemberEvent},
 };
@@ -297,7 +297,7 @@ impl AmbiguityCache {
 #[cfg(test)]
 mod test {
     use common_test::async_test;
-    use common_ruma::{EventId, room_id, server_name, user_id};
+    use harana_matrix_common::{EventId, room_id, server_name, user_id};
     use serde_json::json;
 
     use super::*;

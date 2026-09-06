@@ -23,7 +23,7 @@ use eyeball_im::{ObservableVector, VectorSubscriberBatchedStream};
 use imbl::Vector;
 use client_base::{deserialized_responses::SyncOrStrippedState, event_cache::Event};
 use client_common::locks::Mutex;
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId,
     events::{
         AnySyncMessageLikeEvent, AnySyncTimelineEvent, SyncStateEvent,

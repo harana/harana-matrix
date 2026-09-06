@@ -61,7 +61,7 @@ use client_common::{
     executor::{spawn, spawn_blocking},
     locks::Mutex as StdMutex,
 };
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId, TransactionId, UserId,
     api::{
         client::{
@@ -87,14 +87,14 @@ use common_ruma::{
     },
 };
 #[cfg(feature = "experimental-send-custom-to-device")]
-use common_ruma::{events::AnyToDeviceEventContent, serde::Raw, to_device::DeviceIdOrAllDevices};
+use harana_matrix_common::{events::AnyToDeviceEventContent, serde::Raw, to_device::DeviceIdOrAllDevices};
 use serde::{Deserialize, de::Error as _};
 use tasks::{BundleReceiverTask, RecoveryStateUpdateTask};
 use tokio::sync::{Mutex, RwLockReadGuard};
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::{Instrument, Span, debug, error, instrument, warn};
 use url::Url;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use self::{
     backups::{Backups, types::BackupClientState},
@@ -667,7 +667,7 @@ impl Client {
         Ok(response)
     }
 
-    /// Construct a [`EncryptedFile`][common_ruma::events::room::EncryptedFile] by
+    /// Construct a [`EncryptedFile`][harana_matrix_common::events::room::EncryptedFile] by
     /// encrypting and uploading a provided reader.
     ///
     /// # Arguments
@@ -1417,7 +1417,7 @@ impl Encryption {
     ///
     /// ```no_run
     /// # use client_matrix::Client;
-    /// # use common_ruma::{device_id, user_id};
+    /// # use harana_matrix_common::{device_id, user_id};
     /// # use futures_util::{pin_mut, StreamExt};
     /// # let client: Client = unimplemented!();
     /// # async {
@@ -1459,7 +1459,7 @@ impl Encryption {
     ///
     /// ```no_run
     /// # use client_matrix::Client;
-    /// # use common_ruma::{device_id, user_id};
+    /// # use harana_matrix_common::{device_id, user_id};
     /// # use futures_util::{pin_mut, StreamExt};
     /// # let client: Client = unimplemented!();
     /// # async {
@@ -2481,7 +2481,7 @@ mod tests {
         DEFAULT_TEST_ROOM_ID, JoinedRoomBuilder, SyncResponseBuilder, async_test,
         event_factory::EventFactory,
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         event_id,
         events::{reaction::ReactionEventContent, relation::Annotation},
         user_id,

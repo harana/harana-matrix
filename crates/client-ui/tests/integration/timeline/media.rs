@@ -36,10 +36,10 @@ use client_ui::timeline::{
 #[cfg(feature = "unstable-msc4274")]
 use client_ui::timeline::{GalleryConfig, GalleryItemInfo};
 #[cfg(feature = "unstable-msc4274")]
-use common_ruma::events::room::message::GalleryItemType;
+use harana_matrix_common::events::room::message::GalleryItemType;
 #[cfg(feature = "unstable-msc4274")]
-use common_ruma::owned_mxc_uri;
-use common_ruma::{
+use harana_matrix_common::owned_mxc_uri;
+use harana_matrix_common::{
     event_id,
     events::room::{
         MediaSource,

@@ -32,7 +32,7 @@ use common_test::{
     SyncResponseBuilder, event_factory::EventFactory, test_json,
 };
 use percent_encoding::{AsciiSet, CONTROLS};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, EventId, MilliSecondsSinceUnixEpoch, MxcUri, OwnedDeviceId, OwnedEventId,
     OwnedOneTimeKeyId, OwnedRoomId, OwnedUserId, RoomId, ServerName, UserId,
     api::{
@@ -742,7 +742,7 @@ impl MatrixMockServer {
     /// #
     /// tokio_test::block_on(async {
     /// use js_int::uint;
-    /// use common_ruma::directory::PublicRoomsChunkInit;
+    /// use harana_matrix_common::directory::PublicRoomsChunkInit;
     /// use client_matrix::room_directory_search::RoomDirectorySearch;
     /// use client_matrix::{
     ///     ruma::{event_id, room_id},
@@ -785,7 +785,7 @@ impl MatrixMockServer {
     /// ```
     /// # tokio_test::block_on(async {
     /// use client_matrix::{ruma::room_id, test_utils::mocks::MatrixMockServer};
-    /// use common_ruma::api::client::room::Visibility;
+    /// use harana_matrix_common::api::client::room::Visibility;
     ///
     /// let mock_server = MatrixMockServer::new().await;
     /// let client = mock_server.client_builder().build().await;
@@ -823,7 +823,7 @@ impl MatrixMockServer {
     /// ```
     /// # tokio_test::block_on(async {
     /// use client_matrix::{ruma::room_id, test_utils::mocks::MatrixMockServer};
-    /// use common_ruma::api::client::room::Visibility;
+    /// use harana_matrix_common::api::client::room::Visibility;
     ///
     /// let mock_server = MatrixMockServer::new().await;
     /// let client = mock_server.client_builder().build().await;
@@ -962,7 +962,7 @@ impl MatrixMockServer {
     /// };
     /// use client_base::RoomMemberships;
     /// use common_test::event_factory::EventFactory;
-    /// use common_ruma::{
+    /// use harana_matrix_common::{
     ///     events::room::member::{MembershipState, RoomMemberEventContent},
     ///     user_id,
     /// };
@@ -1003,7 +1003,7 @@ impl MatrixMockServer {
     /// # Examples
     ///
     /// ```
-    /// # use common_ruma::user_id;
+    /// # use harana_matrix_common::user_id;
     /// tokio_test::block_on(async {
     /// use client_matrix::{
     ///     ruma::room_id,
@@ -1033,7 +1033,7 @@ impl MatrixMockServer {
     /// # Examples
     ///
     /// ```
-    /// # use common_ruma::user_id;
+    /// # use harana_matrix_common::user_id;
     /// tokio_test::block_on(async {
     /// use client_matrix::{
     ///     ruma::room_id,
@@ -1063,7 +1063,7 @@ impl MatrixMockServer {
     /// # Examples
     ///
     /// ```
-    /// # use common_ruma::user_id;
+    /// # use harana_matrix_common::user_id;
     /// tokio_test::block_on(async {
     /// use client_matrix::{
     ///     ruma::room_id,
@@ -1276,7 +1276,7 @@ impl MatrixMockServer {
     /// tokio_test::block_on(async {
     /// use js_int::uint;
     /// use client_matrix::test_utils::mocks::MatrixMockServer;
-    /// use common_ruma::user_id;
+    /// use harana_matrix_common::user_id;
     ///
     /// let mock_server = MatrixMockServer::new().await;
     /// let client = mock_server.client_builder().build().await;
@@ -1351,8 +1351,8 @@ impl MatrixMockServer {
     /// ```
     /// tokio_test::block_on(async {
     /// use js_int::uint;
-    /// use common_ruma::events::secret_storage::key;
-    /// use common_ruma::serde::Base64;
+    /// use harana_matrix_common::events::secret_storage::key;
+    /// use harana_matrix_common::serde::Base64;
     /// use client_matrix::{
     ///     encryption::secret_storage::SecretStorage,
     ///     test_utils::mocks::MatrixMockServer,
@@ -1403,7 +1403,7 @@ impl MatrixMockServer {
     /// tokio_test::block_on(async {
     /// use js_int::uint;
     /// use serde_json::json;
-    /// use common_ruma::events::GlobalAccountDataEventType;
+    /// use harana_matrix_common::events::GlobalAccountDataEventType;
     /// use client_matrix::test_utils::mocks::MatrixMockServer;
     ///
     /// let mock_server = MatrixMockServer::new().await;
@@ -4257,7 +4257,7 @@ impl<'a> MockEndpoint<'a, GetSecretStorageKeyEndpoint> {
     pub fn ok(
         self,
         user_id: &UserId,
-        secret_storage_key_event_content: &common_ruma::events::secret_storage::key::SecretStorageKeyEventContent,
+        secret_storage_key_event_content: &harana_matrix_common::events::secret_storage::key::SecretStorageKeyEventContent,
     ) -> MatrixMock<'a> {
         let mock = global_account_data_mock_builder(
             self.mock,
@@ -4462,7 +4462,7 @@ impl<'a> MockEndpoint<'a, LoginEndpoint> {
     ///     LoginResponseTemplate200, MatrixMockServer,
     /// };
     /// use common_test::async_test;
-    /// use common_ruma::{device_id, time::Duration, user_id};
+    /// use harana_matrix_common::{device_id, time::Duration, user_id};
     ///
     /// #[async_test]
     /// async fn test_ok_with() {

@@ -168,7 +168,7 @@ use client_base::{
 };
 use client_common::{boxed_into_future, locks::Mutex as SyncMutex};
 use mime::Mime;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId, RoomId,
     TransactionId, UserId,
     api::client::{
@@ -851,7 +851,7 @@ impl RoomSendQueue {
             "content": content,
         });
 
-        match Raw::<common_ruma::events::AnyRoomAccountDataEvent>::from_json_string(json.to_string()) {
+        match Raw::<harana_matrix_common::events::AnyRoomAccountDataEvent>::from_json_string(json.to_string()) {
             Ok(event) => {
                 if let Err(error) = room
                     .client()
@@ -3901,7 +3901,7 @@ mod tests {
         SerializableEventContent,
     };
     use common_test::{JoinedRoomBuilder, SyncResponseBuilder, async_test};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, MilliSecondsSinceUnixEpoch, TransactionId, event_id,
         events::{
             AnyMessageLikeEventContent,
@@ -3923,7 +3923,7 @@ mod tests {
         use std::collections::BTreeMap;
 
         use client_base::store::QueueWedgeError;
-        use common_ruma::{device_id, user_id};
+        use harana_matrix_common::{device_id, user_id};
 
         let client = logged_in_client(None).await;
         let send_queue = client.send_queue();

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use as_variant::as_variant;
 #[cfg(test)]
-use common_ruma::time::Instant;
-use common_ruma::{
+use harana_matrix_common::time::Instant;
+use harana_matrix_common::{
     TransactionId, UserId,
     events::key::verification::{ShortAuthenticationString, cancel::CancelCode},
 };

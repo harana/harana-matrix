@@ -7,7 +7,7 @@ use client_matrix::{
 use common_test::{
     JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory, test_json,
 };
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     events::tag::{TagInfo, TagName, Tags},
     room_id,

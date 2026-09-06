@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::MilliSecondsSinceUnixEpoch;
+use harana_matrix_common::MilliSecondsSinceUnixEpoch;
 
 /// A [`TimelineItem`](super::TimelineItem) that doesn't correspond to an event.
 #[derive(Clone, Debug)]

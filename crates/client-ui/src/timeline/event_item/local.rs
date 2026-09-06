@@ -19,7 +19,7 @@ use client_matrix::{
     Error,
     send_queue::{AbstractProgress, SendHandle},
 };
-use common_ruma::{EventId, OwnedEventId, OwnedTransactionId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedTransactionId};
 
 use super::TimelineEventItemId;
 

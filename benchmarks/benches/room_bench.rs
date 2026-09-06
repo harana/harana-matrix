@@ -14,7 +14,7 @@ use client_base::{
 use client_sqlite::SqliteStateStore;
 use common_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
 use client_ui::timeline::{TimelineBuilder, TimelineFocus};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId,
     api::client::membership::get_member_events,
     events::room::member::{MembershipState, RoomMemberEvent},

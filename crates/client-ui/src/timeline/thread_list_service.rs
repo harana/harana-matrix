@@ -28,7 +28,7 @@ use client_matrix::{
     task_monitor::BackgroundTaskHandle,
 };
 use client_common::serde_helpers::extract_thread_root;
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::{error, trace, warn};
 
@@ -482,7 +482,7 @@ mod tests {
     use futures_util::pin_mut;
     use client_matrix::test_utils::mocks::MatrixMockServer;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         event_id,
         events::{
             AnyTimelineEvent,

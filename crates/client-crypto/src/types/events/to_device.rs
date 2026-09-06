@@ -14,7 +14,7 @@
 
 use std::{collections::BTreeMap, fmt::Debug};
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, UserId,
     events::{
         ToDeviceEventContent, ToDeviceEventType,
@@ -172,7 +172,7 @@ impl ToDeviceEvents {
     /// 3. Pass the event over FFI, losing the exact type information, this will
     ///    most likely end up using a less strict type naturally.
     ///
-    /// [`AnyToDeviceEvent`]: common_ruma::events::AnyToDeviceEvent
+    /// [`AnyToDeviceEvent`]: harana_matrix_common::events::AnyToDeviceEvent
     pub(crate) fn serialize_zeroized(self) -> Result<Raw<ToDeviceEvents>, serde_json::Error> {
         let serialized = match self {
             ToDeviceEvents::Custom(_)
@@ -234,9 +234,9 @@ impl ToDeviceEvents {
     }
 }
 
-impl JsonCastable<ToDeviceEvents> for common_ruma::events::AnyToDeviceEvent {}
+impl JsonCastable<ToDeviceEvents> for harana_matrix_common::events::AnyToDeviceEvent {}
 
-impl JsonCastable<common_ruma::events::AnyToDeviceEvent> for ToDeviceEvents {}
+impl JsonCastable<harana_matrix_common::events::AnyToDeviceEvent> for ToDeviceEvents {}
 
 /// A to-device event with an unknown type and content.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn zeroized_deserialization() -> Result<(), serde_json::Error> {
-        use common_ruma::events::AnyToDeviceEvent;
+        use harana_matrix_common::events::AnyToDeviceEvent;
 
         macro_rules! assert_serialization_roundtrip {
             ( $( $json:path => $to_device_events:ident ),* $(,)? ) => {

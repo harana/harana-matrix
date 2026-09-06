@@ -38,5 +38,5 @@ pub enum Error {
     /// The registration's `sender_localpart` does not make a valid user ID for
     /// the server it is registered on.
     #[error(transparent)]
-    SenderLocalpart(#[from] common_ruma::IdParseError),
+    SenderLocalpart(#[from] harana_matrix_common::IdParseError),
 }

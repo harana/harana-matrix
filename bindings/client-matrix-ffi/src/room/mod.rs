@@ -36,7 +36,7 @@ use client_ui::{
     unable_to_decrypt_hook::UtdHookManager,
 };
 use mime::Mime;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, Int, OwnedDeviceId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId, RoomAliasId,
     ServerName, UserId, assign,
     events::{
@@ -2197,7 +2197,7 @@ impl From<SdkComposerDraftType> for ComposerDraftType {
 }
 
 impl TryFrom<ComposerDraftType> for SdkComposerDraftType {
-    type Error = common_ruma::IdParseError;
+    type Error = harana_matrix_common::IdParseError;
 
     fn try_from(value: ComposerDraftType) -> std::result::Result<Self, Self::Error> {
         let draft_type = match value {

@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use common_ruma::{
+use harana_matrix_common::{
     events::{AnySyncStateEvent, room::member::MembershipState},
     serde::Raw,
 };

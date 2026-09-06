@@ -48,7 +48,7 @@ use client_search::backend::SearchIndexProvider;
 use client_sqlite::SqliteStoreConfig;
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest-transport"))]
 use reqwest::Certificate;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedServerName, ServerName,
     api::{MatrixVersion, SupportedVersions, error::FromHttpResponseError},
     presence::PresenceState,
@@ -627,7 +627,7 @@ impl ClientBuilder {
     ///   to be able to [restore the session] later.
     ///
     /// [refreshing access tokens]: https://spec.matrix.org/v1.3/client-server-api/#refreshing-access-tokens
-    /// [`UnknownToken`]: common_ruma::api::error::ErrorKind::UnknownToken
+    /// [`UnknownToken`]: harana_matrix_common::api::error::ErrorKind::UnknownToken
     /// [restore the session]: Client::restore_session
     pub fn handle_refresh_tokens(mut self) -> Self {
         self.handle_refresh_tokens = true;
@@ -746,7 +746,7 @@ impl ClientBuilder {
     /// #     backend::{RoomSearchIndex, SearchIndexProvider},
     /// #     error::IndexError,
     /// # };
-    /// # use common_ruma::RoomId;
+    /// # use harana_matrix_common::RoomId;
     /// #[derive(Debug)]
     /// struct MyEngine;
     ///

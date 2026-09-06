@@ -88,7 +88,7 @@ use client_base::{RoomStateFilter, deserialized_responses::TimelineEvent};
 use client_search::error::IndexError;
 #[cfg(doc)]
 use client_search::index::RoomIndex;
-use common_ruma::{OwnedEventId, OwnedRoomId};
+use harana_matrix_common::{OwnedEventId, OwnedRoomId};
 
 use crate::{Client, Room};
 
@@ -353,7 +353,7 @@ mod tests {
 
     use futures_util::TryStreamExt as _;
     use common_test::{BOB, JoinedRoomBuilder, async_test, event_factory::EventFactory};
-    use common_ruma::{OwnedEventId, OwnedRoomId, event_id, room_id, user_id};
+    use harana_matrix_common::{OwnedEventId, OwnedRoomId, event_id, room_id, user_id};
 
     use crate::{sleep::sleep, test_utils::mocks::MatrixMockServer};
 

@@ -29,10 +29,10 @@ pub use machine::VerificationMachine;
 pub use qrcode::{QrVerification, QrVerificationState, ScanError};
 pub use requests::{VerificationRequest, VerificationRequestState};
 #[cfg(feature = "qrcode")]
-use common_ruma::events::key::verification::done::{
+use harana_matrix_common::events::key::verification::done::{
     KeyVerificationDoneEventContent, ToDeviceKeyVerificationDoneEventContent,
 };
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, EventId, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedTransactionId, RoomId,
     UserId,
     api::client::keys::upload_signatures::v3::Request as SignatureUploadRequest,
@@ -608,7 +608,7 @@ impl IdentitiesBeingVerified {
         let mut secrets = self.private_identity.get_missing_secrets().await;
 
         if self.store.inner.load_backup_keys().await?.decryption_key.is_none() {
-            secrets.push(common_ruma::events::secret::request::SecretName::RecoveryKey);
+            secrets.push(harana_matrix_common::events::secret::request::SecretName::RecoveryKey);
         }
 
         Ok(GossipMachine::request_missing_secrets(self.user_id(), secrets))
@@ -737,7 +737,7 @@ impl IdentitiesBeingVerified {
 pub(crate) mod tests {
     use std::sync::Arc;
 
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, UserId, device_id,
         events::{AnyToDeviceEventContent, ToDeviceEvent},
         user_id,

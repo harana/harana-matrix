@@ -22,7 +22,7 @@ use client_base::{
     store::{DependentQueuedRequestKind, SentMediaItem},
 };
 use client_common::executor::spawn;
-use common_ruma::{TransactionId, events::room::MediaSource};
+use harana_matrix_common::{TransactionId, events::room::MediaSource};
 use tokio::sync::broadcast;
 use tracing::warn;
 

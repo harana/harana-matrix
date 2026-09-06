@@ -21,7 +21,7 @@ use futures_util::StreamExt;
 use client_matrix::{assert_let_timeout, executor::spawn, test_utils::mocks::MatrixMockServer};
 use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{EventSendState, RoomExt};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::room::message::{MessageType, RoomMessageEventContent},
     room_id, user_id,

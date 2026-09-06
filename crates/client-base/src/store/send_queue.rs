@@ -17,7 +17,7 @@
 use std::{collections::BTreeMap, fmt, ops::Deref};
 
 use as_variant::as_variant;
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedEventId, OwnedTransactionId, OwnedUserId,
     TransactionId, UInt,
     api::client::receipt::create_receipt::v3::ReceiptType,
@@ -749,7 +749,7 @@ impl fmt::Debug for QueuedRequest {
 #[cfg(test)]
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::receipt::create_receipt::v3::ReceiptType,
         events::{receipt::ReceiptThread, room::MediaSource},
         owned_event_id, owned_mxc_uri,
@@ -848,7 +848,7 @@ mod tests {
 
     fn media_item(url: &str) -> SentMediaItem {
         SentMediaItem {
-            file: MediaSource::Plain(<&common_ruma::MxcUri>::from(url).to_owned()),
+            file: MediaSource::Plain(<&harana_matrix_common::MxcUri>::from(url).to_owned()),
             thumbnail: None,
         }
     }
@@ -920,7 +920,7 @@ mod tests {
         let read = |thread: ReceiptThread, event_id: &str| QueuedRequestKind::ReadReceipt {
             receipt_type: ReceiptType::Read,
             thread,
-            event_id: common_ruma::EventId::parse(event_id).unwrap(),
+            event_id: harana_matrix_common::EventId::parse(event_id).unwrap(),
         };
 
         // A newer receipt of the same type, in the same thread, makes the older one

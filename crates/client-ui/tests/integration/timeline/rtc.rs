@@ -5,7 +5,7 @@ use common_test::{
     ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
 };
 use client_ui::timeline::{RoomExt, TimelineItemContent};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, event_id,
     events::rtc::notification::{CallIntent, NotificationType},
     room_id,

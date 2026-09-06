@@ -18,7 +18,7 @@ pub mod store;
 
 use std::hash::{Hash, Hasher};
 
-use common_ruma::{
+use harana_matrix_common::{
     MxcUri, UInt,
     api::client::media::get_content_thumbnail::v3::Method,
     events::{
@@ -249,7 +249,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches2::assert_let;
-    use common_ruma::{events::room::ImageInfo, mxc_uri, owned_mxc_uri, uint};
+    use harana_matrix_common::{events::room::ImageInfo, mxc_uri, owned_mxc_uri, uint};
     use serde_json::json;
 
     use super::*;
@@ -505,7 +505,7 @@ mod tests {
         assert_eq!(uri, file);
         assert!(content.thumbnail_source().is_none());
 
-        let mut info = common_ruma::events::room::message::FileInfo::new();
+        let mut info = harana_matrix_common::events::room::message::FileInfo::new();
         info.thumbnail_source = Some(MediaSource::Plain(thumbnail.clone()));
         content.info = Some(Box::new(info));
 
@@ -542,7 +542,7 @@ mod tests {
         assert!(content.source().is_none());
         assert!(content.thumbnail_source().is_none());
 
-        let mut info = common_ruma::events::room::message::LocationInfo::new();
+        let mut info = harana_matrix_common::events::room::message::LocationInfo::new();
         info.thumbnail_source = Some(MediaSource::Plain(thumbnail.clone()));
         content.info = Some(Box::new(info));
 

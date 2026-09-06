@@ -44,7 +44,7 @@ use client_base::{
     DmRoomDefinition,
     crypto::{CollectStrategy, DecryptionSettings, TrustRequirement},
 };
-use common_ruma::api::error::{DeserializationError, FromHttpResponseError};
+use harana_matrix_common::api::error::{DeserializationError, FromHttpResponseError};
 use tracing::debug;
 
 use super::client::Client;

@@ -8,7 +8,7 @@ use client_matrix::{
 };
 use common_test::{JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{RoomExt, TimelineItem};
-use common_ruma::{RoomVersionId, device_id, event_id, room_id, user_id};
+use harana_matrix_common::{RoomVersionId, device_id, event_id, room_id, user_id};
 use serde_json::{Value, json};
 
 // Helper function to test the redecryption of different event types.

@@ -16,13 +16,13 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedDeviceId, OwnedRoomId, OwnedTransactionId, RoomId, events::AnyToDeviceEventContent,
     serde::JsonCastable,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 use super::{EventType, ToDeviceEvent};
 use crate::types::{EventEncryptionAlgorithm, serde_curve_key_option};

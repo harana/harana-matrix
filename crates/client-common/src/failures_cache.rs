@@ -17,7 +17,7 @@
 
 use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc, time::Duration};
 
-use common_ruma::time::Instant;
+use harana_matrix_common::time::Instant;
 
 use super::locks::RwLock;
 

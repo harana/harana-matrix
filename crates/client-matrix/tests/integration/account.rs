@@ -1,7 +1,7 @@
 use assert_matches2::assert_matches;
 use client_matrix::test_utils::mocks::MatrixMockServer;
 use common_test::async_test;
-use common_ruma::{
+use harana_matrix_common::{
     api::{
         MatrixVersion,
         client::profile::{AvatarUrl, DisplayName, TimeZone},
@@ -326,7 +326,7 @@ async fn test_get_cached_avatar_url() {
 #[cfg(feature = "unstable-msc4426")]
 #[async_test]
 async fn test_set_status() {
-    use common_ruma::profile::StatusProfileField;
+    use harana_matrix_common::profile::StatusProfileField;
 
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().server_versions(vec![MatrixVersion::V1_16]).build().await;
@@ -370,7 +370,7 @@ async fn test_clear_status() {
 #[cfg(feature = "unstable-msc4426")]
 #[async_test]
 async fn test_set_call() {
-    use common_ruma::{SecondsSinceUnixEpoch, profile::CallProfileField, uint};
+    use harana_matrix_common::{SecondsSinceUnixEpoch, profile::CallProfileField, uint};
 
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().server_versions(vec![MatrixVersion::V1_16]).build().await;
@@ -431,7 +431,7 @@ async fn test_clear_call() {
 #[cfg(feature = "unstable-msc4426")]
 #[async_test]
 async fn test_fetch_user_profile_with_status() {
-    use common_ruma::{
+    use harana_matrix_common::{
         SecondsSinceUnixEpoch,
         api::client::profile::{Call, Status},
         profile::{CallProfileField, StatusProfileField},
@@ -471,7 +471,7 @@ async fn test_fetch_user_profile_with_status() {
 #[cfg(feature = "unstable-msc4426")]
 #[async_test]
 async fn test_fetch_user_profile_call_without_ts() {
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::profile::{Call, Status},
         profile::CallProfileField,
     };

@@ -7,7 +7,7 @@ use std::{
 use assign::assign;
 use async_stream::try_stream;
 use futures_core::stream::Stream;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId,
     api::{
         AppserviceUserIdentity, OutgoingRequest, SupportedVersions,
@@ -157,7 +157,7 @@ impl<C: HttpClient> Client<C> {
         password: &str,
         device_id: Option<&DeviceId>,
         initial_device_display_name: Option<&str>,
-    ) -> Result<login::v3::Response, Error<C::Error, common_ruma::api::error::Error>> {
+    ) -> Result<login::v3::Response, Error<C::Error, harana_matrix_common::api::error::Error>> {
         let login_info = LoginInfo::Password(login::v3::Password::new(
             UserIdentifier::Matrix(MatrixUserIdentifier::new(user.to_owned())),
             password.to_owned(),
@@ -180,7 +180,7 @@ impl<C: HttpClient> Client<C> {
     /// returned by the endpoint in this client, in addition to returning it.
     pub async fn register_guest(
         &self,
-    ) -> Result<register::v3::Response, Error<C::Error, common_ruma::api::client::uiaa::UiaaResponse>>
+    ) -> Result<register::v3::Response, Error<C::Error, harana_matrix_common::api::client::uiaa::UiaaResponse>>
     {
         let response = self
             .send_request(assign!(register::v3::Request::new(), { kind: RegistrationKind::Guest }))
@@ -202,7 +202,7 @@ impl<C: HttpClient> Client<C> {
         &self,
         username: Option<&str>,
         password: &str,
-    ) -> Result<register::v3::Response, Error<C::Error, common_ruma::api::client::uiaa::UiaaResponse>>
+    ) -> Result<register::v3::Response, Error<C::Error, harana_matrix_common::api::client::uiaa::UiaaResponse>>
     {
         let response = self
             .send_request(assign!(register::v3::Request::new(), {
@@ -223,7 +223,7 @@ impl<C: HttpClient> Client<C> {
     /// ```no_run
     /// use std::time::Duration;
     ///
-    /// # use common_ruma::presence::PresenceState;
+    /// # use harana_matrix_common::presence::PresenceState;
     /// # use tokio_stream::{StreamExt as _};
     /// # let homeserver_url = "https://example.com".to_owned();
     /// # async {
@@ -251,7 +251,7 @@ impl<C: HttpClient> Client<C> {
         set_presence: PresenceState,
         timeout: Option<Duration>,
     ) -> impl Stream<
-        Item = Result<sync_events::v3::Response, Error<C::Error, common_ruma::api::error::Error>>,
+        Item = Result<sync_events::v3::Response, Error<C::Error, harana_matrix_common::api::error::Error>>,
     > + '_ {
         try_stream! {
             loop {

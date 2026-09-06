@@ -31,7 +31,7 @@ use client_common::{
     },
 };
 use common_test::{ALICE, DEFAULT_TEST_ROOM_ID, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, RoomId, event_id,
     events::{
         AnyMessageLikeEvent, AnyTimelineEvent, relation::RelationType,

@@ -14,10 +14,10 @@
 
 use std::{cmp::Ordering, fmt};
 
-use common_ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
+use harana_matrix_common::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
 use serde::{Deserialize, Deserializer, Serialize, de, de::Visitor};
 use tracing::error;
-use common_olm::Ed25519PublicKey;
+use harana_matrix_common::olm::Ed25519PublicKey;
 
 use crate::{
     Device,
@@ -480,11 +480,11 @@ mod tests {
     use assert_matches2::assert_let;
     use insta::assert_json_snapshot;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceKeyAlgorithm, DeviceKeyId, device_id, owned_device_id, owned_user_id, user_id,
     };
     use serde_json::json;
-    use common_olm::{Curve25519PublicKey, Ed25519PublicKey, base64_decode};
+    use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey, base64_decode};
 
     use super::SenderData;
     use crate::{

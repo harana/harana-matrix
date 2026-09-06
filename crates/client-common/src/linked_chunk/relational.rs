@@ -20,7 +20,7 @@ use std::{
     hash::Hash,
 };
 
-use common_ruma::{OwnedEventId, OwnedRoomId, RoomId};
+use harana_matrix_common::{OwnedEventId, OwnedRoomId, RoomId};
 use thiserror::Error;
 
 use super::{ChunkContent, ChunkIdentifierGenerator, RawChunk};
@@ -790,7 +790,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches::assert_matches;
-    use common_ruma::room_id;
+    use harana_matrix_common::room_id;
 
     use super::{super::lazy_loader::from_all_chunks, ChunkIdentifier as CId, *};
 

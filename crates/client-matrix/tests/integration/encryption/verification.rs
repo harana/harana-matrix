@@ -6,7 +6,7 @@ use client_matrix::{
     test_utils::{logged_in_client_with_server, mocks::MatrixMockServer},
 };
 use common_test::async_test;
-use common_ruma::{owned_device_id, owned_user_id, user_id};
+use harana_matrix_common::{owned_device_id, owned_user_id, user_id};
 use serde_json::json;
 use wiremock::{
     Mock, ResponseTemplate,

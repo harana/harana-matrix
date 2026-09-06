@@ -20,7 +20,7 @@ mod exif;
 
 use std::time::Duration;
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedTransactionId, UInt, assign,
     events::{
         Mentions,
@@ -577,7 +577,7 @@ pub struct GalleryItemInfo {
 mod tests {
     use assert_matches2::assert_let;
     use image::{ImageFormat, Rgba, RgbaImage};
-    use common_ruma::uint;
+    use harana_matrix_common::uint;
 
     use super::{AttachmentInfo, BaseImageInfo, BaseVideoInfo, Thumbnail, add_blurhash};
 

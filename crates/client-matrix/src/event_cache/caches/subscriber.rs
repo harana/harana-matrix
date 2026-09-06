@@ -19,7 +19,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use common_ruma::{OwnedEventId, OwnedRoomId};
+use harana_matrix_common::{OwnedEventId, OwnedRoomId};
 use tokio::sync::{broadcast::Receiver, mpsc};
 use tracing::{trace, warn};
 
@@ -219,7 +219,7 @@ pub enum AutoShrinkMessage {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use common_ruma::owned_room_id;
+    use harana_matrix_common::owned_room_id;
     use tokio::sync::{broadcast, mpsc};
 
     use super::{AutoShrinkMessage, Subscriber, SubscribersHandle};

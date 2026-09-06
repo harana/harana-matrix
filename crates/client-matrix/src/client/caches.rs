@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use client_base::store::WellKnownResponse;
 use client_common::{locks::Mutex, ttl::TtlValue};
-use common_ruma::api::{
+use harana_matrix_common::api::{
     SupportedVersions,
     client::{
         discovery::{

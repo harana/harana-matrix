@@ -15,13 +15,13 @@
 use std::collections::BTreeMap;
 
 use client_common::deserialized_responses::{VerificationLevel, WithheldCode};
-use common_ruma::{
+use harana_matrix_common::{
     CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedUserId,
 };
 use serde::{Serializer, ser::SerializeMap};
 use serde_json::Error as SerdeError;
 use thiserror::Error;
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey};
 
 use super::store::CryptoStoreError;
 #[cfg(doc)]
@@ -78,7 +78,7 @@ pub enum OlmError {
     /// Encrypting of an Olm message failed because of a low-level cryptographic
     /// issue occurred.
     #[error(transparent)]
-    Encryption(#[from] common_olm::olm::EncryptionError),
+    Encryption(#[from] harana_matrix_common::olm::olm::EncryptionError),
 
     /// Encryption failed due to an error collecting the recipient devices.
     #[error("encryption failed due to an error collecting the recipient devices: {0}")]
@@ -123,11 +123,11 @@ pub enum MegolmError {
 
     /// The encrypted megolm message couldn't be decoded.
     #[error(transparent)]
-    Decode(#[from] common_olm::DecodeError),
+    Decode(#[from] harana_matrix_common::olm::DecodeError),
 
     /// The event could not have been decrypted.
     #[error(transparent)]
-    Decryption(#[from] common_olm::megolm::DecryptionError),
+    Decryption(#[from] harana_matrix_common::olm::megolm::DecryptionError),
 
     /// The storage layer returned an error.
     #[error(transparent)]
@@ -316,11 +316,11 @@ pub enum SignatureError {
 
     /// The signature couldn't be verified.
     #[error(transparent)]
-    VerificationError(#[from] common_olm::SignatureError),
+    VerificationError(#[from] harana_matrix_common::olm::SignatureError),
 
     /// The public key isn't a valid ed25519 key.
     #[error(transparent)]
-    InvalidKey(#[from] common_olm::KeyError),
+    InvalidKey(#[from] harana_matrix_common::olm::KeyError),
 
     /// The message could not be signed with X.509
     #[cfg(feature = "experimental-x509-identity-verification")]
@@ -389,11 +389,11 @@ pub enum SessionCreationError {
 
     /// The given curve25519 key is not a valid key.
     #[error("The given curve25519 key is not a valid key")]
-    InvalidCurveKey(#[from] common_olm::KeyError),
+    InvalidCurveKey(#[from] harana_matrix_common::olm::KeyError),
 
     /// Error when creating an Olm Session from an incoming Olm message.
     #[error(transparent)]
-    InboundCreation(#[from] common_olm::olm::SessionCreationError),
+    InboundCreation(#[from] harana_matrix_common::olm::olm::SessionCreationError),
 
     /// The given device keys are invalid.
     #[error("The given device keys are invalid")]

@@ -14,7 +14,7 @@
 
 use std::num::NonZeroU8;
 
-use common_ruma::MilliSecondsSinceUnixEpoch;
+use harana_matrix_common::MilliSecondsSinceUnixEpoch;
 use time::{
     OffsetDateTime,
     format_description::well_known::{Iso8601, iso8601},
@@ -32,7 +32,7 @@ pub(crate) fn new_message_id() -> String {
     }
     #[cfg(target_family = "wasm")]
     {
-        common_ruma::TransactionId::new().to_string()
+        harana_matrix_common::TransactionId::new().to_string()
     }
 }
 
@@ -82,7 +82,7 @@ pub fn timestamp_to_iso8601(ts: MilliSecondsSinceUnixEpoch) -> Option<String> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use common_ruma::{MilliSecondsSinceUnixEpoch, UInt};
+    use harana_matrix_common::{MilliSecondsSinceUnixEpoch, UInt};
 
     use super::timestamp_to_iso8601;
 

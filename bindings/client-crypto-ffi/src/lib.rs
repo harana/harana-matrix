@@ -53,7 +53,7 @@ pub use responses::{
     BootstrapCrossSigningResult, DeviceLists, KeysImportResult, OutgoingVerificationRequest,
     Request, RequestType, SignatureUploadRequest, UploadSigningKeysRequest,
 };
-use common_ruma::{
+use harana_matrix_common::{
     DeviceKeyAlgorithm, DeviceKeyId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId,
     RoomId, SecondsSinceUnixEpoch, UserId,
     events::room::history_visibility::HistoryVisibility as RustHistoryVisibility,
@@ -66,7 +66,7 @@ pub use verification::{
     RequestVerificationResult, Sas, SasListener, SasState, ScanResult, StartSasResult,
     Verification, VerificationRequest, VerificationRequestListener, VerificationRequestState,
 };
-use common_olm::{Curve25519PublicKey, Ed25519PublicKey};
+use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey};
 
 use crate::dehydrated_devices::DehydrationError;
 
@@ -225,7 +225,7 @@ async fn migrate_data(
     progress_listener: Box<dyn ProgressListener>,
 ) -> anyhow::Result<()> {
     use client_crypto::{olm::PrivateCrossSigningIdentity, store::types::BackupDecryptionKey};
-    use common_olm::olm::Account;
+    use harana_matrix_common::olm::olm::Account;
     use zeroize::Zeroize;
 
     // The total steps here include all the sessions/inbound group sessions and
@@ -456,7 +456,7 @@ fn collect_sessions(
 
     for session_pickle in session_pickles {
         let pickle =
-            common_olm::olm::Session::from_libolm_pickle(&session_pickle.pickle, pickle_key)?
+            harana_matrix_common::olm::olm::Session::from_libolm_pickle(&session_pickle.pickle, pickle_key)?
                 .pickle();
 
         let creation_time = SecondsSinceUnixEpoch(
@@ -487,7 +487,7 @@ fn collect_sessions(
     let mut inbound_group_sessions = Vec::new();
 
     for session in group_session_pickles {
-        let pickle = common_olm::megolm::InboundGroupSession::from_libolm_pickle(
+        let pickle = harana_matrix_common::olm::megolm::InboundGroupSession::from_libolm_pickle(
             &session.pickle,
             pickle_key,
         )?
@@ -964,7 +964,7 @@ impl From<RoomSettings> for RustRoomSettings {
 }
 
 fn parse_user_id(user_id: &str) -> Result<OwnedUserId, CryptoStoreError> {
-    common_ruma::UserId::parse(user_id).map_err(|e| CryptoStoreError::InvalidUserId(user_id.to_owned(), e))
+    harana_matrix_common::UserId::parse(user_id).map_err(|e| CryptoStoreError::InvalidUserId(user_id.to_owned(), e))
 }
 
 #[client_matrix_ffi_macros::export]
@@ -998,7 +998,7 @@ fn version() -> String {
 
 #[client_matrix_ffi_macros::export]
 fn vodozemac_version() -> String {
-    common_olm::VERSION.to_owned()
+    harana_matrix_common::olm::VERSION.to_owned()
 }
 
 /// The encryption component of PkEncryption support.
@@ -1021,20 +1021,20 @@ impl PkEncryption {
     /// correctly.
     #[uniffi::constructor]
     pub fn from_base64(key: &str) -> Result<Arc<Self>, DecodeError> {
-        let key = common_olm::Curve25519PublicKey::from_base64(key)
+        let key = harana_matrix_common::olm::Curve25519PublicKey::from_base64(key)
             .map_err(client_crypto::backups::DecodeError::PublicKey)?;
-        let inner = common_olm::pk_encryption::PkEncryption::from_key(key);
+        let inner = harana_matrix_common::olm::pk_encryption::PkEncryption::from_key(key);
 
         Ok(Self { inner }.into())
     }
 
     /// Encrypt a message using this [`PkEncryption`] object.
     pub fn encrypt(&self, plaintext: &str) -> Option<PkMessage> {
-        use common_olm::base64_encode;
+        use harana_matrix_common::olm::base64_encode;
 
         let message = self.inner.encrypt(plaintext.as_ref()).ok()?;
 
-        let common_olm::pk_encryption::Message { ciphertext, mac, ephemeral_key } = message;
+        let harana_matrix_common::olm::pk_encryption::Message { ciphertext, mac, ephemeral_key } = message;
 
         Some(PkMessage {
             ciphertext: base64_encode(ciphertext),

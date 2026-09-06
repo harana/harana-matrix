@@ -22,8 +22,8 @@ use futures_core::Stream;
 #[cfg(feature = "e2e-encryption")]
 use futures_util::StreamExt;
 #[cfg(feature = "markdown")]
-use common_ruma::events::room::message::FormattedBody;
-use common_ruma::{
+use harana_matrix_common::events::room::message::FormattedBody;
+use harana_matrix_common::{
     RoomAliasId,
     events::{AnyMessageLikeEventContent, AnyStateEventContent},
     serde::Raw,
@@ -346,7 +346,7 @@ mod test {
     #[cfg(feature = "markdown")]
     use assert_matches2::{assert_let, assert_matches};
     #[cfg(feature = "markdown")]
-    use common_ruma::events::room::message::FormattedBody;
+    use harana_matrix_common::events::room::message::FormattedBody;
 
     #[cfg(feature = "markdown")]
     use crate::utils::formatted_body_from;

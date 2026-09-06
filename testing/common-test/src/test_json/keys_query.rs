@@ -18,7 +18,7 @@
 
 use std::{collections::HashMap, iter};
 
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, UserId, api::client::keys::get_keys::v3::Response as KeyQueryResponse, device_id,
     user_id,
 };

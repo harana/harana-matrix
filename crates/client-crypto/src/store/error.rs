@@ -14,7 +14,7 @@
 
 use std::{convert::Infallible, fmt::Debug, io::Error as IoError};
 
-use common_ruma::{IdParseError, OwnedDeviceId, OwnedUserId};
+use harana_matrix_common::{IdParseError, OwnedDeviceId, OwnedUserId};
 use serde_json::Error as SerdeError;
 use thiserror::Error;
 
@@ -54,11 +54,11 @@ pub enum CryptoStoreError {
 
     /// Failed to decrypt an pickled object.
     #[error(transparent)]
-    Pickle(#[from] common_olm::PickleError),
+    Pickle(#[from] harana_matrix_common::olm::PickleError),
 
     /// Backing up a room key has failed.
     #[error(transparent)]
-    Backup(#[from] common_olm::pk_encryption::Error),
+    Backup(#[from] harana_matrix_common::olm::pk_encryption::Error),
 
     /// The received room key couldn't be converted into a valid Megolm session.
     #[error(transparent)]

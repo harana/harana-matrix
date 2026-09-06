@@ -16,7 +16,7 @@ use assert_matches2::assert_let;
 use eyeball_im::VectorDiff;
 use client_matrix::deserialized_responses::TimelineEvent;
 use common_test::{ALICE, BOB, async_test, sync_timeline_event};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch,
     events::{MessageLikeEventType, StateEventType, room::message::MessageType},
     uint,

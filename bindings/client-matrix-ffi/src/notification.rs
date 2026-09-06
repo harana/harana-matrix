@@ -19,7 +19,7 @@ use client_ui::notification_client::{
     NotificationItem as SdkNotificationItem, NotificationStatus as SdkNotificationStatus,
     RawNotificationEvent as SdkRawNotificationEvent,
 };
-use common_ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedRoomId, RoomId};
 
 use crate::{
     client::{Client, JoinRule},

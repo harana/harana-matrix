@@ -47,7 +47,7 @@ pub use client_base::crypto::{
 #[cfg(feature = "qrcode")]
 pub use qrcode::QrVerification;
 pub use requests::{VerificationRequest, VerificationRequestState};
-use common_ruma::RoomId;
+use harana_matrix_common::RoomId;
 pub use sas::SasVerification;
 
 /// An enum over the different verification types the SDK supports.
@@ -102,7 +102,7 @@ impl Verification {
     }
 
     /// Get our own user id.
-    pub fn own_user_id(&self) -> &common_ruma::UserId {
+    pub fn own_user_id(&self) -> &harana_matrix_common::UserId {
         match self {
             Verification::SasV1(v) => v.own_user_id(),
             #[cfg(feature = "qrcode")]
@@ -112,7 +112,7 @@ impl Verification {
 
     /// Get the user id of the other user participating in this verification
     /// flow.
-    pub fn other_user_id(&self) -> &common_ruma::UserId {
+    pub fn other_user_id(&self) -> &harana_matrix_common::UserId {
         match self {
             Verification::SasV1(v) => v.inner.other_user_id(),
             #[cfg(feature = "qrcode")]

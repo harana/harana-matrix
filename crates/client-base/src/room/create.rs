@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use client_common::ROOM_VERSION_RULES_FALLBACK;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, RoomVersionId, assign,
     events::{
         EmptyStateKey, PossiblyRedactedStateEventContent, RedactContent, RedactedStateEventContent,
@@ -50,8 +50,8 @@ pub struct RoomCreateWithCreatorEventContent {
     /// homeservers.
     #[serde(
         rename = "m.federate",
-        default = "common_ruma::serde::default_true",
-        skip_serializing_if = "common_ruma::serde::is_true"
+        default = "harana_matrix_common::serde::default_true",
+        skip_serializing_if = "harana_matrix_common::serde::is_true"
     )]
     pub federate: bool,
 
@@ -169,7 +169,7 @@ impl PossiblyRedactedStateEventContent for RoomCreateWithCreatorEventContent {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomVersionId,
         events::{RedactContent, room::create::RoomCreateEventContent},
         owned_room_id, owned_user_id,

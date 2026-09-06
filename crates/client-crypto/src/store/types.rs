@@ -23,12 +23,12 @@ use std::{
 };
 
 use rand::Rng;
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedRoomId, OwnedUserId,
     events::secret::request::SecretName,
 };
 use serde::{Deserialize, Serialize};
-use common_olm::{Curve25519PublicKey, base64_encode};
+use harana_matrix_common::olm::{Curve25519PublicKey, base64_encode};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use super::{DehydrationError, GossipRequest};

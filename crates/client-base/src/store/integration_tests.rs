@@ -10,7 +10,7 @@ use assert_matches2::assert_let;
 use growable_bloom_filter::GrowableBloomBuilder;
 use client_common::ttl::TtlValue;
 use common_test::{TestResult, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedUserId, RoomId, TransactionId, UserId,
     api::{
         FeatureFlag, MatrixVersion,

@@ -19,7 +19,7 @@ use client_base::{
     event_cache::{Event as RawEvent, Gap as RawGap},
     linked_chunk::{ChunkContent, ChunkIdentifier, LinkedChunkId, RawChunk},
 };
-use common_ruma::{EventId, RoomId, events::relation::RelationType};
+use harana_matrix_common::{EventId, RoomId, events::relation::RelationType};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{

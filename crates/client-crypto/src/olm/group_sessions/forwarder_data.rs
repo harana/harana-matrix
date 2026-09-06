@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{DeviceId, UserId};
+use harana_matrix_common::{DeviceId, UserId};
 use serde::{Deserialize, Serialize};
 
 use crate::olm::{KnownSenderData, SenderData};
@@ -84,8 +84,8 @@ impl ForwarderData {
 #[cfg(test)]
 mod tests {
     use insta::assert_json_snapshot;
-    use common_ruma::{device_id, owned_user_id, user_id};
-    use common_olm::Ed25519PublicKey;
+    use harana_matrix_common::{device_id, owned_user_id, user_id};
+    use harana_matrix_common::olm::Ed25519PublicKey;
 
     use super::ForwarderData;
     use crate::olm::{KnownSenderData, SenderData};

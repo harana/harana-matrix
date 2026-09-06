@@ -25,7 +25,7 @@ use client_base::{
     serde_helpers::{extract_thread_root, extract_thread_root_from_content},
     store::SerializableEventContent,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId,
     TransactionId, UserId,
     events::{
@@ -954,7 +954,7 @@ mod filter_tests {
 
     use assert_matches::assert_matches;
     use common_test::event_factory::{EventFactory, PreviousMembership};
-    use common_ruma::{
+    use harana_matrix_common::{
         event_id,
         events::{
             room::{member::MembershipState, message::RoomMessageEventContent},
@@ -1091,7 +1091,7 @@ mod filter_tests {
                 event_factory
                     .redacted(
                         user_id!("@mnt_io:matrix.org"),
-                        common_ruma::events::room::message::RedactedRoomMessageEventContent::new(),
+                        harana_matrix_common::events::room::message::RedactedRoomMessageEventContent::new(),
                     )
                     .event_id(event_id!("$ev0"))
                     .into_event()
@@ -1118,13 +1118,13 @@ mod filter_tests {
             event | event_factory | {
                 event_factory
                     .call_invite(
-                        common_ruma::OwnedVoipId::from("vvooiipp".to_owned()),
-                        common_ruma::UInt::from(1234u32),
-                        common_ruma::events::call::SessionDescription::new(
+                        harana_matrix_common::OwnedVoipId::from("vvooiipp".to_owned()),
+                        harana_matrix_common::UInt::from(1234u32),
+                        harana_matrix_common::events::call::SessionDescription::new(
                             "type".to_owned(),
                             "sdp".to_owned(),
                         ),
-                        common_ruma::VoipVersionId::V1,
+                        harana_matrix_common::VoipVersionId::V1,
                     )
                     .into_event()
             }
@@ -1141,7 +1141,7 @@ mod filter_tests {
                         NotificationType::Ring,
                     )
                     .mentions(vec![owned_user_id!("@alice:server.name")])
-                    .relates_to_membership_state_event(common_ruma::OwnedEventId::try_from("$abc:server.name").unwrap())
+                    .relates_to_membership_state_event(harana_matrix_common::OwnedEventId::try_from("$abc:server.name").unwrap())
                     .lifetime(60)
                     .into_event()
             }
@@ -1156,8 +1156,8 @@ mod filter_tests {
                 event_factory
                     .sticker(
                         "wink wink",
-                        common_ruma::events::room::ImageInfo::new(),
-                        common_ruma::OwnedMxcUri::from("mxc://foo/bar"),
+                        harana_matrix_common::events::room::ImageInfo::new(),
+                        harana_matrix_common::OwnedMxcUri::from("mxc://foo/bar"),
                     )
                     .into_event()
             }
@@ -1170,9 +1170,9 @@ mod filter_tests {
         assert_latest_event_content!(
             event | event_factory | {
                 event_factory
-                    .event(common_ruma::events::room::encrypted::RoomEncryptedEventContent::new(
-                        common_ruma::events::room::encrypted::EncryptedEventScheme::MegolmV1AesSha2(
-                            common_ruma::events::room::encrypted::MegolmV1AesSha2ContentInit {
+                    .event(harana_matrix_common::events::room::encrypted::RoomEncryptedEventContent::new(
+                        harana_matrix_common::events::room::encrypted::EncryptedEventScheme::MegolmV1AesSha2(
+                            harana_matrix_common::events::room::encrypted::MegolmV1AesSha2ContentInit {
                                 ciphertext: "cipher".to_owned(),
                                 sender_key: "sender_key".to_owned(),
                                 device_id: "device_id".into(),
@@ -1220,7 +1220,7 @@ mod filter_tests {
 
     #[test]
     fn test_knocked_with_power_levels() {
-        use common_ruma::{
+        use harana_matrix_common::{
             events::room::power_levels::{RoomPowerLevels, RoomPowerLevelsSource},
             room_version_rules::AuthorizationRules,
         };
@@ -1389,7 +1389,7 @@ mod filter_tests {
 
     #[test]
     fn test_joined_for_someone_else() {
-        use common_ruma::events::room::member::MembershipState;
+        use harana_matrix_common::events::room::member::MembershipState;
 
         // The current user sees a join but for someone else.
         assert_latest_event_content!(
@@ -1525,7 +1525,7 @@ mod filter_tests {
 
     #[test]
     fn test_room_message_verification_request() {
-        use common_ruma::{OwnedDeviceId, events::room::message};
+        use harana_matrix_common::{OwnedDeviceId, events::room::message};
 
         assert_latest_event_content!(
             event | event_factory | {
@@ -1548,7 +1548,7 @@ mod filter_tests {
 #[cfg(test)]
 mod buffer_of_values_for_local_event_tests {
     use assert_matches::assert_matches;
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedTransactionId,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
         owned_event_id,
@@ -1860,7 +1860,7 @@ mod builder_tests {
         store::{ChildTransactionId, SerializableEventContent},
     };
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, MilliSecondsSinceUnixEpoch, OwnedRoomId, OwnedTransactionId, event_id,
         events::{
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent,
@@ -3111,8 +3111,8 @@ mod builder_tests {
         body: &str,
     ) -> LocalEchoContent {
         let mut content = RoomMessageEventContent::text_plain(body);
-        content.relates_to = Some(common_ruma::events::room::message::Relation::Thread(
-            common_ruma::events::relation::Thread::plain(thread_root.to_owned(), thread_root.to_owned()),
+        content.relates_to = Some(harana_matrix_common::events::room::message::Relation::Thread(
+            harana_matrix_common::events::relation::Thread::plain(thread_root.to_owned(), thread_root.to_owned()),
         ));
 
         LocalEchoContent::Event {

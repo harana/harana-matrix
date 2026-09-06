@@ -33,10 +33,10 @@ use client_base::crypto::{
     types::{RoomKeyBackupInfo, requests::KeysBackupRequest},
 };
 #[cfg(feature = "experimental-push-secrets")]
-use common_ruma::events::secret::push::ToDeviceSecretPushEvent;
+use harana_matrix_common::events::secret::push::ToDeviceSecretPushEvent;
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::serde::JsonCastable;
-use common_ruma::{
+use harana_matrix_common::serde::JsonCastable;
+use harana_matrix_common::{
     OwnedRoomId, RoomId, TransactionId,
     api::{
         client::backup::{
@@ -967,7 +967,7 @@ impl Backups {
     }
 
     async fn delete_backup_from_server(&self, version: String) -> Result<(), Error> {
-        let request = common_ruma::api::client::backup::delete_backup_version::v3::Request::new(version);
+        let request = harana_matrix_common::api::client::backup::delete_backup_version::v3::Request::new(version);
 
         let ret = match self.client.send(request).await {
             Ok(_) => Ok(()),
@@ -1481,11 +1481,11 @@ mod test {
         },
     };
     use common_test::async_test;
-    use common_ruma::room_id;
+    use harana_matrix_common::room_id;
     #[cfg(feature = "experimental-push-secrets")]
-    use common_ruma::{device_id, user_id};
+    use harana_matrix_common::{device_id, user_id};
     use serde_json::json;
-    use common_olm::Curve25519PublicKey;
+    use harana_matrix_common::olm::Curve25519PublicKey;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{header, method, path, path_regex},

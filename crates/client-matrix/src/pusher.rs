@@ -15,7 +15,7 @@
 
 //! High-level pusher API.
 
-use common_ruma::{
+use harana_matrix_common::{
     api::client::push::{PusherIds, set_pusher},
     push::HttpPusherData,
 };
@@ -63,7 +63,7 @@ impl Pusher {
     }
 
     /// Sets a given pusher.
-    pub async fn set(&self, pusher: common_ruma::api::client::push::Pusher, append: bool) -> Result<()> {
+    pub async fn set(&self, pusher: harana_matrix_common::api::client::push::Pusher, append: bool) -> Result<()> {
         let mut request = set_pusher::v3::Request::post(pusher);
         if let set_pusher::v3::PusherAction::Post(data) = &mut request.action {
             data.append = append;
@@ -84,7 +84,7 @@ impl Pusher {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use common_test::{async_test, test_json};
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::push::{PusherIds, PusherInit, PusherKind},
         push::HttpPusherData,
     };

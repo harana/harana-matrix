@@ -32,7 +32,7 @@ use client_ui::{
         TimelineEventItemId, TimelineItemContent,
     },
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId, event_id,
     events::{
         AnyMessageLikeEventContent, AnyTimelineEvent,

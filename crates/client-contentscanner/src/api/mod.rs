@@ -14,7 +14,7 @@
 
 use client_matrix::{RumaApiError, encryption::vodozemac::pk_encryption::PkEncryption};
 use client_crypto::vodozemac::Curve25519PublicKey;
-use common_ruma::{
+use harana_matrix_common::{
     api::{
         IncomingResponse,
         error::{DeserializationError, IntoHttpError},

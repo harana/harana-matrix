@@ -16,7 +16,7 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use futures_core::Stream;
 use indexmap::IndexMap;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, UserId,
     events::receipt::{Receipt, ReceiptEventContent, ReceiptThread, ReceiptType},
 };

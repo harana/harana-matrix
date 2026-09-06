@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedUserId, UserId,
     events::poll::{
         PollResponseData, compile_unstable_poll_results,

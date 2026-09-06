@@ -1,5 +1,5 @@
 use assert_matches2::assert_let;
-use common_ruma::events::TimelineEventType;
+use harana_matrix_common::events::TimelineEventType;
 
 use super::WIDGET_ID;
 use crate::widget::machine::{

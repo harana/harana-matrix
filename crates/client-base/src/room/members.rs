@@ -21,8 +21,8 @@ use std::{
 use bitflags::bitflags;
 use futures_util::future;
 #[cfg(feature = "unstable-msc4426")]
-use common_ruma::profile::{Call, CallProfileField, Status, StatusProfileField, UserProfile};
-use common_ruma::{
+use harana_matrix_common::profile::{Call, CallProfileField, Status, StatusProfileField, UserProfile};
+use harana_matrix_common::{
     Int, MxcUri, OwnedUserId, UserId,
     events::{
         MessageLikeEventType, StateEventType,
@@ -650,8 +650,8 @@ mod tests {
     use common_test::event_factory::EventFactory;
     use proptest::prelude::*;
     #[cfg(feature = "unstable-msc4426")]
-    use common_ruma::{SecondsSinceUnixEpoch, profile::ProfileFieldValue};
-    use common_ruma::{events::room::power_levels::RoomPowerLevelsSource, mxc_uri, user_id};
+    use harana_matrix_common::{SecondsSinceUnixEpoch, profile::ProfileFieldValue};
+    use harana_matrix_common::{events::room::power_levels::RoomPowerLevelsSource, mxc_uri, user_id};
 
     use super::*;
 

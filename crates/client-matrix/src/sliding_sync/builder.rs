@@ -7,7 +7,7 @@ use std::{
 
 use cfg_if::cfg_if;
 use client_common::timer;
-use common_ruma::{OwnedRoomId, api::client::sync::sync_events::v5 as http};
+use harana_matrix_common::{OwnedRoomId, api::client::sync::sync_events::v5 as http};
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock, broadcast::channel};
 
 use super::{

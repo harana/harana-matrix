@@ -24,7 +24,7 @@ use std::{
 
 use eyeball::{SharedObservable, Subscriber};
 use client_base::{SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent};
-use common_ruma::{EventId, UInt, api::Direction};
+use harana_matrix_common::{EventId, UInt, api::Direction};
 
 use crate::{
     Room,
@@ -426,7 +426,7 @@ mod tests {
     use futures_util::FutureExt as _;
     use client_base::deserialized_responses::TimelineEvent;
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{EventId, RoomId, UInt, UserId, api::Direction, event_id, room_id, uint, user_id};
+    use harana_matrix_common::{EventId, RoomId, UInt, UserId, api::Direction, event_id, room_id, uint, user_id};
     use tokio::{
         spawn,
         sync::{Mutex, Notify},

@@ -1,7 +1,7 @@
 //! The Latest Event basic types.
 
 use client_common::deserialized_responses::TimelineEvent;
-use common_ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId};
 use serde::{Deserialize, Serialize};
 
 use crate::store::SerializableEventContent;
@@ -140,7 +140,7 @@ pub struct LocalLatestEventValue {
 
 #[cfg(test)]
 mod tests_latest_event_value {
-    use common_ruma::{
+    use harana_matrix_common::{
         MilliSecondsSinceUnixEpoch,
         events::{AnyMessageLikeEventContent, room::message::RoomMessageEventContent},
         owned_event_id,

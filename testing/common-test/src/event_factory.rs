@@ -24,7 +24,7 @@ use as_variant::as_variant;
 use client_common::deserialized_responses::{
     TimelineEvent, UnableToDecryptInfo, UnableToDecryptReason,
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, Int, MilliSecondsSinceUnixEpoch, MxcUri, OwnedDeviceId, OwnedEventId, OwnedMxcUri,
     OwnedRoomAliasId, OwnedRoomId, OwnedTransactionId, OwnedUserId, OwnedVoipId, RoomId,
     RoomVersionId, TransactionId, UInt, UserId, VoipVersionId,
@@ -131,7 +131,7 @@ impl TimestampArg for u64 {
     }
 }
 
-/// A thin copy of [`common_ruma::events::UnsignedRoomRedactionEvent`].
+/// A thin copy of [`harana_matrix_common::events::UnsignedRoomRedactionEvent`].
 #[derive(Debug, Serialize)]
 struct RedactedBecause {
     /// Data specific to the event type.
@@ -964,7 +964,7 @@ impl EventFactory {
     ///
     /// ```
     /// use common_test::event_factory::EventFactory;
-    /// use common_ruma::{
+    /// use harana_matrix_common::{
     ///     events::{
     ///         SyncStateEvent,
     ///         room::member::{MembershipState, RoomMemberEventContent},
@@ -1091,7 +1091,7 @@ impl EventFactory {
     /// use std::collections::BTreeSet;
     ///
     /// use common_test::event_factory::EventFactory;
-    /// use common_ruma::{
+    /// use harana_matrix_common::{
     ///     events::{SyncStateEvent, member_hints::MemberHintsEventContent},
     ///     owned_user_id, room_id,
     ///     serde::Raw,
@@ -1365,7 +1365,7 @@ impl EventFactory {
     ///
     /// ```
     /// use common_test::event_factory::EventFactory;
-    /// use common_ruma::{
+    /// use harana_matrix_common::{
     ///     MilliSecondsSinceUnixEpoch,
     ///     events::{MessageLikeEvent, beacon::BeaconEventContent},
     ///     owned_event_id, room_id,
@@ -1415,7 +1415,7 @@ impl EventFactory {
     /// use std::time::Duration;
     ///
     /// use common_test::event_factory::EventFactory;
-    /// use common_ruma::{room_id, user_id};
+    /// use harana_matrix_common::{room_id, user_id};
     ///
     /// let factory = EventFactory::new().room(room_id!("!test:localhost"));
     ///
@@ -1479,7 +1479,7 @@ impl EventFactory {
     ///
     /// ```
     /// use common_test::event_factory::EventFactory;
-    /// use common_ruma::{
+    /// use harana_matrix_common::{
     ///     events::{SyncStateEvent, call::member::CallMemberEventContent},
     ///     owned_user_id, room_id,
     ///     serde::Raw,
@@ -1606,7 +1606,7 @@ impl EventFactory {
     /// Create a new `m.space_order` room account data event with the given
     /// order.
     pub fn space_order(&self, order: &str) -> EventBuilder<SpaceOrderEventContent> {
-        let order = common_ruma::SpaceChildOrder::parse(order).expect("order should be valid");
+        let order = harana_matrix_common::SpaceChildOrder::parse(order).expect("order should be valid");
         self.room_account_data(SpaceOrderEventContent::new(order))
     }
 

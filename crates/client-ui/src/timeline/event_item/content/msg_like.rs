@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use as_variant::as_variant;
-use common_ruma::{OwnedEventId, OwnedUserId};
+use harana_matrix_common::{OwnedEventId, OwnedUserId};
 
 use super::{
     EmbeddedEvent, EncryptedMessage, InReplyToDetails, LiveLocationState, Message, PollState,

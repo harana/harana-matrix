@@ -5,7 +5,7 @@ use client_matrix::{
     test_utils::mocks::MatrixMockServer,
 };
 use common_test::{async_test, event_factory::EventFactory};
-use common_ruma::{event_id, owned_room_id, user_id};
+use harana_matrix_common::{event_id, owned_room_id, user_id};
 use tokio::task::yield_now;
 
 #[async_test]

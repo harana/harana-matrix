@@ -36,7 +36,7 @@ use client_matrix::{
 };
 use client_base::{RoomInfo, RoomState, crypto::types::events::CryptoContextInfo};
 use common_test::{ALICE, DEFAULT_TEST_ROOM_ID, event_factory::EventFactory};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedTransactionId,
     OwnedUserId, RoomId, TransactionId, UInt, UserId,
     events::{

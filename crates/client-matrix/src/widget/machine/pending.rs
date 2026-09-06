@@ -16,7 +16,7 @@
 //! that expired requests are removed.
 
 use indexmap::{IndexMap, map::Entry};
-use common_ruma::time::{Duration, Instant};
+use harana_matrix_common::time::{Duration, Instant};
 use tracing::warn;
 use uuid::Uuid;
 

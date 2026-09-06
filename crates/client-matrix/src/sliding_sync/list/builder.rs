@@ -7,7 +7,7 @@ use std::{
 };
 
 use eyeball::SharedObservable;
-use common_ruma::{api::client::sync::sync_events::v5 as http, events::StateEventType};
+use harana_matrix_common::{api::client::sync::sync_events::v5 as http, events::StateEventType};
 use tokio::sync::broadcast::Sender;
 
 use super::{

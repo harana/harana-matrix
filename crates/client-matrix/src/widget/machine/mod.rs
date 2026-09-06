@@ -19,7 +19,7 @@ use std::time::Duration;
 use driver_req::{ReadStateRequest, UpdateDelayedEventRequest};
 use from_widget::UpdateDelayedEventResponse;
 use indexmap::IndexMap;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedRoomId,
     events::{AnyStateEvent, AnyTimelineEvent},
     serde::{JsonObject, Raw},

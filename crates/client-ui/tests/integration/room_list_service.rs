@@ -21,7 +21,7 @@ use client_ui::{
     },
     timeline::{LatestEventValue, RoomExt as _, TimelineItemKind, VirtualTimelineItem},
 };
-use common_ruma::{
+use harana_matrix_common::{
     api::client::room::create_room::v3::Request as CreateRoomRequest,
     events::room::message::RoomMessageEventContent,
     owned_mxc_uri, room_id,

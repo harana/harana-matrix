@@ -21,7 +21,7 @@ use client_base::crypto::types::qr_login::{
 use serde::{Serialize, de::DeserializeOwned};
 use tracing::{instrument, trace};
 use url::Url;
-use common_olm::ecies::{Ecies, EstablishedEcies, InboundCreationResult, OutboundCreationResult};
+use harana_matrix_common::olm::ecies::{Ecies, EstablishedEcies, InboundCreationResult, OutboundCreationResult};
 
 use super::{
     SecureChannelError as Error,
@@ -287,7 +287,7 @@ pub(super) mod test {
     use client_base::crypto::types::qr_login::QrCodeIntent;
     use client_common::executor::spawn;
     use common_test::async_test;
-    use common_ruma::time::Instant;
+    use harana_matrix_common::time::Instant;
     use serde_json::json;
     use similar_asserts::assert_eq;
     use url::Url;

@@ -6,7 +6,7 @@ use base64::{
 };
 use indexed_db_futures::KeyRange;
 use client_store_encryption::StoreCipher;
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, EventId, MxcUri, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, TransactionId,
     UserId,
     events::{

@@ -17,8 +17,8 @@ use std::sync::Arc;
 use eyeball_im::VectorDiff;
 use client_matrix::{deserialized_responses::TimelineEvent, send_queue::SendHandle};
 #[cfg(test)]
-use common_ruma::events::receipt::ReceiptEventContent;
-use common_ruma::{
+use harana_matrix_common::events::receipt::ReceiptEventContent;
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedTransactionId, OwnedUserId,
     events::{AnyMessageLikeEventContent, AnySyncEphemeralRoomEvent},
     room_version_rules::RoomVersionRules,
@@ -215,7 +215,7 @@ impl<P: RoomDataProvider> TimelineState<P> {
     pub(super) fn handle_read_receipts(
         &mut self,
         receipt_event_content: ReceiptEventContent,
-        own_user_id: &common_ruma::UserId,
+        own_user_id: &harana_matrix_common::UserId,
     ) {
         let mut txn = self.transaction();
         txn.handle_explicit_read_receipts(receipt_event_content, own_user_id);

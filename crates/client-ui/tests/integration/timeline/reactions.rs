@@ -20,7 +20,7 @@ use futures_util::StreamExt as _;
 use client_matrix::{assert_let_timeout, test_utils::mocks::MatrixMockServer};
 use common_test::{ALICE, JoinedRoomBuilder, async_test, event_factory::EventFactory};
 use client_ui::timeline::{EventSendState, ReactionStatus, RoomExt as _};
-use common_ruma::{event_id, events::room::message::RoomMessageEventContent, room_id};
+use harana_matrix_common::{event_id, events::room::message::RoomMessageEventContent, room_id};
 use stream_assert::assert_pending;
 use tokio::time::sleep;
 

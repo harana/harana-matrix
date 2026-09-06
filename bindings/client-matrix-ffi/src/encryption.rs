@@ -21,7 +21,7 @@ use client_base::crypto::{
     types::{BackupSecrets, RoomKeyBackupInfo},
 };
 use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use common_ruma::OwnedUserId;
+use harana_matrix_common::OwnedUserId;
 use serde::de::Error;
 use thiserror::Error;
 use tracing::{error, info};

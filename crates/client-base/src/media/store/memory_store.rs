@@ -26,7 +26,7 @@ use client_common::{
     },
     ring_buffer::RingBuffer,
 };
-use common_ruma::{MxcUri, OwnedMxcUri, time::SystemTime};
+use harana_matrix_common::{MxcUri, OwnedMxcUri, time::SystemTime};
 
 use super::Result;
 use crate::media::{

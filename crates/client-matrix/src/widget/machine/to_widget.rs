@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use common_ruma::{
+use harana_matrix_common::{
     events::{AnyStateEvent, AnyTimelineEvent, AnyToDeviceEvent},
     serde::Raw,
 };

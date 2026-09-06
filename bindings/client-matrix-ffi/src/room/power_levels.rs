@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedUserId, UserId,
     events::{
         MessageLikeEventType, StateEventType, TimelineEventType,

@@ -14,8 +14,8 @@
 
 use client_common::{deserialized_responses::TimelineEvent, timer};
 #[cfg(feature = "e2e-encryption")]
-use common_ruma::events::SyncMessageLikeEvent;
-use common_ruma::{
+use harana_matrix_common::events::SyncMessageLikeEvent;
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, UInt, UserId, assign,
     events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent},
     push::{Action, PushConditionRoomCtx},
@@ -158,7 +158,7 @@ pub async fn build<'notification, 'e2ee>(
 /// Set of types used by [`build`] to reduce the number of arguments by grouping
 /// them by thematics.
 pub mod builder {
-    use common_ruma::{
+    use harana_matrix_common::{
         api::client::sync::sync_events::{v3, v5},
         events::AnySyncTimelineEvent,
         serde::Raw,

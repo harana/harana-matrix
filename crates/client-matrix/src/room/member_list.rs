@@ -19,7 +19,7 @@
 //! [`Room::member_list`]: crate::Room::member_list
 
 use client_base::{RoomMembersUpdate, RoomMemberships};
-use common_ruma::{UserId, events::room::power_levels::UserPowerLevel};
+use harana_matrix_common::{UserId, events::room::power_levels::UserPowerLevel};
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 
 use super::{Room, RoomMember};
@@ -300,7 +300,7 @@ fn compare_power_levels(a: UserPowerLevel, b: UserPowerLevel) -> std::cmp::Order
 mod tests {
     use std::cmp::Ordering;
 
-    use common_ruma::{events::room::power_levels::UserPowerLevel, int, user_id};
+    use harana_matrix_common::{events::room::power_levels::UserPowerLevel, int, user_id};
 
     use super::{
         RoomMemberSortOrder, compare_names, compare_power_levels, matches_search,

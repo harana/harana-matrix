@@ -45,7 +45,7 @@ use client_base::{
     },
     timer,
 };
-use common_ruma::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
+use harana_matrix_common::{MilliSecondsSinceUnixEpoch, MxcUri, time::SystemTime};
 use tracing::instrument;
 
 use crate::{

@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use common_ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedRoomId, RoomId};
 use serde::{Deserialize, Serialize};
 
 /// An identifier for a linked chunk; borrowed variant.
@@ -161,7 +161,7 @@ impl From<LinkedChunkId<'_>> for OwnedLinkedChunkId {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::{event_id, room_id};
+    use harana_matrix_common::{event_id, room_id};
 
     use super::LinkedChunkId;
 

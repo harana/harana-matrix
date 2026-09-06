@@ -42,7 +42,7 @@ use client_base::{
     sync::RoomUpdates,
     task_monitor::BackgroundTaskHandle,
 };
-use common_ruma::{EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId};
+use harana_matrix_common::{EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId};
 use tokio::sync::{
     OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock,
     broadcast::{Receiver, Sender, channel},
@@ -898,7 +898,7 @@ mod tests {
     use common_test::{
         JoinedRoomBuilder, SyncResponseBuilder, async_test, event_factory::EventFactory,
     };
-    use common_ruma::{event_id, room_id, user_id};
+    use harana_matrix_common::{event_id, room_id, user_id};
     use tokio::time::sleep;
 
     use super::{EventCacheError, RoomEventCacheGenericUpdate};

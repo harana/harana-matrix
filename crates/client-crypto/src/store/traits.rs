@@ -16,10 +16,10 @@ use std::{collections::HashMap, fmt, sync::Arc};
 
 use async_trait::async_trait;
 use client_common::{AsyncTraitDeps, cross_process_lock::CrossProcessLockGeneration};
-use common_ruma::{
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId, RoomId, TransactionId, UserId, events::secret::request::SecretName,
 };
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 use zeroize::Zeroizing;
 
 use super::{

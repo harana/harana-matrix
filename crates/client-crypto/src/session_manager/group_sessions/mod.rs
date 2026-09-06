@@ -28,8 +28,8 @@ use client_common::{
     deserialized_responses::WithheldCode, executor::spawn, locks::RwLock as StdRwLock,
 };
 #[cfg(feature = "experimental-encrypted-state-events")]
-use common_ruma::events::AnyStateEventContent;
-use common_ruma::{
+use harana_matrix_common::events::AnyStateEventContent;
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId, OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId,
     UserId,
     events::{AnyMessageLikeEventContent, AnyToDeviceEventContent, ToDeviceEventType},
@@ -1167,7 +1167,7 @@ mod tests {
     use assert_matches2::assert_let;
     use client_common::deserialized_responses::{ProcessedToDeviceEvent, WithheldCode};
     use common_test::{async_test, ruma_response_from_json};
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, OneTimeKeyAlgorithm, OwnedMxcUri, TransactionId, UInt, UserId,
         api::client::{
             keys::{claim_keys, get_keys, upload_keys},

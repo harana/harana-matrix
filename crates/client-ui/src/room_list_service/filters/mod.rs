@@ -62,7 +62,7 @@ use client_matrix::{Client, test_utils::mocks::MatrixMockServer};
 #[cfg(test)]
 use common_test::JoinedRoomBuilder;
 #[cfg(test)]
-use common_ruma::RoomId;
+use harana_matrix_common::RoomId;
 use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
 
 use super::RoomListItem;

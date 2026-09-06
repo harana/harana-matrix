@@ -16,7 +16,7 @@ use futures_util::{Stream, StreamExt};
 use client_base::crypto::{
     CancelInfo, DeviceData, VerificationRequest as BaseVerificationRequest,
 };
-use common_ruma::{RoomId, events::key::verification::VerificationMethod};
+use harana_matrix_common::{RoomId, events::key::verification::VerificationMethod};
 
 #[cfg(feature = "qrcode")]
 use super::{QrVerification, QrVerificationData};
@@ -103,7 +103,7 @@ impl VerificationRequest {
     }
 
     /// Get our own user id.
-    pub fn own_user_id(&self) -> &common_ruma::UserId {
+    pub fn own_user_id(&self) -> &harana_matrix_common::UserId {
         self.inner.own_user_id()
     }
 
@@ -124,7 +124,7 @@ impl VerificationRequest {
 
     /// Get the user id of the other user participating in this verification
     /// flow.
-    pub fn other_user_id(&self) -> &common_ruma::UserId {
+    pub fn other_user_id(&self) -> &harana_matrix_common::UserId {
         self.inner.other_user()
     }
 
@@ -142,7 +142,7 @@ impl VerificationRequest {
     /// Get the device id of the other device participating in this
     /// verification flow. See [`VerificationRequest::other_device_data`] for
     /// when this is available.
-    pub fn other_device_id(&self) -> Option<common_ruma::OwnedDeviceId> {
+    pub fn other_device_id(&self) -> Option<harana_matrix_common::OwnedDeviceId> {
         self.inner.other_device_id()
     }
 

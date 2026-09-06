@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use client_matrix::RumaApiError;
-use common_ruma::{
+use harana_matrix_common::{
     api::{IncomingResponse, error::DeserializationError},
     exports::{http::Response, serde_json},
 };

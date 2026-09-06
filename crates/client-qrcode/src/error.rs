@@ -37,7 +37,7 @@ pub enum DecodingError {
     Version(u8),
     /// The QR code data doesn't contain valid ed25519 keys.
     #[error("the QR code contains invalid ed25519 keys: {0}")]
-    Keys(#[from] common_olm::KeyError),
+    Keys(#[from] harana_matrix_common::olm::KeyError),
 }
 
 /// Error type describing errors that happen while QR data is being encoded.

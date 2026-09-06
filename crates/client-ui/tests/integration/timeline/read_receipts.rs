@@ -27,7 +27,7 @@ use common_test::{
     ALICE, BOB, CAROL, JoinedRoomBuilder, async_test, event_factory::EventFactory,
 };
 use client_ui::timeline::{RoomExt, TimelineFocus, TimelineReadReceiptTracking};
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedEventId,
     api::client::receipt::create_receipt::v3::ReceiptType as CreateReceiptType,
     event_id,
@@ -51,7 +51,7 @@ use tokio::task::yield_now;
 ///
 /// Read receipts and unread markers go through the send queue, so they land on
 /// the server a moment after the call that asked for them returned.
-async fn wait_for_empty_send_queue(client: &client_matrix::Client, room_id: &common_ruma::RoomId) {
+async fn wait_for_empty_send_queue(client: &client_matrix::Client, room_id: &harana_matrix_common::RoomId) {
     for _ in 0..300 {
         let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
         if requests.is_empty() {
@@ -2008,7 +2008,7 @@ async fn test_no_duplicate_receipt_after_backpagination() {
     // Carol has a read receipt on the edit.
     let read_receipt_event = f
         .read_receipts()
-        .add(eid3, *CAROL, common_ruma::events::receipt::ReceiptType::Read, ReceiptThread::Unthreaded)
+        .add(eid3, *CAROL, harana_matrix_common::events::receipt::ReceiptType::Read, ReceiptThread::Unthreaded)
         .into_event();
 
     let prev_batch_token = "prev-batch-token";
@@ -2143,7 +2143,7 @@ async fn test_no_duplicate_receipt_after_backpagination_with_message_like_events
     // …and Carol has a read receipt on that (hidden) edit.
     let read_receipt_event = f
         .read_receipts()
-        .add(eid4, *CAROL, common_ruma::events::receipt::ReceiptType::Read, ReceiptThread::Unthreaded)
+        .add(eid4, *CAROL, harana_matrix_common::events::receipt::ReceiptType::Read, ReceiptThread::Unthreaded)
         .into_event();
 
     let prev_batch_token = "prev-batch-token";

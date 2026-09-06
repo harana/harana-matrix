@@ -15,7 +15,7 @@
 //! Timeline item content for other message-like events created by the
 //! EventContent macro from ruma.
 
-use common_ruma::events::MessageLikeEventType;
+use harana_matrix_common::events::MessageLikeEventType;
 
 /// A custom event created by the EventContent macro from ruma.
 #[derive(Debug, Clone, PartialEq)]

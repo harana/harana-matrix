@@ -22,14 +22,14 @@
 
 use std::pin::Pin;
 
-use common_ruma::{RoomVersionId, room_version_rules::RoomVersionRules};
+use harana_matrix_common::{RoomVersionId, room_version_rules::RoomVersionRules};
 
 #[cfg(test)]
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();
 
 use futures_core::Future;
 #[doc(no_inline)]
-pub use common_ruma as ruma;
+pub use harana_matrix_common as ruma;
 
 pub mod backoff;
 pub mod content_disposition;

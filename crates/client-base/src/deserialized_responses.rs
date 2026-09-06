@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, fmt, hash::Hash, iter, sync::LazyLock};
 
 pub use client_common::deserialized_responses::*;
 use regex::Regex;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, MxcUri, OwnedEventId, OwnedRoomId, OwnedUserId, UInt,
     UserId,
     events::{

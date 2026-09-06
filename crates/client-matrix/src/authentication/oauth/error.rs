@@ -24,7 +24,7 @@ pub use oauth2::{
         BasicRevocationErrorResponse,
     },
 };
-use common_ruma::{
+use harana_matrix_common::{
     api::client::discovery::get_authorization_server_metadata::v1::AuthorizationServerMetadataUrlError,
     serde::StringEnum,
 };

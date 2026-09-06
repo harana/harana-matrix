@@ -23,7 +23,7 @@ use client_common::{
         RawChunk, Update,
     },
 };
-use common_ruma::{EventId, OwnedEventId, RoomId, events::relation::RelationType};
+use harana_matrix_common::{EventId, OwnedEventId, RoomId, events::relation::RelationType};
 
 use super::{
     super::{Event, Gap, thread::ThreadInfo},

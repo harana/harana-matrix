@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     events::{
         AnyRoomAccountDataEvent, fully_read::FullyReadEventContent,
@@ -196,7 +196,7 @@ fn on_unread_marker(
 #[cfg(test)]
 mod tests {
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomId, event_id,
         events::{
             AnyRoomAccountDataEvent, RoomAccountDataEventType,

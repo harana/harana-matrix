@@ -20,10 +20,10 @@ use client_common::{
     debug::DebugRawEvent,
     deserialized_responses::{ProcessedToDeviceEvent, TimelineEvent},
 };
-pub use common_ruma::api::client::sync::sync_events::v3::{
+pub use harana_matrix_common::api::client::sync::sync_events::v3::{
     InvitedRoom as InvitedRoomUpdate, KnockedRoom as KnockedRoomUpdate,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
     api::client::sync::sync_events::UnreadNotificationsCount as RumaUnreadNotificationsCount,
     events::{
@@ -113,7 +113,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches::assert_matches;
-    use common_ruma::room_id;
+    use harana_matrix_common::room_id;
 
     use super::{
         InvitedRoomUpdate, JoinedRoomUpdate, KnockedRoomUpdate, LeftRoomUpdate, RoomUpdates,

@@ -17,10 +17,10 @@ use client_common::deserialized_responses::PrivOwnedStr;
 use oauth2::{
     EndUserVerificationUrl, StandardDeviceAuthorizationResponse, VerificationUriComplete,
 };
-use common_ruma::serde::StringEnum;
+use harana_matrix_common::serde::StringEnum;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use common_olm::Curve25519PublicKey;
+use harana_matrix_common::olm::Curve25519PublicKey;
 
 #[cfg(doc)]
 use super::QRCodeLoginError::SecureChannel;

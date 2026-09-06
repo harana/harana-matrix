@@ -47,8 +47,8 @@ use client_common::{
     ttl::TtlValue,
 };
 #[cfg(feature = "e2e-encryption")]
-use common_ruma::events::{InitialStateEvent, room::encryption::RoomEncryptionEventContent};
-use common_ruma::{
+use harana_matrix_common::events::{InitialStateEvent, room::encryption::RoomEncryptionEventContent};
+use harana_matrix_common::{
     DeviceId, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName,
     RoomAliasId, RoomId, RoomOrAliasId, ServerName, UInt, UserId,
     api::{
@@ -711,7 +711,7 @@ impl Client {
         &self,
         request_config: Option<RequestConfig>,
     ) -> HttpResult<ServerVendorInfo> {
-        use common_ruma::api::federation::discovery::get_server_version;
+        use harana_matrix_common::api::federation::discovery::get_server_version;
 
         let res = self
             .send_inner(get_server_version::v1::Request::new(), request_config, Default::default())
@@ -824,7 +824,7 @@ impl Client {
     /// Requires the Profiles sliding sync extension to be enabled.
     pub fn subscribe_to_global_profile_updates(
         &self,
-    ) -> broadcast::Receiver<BTreeSet<common_ruma::OwnedUserId>> {
+    ) -> broadcast::Receiver<BTreeSet<harana_matrix_common::OwnedUserId>> {
         self.base_client().subscribe_to_global_profile_updates()
     }
 
@@ -837,10 +837,10 @@ impl Client {
     /// **Note:** Without the Profiles sliding sync extension enabled only an
     /// empty profile will be emitted and no updates will be published.
     ///
-    /// [`UserProfile`]: common_ruma::profile::UserProfile
+    /// [`UserProfile`]: harana_matrix_common::profile::UserProfile
     pub fn subscribe_to_own_profile(
         &self,
-    ) -> Result<impl Stream<Item = common_ruma::profile::UserProfile> + use<>> {
+    ) -> Result<impl Stream<Item = harana_matrix_common::profile::UserProfile> + use<>> {
         let own_user_id = self.user_id().ok_or(Error::AuthenticationRequired)?.to_owned();
         let mut updates = self.subscribe_to_global_profile_updates();
         let client = self.clone();
@@ -1371,7 +1371,7 @@ impl Client {
     /// # futures_executor::block_on(async {
     /// # let client = client_matrix::Client::builder()
     /// #     .homeserver_url(homeserver)
-    /// #     .server_versions([common_ruma::api::MatrixVersion::V1_0])
+    /// #     .server_versions([harana_matrix_common::api::MatrixVersion::V1_0])
     /// #     .build()
     /// #     .await
     /// #     .unwrap();
@@ -1421,7 +1421,7 @@ impl Client {
     /// # futures_executor::block_on(async {
     /// # let client = client_matrix::Client::builder()
     /// #     .homeserver_url(homeserver)
-    /// #     .server_versions([common_ruma::api::MatrixVersion::V1_0])
+    /// #     .server_versions([harana_matrix_common::api::MatrixVersion::V1_0])
     /// #     .build()
     /// #     .await
     /// #     .unwrap();
@@ -2690,7 +2690,7 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// use common_ruma::api::{FeatureFlag, MatrixVersion};
+    /// use harana_matrix_common::api::{FeatureFlag, MatrixVersion};
     /// # use client_matrix::{Client, config::SyncSettings};
     /// # use url::Url;
     /// # async {
@@ -2818,7 +2818,7 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// use common_ruma::api::{FeatureFlag, MatrixVersion};
+    /// use harana_matrix_common::api::{FeatureFlag, MatrixVersion};
     /// # use client_matrix::{Client, config::SyncSettings};
     /// # use url::Url;
     /// # async {
@@ -2892,7 +2892,7 @@ impl Client {
     /// # Examples
     ///
     /// ```no_run
-    /// use common_ruma::api::MatrixVersion;
+    /// use harana_matrix_common::api::MatrixVersion;
     /// # use client_matrix::{Client, config::SyncSettings};
     /// # use url::Url;
     /// # async {
@@ -3696,7 +3696,7 @@ impl Client {
     /// [`full_state`]: crate::config::SyncSettings#method.full_state
     /// [`set_presence`]: crate::config::SyncSettings::set_presence
     /// [`filter`]: crate::config::SyncSettings#method.filter
-    /// [`Filter`]: common_ruma::api::client::sync::sync_events::v3::Filter
+    /// [`Filter`]: harana_matrix_common::api::client::sync::sync_events::v3::Filter
     /// [`next_batch`]: SyncResponse#structfield.next_batch
     /// [`get_or_upload_filter()`]: #method.get_or_upload_filter
     /// [long polling]: #long-polling
@@ -4583,7 +4583,7 @@ pub(crate) mod tests {
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     use client_common::cross_process_lock::CrossProcessLockConfig;
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomId, ServerName, UserId,
         api::{
             FeatureFlag, MatrixVersion,
@@ -6390,7 +6390,7 @@ pub(crate) mod tests {
 
         let data = vec![1, 2];
         let upload_request =
-            common_ruma::api::client::media::create_content::v3::Request::new(data.clone());
+            harana_matrix_common::api::client::media::create_content::v3::Request::new(data.clone());
         let request = SendRequest {
             client: client.clone(),
             request: upload_request,

@@ -45,7 +45,7 @@ use client_matrix::{
     task_monitor::BackgroundTaskHandle,
 };
 use mime::Mime;
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, OwnedTransactionId, UserId,
     api::client::receipt::create_receipt::v3::ReceiptType,
     events::{
@@ -265,7 +265,7 @@ impl Timeline {
     /// # use client_ui::Timeline;
     /// # async {
     /// # let mut client: Client = todo!();
-    /// # let room_id = common_ruma::room_id!("!example:example.org");
+    /// # let room_id = harana_matrix_common::room_id!("!example:example.org");
     /// # let timeline: Timeline = todo!();
     /// let path = PathBuf::from("/home/example/e2e-keys.txt");
     /// let result =

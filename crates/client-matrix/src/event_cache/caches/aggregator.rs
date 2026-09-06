@@ -18,7 +18,7 @@ use client_base::{
     serde_helpers::{extract_redaction_target, extract_relation, extract_thread_root},
     sync::Timeline,
 };
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId,
     events::{
         receipt::{ReceiptEventContent, ReceiptThread},

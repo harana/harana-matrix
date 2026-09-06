@@ -33,7 +33,7 @@
 //! # async {
 //! # let homeserver = Url::parse("http://example.com")?;
 //! # let client = Client::new(homeserver).await?;
-//! use common_ruma::events::secret::request::SecretName;
+//! use harana_matrix_common::events::secret::request::SecretName;
 //!
 //! // Open the store.
 //! let secret_store = client
@@ -66,7 +66,7 @@ use client_base::crypto::{
     CryptoStoreError, SecretImportError,
     secret_storage::{DecodeError, MacError, SecretStorageKey},
 };
-use common_ruma::{
+use harana_matrix_common::{
     events::{
         EventContentFromType, GlobalAccountDataEventType,
         secret::request::SecretName,
@@ -104,7 +104,7 @@ pub enum ImportError {
 
     /// The key that we tried to import was invalid.
     #[error(transparent)]
-    Key(common_olm::KeyError),
+    Key(harana_matrix_common::olm::KeyError),
 
     /// The public key of the imported private key doesn't match the public
     /// key that was uploaded to the server.
@@ -259,7 +259,7 @@ impl SecretStorage {
     /// # async {
     /// # let homeserver = Url::parse("http://example.com")?;
     /// # let client = Client::new(homeserver).await?;
-    /// use common_ruma::events::secret::request::SecretName;
+    /// use harana_matrix_common::events::secret::request::SecretName;
     ///
     /// let secret_store = client
     ///     .encryption()
@@ -330,7 +330,7 @@ impl SecretStorage {
     /// # async {
     /// # let homeserver = Url::parse("http://example.com")?;
     /// # let client = Client::new(homeserver).await?;
-    /// use common_ruma::events::secret::request::SecretName;
+    /// use harana_matrix_common::events::secret::request::SecretName;
     ///
     /// let secret_store = client
     ///     .encryption()

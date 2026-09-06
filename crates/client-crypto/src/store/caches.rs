@@ -28,7 +28,7 @@ use std::{
 };
 
 use client_common::locks::RwLock as StdRwLock;
-use common_ruma::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
+use harana_matrix_common::{DeviceId, OwnedDeviceId, OwnedUserId, UserId};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, MutexGuard, OwnedRwLockReadGuard, RwLock};
 use tracing::{Span, field::display, instrument, trace};

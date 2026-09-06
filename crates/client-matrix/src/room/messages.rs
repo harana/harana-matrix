@@ -16,7 +16,7 @@ use std::fmt;
 
 use futures_util::future::join_all;
 use client_common::{debug::DebugStructExt as _, deserialized_responses::TimelineEvent};
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, RoomId, UInt,
     api::{
         Direction,
@@ -186,7 +186,7 @@ pub struct Messages {
 /// The result of a [`super::Room::event_with_context`] query.
 ///
 /// This is a wrapper around
-/// [`common_ruma::api::client::context::get_context::v3::Response`], with events
+/// [`harana_matrix_common::api::client::context::get_context::v3::Response`], with events
 /// decrypted if needs be.
 #[derive(Debug, Default)]
 pub struct EventWithContextResponse {
@@ -412,7 +412,7 @@ pub struct Relations {
 
 #[cfg(test)]
 mod tests {
-    use common_ruma::api::Direction;
+    use harana_matrix_common::api::Direction;
 
     use super::{BEACON_EVENT_TYPES, MessagesOptions};
 

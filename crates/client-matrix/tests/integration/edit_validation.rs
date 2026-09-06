@@ -4,7 +4,7 @@ use client_matrix::{
     deserialized_responses::{AlgorithmInfo, EncryptionInfo, VerificationState},
 };
 use common_test::event_factory::EventFactory;
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::{AnySyncTimelineEvent, room::message::RoomMessageEventContentWithoutRelation},
     serde::Raw,

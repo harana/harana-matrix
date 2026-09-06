@@ -16,7 +16,7 @@
 
 use std::{borrow::Borrow, future::Future};
 
-use common_ruma::{
+use harana_matrix_common::{
     EventId, OwnedEventId, RoomId,
     events::StateEventType,
     room_version_rules::RoomVersionRules,
@@ -152,7 +152,7 @@ where
             cache.insert(event_id, event);
         }
 
-        let result = common_ruma::state_res::check_state_independent_auth_rules(
+        let result = harana_matrix_common::state_res::check_state_independent_auth_rules(
             &rules.authorization,
             incoming_event,
             |event_id: &EventId| cache.get(&event_id.to_owned()),
@@ -232,7 +232,7 @@ where
             cache.insert(key, event);
         }
 
-        let result = common_ruma::state_res::check_state_dependent_auth_rules(
+        let result = harana_matrix_common::state_res::check_state_dependent_auth_rules(
             &rules.authorization,
             incoming_event,
             |event_type: &StateEventType, state_key: &str| {
@@ -262,6 +262,6 @@ where
 ///
 /// Room versions from 12 onwards use the create event's reference hash as the
 /// room ID, so the two differ only by their sigil.
-fn room_create_event_id(room_id: &RoomId) -> Result<OwnedEventId, common_ruma::IdParseError> {
+fn room_create_event_id(room_id: &RoomId) -> Result<OwnedEventId, harana_matrix_common::IdParseError> {
     EventId::parse(format!("${}", room_id.strip_sigil()))
 }

@@ -24,7 +24,7 @@
 use std::sync::Arc;
 
 use client_matrix::deserialized_responses::EncryptionInfo;
-use common_ruma::{
+use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch,
     events::{beacon_info::BeaconInfoEventContent, location::AssetType},
 };

@@ -32,7 +32,7 @@ use client_base::{
     store::migration_helpers::RoomInfoV1,
 };
 use client_store_encryption::StoreCipher;
-use common_ruma::{
+use harana_matrix_common::{
     events::{
         StateEventType,
         room::{
@@ -873,7 +873,7 @@ mod tests {
         sync::UnreadNotificationsCount,
     };
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, MilliSecondsSinceUnixEpoch, OwnedUserId, RoomId, UserId,
         events::{
             AnySyncStateEvent, StateEventType,
@@ -1313,7 +1313,7 @@ mod tests {
             .member(user_id)
             .invited(user_id)
             .display_name("example")
-            .avatar_url(common_ruma::mxc_uri!("mxc://localhost/SEsfnsuifSDFSSEF"))
+            .avatar_url(harana_matrix_common::mxc_uri!("mxc://localhost/SEsfnsuifSDFSSEF"))
             .reason("Looking for support")
             .into();
 
@@ -1399,7 +1399,7 @@ mod tests {
             .member(invite_user_id)
             .invited(invite_user_id)
             .display_name("example")
-            .avatar_url(common_ruma::mxc_uri!("mxc://localhost/SEsfnsuifSDFSSEF"))
+            .avatar_url(harana_matrix_common::mxc_uri!("mxc://localhost/SEsfnsuifSDFSSEF"))
             .reason("Looking for support")
             .into();
         let ban_member_event: Raw<SyncRoomMemberEvent> =

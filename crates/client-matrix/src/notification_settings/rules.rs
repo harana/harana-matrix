@@ -2,7 +2,7 @@
 
 use imbl::HashSet;
 use indexmap::IndexSet;
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     push::{
         AnyPushRuleRef, PatternedPushRule, PredefinedContentRuleId, PredefinedOverrideRuleId,
@@ -335,7 +335,7 @@ pub(crate) mod tests {
             build_ruleset, get_server_default_ruleset, server_default_ruleset_with_legacy_mentions,
         },
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedRoomId, RoomId,
         push::{
             Action, EventMatchConditionData, NewConditionalPushRule, NewPushRule,

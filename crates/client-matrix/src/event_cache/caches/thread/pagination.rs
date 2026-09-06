@@ -20,7 +20,7 @@ use client_base::{
     event_cache::{Event, Gap},
     linked_chunk::{ChunkContent, LinkedChunkId, Update},
 };
-use common_ruma::api::Direction;
+use harana_matrix_common::api::Direction;
 use tracing::{error, trace};
 
 use super::{

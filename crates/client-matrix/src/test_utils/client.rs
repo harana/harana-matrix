@@ -15,7 +15,7 @@
 //! Augmented [`ClientBuilder`] that can set up an already logged-in user.
 
 use client_base::{SessionMeta, store::RoomLoadSettings};
-use common_ruma::{OwnedDeviceId, OwnedUserId, api::MatrixVersion, owned_device_id, owned_user_id};
+use harana_matrix_common::{OwnedDeviceId, OwnedUserId, api::MatrixVersion, owned_device_id, owned_user_id};
 
 use crate::{
     Client, ClientBuilder, SessionTokens, authentication::matrix::MatrixSession,
@@ -261,7 +261,7 @@ pub fn mock_matrix_session() -> MatrixSession {
 
 /// Mock client data for the OAuth 2.0 API.
 pub mod oauth {
-    use common_ruma::serde::Raw;
+    use harana_matrix_common::serde::Raw;
     use url::Url;
 
     use crate::{

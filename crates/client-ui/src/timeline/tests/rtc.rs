@@ -6,7 +6,7 @@ use assert_matches::assert_matches;
 use eyeball_im::VectorDiff;
 use client_base::CallIntentConsensus;
 use common_test::{ALICE, BOB, CAROL};
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::rtc::notification::{CallIntent, NotificationType},
 };

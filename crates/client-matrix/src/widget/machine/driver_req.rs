@@ -16,7 +16,7 @@
 
 use std::{collections::BTreeMap, marker::PhantomData};
 
-use common_ruma::{
+use harana_matrix_common::{
     OwnedMxcUri, OwnedUserId,
     api::client::{account::request_openid_token, delayed_events::update_delayed_event},
     events::{AnyStateEvent, AnyTimelineEvent, AnyToDeviceEventContent},

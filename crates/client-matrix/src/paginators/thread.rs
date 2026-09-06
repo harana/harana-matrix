@@ -23,7 +23,7 @@ use std::{
 };
 
 use client_base::{SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent};
-use common_ruma::{EventId, OwnedEventId, UInt, api::Direction};
+use harana_matrix_common::{EventId, OwnedEventId, UInt, api::Direction};
 
 use crate::{
     Error, Room,

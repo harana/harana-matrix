@@ -38,7 +38,7 @@ use client_base::crypto::{
 };
 use client_common::timeout::timeout;
 use common_test::{JoinedRoomBuilder, SyncResponseBuilder, TestResult, async_test};
-use common_ruma::{
+use harana_matrix_common::{
     EventId, RoomId, TransactionId,
     api::client::room::create_room::v3::Request as CreateRoomRequest,
     assign, event_id,
@@ -48,7 +48,7 @@ use common_ruma::{
 use serde_json::{Value, json};
 use tempfile::tempdir;
 use tokio::spawn;
-use common_olm::{
+use harana_matrix_common::olm::{
     Curve25519PublicKey, Curve25519SecretKey, Ed25519PublicKey, Ed25519SecretKey, olm::IdentityKeys,
 };
 use wiremock::{
@@ -425,7 +425,7 @@ async fn test_backup_resumption() -> TestResult {
 
     let builder = Client::builder()
         .homeserver_url(server.uri())
-        .server_versions([common_ruma::api::MatrixVersion::V1_0]);
+        .server_versions([harana_matrix_common::api::MatrixVersion::V1_0]);
 
     let client = builder
         .request_config(RequestConfig::new().disable_retry())
@@ -835,7 +835,7 @@ async fn test_incremental_upload_of_keys_sliding_sync() -> TestResult {
     let server = wiremock::MockServer::start().await;
     let builder = Client::builder()
         .homeserver_url(server.uri())
-        .server_versions([common_ruma::api::MatrixVersion::V1_0]);
+        .server_versions([harana_matrix_common::api::MatrixVersion::V1_0]);
 
     let client = builder.request_config(RequestConfig::new().disable_retry()).build().await?;
 

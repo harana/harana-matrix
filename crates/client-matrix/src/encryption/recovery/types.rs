@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use client_base::crypto::store::types::RoomKeyCounts;
-use common_ruma::events::macros::EventContent;
+use harana_matrix_common::events::macros::EventContent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop};

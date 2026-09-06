@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use client_matrix::room::power_levels::power_level_user_changes;
 use client_base::CallIntentConsensus;
 use client_ui::timeline::RoomPinnedEventsChange;
-use common_ruma::events::{
+use harana_matrix_common::events::{
     StateEventContentChange, room::history_visibility::HistoryVisibility as RumaHistoryVisibility,
 };
 

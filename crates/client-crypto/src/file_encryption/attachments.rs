@@ -19,7 +19,7 @@ use aes::{
     cipher::{KeyIvInit, StreamCipher},
 };
 use rand::{Rng, rng};
-use common_ruma::{
+use harana_matrix_common::{
     events::room::{
         EncryptedFile, EncryptedFileHash, EncryptedFileHashAlgorithm, EncryptedFileHashes,
         EncryptedFileInfo, V2EncryptedFileInfo,
@@ -82,7 +82,7 @@ pub enum DecryptorError {
     /// Some data in the encrypted attachment coldn't be decoded, this may be a
     /// hash, the secret key, or the initialization vector.
     #[error(transparent)]
-    Decode(#[from] common_olm::Base64DecodeError),
+    Decode(#[from] harana_matrix_common::olm::Base64DecodeError),
     /// A hash is missing from the encryption info.
     #[error("The encryption info is missing a hash")]
     MissingHash,

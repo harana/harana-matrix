@@ -31,7 +31,7 @@ use client_base::{
     read_receipts::ReadReceipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
 };
-use common_ruma::{
+use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
     RoomId, UInt,
     api::client::retention::get_retention_configuration,
@@ -793,7 +793,7 @@ mod tests {
         linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
     };
     use common_test::{async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         RoomId, event_id,
         events::{
             receipt::{ReceiptThread, ReceiptType},
@@ -1194,7 +1194,7 @@ mod timed_tests {
     };
     use client_common::cross_process_lock::CrossProcessLockConfig;
     use common_test::{ALICE, BOB, async_test, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         EventId, MilliSecondsSinceUnixEpoch, event_id,
         events::{AnySyncMessageLikeEvent, AnySyncTimelineEvent},
         room_id,

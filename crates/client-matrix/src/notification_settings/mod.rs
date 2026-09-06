@@ -17,7 +17,7 @@
 use std::{ops::Deref, sync::Arc};
 
 use indexmap::IndexSet;
-use common_ruma::{
+use harana_matrix_common::{
     RoomId,
     api::client::push::{
         delete_pushrule, set_pushrule, set_pushrule_actions, set_pushrule_enabled,
@@ -278,10 +278,10 @@ impl NotificationSettings {
         rule_id: String,
         rule_kind: RuleKind,
         actions: Vec<Action>,
-        conditions: Vec<common_ruma::push::PushCondition>,
+        conditions: Vec<harana_matrix_common::push::PushCondition>,
     ) -> Result<(), NotificationSettingsError> {
         let new_conditional_rule =
-            common_ruma::push::NewConditionalPushRule::new(rule_id, conditions, actions);
+            harana_matrix_common::push::NewConditionalPushRule::new(rule_id, conditions, actions);
 
         let new_push_rule = match rule_kind {
             RuleKind::Override => NewPushRule::Override(new_conditional_rule),
@@ -646,7 +646,7 @@ mod tests {
         event_factory::EventFactory,
         notification_settings::{build_ruleset, get_server_default_ruleset},
     };
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedRoomId, RoomId, owned_room_id,
         push::{
             Action, AnyPushRuleRef, EventMatchConditionData, NewPatternedPushRule, NewPushRule,

@@ -23,7 +23,7 @@ use client_matrix::{
 };
 use common_test::{BOB, async_test, event_factory::EventFactory};
 use client_ui::timeline::RoomExt;
-use common_ruma::{
+use harana_matrix_common::{
     event_id,
     events::room::encrypted::{
         EncryptedEventScheme, MegolmV1AesSha2ContentInit, RoomEncryptedEventContent,

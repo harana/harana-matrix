@@ -38,7 +38,7 @@ use client_matrix::{
     executor::{JoinHandle, spawn},
     sleep::sleep,
 };
-use common_ruma::time::Instant;
+use harana_matrix_common::time::Instant;
 use thiserror::Error;
 use tokio::sync::{
     Mutex as AsyncMutex, OwnedMutexGuard,
@@ -866,7 +866,7 @@ impl TerminationReport {
         match &self.error {
             Some(Error::RoomList(room_list_service::Error::SlidingSync(error)))
             | Some(Error::EncryptionSync(encryption_sync_service::Error::SlidingSync(error))) => {
-                error.client_api_error_kind() == Some(&common_ruma::api::error::ErrorKind::UnknownPos)
+                error.client_api_error_kind() == Some(&harana_matrix_common::api::error::ErrorKind::UnknownPos)
             }
             _ => false,
         }

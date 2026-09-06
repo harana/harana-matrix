@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ruma::{OwnedUserId, events::rtc::notification::CallIntent};
+use harana_matrix_common::{OwnedUserId, events::rtc::notification::CallIntent};
 
 use super::Room;
 
@@ -64,8 +64,8 @@ impl Room {
     /// [`RoomInfo::is_device_in_active_room_call`]: crate::RoomInfo::is_device_in_active_room_call
     pub fn is_device_in_active_room_call(
         &self,
-        user_id: &common_ruma::UserId,
-        device_id: &common_ruma::DeviceId,
+        user_id: &harana_matrix_common::UserId,
+        device_id: &harana_matrix_common::DeviceId,
     ) -> bool {
         self.info.read().is_device_in_active_room_call(user_id, device_id)
     }
@@ -83,7 +83,7 @@ mod tests {
 
     use assign::assign;
     use common_test::{ALICE, BOB, CAROL, event_factory::EventFactory};
-    use common_ruma::{
+    use harana_matrix_common::{
         DeviceId, EventId, MilliSecondsSinceUnixEpoch, OwnedUserId, UserId, device_id, event_id,
         events::{
             AnySyncStateEvent,
@@ -185,7 +185,7 @@ mod tests {
     ) -> Raw<AnySyncStateEvent> {
         let mut app_content = CallApplicationContent::new(
             "my_call_id_1".to_owned(),
-            common_ruma::events::call::member::CallScope::Room,
+            harana_matrix_common::events::call::member::CallScope::Room,
         );
         app_content.call_intent = call_intent;
 
@@ -233,7 +233,7 @@ mod tests {
         (
             Application::Call(CallApplicationContent::new(
                 "my_call_id_1".to_owned(),
-                common_ruma::events::call::member::CallScope::Room,
+                harana_matrix_common::events::call::member::CallScope::Room,
             )),
             vec![Focus::Livekit(LivekitFocus::new(
                 "my_call_foci_alias".to_owned(),

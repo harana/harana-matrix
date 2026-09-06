@@ -14,7 +14,7 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
-use common_ruma::{OwnedDeviceId, OwnedUserId};
+use harana_matrix_common::{OwnedDeviceId, OwnedUserId};
 
 /// Customized version of `ruma_client_api::keys::get_keys::v3::Request`,
 /// without any references.

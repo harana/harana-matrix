@@ -6,7 +6,7 @@ use client_common::{
     cross_process_lock::{CrossProcessLock, CrossProcessLockConfig},
     locks::RwLock as StdRwLock,
 };
-use common_ruma::{DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId};
+use harana_matrix_common::{DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId};
 use tokio::sync::{Mutex, broadcast};
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{debug, trace, warn};
@@ -579,7 +579,7 @@ impl Deref for CryptoStoreWrapper {
 #[cfg(test)]
 mod test {
     use common_test::async_test;
-    use common_ruma::{SecondsSinceUnixEpoch, UInt, device_id, user_id};
+    use harana_matrix_common::{SecondsSinceUnixEpoch, UInt, device_id, user_id};
 
     use super::*;
     use crate::{
@@ -725,7 +725,7 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use common_test::async_test;
-    use common_ruma::{device_id, room_id, user_id};
+    use harana_matrix_common::{device_id, room_id, user_id};
 
     use super::CryptoStoreWrapper;
     use crate::store::{

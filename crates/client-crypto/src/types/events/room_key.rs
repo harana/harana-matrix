@@ -16,10 +16,10 @@
 
 use std::collections::BTreeMap;
 
-use common_ruma::{OwnedRoomId, RoomId, serde::Raw};
+use harana_matrix_common::{OwnedRoomId, RoomId, serde::Raw};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::to_raw_value};
-use common_olm::megolm::SessionKey;
+use harana_matrix_common::olm::megolm::SessionKey;
 
 use super::{EventType, ToDeviceEvent};
 #[cfg(doc)]
@@ -117,7 +117,7 @@ pub struct MegolmV1AesSha2Content {
     /// The key to be exchanged. Can be used to create a [`InboundGroupSession`]
     /// that can be used to decrypt room events.
     ///
-    /// [`InboundGroupSession`]: common_olm::megolm::InboundGroupSession
+    /// [`InboundGroupSession`]: harana_matrix_common::olm::megolm::InboundGroupSession
     pub session_key: SessionKey,
     /// Whether this room key can be shared with users who are invited to the
     /// room in the future, allowing access to history, as defined in

@@ -19,7 +19,7 @@ use client_common::{
     executor::{JoinHandle, spawn},
     locks::Mutex,
 };
-use common_ruma::time::SystemTime;
+use harana_matrix_common::time::SystemTime;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::error;
 
@@ -366,7 +366,7 @@ pub trait TimeProvider: SendOutsideWasm + SyncOutsideWasm {
     fn now(&self) -> SystemTime;
 }
 
-/// The default time provider, that calls `common_ruma::time::SystemTime::now()`.
+/// The default time provider, that calls `harana_matrix_common::time::SystemTime::now()`.
 #[derive(Debug)]
 pub struct DefaultTimeProvider;
 
@@ -386,7 +386,7 @@ mod tests {
     use async_trait::async_trait;
     use client_common::locks::Mutex;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         OwnedMxcUri,
         events::room::MediaSource,
         mxc_uri,

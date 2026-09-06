@@ -45,7 +45,7 @@ use client_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex as 
 use client_crypto::store::{DynCryptoStore, IntoCryptoStore};
 pub use client_store_encryption::Error as StoreEncryptionError;
 use observable_map::ObservableMap;
-use common_ruma::{
+use harana_matrix_common::{
     OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
     events::{
         AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnyStrippedStateEvent,
@@ -120,7 +120,7 @@ pub enum StoreError {
     /// An error happened while deserializing a Matrix identifier, e.g. an user
     /// id.
     #[error(transparent)]
-    Identifier(#[from] common_ruma::IdParseError),
+    Identifier(#[from] harana_matrix_common::IdParseError),
 
     /// The store is locked with a passphrase and an incorrect passphrase was
     /// given.
@@ -150,7 +150,7 @@ pub enum StoreError {
     ///
     /// This should never happen.
     #[error("Redaction failed: {0}")]
-    Redaction(#[source] common_ruma::canonical_json::CanonicalJsonFieldError),
+    Redaction(#[source] harana_matrix_common::canonical_json::CanonicalJsonFieldError),
 
     /// The store contains invalid data.
     #[error("The store contains invalid data: {details}")]
@@ -703,7 +703,7 @@ impl StateChanges {
         state_key: &K,
     ) -> Option<&Raw<SyncStateEvent<C>>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::Redacted: RedactedStateEventContent,
@@ -726,7 +726,7 @@ impl StateChanges {
         state_key: &K,
     ) -> Option<&Raw<StrippedStateEvent<C::PossiblyRedacted>>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False> + StaticStateEventContent,
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False> + StaticStateEventContent,
         C::StateKey: Borrow<K>,
         K: AsRef<str> + ?Sized,
     {
@@ -747,7 +747,7 @@ impl StateChanges {
         state_key: &K,
     ) -> Option<StrippedStateEvent<C::PossiblyRedacted>>
     where
-        C: StaticEventContent<IsPrefix = common_ruma::events::False>
+        C: StaticEventContent<IsPrefix = harana_matrix_common::events::False>
             + StaticStateEventContent
             + RedactContent,
         C::Redacted: RedactedStateEventContent,
@@ -897,7 +897,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use common_test::async_test;
-    use common_ruma::{
+    use harana_matrix_common::{
         events::room::redaction::SyncRoomRedactionEvent, owned_device_id, owned_event_id,
         owned_user_id, room_id, room_version_rules::RedactionRules, serde::Raw, user_id,
     };

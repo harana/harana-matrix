@@ -22,7 +22,7 @@ use client_matrix::{
     },
 };
 use common_test::{async_test, test_json};
-use common_ruma::{
+use harana_matrix_common::{
     api::{
         MatrixVersion,
         client::account::register,
@@ -96,7 +96,7 @@ async fn test_login_sso_refresh_token() {
         .mount(&server)
         .await;
 
-    let idp = common_ruma::api::client::session::get_login_types::v3::IdentityProvider::new(
+    let idp = harana_matrix_common::api::client::session::get_login_types::v3::IdentityProvider::new(
         "some-id".to_owned(),
         "idp-name".to_owned(),
     );

@@ -18,7 +18,7 @@ use std::{fmt, sync::Arc, time::Duration};
 
 use client_base::{SessionMeta, locks::Mutex};
 use client_common::BoxFuture;
-use common_ruma::time::Instant;
+use harana_matrix_common::time::Instant;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex as AsyncMutex, OnceCell, broadcast};
 

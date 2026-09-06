@@ -6,7 +6,7 @@ use client_crypto::{
     store::{CryptoStoreError as InnerStoreError, DehydrationError as InnerDehydrationError},
 };
 use client_sqlite::OpenStoreError;
-use common_ruma::{IdParseError, OwnedUserId};
+use harana_matrix_common::{IdParseError, OwnedUserId};
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]

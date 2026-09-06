@@ -9,7 +9,7 @@ use client_matrix::{
 use client_base::{SessionMeta, StateStore as _, store::MemoryStore};
 use client_sqlite::SqliteStateStore;
 use common_test::base64_sha256_hash;
-use common_ruma::{OwnedRoomId, RoomId, owned_device_id, owned_user_id};
+use harana_matrix_common::{OwnedRoomId, RoomId, owned_device_id, owned_user_id};
 use tokio::runtime::Builder;
 
 /// Number of joined rooms in the benchmark.

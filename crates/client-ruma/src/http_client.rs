@@ -4,7 +4,7 @@
 use std::{future::Future, pin::Pin};
 
 use bytes::BufMut;
-use common_ruma::api::{
+use harana_matrix_common::api::{
     AppserviceUserIdentity, OutgoingRequest,
     auth_scheme::{AuthScheme, SendAccessToken},
     path_builder::PathBuilder,

@@ -1,4 +1,4 @@
-use common_ruma::{
+use harana_matrix_common::{
     RoomId, UserId,
     power_levels::NotificationPowerLevelsKey,
     push::{

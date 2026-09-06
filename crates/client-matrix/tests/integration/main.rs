@@ -27,7 +27,7 @@ mod sync;
 #[cfg(feature = "experimental-widgets")]
 mod widget;
 
-common_test_utils::init_tracing_for_tests!();
+harana_matrix_common::init_tracing_for_tests!();
 
 /// Mount a Mock on the given server to handle the `GET /sync` endpoint with
 /// an optional `since` param that returns a 200 status code with the given
