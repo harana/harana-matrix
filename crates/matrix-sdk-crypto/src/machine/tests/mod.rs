@@ -2103,6 +2103,134 @@ async fn test_olm_machine_with_custom_account() {
     );
 }
 
+/// A bundled aggregation is a separate encrypted event, so it can be a UTD
+/// while the event carrying it decrypted fine. Nothing about the outer event
+/// changes when the bundled event's room key arrives, so there has to be a way
+/// to ask again without re-decrypting the outer event.
+#[async_test]
+async fn test_retry_decryption_of_bundled_events() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let give_bob_the_room_key = async |alice: &OlmMachine, bob: &OlmMachine| {
+        let to_device_requests = alice
+            .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+            .await
+            .unwrap();
+        let event = ToDeviceEvent::new(
+            alice.user_id().to_owned(),
+            to_device_requests_to_content(to_device_requests),
+        );
+
+        bob.store()
+            .with_transaction(async |tr| {
+                let res = bob
+                    .decrypt_to_device_event(
+                        tr,
+                        &event,
+                        &mut Changes::default(),
+                        &decryption_settings,
+                    )
+                    .await?;
+                Ok(res)
+            })
+            .await
+            .unwrap()
+            .inbound_group_session
+            .unwrap()
+    };
+
+    // Bob gets the key for the original message.
+    let session = give_bob_the_room_key(&alice, &bob).await;
+    bob.store().save_inbound_group_sessions(&[session]).await.unwrap();
+
+    let original = alice
+        .encrypt_room_event(room_id, RoomMessageEventContent::text_plain("original"))
+        .await
+        .unwrap();
+
+    // The edit is sent under a new session that Bob does not have.
+    alice.discard_room_key(room_id).await.unwrap();
+    let edit_session = give_bob_the_room_key(&alice, &bob).await;
+
+    let original_event_id = ruma::event_id!("$original:example.org");
+    let edit_content = RoomMessageEventContent::text_plain("edited").make_replacement(
+        ruma::events::room::message::ReplacementMetadata::new(
+            original_event_id.to_owned(),
+            None,
+        ),
+    );
+    let edit = alice.encrypt_room_event(room_id, edit_content).await.unwrap();
+
+    let event = json_convert(&json!({
+        "event_id": original_event_id,
+        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+        "sender": alice.user_id(),
+        "type": "m.room.encrypted",
+        "content": original.content,
+        "unsigned": {
+            "m.relations": {
+                "m.replace": {
+                    "event_id": "$edit:example.org",
+                    "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+                    "sender": alice.user_id(),
+                    "type": "m.room.encrypted",
+                    "content": edit.content,
+                },
+            },
+        },
+    }))
+    .unwrap();
+
+    // The outer event decrypts, the bundled edit does not.
+    let mut decrypted =
+        bob.decrypt_room_event(&event, room_id, &decryption_settings).await.unwrap();
+
+    assert_let!(Some(info) = &decrypted.unsigned_encryption_info);
+    assert_matches!(
+        info.get(&UnsignedEventLocation::RelationsReplace).unwrap(),
+        UnsignedDecryptionResult::UnableToDecrypt(_)
+    );
+
+    // Asking again before the key arrives changes nothing.
+    assert!(
+        !bob.retry_decryption_of_bundled_events(&mut decrypted, room_id, &decryption_settings)
+            .await
+            .unwrap(),
+        "Nothing should have changed while the room key is still missing",
+    );
+
+    // The room key for the edit arrives.
+    bob.store().save_inbound_group_sessions(&[edit_session]).await.unwrap();
+
+    assert!(
+        bob.retry_decryption_of_bundled_events(&mut decrypted, room_id, &decryption_settings)
+            .await
+            .unwrap(),
+        "The bundled edit should have been decrypted now",
+    );
+
+    assert_let!(Some(info) = &decrypted.unsigned_encryption_info);
+    assert_matches!(
+        info.get(&UnsignedEventLocation::RelationsReplace).unwrap(),
+        UnsignedDecryptionResult::Decrypted(_)
+    );
+
+    // ... and the decrypted edit is now part of the event itself.
+    assert_let!(
+        AnyTimelineEvent::MessageLike(AnyMessageLikeEvent::RoomMessage(message)) =
+            decrypted.event.deserialize().unwrap()
+    );
+    let message = message.as_original().unwrap();
+    let replace = message.unsigned.relations.replace.as_ref().unwrap();
+    assert_let!(Some(Relation::Replacement(replacement)) = &replace.content.relates_to);
+    assert_eq!(replacement.new_content.msgtype.body(), "edited");
+}
+
 #[async_test]
 async fn test_unsigned_decryption() {
     let (alice, bob) =

@@ -137,6 +137,7 @@ use matrix_sdk_base::{
 };
 #[cfg(doc)]
 use matrix_sdk_common::deserialized_responses::EncryptionInfo;
+use matrix_sdk_common::deserialized_responses::UnsignedDecryptionResult;
 use ruma::{
     OwnedEventId, OwnedRoomId, RoomId,
     events::{AnySyncTimelineEvent, room::encrypted::OriginalSyncRoomEncryptedEvent},
@@ -403,6 +404,102 @@ impl EventCache {
         utds
     }
 
+    /// Retrieve the events in a room whose bundled aggregation - an edit, or
+    /// the latest event of a thread - we could not decrypt with the given room
+    /// key.
+    ///
+    /// A bundled aggregation is a separate encrypted event, so it can be a UTD
+    /// while the event carrying it decrypted fine. Such an event is stored as
+    /// decrypted and indexed under the outer event's session ID, so the store
+    /// query by session ID never finds it; these are picked out of the events
+    /// the cache holds in memory, which is where the ones a timeline is
+    /// showing live.
+    async fn all_events_with_bundled_utd(
+        &self,
+        room_id: &RoomId,
+        session_id: SessionId<'_>,
+    ) -> Vec<EventIdAndEvent> {
+        let by_room = self.inner.by_room.read().await;
+
+        let Some(caches) = by_room.get(room_id) else {
+            return Vec::new();
+        };
+
+        caches
+            .all_in_memory_events()
+            .await
+            .into_iter()
+            .flatten()
+            .filter(|event| {
+                event.kind.unsigned_encryption_map().is_some_and(|map| {
+                    map.values().any(|result| match result {
+                        UnsignedDecryptionResult::UnableToDecrypt(utd) => {
+                            utd.session_id.as_deref() == Some(session_id)
+                        }
+                        UnsignedDecryptionResult::Decrypted(_) => false,
+                    })
+                })
+            })
+            .filter_map(filter_timeline_event_to_decrypted)
+            .collect()
+    }
+
+    /// Try to decrypt the bundled aggregations of events whose outer event we
+    /// had already decrypted.
+    async fn retry_decryption_of_bundled_events(
+        &self,
+        room_id: &RoomId,
+        session_id: SessionId<'_>,
+    ) -> Result<(), EventCacheError> {
+        let events = self.all_events_with_bundled_utd(room_id, session_id).await;
+
+        if events.is_empty() {
+            return Ok(());
+        }
+
+        let Ok(client) = self.inner.client() else {
+            return Ok(());
+        };
+
+        let machine = client.olm_machine().await;
+        let Some(machine) = machine.as_ref() else {
+            return Ok(());
+        };
+
+        let settings = client.decryption_settings();
+        let mut updated_events = Vec::with_capacity(events.len());
+
+        for (event_id, mut event) in events {
+            match machine
+                .retry_decryption_of_bundled_events(&mut event, room_id, settings)
+                .await
+            {
+                Ok(true) => updated_events.push(ResolvedUtd {
+                    event_id,
+                    decrypted_event: event,
+                    actions: None,
+                }),
+                Ok(false) => {}
+                Err(error) => {
+                    warn!(
+                        %room_id,
+                        session_id,
+                        "Failed to redecrypt a bundled event despite receiving its room key: \
+                         {error:?}",
+                    );
+                }
+            }
+        }
+
+        if updated_events.is_empty() {
+            return Ok(());
+        }
+
+        trace!(count = updated_events.len(), "Redecrypted some bundled events");
+
+        self.on_resolved_utds(room_id, updated_events).await
+    }
+
     async fn all_decrypted_events(
         &self,
         room_id: &RoomId,
@@ -665,7 +762,11 @@ impl EventCache {
     ) -> Result<(), EventCacheError> {
         // Get all the relevant UTDs.
         let events = self.all_encrypted_events(room_id, session_id).await?;
-        self.retry_decryption_for_events(room_id, events).await
+        self.retry_decryption_for_events(room_id, events).await?;
+
+        // An event can decrypt fine and still carry a bundled aggregation we
+        // could not decrypt, so those need asking about separately.
+        self.retry_decryption_of_bundled_events(room_id, session_id).await
     }
 
     /// Attempt to redecrypt events that were persisted in the event cache.

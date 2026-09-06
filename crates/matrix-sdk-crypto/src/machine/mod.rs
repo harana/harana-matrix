@@ -2758,6 +2758,46 @@ impl OlmMachine {
         Ok(())
     }
 
+    /// Try again to decrypt the events bundled in the `unsigned` object of an
+    /// event we have already decrypted.
+    ///
+    /// A bundled aggregation - an edit, or the latest event of a thread - is a
+    /// separate encrypted event, and it can be undecryptable while the event
+    /// carrying it is not. Nothing about the outer event changes when the
+    /// bundled event's room key finally arrives, so a caller holding a
+    /// decrypted event with a bundled UTD has to come back and ask.
+    ///
+    /// Returns `true` if the bundled decryption results changed, in which case
+    /// `event` has been updated in place and should be stored again.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` - An event we previously decrypted, whose `unsigned` object
+    ///   still holds the bundled events as they arrived.
+    /// * `room_id` - The ID of the room the event was sent to.
+    /// * `decryption_settings` - The settings to decrypt the bundled events
+    ///   with.
+    pub async fn retry_decryption_of_bundled_events(
+        &self,
+        event: &mut DecryptedRoomEvent,
+        room_id: &RoomId,
+        decryption_settings: &DecryptionSettings,
+    ) -> MegolmResult<bool> {
+        let mut json: JsonObject = serde_json::from_str(event.event.json().get())?;
+
+        let unsigned_encryption_info =
+            self.decrypt_unsigned_events(&mut json, room_id, decryption_settings).await;
+
+        if unsigned_encryption_info == event.unsigned_encryption_info {
+            return Ok(false);
+        }
+
+        event.event = serde_json::from_value::<Raw<AnyTimelineEvent>>(json.into())?;
+        event.unsigned_encryption_info = unsigned_encryption_info;
+
+        Ok(true)
+    }
+
     /// Try to decrypt the events bundled in the `unsigned` object of the given
     /// event.
     ///
