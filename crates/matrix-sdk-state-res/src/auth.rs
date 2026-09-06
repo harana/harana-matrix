@@ -92,11 +92,13 @@ pub async fn auth_check<E, FetchEvent, EventFut, FetchState, StateFut>(
     fetch_state: FetchState,
 ) -> Result<AuthCheckOutcome, Error>
 where
-    E: Event + Clone,
-    FetchEvent: Fn(OwnedEventId) -> EventFut,
-    EventFut: Future<Output = Option<E>>,
-    FetchState: Fn(StateEventType, String) -> StateFut,
-    StateFut: Future<Output = Option<E>>,
+    // The lookups are held across the awaits below, so the whole future is
+    // only `Send` when they are: these checks are driven from spawned tasks.
+    E: Event + Clone + Send + Sync,
+    FetchEvent: Fn(OwnedEventId) -> EventFut + Send,
+    EventFut: Future<Output = Option<E>> + Send,
+    FetchState: Fn(StateEventType, String) -> StateFut + Send,
+    StateFut: Future<Output = Option<E>> + Send,
 {
     match check_state_independent_auth_rules(rules, incoming_event, fetch_event).await? {
         AuthCheckOutcome::Allow => {}
@@ -123,9 +125,9 @@ pub async fn check_state_independent_auth_rules<E, FetchEvent, EventFut>(
     fetch_event: FetchEvent,
 ) -> Result<AuthCheckOutcome, Error>
 where
-    E: Event + Clone,
-    FetchEvent: Fn(OwnedEventId) -> EventFut,
-    EventFut: Future<Output = Option<E>>,
+    E: Event + Clone + Send + Sync,
+    FetchEvent: Fn(OwnedEventId) -> EventFut + Send,
+    EventFut: Future<Output = Option<E>> + Send,
 {
     let mut cache: FetchCache<OwnedEventId, E> = FetchCache::new();
     let mut pending: Vec<OwnedEventId> =
@@ -196,9 +198,9 @@ pub async fn check_state_dependent_auth_rules<E, FetchState, StateFut>(
     fetch_state: FetchState,
 ) -> Result<AuthCheckOutcome, Error>
 where
-    E: Event + Clone,
-    FetchState: Fn(StateEventType, String) -> StateFut,
-    StateFut: Future<Output = Option<E>>,
+    E: Event + Clone + Send + Sync,
+    FetchState: Fn(StateEventType, String) -> StateFut + Send,
+    StateFut: Future<Output = Option<E>> + Send,
 {
     let auth_types = match auth_types_for_event(
         incoming_event.event_type(),

@@ -170,7 +170,7 @@ impl ClientBuilder {
             request_config: Default::default(),
             respect_login_well_known: true,
             well_known_lookup_disabled: false,
-            discovery_cache_timeout: Duration::from_millis(TtlValue::<()>::STALE_THRESHOLD as u64),
+            discovery_cache_timeout: Client::DEFAULT_DISCOVERY_CACHE_TIMEOUT,
             server_versions: None,
             handle_refresh_tokens: false,
             base_client: None,
@@ -477,21 +477,20 @@ impl ClientBuilder {
         self
     }
 
-    /// Set how long the discovery data of the homeserver stays usable before
-    /// the client refreshes it.
+    /// How long a discovery result stays usable before it is fetched again.
     ///
-    /// This covers the data the client discovers about the server rather than
-    /// asks it for: the supported versions, the well-known file, and the RTC
-    /// transports advertised in it. All of it is persisted in the state store,
-    /// so it survives a restart, and it is refreshed through the usual request
-    /// path once it is older than this timeout.
+    /// The homeserver's `/.well-known/matrix/client` file, its supported
+    /// Matrix versions and its capabilities are persisted in the store with
+    /// the time they were fetched, so a restart doesn't re-run discovery.
+    /// Past this timeout the stored copy is still served, and a refresh is
+    /// started in the background through the normal request path, so a stale
+    /// entry never blocks startup.
     ///
-    /// Defaults to
-    /// [`TtlValue::STALE_THRESHOLD`](matrix_sdk_common::ttl::TtlValue::STALE_THRESHOLD),
-    /// i.e. one day. A timeout of [`Duration::ZERO`] refreshes it on every
-    /// access, which is rarely what a client wants: use
-    /// [`Client::rediscover`](crate::Client::rediscover) for a one-off
-    /// refresh.
+    /// Defaults to [`Client::DEFAULT_DISCOVERY_CACHE_TIMEOUT`] (one day). A
+    /// deployment that moves its homeserver or turns capabilities on and off
+    /// often wants a shorter one; [`Duration::ZERO`] refreshes on every
+    /// startup. To force a refresh at a moment of the client's choosing,
+    /// rather than on a timer, use [`Client::rediscover`].
     pub fn discovery_cache_timeout(mut self, timeout: Duration) -> Self {
         self.discovery_cache_timeout = timeout;
         self

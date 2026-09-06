@@ -70,20 +70,19 @@ impl<T> TtlValue<T> {
     }
 
     /// Whether this value has expired, using the default
-    /// [`STALE_THRESHOLD`](Self::STALE_THRESHOLD).
+    /// [`STALE_THRESHOLD`][Self::STALE_THRESHOLD].
     pub fn has_expired(&self) -> bool {
         self.last_fetch_ts.is_some_and(|ts| now_timestamp_ms() - ts >= Self::STALE_THRESHOLD)
     }
 
-    /// Whether this value has expired, using the given time-to-live rather than
-    /// the default [`STALE_THRESHOLD`](Self::STALE_THRESHOLD).
+    /// Whether this value has expired, using the given lifetime rather than
+    /// the default [`STALE_THRESHOLD`][Self::STALE_THRESHOLD].
     ///
-    /// A value constructed with [`TtlValue::without_expiry`] never expires,
-    /// whatever the time-to-live.
-    pub fn has_expired_after(&self, ttl: Duration) -> bool {
-        let ttl = ttl.as_secs_f64() * 1000.0;
-
-        self.last_fetch_ts.is_some_and(|ts| now_timestamp_ms() - ts >= ttl)
+    /// A value marked as never expiring with [`Self::without_expiry`] never
+    /// expires, whatever the lifetime.
+    pub fn has_expired_after(&self, lifetime: Duration) -> bool {
+        let lifetime_ms = lifetime.as_secs_f64() * 1000.0;
+        self.last_fetch_ts.is_some_and(|ts| now_timestamp_ms() - ts >= lifetime_ms)
     }
 
     /// Mark this value has expired.
@@ -123,12 +122,27 @@ fn default_timestamp() -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use serde::{Deserialize, Serialize};
     use serde_json::json;
 
-    use super::{TtlValue, now_timestamp_ms};
+    use super::{Duration, TtlValue, now_timestamp_ms};
+
+    #[test]
+    fn test_a_custom_lifetime_decides_when_a_value_expires() {
+        // Fetched a minute ago.
+        let ttl_value =
+            TtlValue { data: (), last_fetch_ts: Some(now_timestamp_ms() - 60.0 * 1000.0) };
+
+        assert!(!ttl_value.has_expired());
+        assert!(!ttl_value.has_expired_after(Duration::from_secs(120)));
+        assert!(ttl_value.has_expired_after(Duration::from_secs(30)));
+        // A zero lifetime expires everything that has a fetch time at all.
+        assert!(ttl_value.has_expired_after(Duration::ZERO));
+
+        // A value that cannot expire ignores the lifetime.
+        let ttl_value = TtlValue::without_expiry(());
+        assert!(!ttl_value.has_expired_after(Duration::ZERO));
+    }
 
     #[test]
     fn test_ttl_value_expiry() {
@@ -146,21 +160,6 @@ mod tests {
         // Cannot be stale.
         let ttl_value = TtlValue::without_expiry(());
         assert!(!ttl_value.has_expired());
-    }
-
-    #[test]
-    fn test_ttl_value_expiry_with_a_custom_ttl() {
-        let ttl_value =
-            TtlValue { data: (), last_fetch_ts: Some(now_timestamp_ms() - 60.0 * 1000.0) };
-
-        // A minute old, so it depends on what the caller asks for.
-        assert!(ttl_value.has_expired_after(Duration::from_secs(30)));
-        assert!(!ttl_value.has_expired_after(Duration::from_secs(120)));
-        assert!(!ttl_value.has_expired());
-
-        // A value without an expiry never expires, whatever the time-to-live.
-        let ttl_value = TtlValue::without_expiry(());
-        assert!(!ttl_value.has_expired_after(Duration::ZERO));
     }
 
     #[test]

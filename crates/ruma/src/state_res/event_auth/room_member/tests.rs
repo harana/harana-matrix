@@ -1,21 +1,21 @@
-use serde_json::json;
-
-use super::check_room_member;
 use crate::{
-    RoomVersionId,
-    events::{
-        TimelineEventType,
-        room::join_rules::{JoinRule, Restricted},
-    },
-    owned_event_id, owned_room_id,
+    RoomVersionId, owned_event_id, owned_room_id,
     room::{AllowRule, RoomMembership},
     room_version_rules::AuthorizationRules,
-    state_res::{
-        events::RoomMemberEvent,
-        test_utils::{
-            Pdu, RoomCreatePduBuilder, RoomMemberPduContent, RoomPowerLevelsPduContent,
-            RoomTimelineFactory, UserFactory,
-        },
+};
+use crate::events::{
+    TimelineEventType,
+    room::join_rules::{JoinRule, Restricted},
+};
+use serde_json::json;
+use test_log::test;
+
+use super::check_room_member;
+use crate::state_res::{
+    events::RoomMemberEvent,
+    test_utils::{
+        Pdu, RoomCreatePduBuilder, RoomMemberPduContent, RoomPowerLevelsPduContent,
+        RoomTimelineFactory, UserFactory,
     },
 };
 
@@ -79,8 +79,7 @@ fn join_after_create_creator_match() {
         RoomMemberPduContent::Join,
     );
 
-    // Before v11, the `creator` of `m.room.create` must be the same as the state
-    // key.
+    // Before v11, the `creator` of `m.room.create` must be the same as the state key.
     check_room_member(
         RoomMemberEvent::new(pdu),
         &AuthorizationRules::V6,
@@ -100,8 +99,7 @@ fn join_after_create_creator_mismatch() {
         RoomMemberPduContent::Join,
     );
 
-    // Before v11, the `creator` of `m.room.create` must be the same as the state
-    // key.
+    // Before v11, the `creator` of `m.room.create` must be the same as the state key.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -227,8 +225,7 @@ fn join_invite_join_rule_already_joined() {
         RoomMemberPduContent::DisplayName { displayname: "Bob".to_owned() },
     );
 
-    // A user can send a join event in a room with `invite` join rule if they
-    // already joined.
+    // A user can send a join event in a room with `invite` join rule if they already joined.
     check_room_member(
         RoomMemberEvent::new(pdu),
         &AuthorizationRules::V6,
@@ -261,8 +258,8 @@ fn join_knock_join_rule_already_invited() {
         RoomMemberPduContent::Join,
     );
 
-    // Since v7, a user can send a join event in a room with `knock` join rule if
-    // they are were invited.
+    // Since v7, a user can send a join event in a room with `knock` join rule if they are were
+    // invited.
     check_room_member(
         RoomMemberEvent::new(pdu),
         &AuthorizationRules::V7,
@@ -288,9 +285,9 @@ fn join_knock_join_rule_not_supported() {
         RoomMemberPduContent::Join,
     );
 
-    // Before v7, a user CANNOT send a join event in a room with `knock` join rule.
-    // Servers should not allow that join rule if it's not supported by the room
-    // version, but this is good for coverage.
+    // Before v7, a user CANNOT send a join event in a room with `knock` join rule. Servers should
+    // not allow that join rule if it's not supported by the room version, but this is good
+    // for coverage.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -321,9 +318,9 @@ fn join_restricted_join_rule_not_supported() {
         RoomMemberPduContent::Join,
     );
 
-    // Before v8, a user CANNOT send a join event in a room with `restricted` join
-    // rule. Servers should not allow that join rule if it's not supported by
-    // the room version, but this is good for coverage.
+    // Before v8, a user CANNOT send a join event in a room with `restricted` join rule. Servers
+    // should not allow that join rule if it's not supported by the room version, but this is good
+    // for coverage.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -354,9 +351,9 @@ fn join_knock_restricted_join_rule_not_supported() {
         RoomMemberPduContent::Join,
     );
 
-    // Before v10, a user CANNOT send a join event in a room with `knock_restricted`
-    // join rule. Servers should not allow that join rule if it's not supported
-    // by the room version, but this is good for coverage.
+    // Before v10, a user CANNOT send a join event in a room with `knock_restricted` join rule.
+    // Servers should not allow that join rule if it's not supported by the room version, but
+    // this is good for coverage.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -387,8 +384,8 @@ fn join_restricted_join_rule_already_joined() {
         RoomMemberPduContent::DisplayName { displayname: "Bob".to_owned() },
     );
 
-    // Since v8, a user can send a join event in a room with `restricted` join rule
-    // if they already joined.
+    // Since v8, a user can send a join event in a room with `restricted` join rule if they already
+    // joined.
     check_room_member(
         RoomMemberEvent::new(pdu),
         &AuthorizationRules::V8,
@@ -413,7 +410,7 @@ fn join_knock_restricted_join_rule_already_invited() {
     );
     factory.add_room_member(
         owned_event_id!("$room-member-charlie-invite"),
-        charlie_id,
+        charlie_id.clone(),
         RoomMemberPduContent::Invite { sender: alice_id },
     );
 
@@ -423,8 +420,8 @@ fn join_knock_restricted_join_rule_already_invited() {
         RoomMemberPduContent::Join,
     );
 
-    // Since v10, a user can send a join event in a room with `knock_restricted`
-    // join rule if they were invited.
+    // Since v10, a user can send a join event in a room with `knock_restricted` join rule if they
+    // were invited.
     check_room_member(
         RoomMemberEvent::new(pdu),
         &AuthorizationRules::V10,
@@ -452,8 +449,8 @@ fn join_restricted_join_rule_missing_join_authorised_via_users_server() {
         RoomMemberPduContent::Join,
     );
 
-    // Since v8, a user CANNOT join event in a room with `restricted` join rule if
-    // there is no `join_authorised_via_users_server` property.
+    // Since v8, a user CANNOT join event in a room with `restricted` join rule if there is no
+    // `join_authorised_via_users_server` property.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -484,8 +481,8 @@ fn join_restricted_join_rule_authorised_via_user_not_in_room() {
         RoomMemberPduContent::JoinAuthorized { via_users_server: UserFactory::Zara.user_id() },
     );
 
-    // Since v8, a user CANNOT join event in a room with `restricted` join rule if
-    // they were authorized by a user not in the room.
+    // Since v8, a user CANNOT join event in a room with `restricted` join rule if they were
+    // authorized by a user not in the room.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -522,8 +519,8 @@ fn join_restricted_join_rule_authorised_via_user_with_not_enough_power() {
         RoomMemberPduContent::JoinAuthorized { via_users_server: UserFactory::Bob.user_id() },
     );
 
-    // Since v8, a user CANNOT join event in a room with `restricted` join rule if
-    // they were authorized by a user with not enough power.
+    // Since v8, a user CANNOT join event in a room with `restricted` join rule if they were
+    // authorized by a user with not enough power.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -541,9 +538,8 @@ fn join_restricted_join_rule_authorised_via_user() {
     let mut factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V8);
     let alice_id = UserFactory::Alice.user_id();
 
-    // Check various contents that might not match the definition of
-    // `m.room.join_rules` in the spec, to ensure that we only care about the
-    // `join_rule` field.
+    // Check various contents that might not match the definition of `m.room.join_rules` in the
+    // spec, to ensure that we only care about the `join_rule` field.
     let join_rules_to_check = [
         // Valid content, but we don't care about the allow rules.
         json!({
@@ -586,8 +582,8 @@ fn join_restricted_join_rule_authorised_via_user() {
 
         factory.prepare_to_add_pdu(&mut pdu);
 
-        // Since v8, a user can join event in a room with `restricted` join rule if they
-        // were authorized by a user with enough power.
+        // Since v8, a user can join event in a room with `restricted` join rule if they were
+        // authorized by a user with enough power.
         check_room_member(
             RoomMemberEvent::new(&pdu),
             &AuthorizationRules::V8,
@@ -603,8 +599,8 @@ fn join_public_join_rule() {
     let mut factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V8);
     let charlie_id = UserFactory::Charlie.user_id();
 
-    // Check various contents that might not match the definition of `m.room.member`
-    // in the spec, to ensure that we only care about a few fields.
+    // Check various contents that might not match the definition of `m.room.member` in the
+    // spec, to ensure that we only care about a few fields.
     let contents_to_check = [
         // Valid content.
         json!({
@@ -794,8 +790,7 @@ fn invite_via_third_party_invite_missing_room_third_party_invite() {
 
     let pdu = factory.create_room_member_third_party_invite();
 
-    // There must be an `m.room.third_party_invite` event with the same token in the
-    // state.
+    // There must be an `m.room.third_party_invite` event with the same token in the state.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -992,8 +987,7 @@ fn invite_via_third_party_invite_with_wrong_signing_algorithm() {
     );
     factory.prepare_to_add_pdu(&mut pdu);
 
-    // Can't verify a signature with an unsupported algorithm, so there is no
-    // signature to verify.
+    // Can't verify a signature with an unsupported algorithm, so there is no signature to verify.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),
@@ -1263,9 +1257,8 @@ fn leave_after_knock_not_supported() {
         RoomMemberPduContent::Leave,
     );
 
-    // User can't leave if the room version does not support knocking. Servers
-    // should not allow that membership if it's not supported by the room
-    // version, but this is good for coverage.
+    // User can't leave if the room version does not support knocking. Servers should not allow that
+    // membership if it's not supported by the room version, but this is good for coverage.
     assert_eq!(
         check_room_member(
             RoomMemberEvent::new(pdu),

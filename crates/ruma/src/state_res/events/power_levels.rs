@@ -7,27 +7,27 @@ use std::{
 };
 
 use js_int::{Int, int};
-use serde::de::DeserializeOwned;
-use serde_json::{Error, from_value as from_json_value};
-
-use super::Event;
 use crate::{
     OwnedUserId, UserId,
-    events::{TimelineEventType, room::power_levels::UserPowerLevel},
     room_version_rules::AuthorizationRules,
     serde::{
         DebugAsRefStr, DisplayAsRefStr, EqAsRefStr, JsonObject, OrdAsRefStr,
         btreemap_deserialize_v1_powerlevel_values, deserialize_v1_powerlevel, from_raw_json_value,
     },
 };
+use crate::events::{TimelineEventType, room::power_levels::UserPowerLevel};
+use serde::de::DeserializeOwned;
+use serde_json::{Error, from_value as from_json_value};
+
+use super::Event;
 
 /// The default value of the creator's power level.
 const DEFAULT_CREATOR_POWER_LEVEL: i32 = 100;
 
 /// A helper type for an [`Event`] of type `m.room.power_levels`.
 ///
-/// This is a type that deserializes each field lazily, when requested. Some
-/// deserialization results are cached in memory, if they are used often.
+/// This is a type that deserializes each field lazily, when requested. Some deserialization results
+/// are cached in memory, if they are used often.
 #[derive(Debug, Clone)]
 pub struct RoomPowerLevelsEvent<E: Event> {
     inner: Arc<RoomPowerLevelsEventInner<E>>,
@@ -114,8 +114,8 @@ impl<E: Event> RoomPowerLevelsEvent<E> {
         Ok(power_level)
     }
 
-    /// Get the value of a field that should contain an integer, or its default
-    /// value if it is absent.
+    /// Get the value of a field that should contain an integer, or its default value if it is
+    /// absent.
     pub fn get_as_int_or_default(
         &self,
         field: RoomPowerLevelsIntField,
@@ -124,8 +124,7 @@ impl<E: Event> RoomPowerLevelsEvent<E> {
         Ok(self.get_as_int(field, rules)?.unwrap_or_else(|| field.default_value()))
     }
 
-    /// Get the value of a field that should contain a map of any value to
-    /// integer, if any.
+    /// Get the value of a field that should contain a map of any value to integer, if any.
     fn get_as_int_map<T: Ord + DeserializeOwned>(
         &self,
         field: &str,
@@ -185,8 +184,8 @@ impl<E: Event> RoomPowerLevelsEvent<E> {
 
     /// Get the power level of the user with the given ID.
     ///
-    /// Calling this method several times should be cheap because the necessary
-    /// deserialization results are cached.
+    /// Calling this method several times should be cheap because the necessary deserialization
+    /// results are cached.
     pub fn user_power_level(
         &self,
         user_id: &UserId,
@@ -257,8 +256,8 @@ pub(crate) trait RoomPowerLevelsEventOptionExt {
         rules: &AuthorizationRules,
     ) -> Result<UserPowerLevel, String>;
 
-    /// Get the value of a field that should contain an integer, or its default
-    /// value if it is absent.
+    /// Get the value of a field that should contain an integer, or its default value if it is
+    /// absent.
     fn get_as_int_or_default(
         &self,
         field: RoomPowerLevelsIntField,
@@ -327,8 +326,7 @@ impl<E: Event> RoomPowerLevelsEventOptionExt for Option<RoomPowerLevelsEvent<E>>
     }
 }
 
-/// Fields in the `content` of an `m.room.power_levels` event with an integer
-/// value.
+/// Fields in the `content` of an `m.room.power_levels` event with an integer value.
 #[derive(DebugAsRefStr, Clone, Copy, DisplayAsRefStr, EqAsRefStr, OrdAsRefStr)]
 #[non_exhaustive]
 pub enum RoomPowerLevelsIntField {

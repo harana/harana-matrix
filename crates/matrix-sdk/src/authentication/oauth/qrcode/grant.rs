@@ -23,6 +23,7 @@ use matrix_sdk_base::{
         qr_login::{QrCodeData, QrCodeIntent},
     },
 };
+use matrix_sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use oauth2::VerificationUriComplete;
 use ruma::time::Instant;
 use url::Url;
@@ -54,7 +55,7 @@ async fn export_secrets_bundle(client: &Client) -> Result<SecretsBundle, QRCodeG
     Ok(secrets_bundle)
 }
 
-async fn finish_login_grant<Q>(
+async fn finish_login_grant<Q: SendOutsideWasm + SyncOutsideWasm>(
     client: &Client,
     channel: &mut EstablishedSecureChannel,
     device_creation_timeout: Duration,

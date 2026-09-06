@@ -48,6 +48,77 @@ async fn test_restore_session() {
     assert_matches!(client.session(), Some(AuthSession::Matrix(_)));
 }
 
+/// The session a client hands out names the homeserver it belongs to, so
+/// restoring it later doesn't have to resolve the server name again.
+#[async_test]
+async fn test_the_session_carries_the_homeserver() {
+    let (client, server) = logged_in_client_with_server().await;
+
+    let session = client.matrix_auth().session().unwrap();
+
+    assert_eq!(session.homeserver, Some(Url::parse(&server.uri()).unwrap()));
+}
+
+/// A restored session's homeserver wins over the URL the client was built
+/// with: the tokens are only good against the server that issued them.
+#[async_test]
+async fn test_restoring_a_session_follows_its_homeserver() {
+    let (_, server) = no_retry_test_client_with_server().await;
+
+    let client = Client::builder()
+        .homeserver_url("https://not.the.right.server.example.org")
+        .request_config(RequestConfig::new().disable_retry())
+        .build()
+        .await
+        .unwrap();
+
+    let session_homeserver = Url::parse(&server.uri()).unwrap();
+    client
+        .matrix_auth()
+        .restore_session(
+            MatrixSession {
+                meta: SessionMeta {
+                    user_id: owned_user_id!("@example:localhost"),
+                    device_id: owned_device_id!("DEVICEID"),
+                },
+                tokens: SessionTokens { access_token: "1234".to_owned(), refresh_token: None },
+                homeserver: Some(session_homeserver.clone()),
+            },
+            Default::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(client.homeserver(), session_homeserver);
+}
+
+/// A session without a homeserver, as saved before the field existed, leaves
+/// the client where it was built.
+#[async_test]
+async fn test_restoring_a_session_without_a_homeserver_changes_nothing() {
+    let (client, server) = no_retry_test_client_with_server().await;
+    let built_with = client.homeserver();
+    assert_eq!(built_with, Url::parse(&server.uri()).unwrap());
+
+    client
+        .matrix_auth()
+        .restore_session(
+            MatrixSession {
+                meta: SessionMeta {
+                    user_id: owned_user_id!("@example:localhost"),
+                    device_id: owned_device_id!("DEVICEID"),
+                },
+                tokens: SessionTokens { access_token: "1234".to_owned(), refresh_token: None },
+                homeserver: None,
+            },
+            Default::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(client.homeserver(), built_with);
+}
+
 #[async_test]
 async fn test_logout_stops_the_send_queue() {
     let server = MatrixMockServer::new().await;
@@ -576,12 +647,12 @@ fn test_deserialize_session() {
 fn test_serialize_session() {
     // Without refresh token.
     let mut session = MatrixSession {
+        homeserver: None,
         meta: SessionMeta {
             user_id: owned_user_id!("@user:localhost"),
             device_id: owned_device_id!("EFGHIJ"),
         },
         tokens: SessionTokens { access_token: "abcd".to_owned(), refresh_token: None },
-        homeserver: None,
     };
     assert_eq!(
         to_json_value(session.clone()).unwrap(),

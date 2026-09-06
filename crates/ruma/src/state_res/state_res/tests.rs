@@ -1,22 +1,21 @@
 use js_int::{int, uint};
+use crate::{
+    MilliSecondsSinceUnixEpoch, RoomVersionId, owned_event_id,
+    room_version_rules::AuthorizationRules,
+};
+use crate::events::StateEventType;
+use test_log::test;
 
 use super::{StateMap, is_power_event};
-use crate::{
-    MilliSecondsSinceUnixEpoch, RoomVersionId,
-    events::StateEventType,
-    owned_event_id,
-    room_version_rules::AuthorizationRules,
-    state_res::{
-        test_utils::{RoomPowerLevelsPduContent, RoomTimelineFactory, UserFactory},
-        utils::{event_id_map::EventIdMap, event_id_set::EventIdSet},
-    },
+use crate::state_res::{
+    test_utils::{RoomPowerLevelsPduContent, RoomTimelineFactory, UserFactory},
+    utils::{event_id_map::EventIdMap, event_id_set::EventIdSet},
 };
 
 #[test]
 fn test_sort_power_events() {
-    // Because we use the keys and values of a `HashMap` to get the events to sort,
-    // their order before sorting changes every time, so let's run this several
-    // times.
+    // Because we use the keys and values of a `HashMap` to get the events to sort, their order
+    // before sorting changes every time, so let's run this several times.
     for _ in 0..20 {
         let factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V6);
 
@@ -45,9 +44,8 @@ fn test_sort_power_events() {
 
 #[test]
 fn test_mainline_sort() {
-    // Because we use the keys and values of a `HashMap` to get the events to sort,
-    // their order before sorting changes every time, so let's run this several
-    // times.
+    // Because we use the keys and values of a `HashMap` to get the events to sort, their order
+    // before sorting changes every time, so let's run this several times.
     for _ in 0..20 {
         let factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V10);
 
@@ -105,7 +103,7 @@ fn test_mainline_sort_no_pl_ancestor_sorts_first() {
     // Send a message with no PL in its auth chain. The factory auto-populates
     // auth_events with the resolved PL; drop it so the chain has no PL ancestor.
     let mut msg_no_pl =
-        factory.create_text_message(owned_event_id!("$msg-no-pl"), alice, "no PL ancestor");
+        factory.create_text_message(owned_event_id!("$msg-no-pl"), alice.clone(), "no PL ancestor");
     msg_no_pl.auth_events.remove(&owned_event_id!("$pl-3"));
 
     factory.add_pdu(msg_old);

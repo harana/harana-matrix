@@ -1,15 +1,14 @@
 use std::borrow::Borrow;
 
-use tracing::debug;
-
 use crate::{
     AnyKeyName, SigningKeyId, UserId,
-    events::{StateEventType, room::member::MembershipState},
     room::JoinRuleKind,
     room_version_rules::AuthorizationRules,
     serde::{Base64, base64::Standard},
-    signatures::verify_canonical_json_bytes,
 };
+use crate::events::{StateEventType, room::member::MembershipState};
+use crate::signatures::verify_canonical_json_bytes;
+use tracing::debug;
 
 #[cfg(test)]
 mod tests;
@@ -23,12 +22,10 @@ use crate::state_res::{
     },
 };
 
-/// Check whether the given event passes the `m.room.roomber` authorization
-/// rules.
+/// Check whether the given event passes the `m.room.roomber` authorization rules.
 ///
-/// This assumes that `crate::signatures::verify_event()` was called previously,
-/// as some authorization rules depend on the signatures being valid on the
-/// event.
+/// This assumes that `crate::signatures::verify_event()` was called previously, as some authorization
+/// rules depend on the signatures being valid on the event.
 pub(super) fn check_room_member<E: Event>(
     room_member_event: RoomMemberEvent<impl Event>,
     rules: &AuthorizationRules,
@@ -37,8 +34,8 @@ pub(super) fn check_room_member<E: Event>(
 ) -> Result<(), String> {
     debug!("starting m.room.member check");
 
-    // Since v1, if there is no state_key property, or no membership property in
-    // content, reject.
+    // Since v1, if there is no state_key property, or no membership property in content,
+    // reject.
     let Some(state_key) = room_member_event.state_key() else {
         return Err("missing `state_key` field in `m.room.member` event".to_owned());
     };
@@ -51,8 +48,8 @@ pub(super) fn check_room_member<E: Event>(
     //
     // Since v8, if content has a join_authorised_via_users_server property:
     //
-    // - Since v8, if the event is not validly signed by the homeserver of the user
-    //   ID denoted by the key, reject.
+    // - Since v8, if the event is not validly signed by the homeserver of the user ID denoted by
+    //   the key, reject.
 
     match target_membership {
         // Since v1, if membership is join:
@@ -96,8 +93,8 @@ pub(super) fn check_room_member<E: Event>(
     }
 }
 
-/// Check whether the given event passes the `m.room.member` authorization rules
-/// with a membership of `join`.
+/// Check whether the given event passes the `m.room.member` authorization rules with a membership
+/// of `join`.
 fn check_room_member_join<E: Event>(
     room_member_event: &RoomMemberEvent<impl Event>,
     target_user: &UserId,
@@ -115,10 +112,10 @@ fn check_room_member_join<E: Event>(
     let prev_event_is_only_room_create_event =
         prev_event_is_room_create_event && prev_events.next().is_none();
 
-    // v1-v10, if the only previous event is an m.room.create and the state_key is
-    // the creator, allow.
-    // Since v11, if the only previous event is an m.room.create and the state_key
-    // is the sender of the m.room.create, allow.
+    // v1-v10, if the only previous event is an m.room.create and the state_key is the
+    // creator, allow.
+    // Since v11, if the only previous event is an m.room.create and the state_key is the
+    // sender of the m.room.create, allow.
     if prev_event_is_only_room_create_event && *target_user == *creator {
         return Ok(());
     }
@@ -139,8 +136,8 @@ fn check_room_member_join<E: Event>(
 
     // v1-v6, if the join_rule is invite then allow if membership state is invite or
     // join.
-    // Since v7, if the join_rule is invite or knock then allow if membership state
-    // is invite or join.
+    // Since v7, if the join_rule is invite or knock then allow if membership state is
+    // invite or join.
     if (join_rule == JoinRuleKind::Invite || rules.knocking && join_rule == JoinRuleKind::Knock)
         && matches!(current_membership, MembershipState::Invite | MembershipState::Join)
     {
@@ -157,9 +154,9 @@ fn check_room_member_join<E: Event>(
             return Ok(());
         }
 
-        // Since v8, if the join_authorised_via_users_server key in content is not a
-        // user with sufficient permission to invite other users or is not a
-        // joined member of the room, reject.
+        // Since v8, if the join_authorised_via_users_server key in content is not a user with
+        // sufficient permission to invite other users or is not a joined member of the room,
+        // reject.
         //
         // Otherwise, allow.
         let Some(authorized_via_user) = room_member_event.join_authorised_via_users_server()?
@@ -201,8 +198,8 @@ fn check_room_member_join<E: Event>(
     }
 }
 
-/// Check whether the given event passes the `m.room.member` authorization rules
-/// with a membership of `invite`.
+/// Check whether the given event passes the `m.room.member` authorization rules with a membership
+/// of `invite`.
 fn check_room_member_invite<E: Event>(
     room_member_event: &RoomMemberEvent<impl Event>,
     target_user: &UserId,
@@ -255,8 +252,8 @@ fn check_room_member_invite<E: Event>(
     }
 }
 
-/// Check whether the `third_party_invite` from the `m.room.member` event passes
-/// the authorization rules.
+/// Check whether the `third_party_invite` from the `m.room.member` event passes the authorization
+/// rules.
 fn check_third_party_invite<E: Event>(
     room_member_event: &RoomMemberEvent<impl Event>,
     third_party_invite: ThirdPartyInvite,
@@ -270,9 +267,8 @@ fn check_third_party_invite<E: Event>(
         return Err("cannot invite user that is banned".to_owned());
     }
 
-    // Since v1, if content.third_party_invite does not have a signed property,
-    // reject. Since v1, if signed does not have mxid and token properties,
-    // reject.
+    // Since v1, if content.third_party_invite does not have a signed property, reject.
+    // Since v1, if signed does not have mxid and token properties, reject.
     let third_party_invite_token = third_party_invite.token()?;
     let third_party_invite_mxid = third_party_invite.mxid()?;
 
@@ -281,16 +277,15 @@ fn check_third_party_invite<E: Event>(
         return Err("third-party invite mxid does not match target user".to_owned());
     }
 
-    // Since v1, if there is no m.room.third_party_invite event in the current room
-    // state with state_key matching token, reject.
+    // Since v1, if there is no m.room.third_party_invite event in the current room state with
+    // state_key matching token, reject.
     let Some(room_third_party_invite_event) =
         fetch_state.room_third_party_invite_event(third_party_invite_token)
     else {
         return Err("no `m.room.third_party_invite` in room state matches the token".to_owned());
     };
 
-    // Since v1, if sender does not match sender of the m.room.third_party_invite,
-    // reject.
+    // Since v1, if sender does not match sender of the m.room.third_party_invite, reject.
     if room_member_event.sender() != room_third_party_invite_event.sender() {
         return Err(
             "sender of `m.room.third_party_invite` does not match sender of `m.room.member`"
@@ -302,8 +297,8 @@ fn check_third_party_invite<E: Event>(
     let signatures = third_party_invite.signatures()?;
     let signed_canonical_json = third_party_invite.signed_canonical_json()?;
 
-    // Since v1, if any signature in signed matches any public key in the
-    // m.room.third_party_invite event, allow.
+    // Since v1, if any signature in signed matches any public key in the m.room.third_party_invite
+    // event, allow.
     for entity_signatures_value in signatures.values() {
         let Some(entity_signatures) = entity_signatures_value.as_object() else {
             return Err(format!(
@@ -312,8 +307,8 @@ fn check_third_party_invite<E: Event>(
             ));
         };
 
-        // We will ignore any error from now on, we just want to find a signature that
-        // can be verified from a public key.
+        // We will ignore any error from now on, we just want to find a signature that can be
+        // verified from a public key.
 
         for (key_id, signature_value) in entity_signatures {
             let Ok(parsed_key_id) = <&SigningKeyId<AnyKeyName>>::try_from(key_id.as_str()) else {
@@ -355,8 +350,8 @@ fn check_third_party_invite<E: Event>(
         .to_owned())
 }
 
-/// Check whether the given event passes the `m.room.member` authorization rules
-/// with a membership of `leave`.
+/// Check whether the given event passes the `m.room.member` authorization rules with a membership
+/// of `leave`.
 fn check_room_member_leave<E: Event>(
     room_member_event: &RoomMemberEvent<impl Event>,
     target_user: &UserId,
@@ -366,10 +361,10 @@ fn check_room_member_leave<E: Event>(
 ) -> Result<(), String> {
     let sender_membership = fetch_state.user_membership(room_member_event.sender())?;
 
-    // v1-v6, if the sender matches state_key, allow if and only if that user’s
-    // current membership state is invite or join.
-    // Since v7, if the sender matches state_key, allow if and only if that user’s
-    // current membership state is invite, join, or knock.
+    // v1-v6, if the sender matches state_key, allow if and only if that user’s current
+    // membership state is invite or join.
+    // Since v7, if the sender matches state_key, allow if and only if that user’s current
+    // membership state is invite, join, or knock.
     if room_member_event.sender() == target_user {
         let membership_is_invite_or_join =
             matches!(sender_membership, MembershipState::Join | MembershipState::Invite);
@@ -396,8 +391,8 @@ fn check_room_member_leave<E: Event>(
     let ban_power_level =
         room_power_levels_event.get_as_int_or_default(RoomPowerLevelsIntField::Ban, rules)?;
 
-    // Since v1, if the target user’s current membership state is ban, and the
-    // sender’s power level is less than the ban level, reject.
+    // Since v1, if the target user’s current membership state is ban, and the sender’s
+    // power level is less than the ban level, reject.
     if current_target_user_membership == MembershipState::Ban
         && sender_power_level < ban_power_level
     {
@@ -409,9 +404,8 @@ fn check_room_member_leave<E: Event>(
     let target_user_power_level =
         room_power_levels_event.user_power_level(target_user, &creators, rules)?;
 
-    // Since v1, if the sender’s power level is greater than or equal to the kick
-    // level, and the target user’s power level is less than the sender’s power
-    // level, allow.
+    // Since v1, if the sender’s power level is greater than or equal to the kick level,
+    // and the target user’s power level is less than the sender’s power level, allow.
     //
     // Otherwise, reject.
     if sender_power_level >= kick_power_level && target_user_power_level < sender_power_level {
@@ -421,8 +415,8 @@ fn check_room_member_leave<E: Event>(
     }
 }
 
-/// Check whether the given event passes the `m.room.member` authorization rules
-/// with a membership of `ban`.
+/// Check whether the given event passes the `m.room.member` authorization rules with a membership
+/// of `ban`.
 fn check_room_member_ban<E: Event>(
     room_member_event: &RoomMemberEvent<impl Event>,
     target_user: &UserId,
@@ -447,9 +441,8 @@ fn check_room_member_ban<E: Event>(
     let target_user_power_level =
         room_power_levels_event.user_power_level(target_user, &creators, rules)?;
 
-    // If the sender’s power level is greater than or equal to the ban level, and
-    // the target user’s power level is less than the sender’s power level,
-    // allow.
+    // If the sender’s power level is greater than or equal to the ban level, and the
+    // target user’s power level is less than the sender’s power level, allow.
     //
     // Otherwise, reject.
     if sender_power_level >= ban_power_level && target_user_power_level < sender_power_level {
@@ -459,8 +452,8 @@ fn check_room_member_ban<E: Event>(
     }
 }
 
-/// Check whether the given event passes the `m.room.member` authorization rules
-/// with a membership of `knock`.
+/// Check whether the given event passes the `m.room.member` authorization rules with a membership
+/// of `knock`.
 fn check_room_member_knock<E: Event>(
     room_member_event: &RoomMemberEvent<impl Event>,
     target_user: &UserId,
@@ -488,8 +481,8 @@ fn check_room_member_knock<E: Event>(
 
     let sender_membership = fetch_state.user_membership(room_member_event.sender())?;
 
-    // Since v7, if the sender’s current membership is not ban, invite, or join,
-    // allow. Otherwise, reject.
+    // Since v7, if the sender’s current membership is not ban, invite, or join, allow.
+    // Otherwise, reject.
     if !matches!(
         sender_membership,
         MembershipState::Ban | MembershipState::Invite | MembershipState::Join

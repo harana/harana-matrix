@@ -55,6 +55,23 @@ pub(crate) struct ClientCaches {
     pub(crate) rtc_transports: Cache<Option<Vec<RtcTransport>>, Arc<HttpError>>,
 }
 
+impl ClientCaches {
+    /// Mark every discovery result as expired, so the next read of one goes
+    /// back to the homeserver.
+    ///
+    /// The values are kept rather than dropped: a refresh that fails then
+    /// leaves the previous answer in place instead of nothing at all. The
+    /// OAuth 2.0 server metadata is deliberately left alone, since it is not
+    /// discovery of the homeserver but of its authorization server, and
+    /// dropping it mid-session invalidates an in-flight login.
+    pub(crate) fn expire_discovery(&self) {
+        self.supported_versions.expire();
+        self.well_known.expire();
+        self.homeserver_capabilities.expire();
+        self.rtc_transports.expire();
+    }
+}
+
 /// A cached value that can either be set or not set, used to avoid confusion
 /// between a value that is set to `None` (because it doesn't exist) and a value
 /// that has not been cached yet.
@@ -108,6 +125,16 @@ impl<Value, Error> Cache<Value, Error> {
     /// Reset the cache by dropping the value.
     pub(crate) fn reset(&self) {
         self.value.lock().take();
+    }
+
+    /// Mark the cached value, if there is one, as expired.
+    ///
+    /// Unlike [`Self::reset`] the value stays readable, so a caller that only
+    /// wants a fresher answer still has the previous one to fall back on.
+    pub(crate) fn expire(&self) {
+        if let CachedValue::Cached(value) = &mut *self.value.lock() {
+            value.expire();
+        }
     }
 }
 

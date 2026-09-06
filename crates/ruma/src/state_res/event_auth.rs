@@ -4,18 +4,15 @@ use std::{
 };
 
 use js_int::Int;
+use crate::{
+    EventId, OwnedUserId, UserId, room::JoinRuleKind, room_version_rules::AuthorizationRules,
+};
+use crate::events::{
+    StateEventType, TimelineEventType,
+    room::{member::MembershipState, power_levels::UserPowerLevel},
+};
 use serde_json::value::RawValue as RawJsonValue;
 use tracing::{debug, info, instrument, warn};
-
-use crate::{
-    EventId, OwnedUserId, UserId,
-    events::{
-        StateEventType, TimelineEventType,
-        room::{member::MembershipState, power_levels::UserPowerLevel},
-    },
-    room::JoinRuleKind,
-    room_version_rules::AuthorizationRules,
-};
 
 mod room_member;
 #[cfg(test)]
@@ -33,15 +30,14 @@ use crate::state_res::{
     utils::RoomIdExt,
 };
 
-/// Get the list of [relevant auth events] required to authorize the event of
-/// the given type.
+/// Get the list of [relevant auth events] required to authorize the event of the given type.
 ///
 /// Returns a list of `(event_type, state_key)` tuples.
 ///
 /// # Errors
 ///
-/// Returns an `Err(_)` if a field could not be deserialized because `content`
-/// does not respect the expected format for the `event_type`.
+/// Returns an `Err(_)` if a field could not be deserialized because `content` does not respect the
+/// expected format for the `event_type`.
 ///
 /// [relevant auth events]: https://spec.matrix.org/v1.19/server-server-api/#auth-events-selection
 pub fn auth_types_for_event(
@@ -84,8 +80,8 @@ pub fn auth_types_for_event(
         let content = RoomMemberEventContent::new(content);
         let membership = content.membership()?;
 
-        // If `membership` is `join`, `invite` or `knock`, the current
-        // `m.room.join_rules` event, if any.
+        // If `membership` is `join`, `invite` or `knock`, the current `m.room.join_rules` event, if
+        // any.
         if matches!(
             membership,
             MembershipState::Join | MembershipState::Invite | MembershipState::Knock
@@ -96,10 +92,9 @@ pub fn auth_types_for_event(
             }
         }
 
-        // If `membership` is `invite` and `content` contains a `third_party_invite`
-        // property, the current `m.room.third_party_invite` event with
-        // `state_key` matching `content.third_party_invite.signed.token`, if
-        // any.
+        // If `membership` is `invite` and `content` contains a `third_party_invite` property, the
+        // current `m.room.third_party_invite` event with `state_key` matching
+        // `content.third_party_invite.signed.token`, if any.
         if membership == MembershipState::Invite {
             let third_party_invite = content.third_party_invite()?;
 
@@ -112,9 +107,9 @@ pub fn auth_types_for_event(
             }
         }
 
-        // If `content.join_authorised_via_users_server` is present, and the room
-        // version supports restricted rooms, then the `m.room.member` event
-        // with `state_key` matching `content.join_authorised_via_users_server`.
+        // If `content.join_authorised_via_users_server` is present, and the room version supports
+        // restricted rooms, then the `m.room.member` event with `state_key` matching
+        // `content.join_authorised_via_users_server`.
         //
         // Note: And the membership is join (https://github.com/matrix-org/matrix-spec/pull/2100)
         if membership == MembershipState::Join && rules.restricted_join_rule {
@@ -131,19 +126,18 @@ pub fn auth_types_for_event(
     Ok(auth_types)
 }
 
-/// Check whether the incoming event passes the state-independent [authorization
-/// rules] for the given room version rules.
+/// Check whether the incoming event passes the state-independent [authorization rules] for the
+/// given room version rules.
 ///
-/// The state-independent rules are the first few authorization rules that check
-/// an incoming `m.room.create` event (which cannot have `auth_events`), and the
-/// list of `auth_events` of other events.
+/// The state-independent rules are the first few authorization rules that check an incoming
+/// `m.room.create` event (which cannot have `auth_events`), and the list of `auth_events` of other
+/// events.
 ///
 /// This method only needs to be called once, when the event is received.
 ///
 /// # Errors
 ///
-/// If the check fails, this returns an `Err(_)` with a description of the check
-/// that failed.
+/// If the check fails, this returns an `Err(_)` with a description of the check that failed.
 ///
 /// [authorization rules]: https://spec.matrix.org/v1.19/server-server-api/#authorisation-rules
 #[instrument(skip_all, fields(event_id = incoming_event.event_id().borrow().as_str()))]
@@ -198,25 +192,23 @@ pub fn check_state_independent_auth_rules<E: Event>(
             .ok_or_else(|| format!("auth event {event_id} has no `state_key`"))?;
         let key = (event_type.clone(), state_key.to_owned());
 
-        // Since v1, if there are duplicate entries for a given type and state_key pair,
-        // reject.
+        // Since v1, if there are duplicate entries for a given type and state_key pair, reject.
         if seen_auth_types.contains(&key) {
             return Err(format!(
                 "duplicate auth event {event_id} for ({event_type}, {state_key}) pair"
             ));
         }
 
-        // Since v1, if there are entries whose type and state_key don’t match those
-        // specified by the auth events selection algorithm described in the
-        // server specification, reject.
+        // Since v1, if there are entries whose type and state_key don’t match those specified by
+        // the auth events selection algorithm described in the server specification, reject.
         if !expected_auth_types.contains(&key) {
             return Err(format!(
                 "unexpected auth event {event_id} with ({event_type}, {state_key}) pair"
             ));
         }
 
-        // Since v1, if there are entries which were themselves rejected under the
-        // checks performed on receipt of a PDU, reject.
+        // Since v1, if there are entries which were themselves rejected under the checks performed
+        // on receipt of a PDU, reject.
         if auth_event.rejected() {
             return Err(format!("rejected auth event {event_id}"));
         }
@@ -233,8 +225,7 @@ pub fn check_state_independent_auth_rules<E: Event>(
         return Err("no `m.room.create` event in auth events".to_owned());
     }
 
-    // Since v12, the room_id must be the reference hash of an accepted
-    // m.room.create event.
+    // Since v12, the room_id must be the reference hash of an accepted m.room.create event.
     if rules.room_create_event_id_as_room_id {
         let room_create_event_id = room_id.room_create_event_id().map_err(|error| {
             format!("could not construct `m.room.create` event ID from room ID: {error}")
@@ -252,27 +243,24 @@ pub fn check_state_independent_auth_rules<E: Event>(
     Ok(())
 }
 
-/// Check whether the incoming event passes the state-dependent [authorization
-/// rules] for the given room version rules.
+/// Check whether the incoming event passes the state-dependent [authorization rules] for the given
+/// room version rules.
 ///
 /// The state-dependent rules are all the remaining rules not checked by
 /// [`check_state_independent_auth_rules()`].
 ///
-/// This method should be called several times for an event, to perform the
-/// [checks on receipt of a PDU].
+/// This method should be called several times for an event, to perform the [checks on receipt of a
+/// PDU].
 ///
-/// The `fetch_state` closure should gather state from a state snapshot. We need
-/// to know if the event passes auth against some state not a recursive
-/// collection of auth_events fields.
+/// The `fetch_state` closure should gather state from a state snapshot. We need to know if the
+/// event passes auth against some state not a recursive collection of auth_events fields.
 ///
-/// This assumes that `crate::signatures::verify_event()` was called previously,
-/// as some authorization rules depend on the signatures being valid on the
-/// event.
+/// This assumes that `crate::signatures::verify_event()` was called previously, as some authorization
+/// rules depend on the signatures being valid on the event.
 ///
 /// # Errors
 ///
-/// If the check fails, this returns an `Err(_)` with a description of the check
-/// that failed.
+/// If the check fails, this returns an `Err(_)` with a description of the check that failed.
 ///
 /// [authorization rules]: https://spec.matrix.org/v1.19/server-server-api/#authorisation-rules
 /// [checks on receipt of a PDU]: https://spec.matrix.org/v1.19/server-server-api/#checks-performed-on-receipt-of-a-pdu
@@ -292,9 +280,8 @@ pub fn check_state_dependent_auth_rules<E: Event>(
 
     let room_create_event = fetch_state.room_create_event()?;
 
-    // Since v1, if the create event content has the field m.federate set to false
-    // and the sender domain of the event does not match the sender domain of
-    // the create event, reject.
+    // Since v1, if the create event content has the field m.federate set to false and the sender
+    // domain of the event does not match the sender domain of the create event, reject.
     let federate = room_create_event.federate()?;
     if !federate
         && room_create_event.sender().server_name() != incoming_event.sender().server_name()
@@ -360,8 +347,8 @@ pub fn check_state_dependent_auth_rules<E: Event>(
         return Ok(());
     }
 
-    // Since v1, if the event type's required power level is greater than the
-    // sender's power level, reject.
+    // Since v1, if the event type's required power level is greater than the sender's power level,
+    // reject.
     let event_type_power_level = current_room_power_levels_event.event_power_level(
         incoming_event.event_type(),
         incoming_event.state_key(),
@@ -374,8 +361,8 @@ pub fn check_state_dependent_auth_rules<E: Event>(
         ));
     }
 
-    // Since v1, if the event has a state_key that starts with an @ and does not
-    // match the sender, reject.
+    // Since v1, if the event has a state_key that starts with an @ and does not match the sender,
+    // reject.
     if incoming_event.state_key().is_some_and(|k| k.starts_with('@'))
         && incoming_event.state_key() != Some(incoming_event.sender().as_str())
     {
@@ -413,8 +400,7 @@ pub fn check_state_dependent_auth_rules<E: Event>(
     Ok(())
 }
 
-/// Check whether the given event passes the `m.room.create` authorization
-/// rules.
+/// Check whether the given event passes the `m.room.create` authorization rules.
 fn check_room_create(
     room_create_event: RoomCreateEvent<impl Event>,
     rules: &AuthorizationRules,
@@ -432,8 +418,7 @@ fn check_room_create(
             return Err("`m.room.create` event cannot have a `room_id` field".into());
         }
     } else {
-        // v1-v11, if the domain of the room_id does not match the domain of the sender,
-        // reject.
+        // v1-v11, if the domain of the room_id does not match the domain of the sender, reject.
         let Some(room_id) = room_create_event.room_id() else {
             return Err("missing `room_id` field in `m.room.create` event".into());
         };
@@ -449,8 +434,7 @@ fn check_room_create(
         }
     }
 
-    // Since v1, if `content.room_version` is present and is not a recognized
-    // version, reject.
+    // Since v1, if `content.room_version` is present and is not a recognized version, reject.
     //
     // This check is assumed to be done before calling auth_check because we have an
     // AuthorizationRules, which means that we recognized the version.
@@ -460,9 +444,8 @@ fn check_room_create(
         return Err("missing `creator` field in `m.room.create` event".into());
     }
 
-    // Since v12, if the `additional_creators` field is present and is not an array
-    // of strings where each string passes the same user ID validation that is
-    // applied to the sender, reject.
+    // Since v12, if the `additional_creators` field is present and is not an array of strings
+    // where each string passes the same user ID validation that is applied to the sender, reject.
     room_create_event.additional_creators(rules)?;
 
     // Otherwise, allow.
@@ -470,8 +453,7 @@ fn check_room_create(
     Ok(())
 }
 
-/// Check whether the given event passes the `m.room.power_levels` authorization
-/// rules.
+/// Check whether the given event passes the `m.room.power_levels` authorization rules.
 fn check_room_power_levels(
     room_power_levels_event: RoomPowerLevelsEvent<impl Event>,
     current_room_power_levels_event: Option<RoomPowerLevelsEvent<impl Event>>,
@@ -481,26 +463,23 @@ fn check_room_power_levels(
 ) -> Result<(), String> {
     debug!("starting m.room.power_levels check");
 
-    // Since v10, if any of the properties users_default, events_default,
-    // state_default, ban, redact, kick, or invite in content are present and
-    // not an integer, reject.
+    // Since v10, if any of the properties users_default, events_default, state_default, ban,
+    // redact, kick, or invite in content are present and not an integer, reject.
     let new_int_fields = room_power_levels_event.int_fields_map(rules)?;
 
-    // Since v10, if either of the properties events or notifications in content are
-    // present and not a dictionary with values that are integers, reject.
+    // Since v10, if either of the properties events or notifications in content are present and not
+    // a dictionary with values that are integers, reject.
     let new_events = room_power_levels_event.events(rules)?;
     let new_notifications = room_power_levels_event.notifications(rules)?;
 
-    // v1-v9, If the users property in content is not an object with keys that are
-    // valid user IDs with values that are integers (or a string that is an
-    // integer), reject. Since v10, if the users property in content is not an
-    // object with keys that are valid user IDs with values that are integers,
-    // reject.
+    // v1-v9, If the users property in content is not an object with keys that are valid user IDs
+    // with values that are integers (or a string that is an integer), reject.
+    // Since v10, if the users property in content is not an object with keys that are valid user
+    // IDs with values that are integers, reject.
     let new_users = room_power_levels_event.users(rules)?;
 
-    // Since v12, if the `users` property in `content` contains the `sender` of the
-    // `m.room.create` event or any of the user IDs in the create event's
-    // `content.additional_creators`, reject.
+    // Since v12, if the `users` property in `content` contains the `sender` of the `m.room.create`
+    // event or any of the user IDs in the create event's `content.additional_creators`, reject.
     if rules.explicitly_privilege_room_creators
         && new_users.is_some_and(|new_users| {
             room_creators.iter().any(|creator| new_users.contains_key(creator))
@@ -511,16 +490,14 @@ fn check_room_power_levels(
 
     debug!("validation of power event finished");
 
-    // Since v1, if there is no previous m.room.power_levels event in the room,
-    // allow.
+    // Since v1, if there is no previous m.room.power_levels event in the room, allow.
     let Some(current_room_power_levels_event) = current_room_power_levels_event else {
         info!("initial m.room.power_levels event allowed");
         return Ok(());
     };
 
-    // Since v1, for the properties users_default, events_default, state_default,
-    // ban, redact, kick, invite check if they were added, changed or removed.
-    // For each found alteration:
+    // Since v1, for the properties users_default, events_default, state_default, ban, redact, kick,
+    // invite check if they were added, changed or removed. For each found alteration:
     for field in RoomPowerLevelsIntField::ALL {
         let current_power_level = current_room_power_levels_event.get_as_int(*field, rules)?;
         let new_power_level = new_int_fields.get(field).copied();
@@ -529,12 +506,11 @@ fn check_room_power_levels(
             continue;
         }
 
-        // Since v1, if the current value is higher than the sender’s current power
-        // level, reject.
+        // Since v1, if the current value is higher than the sender’s current power level,
+        // reject.
         let current_power_level_too_big =
             current_power_level.unwrap_or_else(|| field.default_value()) > sender_power_level;
-        // Since v1, if the new value is higher than the sender’s current power level,
-        // reject.
+        // Since v1, if the new value is higher than the sender’s current power level, reject.
         let new_power_level_too_big =
             new_power_level.unwrap_or_else(|| field.default_value()) > sender_power_level;
 
@@ -546,18 +522,16 @@ fn check_room_power_levels(
     }
 
     // Since v1, for each entry being added to, or changed in, the events property:
-    // - Since v1, if the new value is higher than the sender's current power level,
-    //   reject.
+    // - Since v1, if the new value is higher than the sender's current power level, reject.
     let current_events = current_room_power_levels_event.events(rules)?;
     check_power_level_maps(
         current_events.as_ref(),
         new_events.as_ref(),
         &sender_power_level,
         |_, current_power_level| {
-            // Since v1, for each entry being changed in, or removed from, the events
-            // property:
-            // - Since v1, if the current value is higher than the sender's current power
-            //   level, reject.
+            // Since v1, for each entry being changed in, or removed from, the events property:
+            // - Since v1, if the current value is higher than the sender's current power level,
+            //   reject.
             current_power_level > sender_power_level
         },
         |ev_type| {
@@ -567,10 +541,8 @@ fn check_room_power_levels(
         },
     )?;
 
-    // Since v6, for each entry being added to, or changed in, the notifications
-    // property:
-    // - Since v6, if the new value is higher than the sender's current power level,
-    //   reject.
+    // Since v6, for each entry being added to, or changed in, the notifications property:
+    // - Since v6, if the new value is higher than the sender's current power level, reject.
     if rules.limit_notifications_power_levels {
         let current_notifications = current_room_power_levels_event.notifications(rules)?;
         check_power_level_maps(
@@ -580,8 +552,8 @@ fn check_room_power_levels(
             |_, current_power_level| {
                 // Since v6, for each entry being changed in, or removed from, the notifications
                 // property:
-                // - Since v6, if the current value is higher than the sender's current power
-                //   level, reject.
+                // - Since v6, if the current value is higher than the sender's current power level,
+                //   reject.
                 current_power_level > sender_power_level
             },
             |key| {
@@ -593,18 +565,17 @@ fn check_room_power_levels(
     }
 
     // Since v1, for each entry being added to, or changed in, the users property:
-    // - Since v1, if the new value is greater than the sender’s current power
-    //   level, reject.
+    // - Since v1, if the new value is greater than the sender’s current power level, reject.
     let current_users = current_room_power_levels_event.users(rules)?;
     check_power_level_maps(
         current_users,
         new_users,
         &sender_power_level,
         |user_id, current_power_level| {
-            // Since v1, for each entry being changed in, or removed from, the users
-            // property, other than the sender’s own entry:
-            // - Since v1, if the current value is greater than or equal to the sender’s
-            //   current power level, reject.
+            // Since v1, for each entry being changed in, or removed from, the users property, other
+            // than the sender’s own entry:
+            // - Since v1, if the current value is greater than or equal to the sender’s current
+            //   power level, reject.
             user_id != room_power_levels_event.sender() && current_power_level >= sender_power_level
         },
         |user_id| format!("sender does not have enough power to change `{user_id}`'s  power level"),
@@ -622,17 +593,16 @@ fn check_room_power_levels(
 /// * `current`: the map with the current power levels.
 /// * `new`: the map with the new power levels.
 /// * `sender_power_level`: the power level of the sender of the new map.
-/// * `reject_current_power_level_change_fn`: the function to check if a power
-///   level change or removal must be rejected given its current value.
+/// * `reject_current_power_level_change_fn`: the function to check if a power level change or
+///   removal must be rejected given its current value.
 ///
-///   The arguments to the method are the key of the power level and the
-///   current value of the power level. It must return `true` if the change or
-///   removal is rejected.
+///   The arguments to the method are the key of the power level and the current value of the power
+///   level. It must return `true` if the change or removal is rejected.
 ///
-///   Note that another check is done after this one to check if the change is
-///   allowed given the new value of the power level.
-/// * `error_fn`: the function to generate an error when the change for the
-///   given key is not allowed.
+///   Note that another check is done after this one to check if the change is allowed given the new
+///   value of the power level.
+/// * `error_fn`: the function to generate an error when the change for the given key is not
+///   allowed.
 fn check_power_level_maps<K: Ord>(
     current: Option<&BTreeMap<K, Int>>,
     new: Option<&BTreeMap<K, Int>>,
@@ -670,8 +640,7 @@ fn check_power_level_maps<K: Ord>(
     Ok(())
 }
 
-/// Check whether the given event passes the `m.room.redaction` authorization
-/// rules.
+/// Check whether the given event passes the `m.room.redaction` authorization rules.
 fn check_room_redaction(
     room_redaction_event: impl Event,
     current_room_power_levels_event: Option<RoomPowerLevelsEvent<impl Event>>,
@@ -681,15 +650,14 @@ fn check_room_redaction(
     let redact_level = current_room_power_levels_event
         .get_as_int_or_default(RoomPowerLevelsIntField::Redact, rules)?;
 
-    // v1-v2, if the sender’s power level is greater than or equal to the redact
-    // level, allow.
+    // v1-v2, if the sender’s power level is greater than or equal to the redact level, allow.
     if sender_level >= redact_level {
         info!("`m.room.redaction` event allowed via power levels");
         return Ok(());
     }
 
-    // v1-v2, if the domain of the event_id of the event being redacted is the same
-    // as the domain of the event_id of the m.room.redaction, allow.
+    // v1-v2, if the domain of the event_id of the event being redacted is the same as the
+    // domain of the event_id of the m.room.redaction, allow.
     if room_redaction_event.event_id().borrow().server_name()
         == room_redaction_event.redacts().as_ref().and_then(|&id| id.borrow().server_name())
     {

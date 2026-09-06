@@ -2,18 +2,15 @@ use std::sync::Arc;
 
 use matrix_sdk_base::{StateStoreDataKey, StateStoreDataValue, StoreError, ttl::TtlValue};
 use ruma::{
-    api::{
-        Metadata,
-        client::{
-            discovery::get_capabilities::{
-                self,
-                v3::{
-                    AccountModerationCapability, Capabilities, ProfileFieldsCapability,
-                    RoomVersionsCapability,
-                },
+    api::client::{
+        discovery::get_capabilities::{
+            self,
+            v3::{
+                AccountModerationCapability, Capabilities, ProfileFieldsCapability,
+                RoomVersionsCapability,
             },
-            profile::delete_profile_field,
         },
+        profile::delete_profile_field,
     },
     profile::ProfileFieldName,
 };
@@ -159,7 +156,7 @@ impl HomeserverCapabilities {
         };
 
         // Spawn a task to refresh the cache if it has expired.
-        if value.has_expired() {
+        if value.has_expired_after(self.client.discovery_cache_timeout()) {
             debug!("spawning task to refresh homeserver capabilities cache");
 
             let homeserver_capabilities = self.clone();
@@ -218,7 +215,7 @@ impl HomeserverCapabilities {
 
                 // Reuse the data if it was cached and it hasn't expired.
                 if let CachedValue::Cached(value) = capabilities_cache.value()
-                    && !value.has_expired()
+                    && !value.has_expired_after(self.client.discovery_cache_timeout())
                 {
                     return Ok(value.into_data());
                 }
@@ -291,10 +288,9 @@ impl HomeserverCapabilities {
     ///
     /// [Matrix spec]: https://spec.matrix.org/latest/client-server-api/#mprofile_fields-capability
     async fn homeserver_supports_extended_profile_fields(&self) -> crate::Result<bool> {
-        let supported_versions = self.client.supported_versions().await?;
         // If the homeserver supports the endpoint to delete profile fields, it supports
         // extended profile fields.
-        Ok(delete_profile_field::v3::Request::PATH_BUILDER.is_supported(&supported_versions))
+        Ok(self.client.supports_endpoint::<delete_profile_field::v3::Request>().await?)
     }
 }
 

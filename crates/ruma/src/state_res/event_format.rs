@@ -1,10 +1,9 @@
 use js_int::int;
-use serde_json::to_string as to_json_string;
-
 use crate::{
     CanonicalJsonObject, CanonicalJsonValue, ID_MAX_BYTES, RoomId,
     room_version_rules::EventFormatRules,
 };
+use serde_json::to_string as to_json_string;
 
 /// The [maximum size allowed] for a PDU.
 ///
@@ -21,8 +20,8 @@ const MAX_PREV_EVENTS_LENGTH: usize = 20;
 /// [maximum length allowed]: https://spec.matrix.org/v1.19/rooms/v1/#event-format
 const MAX_AUTH_EVENTS_LENGTH: usize = 10;
 
-/// Check that the given canonicalized PDU respects the event format of the room
-/// version and the [size limits] from the Matrix specification.
+/// Check that the given canonicalized PDU respects the event format of the room version and the
+/// [size limits] from the Matrix specification.
 ///
 /// This is part of the [checks performed on receipt of a PDU].
 ///
@@ -38,8 +37,7 @@ const MAX_AUTH_EVENTS_LENGTH: usize = 10;
 /// * `auth_events`
 /// * `depth`
 ///
-/// Returns an `Err(_)` if the JSON is malformed or if the PDU doesn't pass the
-/// checks.
+/// Returns an `Err(_)` if the JSON is malformed or if the PDU doesn't pass the checks.
 ///
 /// [size limits]: https://spec.matrix.org/v1.19/client-server-api/#size-limits
 /// [checks performed on receipt of a PDU]: https://spec.matrix.org/v1.19/server-server-api/#checks-performed-on-receipt-of-a-pdu
@@ -77,8 +75,8 @@ pub fn check_pdu_format(pdu: &CanonicalJsonObject, rules: &EventFormatRules) -> 
     let auth_events = extract_required_array_field(pdu, "auth_events", MAX_AUTH_EVENTS_LENGTH)?;
 
     if !rules.allow_room_create_in_auth_events {
-        // The only case where the room ID should be missing is for m.room.create which
-        // shouldn't have any auth_events.
+        // The only case where the room ID should be missing is for m.room.create which shouldn't
+        // have any auth_events.
         if let Some(room_id) = room_id {
             let room_create_event_reference_hash = <&RoomId>::try_from(room_id.as_str())
                 .map_err(|e| format!("invalid `room_id` field in PDU: {e}"))?
@@ -125,12 +123,11 @@ pub fn check_pdu_format(pdu: &CanonicalJsonObject, rules: &EventFormatRules) -> 
     Ok(())
 }
 
-/// Extract the optional string field with the given name from the given
-/// canonical JSON object.
+/// Extract the optional string field with the given name from the given canonical JSON object.
 ///
-/// Returns `Ok(Some(value))` if the field is present and a valid string,
-/// `Ok(None)` if the field is missing and `Err(_)` if the field is not a string
-/// or its length is bigger than [`ID_MAX_BYTES`].
+/// Returns `Ok(Some(value))` if the field is present and a valid string, `Ok(None)` if the field
+/// is missing and `Err(_)` if the field is not a string or its length is bigger than
+/// [`ID_MAX_BYTES`].
 fn extract_optional_string_field<'a>(
     object: &'a CanonicalJsonObject,
     field: &'a str,
@@ -154,12 +151,10 @@ fn extract_optional_string_field<'a>(
     }
 }
 
-/// Extract the required string field with the given name from the given
-/// canonical JSON object.
+/// Extract the required string field with the given name from the given canonical JSON object.
 ///
-/// Returns `Ok(value)` if the field is present and a valid string and `Err(_)`
-/// if the field is missing, not a string or its length is bigger than
-/// [`ID_MAX_BYTES`].
+/// Returns `Ok(value)` if the field is present and a valid string and `Err(_)` if the field is
+/// missing, not a string or its length is bigger than [`ID_MAX_BYTES`].
 fn extract_required_string_field<'a>(
     object: &'a CanonicalJsonObject,
     field: &'a str,
@@ -168,12 +163,10 @@ fn extract_required_string_field<'a>(
         .ok_or_else(|| format!("missing `{field}` field in PDU"))
 }
 
-/// Extract the required array field with the given name from the given
-/// canonical JSON object.
+/// Extract the required array field with the given name from the given canonical JSON object.
 ///
-/// Returns `Ok(value)` if the field is present and a valid array or `Err(_)` if
-/// the field is missing, not an array or its length is bigger than the given
-/// value.
+/// Returns `Ok(value)` if the field is present and a valid array or `Err(_)` if the field is
+/// missing, not an array or its length is bigger than the given value.
 fn extract_required_array_field<'a>(
     object: &'a CanonicalJsonObject,
     field: &'a str,
@@ -203,10 +196,12 @@ mod tests {
     use std::iter::repeat_n;
 
     use js_int::int;
+    use crate::{
+        CanonicalJsonObject, CanonicalJsonValue, room_version_rules::EventFormatRules,
+    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::check_pdu_format;
-    use crate::{CanonicalJsonObject, CanonicalJsonValue, room_version_rules::EventFormatRules};
 
     /// Construct a PDU valid for the event format of room v1.
     fn pdu_v1() -> CanonicalJsonObject {

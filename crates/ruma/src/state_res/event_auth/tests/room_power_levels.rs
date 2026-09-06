@@ -1,24 +1,22 @@
 use std::collections::HashSet;
 
 use js_int::int;
+use crate::{
+    UserId, owned_event_id, room_version_rules::AuthorizationRules, serde::JsonObject,
+};
+use crate::events::{TimelineEventType, room::power_levels::UserPowerLevel};
 use serde_json::{Value as JsonValue, json};
+use test_log::test;
 use tracing::info;
 
-use crate::{
-    UserId,
-    events::{TimelineEventType, room::power_levels::UserPowerLevel},
-    owned_event_id,
-    room_version_rules::AuthorizationRules,
-    serde::JsonObject,
-    state_res::{
-        event_auth::check_room_power_levels,
-        events::RoomPowerLevelsEvent,
-        test_utils::{Pdu, UserFactory},
-    },
+use crate::state_res::{
+    event_auth::check_room_power_levels,
+    events::RoomPowerLevelsEvent,
+    test_utils::{Pdu, UserFactory},
 };
 
-/// The default `m.room.power_levels` event content when creating a room with
-/// the given authorization rules.
+/// The default `m.room.power_levels` event content when creating a room with the given
+/// authorization rules.
 fn initial_room_power_levels_content(
     authorization_rules: &AuthorizationRules,
     creator: &UserId,
@@ -33,8 +31,7 @@ fn initial_room_power_levels_content(
     content
 }
 
-/// The default `m.room.power_levels` PDU when creating a room with the given
-/// authorization rules.
+/// The default `m.room.power_levels` PDU when creating a room with the given authorization rules.
 fn initial_room_power_levels(authorization_rules: &AuthorizationRules) -> Pdu {
     let creator = UserFactory::Alice.user_id();
     let content = initial_room_power_levels_content(authorization_rules, &creator);
@@ -1169,8 +1166,8 @@ fn creator_has_infinite_power() {
         incoming_content,
     );
 
-    // Room creator has infinite power level, and hence can change the power level
-    // of any other user.
+    // Room creator has infinite power level, and hence can change the power level of any other
+    // user.
     check_room_power_levels(
         RoomPowerLevelsEvent::new(&pdu),
         Some(RoomPowerLevelsEvent::new(&current_room_power_levels_event)),

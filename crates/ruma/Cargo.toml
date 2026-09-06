@@ -21,16 +21,14 @@ ignored = [
 [features]
 default = []
 
-# State resolution and the checks performed on receipt of a PDU. Vendored from
-# `ruma-state-res`, see `src/state_res.rs`.
-state-res = ["signatures"]
-
 # Everything the vendored test suite needs. Not meant for downstream use.
 full = [
-    "state-res",
+    "appservice-api-c",
+    "appservice-api-s",
     "client",
     "server",
     "appservice-api",
+    "state-res",
     "federation-api",
     "signatures",
     "html",
@@ -145,6 +143,9 @@ federation-api = [
 ]
 # Digital signatures, in `signatures`.
 signatures = ["dep:ed25519-dalek", "dep:pkcs8", "dep:rand", "dep:sha2"]
+# State resolution and PDU authorization rules, in `state_res`. Needs
+# `signatures` for the reference hash used to check an event's format.
+state-res = ["signatures"]
 # HTML parsing and sanitizing, in `html`.
 html = ["dep:html5ever"]
 # Parse markdown to construct messages.
@@ -335,7 +336,9 @@ uniffi = { workspace = true, optional = true }
 assert_matches2.workspace = true
 insta.workspace = true
 macro_rules_attribute = "0.2.2"
+similar-asserts.workspace = true
 smol-macros = "0.1.1"
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
 
 [lints]
 workspace = true

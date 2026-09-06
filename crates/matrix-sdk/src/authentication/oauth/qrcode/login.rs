@@ -21,6 +21,7 @@ use matrix_sdk_base::{
     crypto::types::qr_login::{QrCodeData, QrCodeIntent},
     store::RoomLoadSettings,
 };
+use matrix_sdk_common::{SendOutsideWasm, SyncOutsideWasm};
 use oauth2::{DeviceCodeErrorResponseType, StandardDeviceAuthorizationResponse};
 use ruma::{
     OwnedDeviceId,
@@ -55,7 +56,7 @@ async fn send_unexpected_message_error(
         .await
 }
 
-async fn finish_login<Q>(
+async fn finish_login<Q: SendOutsideWasm + SyncOutsideWasm>(
     client: &Client,
     mut channel: EstablishedSecureChannel,
     registration_data: Option<&ClientRegistrationData>,
