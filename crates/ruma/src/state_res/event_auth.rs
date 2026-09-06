@@ -625,12 +625,12 @@ fn check_room_power_levels(
 /// * `reject_current_power_level_change_fn`: the function to check if a power
 ///   level change or removal must be rejected given its current value.
 ///
-///   The arguments to the method are the key of the power level and the current
-/// value of the power   level. It must return `true` if the change or removal
-/// is rejected.
+///   The arguments to the method are the key of the power level and the
+///   current value of the power level. It must return `true` if the change or
+///   removal is rejected.
 ///
 ///   Note that another check is done after this one to check if the change is
-/// allowed given the new   value of the power level.
+///   allowed given the new value of the power level.
 /// * `error_fn`: the function to generate an error when the change for the
 ///   given key is not allowed.
 fn check_power_level_maps<K: Ord>(
