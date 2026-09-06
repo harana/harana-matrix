@@ -93,6 +93,45 @@ macro_rules! construct_withheld_content {
 }
 
 impl RoomKeyWithheldContent {
+    /// Create an `m.no_olm` withheld content.
+    ///
+    /// `m.no_olm` says that we could not establish an Olm session with the
+    /// recipient's device, which is a statement about the pair of devices
+    /// rather than about any one room key. Its content carries neither a room
+    /// ID nor a session ID, so unlike [`RoomKeyWithheldContent::new`] this
+    /// needs neither.
+    ///
+    /// # Panics
+    ///
+    /// The method will panic if an unsupported algorithm is given. The only
+    /// supported algorithm as of now is `m.megolm.v1.aes-sha2`.
+    pub fn no_olm(
+        algorithm: EventEncryptionAlgorithm,
+        sender_key: Curve25519PublicKey,
+        from_device: OwnedDeviceId,
+    ) -> Self {
+        let content = NoOlmWithheldContent {
+            sender_key,
+            from_device: Some(from_device),
+            other: Default::default(),
+        };
+
+        match algorithm {
+            EventEncryptionAlgorithm::MegolmV1AesSha2 => {
+                RoomKeyWithheldContent::MegolmV1AesSha2(MegolmV1AesSha2WithheldContent::NoOlm(
+                    content.into(),
+                ))
+            }
+            #[cfg(feature = "experimental-algorithms")]
+            EventEncryptionAlgorithm::MegolmV2AesSha2 => {
+                RoomKeyWithheldContent::MegolmV2AesSha2(MegolmV2AesSha2WithheldContent::NoOlm(
+                    content.into(),
+                ))
+            }
+            _ => unreachable!("Unsupported algorithm {algorithm}"),
+        }
+    }
+
     /// Creates a withheld content from the given info
     ///
     /// # Panics

@@ -57,9 +57,12 @@ use crate::{
     },
     store::{CryptoStoreWrapper, Result as StoreResult, Store, types::Changes},
     types::{
+        EventEncryptionAlgorithm,
         events::{
-            EventType, room::encrypted::ToDeviceEncryptedEventContent,
+            EventType,
+            room::encrypted::ToDeviceEncryptedEventContent,
             room_key_bundle::RoomKeyBundleContent,
+            room_key_withheld::RoomKeyWithheldContent,
         },
         requests::ToDeviceRequest,
     },
@@ -857,13 +860,33 @@ impl GroupSessionManager {
             )
             .await?;
 
-        let devices = devices.into_values().flatten().collect();
+        let devices: Vec<DeviceData> = devices.into_values().flatten().collect();
         let event_type = bundle_data.event_type().to_owned();
-        let (requests, _) = self
+        let (mut requests, no_olm_devices) = self
             .encrypt_content_for_devices(devices, &event_type, bundle_data, &mut changes)
             .await?;
 
-        // TODO: figure out what to do with withheld devices
+        // Devices we could not claim a one-time key for, or could not otherwise
+        // establish an Olm session with, get nothing. Without a withheld notice the
+        // invitee is left with a room whose history simply does not decrypt on that
+        // device and no reason given, which is indistinguishable from the history
+        // never having been shared.
+        //
+        // `m.no_olm` names no room or session - it is a statement about the pair of
+        // devices - so it is as true of a key bundle as it is of a room key.
+        if !no_olm_devices.is_empty() {
+            let no_olm: Vec<DeviceData> =
+                no_olm_devices.iter().map(|(device, _)| device.clone()).collect();
+            let recipients = recipient_list_to_users_and_devices(&no_olm);
+
+            info!(
+                ?recipients,
+                "Could not establish an Olm session to share the room key bundle with, \
+                 sending a withheld notice",
+            );
+
+            requests.extend(self.no_olm_withheld_requests(&no_olm_devices));
+        }
 
         // Persist any changes we might have collected.
         if !changes.is_empty() {
@@ -878,6 +901,52 @@ impl GroupSessionManager {
         }
 
         Ok(requests)
+    }
+
+    /// Build the `m.room_key.withheld` requests telling the given devices that
+    /// we could not establish an Olm session with them.
+    ///
+    /// Unlike the room key path, these are not tied to an outbound group
+    /// session, so there is nothing to record them against; the `m.no_olm`
+    /// content says nothing about a room or a session either way.
+    fn no_olm_withheld_requests(
+        &self,
+        devices: &[(DeviceData, WithheldCode)],
+    ) -> Vec<ToDeviceRequest> {
+        devices
+            .iter()
+            .chunks(Self::MAX_TO_DEVICE_MESSAGES)
+            .into_iter()
+            .filter_map(|chunk| {
+                let mut messages: BTreeMap<_, BTreeMap<_, _>> = BTreeMap::new();
+
+                for (device, code) in chunk {
+                    debug_assert_eq!(code, &WithheldCode::NoOlm);
+
+                    let mut content = RoomKeyWithheldContent::no_olm(
+                        EventEncryptionAlgorithm::MegolmV1AesSha2,
+                        self.store.static_account().identity_keys.curve25519,
+                        self.store.static_account().device_id.clone(),
+                    );
+                    content.set_message_id(new_message_id());
+
+                    let content: Raw<AnyToDeviceEventContent> = Raw::new(&content)
+                        .expect("We can always serialize a withheld content info")
+                        .cast();
+
+                    messages.entry(device.user_id().to_owned()).or_default().insert(
+                        DeviceIdOrAllDevices::DeviceId(device.device_id().to_owned()),
+                        content,
+                    );
+                }
+
+                (!messages.is_empty()).then(|| ToDeviceRequest {
+                    event_type: ToDeviceEventType::from("m.room_key.withheld"),
+                    txn_id: TransactionId::new(),
+                    messages,
+                })
+            })
+            .collect()
     }
 
     /// Encrypt the given content for the given devices and build to-device
@@ -1920,5 +1989,94 @@ mod tests {
             raw.get_field::<String>("type").unwrap().unwrap(),
             RoomKeyBundleContent::EVENT_TYPE,
         );
+    }
+
+    /// A device we cannot establish an Olm session with gets nothing at all
+    /// when history is shared on invite. Without a withheld notice the invitee
+    /// is left with a room whose history does not decrypt on that device and no
+    /// reason given, which looks exactly like history never having been shared.
+    #[async_test]
+    async fn test_room_key_bundle_sharing_sends_no_olm_withheld() {
+        let (alice, bob) = get_machine_pair_with_setup_sessions_test_helper(
+            user_id!("@alice:localhost"),
+            user_id!("@bob:localhost"),
+            false,
+        )
+        .await;
+
+        let device = alice.get_device(bob.user_id(), bob.device_id(), None).await.unwrap().unwrap();
+        device.set_local_trust(LocalTrust::Verified).await.unwrap();
+
+        // A second device of Bob's that Alice knows about and trusts, but has never
+        // managed to start an Olm session with.
+        let unreachable = Account::with_device_id(bob.user_id(), device_id!("UNREACHABLE"));
+        let unreachable = DeviceData::from_account(&unreachable);
+        let unreachable_device_id = unreachable.device_id().to_owned();
+
+        alice
+            .store()
+            .save_changes(crate::store::types::Changes {
+                devices: crate::store::types::DeviceChanges {
+                    new: vec![unreachable],
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        alice
+            .get_device(bob.user_id(), &unreachable_device_id, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .set_local_trust(LocalTrust::Verified)
+            .await
+            .unwrap();
+
+        let content = RoomKeyBundleContent {
+            room_id: owned_room_id!("!room:id"),
+            file: EncryptedFile::new(
+                OwnedMxcUri::from("test"),
+                V2EncryptedFileInfo::encode([0; 32], [0; 16]).into(),
+                Default::default(),
+            ),
+        };
+
+        let requests = alice
+            .share_room_key_bundle_data(
+                bob.user_id(),
+                &CollectStrategy::OnlyTrustedDevices,
+                content,
+            )
+            .await
+            .unwrap();
+
+        // The device we do have a session with still gets the bundle.
+        let encrypted: usize = requests
+            .iter()
+            .filter(|r| r.event_type == "m.room.encrypted".into())
+            .map(|r| r.message_count())
+            .sum();
+        assert_eq!(encrypted, 1);
+
+        // ... and the one we do not gets told why it did not.
+        let withheld: Vec<_> = requests
+            .iter()
+            .filter(|r| r.event_type == "m.room_key.withheld".into())
+            .collect();
+        assert_eq!(withheld.len(), 1, "There should be one withheld request");
+
+        let content = withheld[0]
+            .messages
+            .get(bob.user_id())
+            .expect("The withheld notice should be addressed to Bob")
+            .get(&DeviceIdOrAllDevices::DeviceId(unreachable_device_id))
+            .expect("The withheld notice should be addressed to the unreachable device");
+
+        let content: RoomKeyWithheldContent =
+            content.deserialize_as_unchecked::<RoomKeyWithheldContent>().unwrap();
+        assert_let!(MegolmV1AesSha2(content) = content);
+        assert_eq!(content.withheld_code(), WithheldCode::NoOlm);
     }
 }
