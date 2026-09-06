@@ -196,6 +196,15 @@ pub enum AutoShrinkMessage {
         room_id: OwnedRoomId,
     },
 
+    /// Ask to unload a [`PinnedEventsCache`], as nobody is listening to it
+    /// anymore.
+    ///
+    /// [`PinnedEventsCache`]: super::pinned_events::PinnedEventsCache
+    PinnedEvents {
+        /// The ID of the room.
+        room_id: OwnedRoomId,
+    },
+
     /// Ask to automatically shrink a [`ThreadEventCache`].
     ///
     /// [`ThreadEventCache`]: super::thread::ThreadEventCache
