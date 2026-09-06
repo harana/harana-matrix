@@ -15,7 +15,9 @@
 use std::collections::BTreeMap;
 
 use matrix_sdk_common::deserialized_responses::{VerificationLevel, WithheldCode};
-use ruma::{CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedUserId};
+use ruma::{
+    CanonicalJsonError, IdParseError, OwnedDeviceId, OwnedEventId, OwnedRoomId, OwnedUserId,
+};
 use serde::{Serializer, ser::SerializeMap};
 use serde_json::Error as SerdeError;
 use thiserror::Error;

@@ -1232,7 +1232,6 @@ impl IdentityManager {
         Ok(())
     }
 
-
     /// Mark all tracked users as dirty.
     ///
     /// All users *whose device lists we are tracking* are flagged as needing a

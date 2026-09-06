@@ -8,13 +8,15 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3keysdevice_signingupload
 
     use crate::{
-        api::{auth_scheme::AccessToken, request, response},
+        api::{
+            auth_scheme::AccessToken,
+            client::uiaa::{AuthData, UiaaResponse},
+            request, response,
+        },
         encryption::CrossSigningKey,
         metadata,
         serde::Raw,
     };
-
-    use crate::api::client::uiaa::{AuthData, UiaaResponse};
 
     metadata! {
         method: POST,
@@ -30,7 +32,8 @@ pub mod v3 {
     #[request(error = UiaaResponse)]
     #[derive(Default)]
     pub struct Request {
-        /// Additional authentication information for the user-interactive authentication API.
+        /// Additional authentication information for the user-interactive
+        /// authentication API.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub auth: Option<AuthData>,
 
@@ -40,15 +43,17 @@ pub mod v3 {
 
         /// The user's self-signing key.
         ///
-        /// Must be signed with the accompanied master, or by the user's most recently uploaded
-        /// master key if no master key is included in the request.
+        /// Must be signed with the accompanied master, or by the user's most
+        /// recently uploaded master key if no master key is included in
+        /// the request.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub self_signing_key: Option<Raw<CrossSigningKey>>,
 
         /// The user's user-signing key.
         ///
-        /// Must be signed with the accompanied master, or by the user's most recently uploaded
-        /// master key if no master key is included in the request.
+        /// Must be signed with the accompanied master, or by the user's most
+        /// recently uploaded master key if no master key is included in
+        /// the request.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub user_signing_key: Option<Raw<CrossSigningKey>>,
 

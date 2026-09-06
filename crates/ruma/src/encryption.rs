@@ -35,15 +35,15 @@ pub struct DeviceKeys {
     /// Signatures for the device key object.
     pub signatures: CrossSigningOrDeviceSignatures,
 
-    /// Additional data added to the device key information by intermediate servers, and
-    /// not covered by the signatures.
+    /// Additional data added to the device key information by intermediate
+    /// servers, and not covered by the signatures.
     #[serde(default, skip_serializing_if = "UnsignedDeviceInfo::is_empty")]
     pub unsigned: UnsignedDeviceInfo,
 }
 
 impl DeviceKeys {
-    /// Creates a new `DeviceKeys` from the given user id, device id, algorithms, keys and
-    /// signatures.
+    /// Creates a new `DeviceKeys` from the given user id, device id,
+    /// algorithms, keys and signatures.
     pub fn new(
         user_id: OwnedUserId,
         device_id: OwnedDeviceId,
@@ -134,9 +134,9 @@ pub struct CrossSigningKey {
 
     /// Signatures of the key.
     ///
-    /// The master key should be signed by the device key and can be signed by other users'
-    /// user-signing key. The user-signing and self-signing keys must be signed by the master
-    /// key.
+    /// The master key should be signed by the device key and can be signed by
+    /// other users' user-signing key. The user-signing and self-signing
+    /// keys must be signed by the master key.
     ///
     /// Only optional for the master key.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -144,7 +144,8 @@ pub struct CrossSigningKey {
 }
 
 impl CrossSigningKey {
-    /// Creates a new `CrossSigningKey` with the given user ID, usage, keys and signatures.
+    /// Creates a new `CrossSigningKey` with the given user ID, usage, keys and
+    /// signatures.
     pub fn new(
         user_id: OwnedUserId,
         usage: Vec<KeyUsage>,
@@ -176,7 +177,10 @@ pub enum KeyUsage {
     ///
     /// [MSC3834]: https://github.com/matrix-org/matrix-spec-proposals/pull/3834
     #[cfg(feature = "unstable-msc3834")]
-    #[ruma_enum(rename = "org.matrix.msc3834.v1.cross_signing.tofu_signing", alias = "m.cross_signing.tofu_signing")]
+    #[ruma_enum(
+        rename = "org.matrix.msc3834.v1.cross_signing.tofu_signing",
+        alias = "m.cross_signing.tofu_signing"
+    )]
     TofuSigning,
 
     #[doc(hidden)]

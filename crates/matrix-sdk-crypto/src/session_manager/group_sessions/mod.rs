@@ -59,10 +59,8 @@ use crate::{
     types::{
         EventEncryptionAlgorithm,
         events::{
-            EventType,
-            room::encrypted::ToDeviceEncryptedEventContent,
-            room_key_bundle::RoomKeyBundleContent,
-            room_key_withheld::RoomKeyWithheldContent,
+            EventType, room::encrypted::ToDeviceEncryptedEventContent,
+            room_key_bundle::RoomKeyBundleContent, room_key_withheld::RoomKeyWithheldContent,
         },
         requests::ToDeviceRequest,
     },
@@ -2066,10 +2064,8 @@ mod tests {
         assert_eq!(encrypted, 1);
 
         // ... and the one we do not gets told why it did not.
-        let withheld: Vec<_> = requests
-            .iter()
-            .filter(|r| r.event_type == "m.room_key.withheld".into())
-            .collect();
+        let withheld: Vec<_> =
+            requests.iter().filter(|r| r.event_type == "m.room_key.withheld".into()).collect();
         assert_eq!(withheld.len(), 1, "There should be one withheld request");
 
         let content = withheld[0]

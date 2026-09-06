@@ -1,14 +1,15 @@
-//! Core types used to define the requests and responses for each endpoint in the various
-//! [Matrix API specifications][apis].
+//! Core types used to define the requests and responses for each endpoint in
+//! the various [Matrix API specifications][apis].
 //!
-//! When implementing a new Matrix API, each endpoint has a request type which implements
-//! [`IncomingRequest`] and [`OutgoingRequest`], and a response type connected via an associated
-//! type.
+//! When implementing a new Matrix API, each endpoint has a request type which
+//! implements [`IncomingRequest`] and [`OutgoingRequest`], and a response type
+//! connected via an associated type.
 //!
-//! An implementation of [`IncomingRequest`] or [`OutgoingRequest`] contains all the information
-//! about the HTTP method, the path and input parameters for requests, and the structure of a
-//! successful response. Such types can then be used by client code to make requests, and by server
-//! code to fulfill those requests.
+//! An implementation of [`IncomingRequest`] or [`OutgoingRequest`] contains all
+//! the information about the HTTP method, the path and input parameters for
+//! requests, and the structure of a successful response. Such types can then be
+//! used by client code to make requests, and by server code to fulfill those
+//! requests.
 //!
 //! [apis]: https://spec.matrix.org/v1.19/#matrix-apis
 
@@ -18,59 +19,67 @@ use bytes::BufMut;
 pub use ruma_macros::OutgoingBodyJson;
 /// Generates [`OutgoingRequest`] and [`IncomingRequest`] implementations.
 ///
-/// The `OutgoingRequest` impl is feature-gated behind `cfg(feature = "client")`.
-/// The `IncomingRequest` impl is feature-gated behind `cfg(feature = "server")`.
+/// The `OutgoingRequest` impl is feature-gated behind `cfg(feature =
+/// "client")`. The `IncomingRequest` impl is feature-gated behind `cfg(feature
+/// = "server")`.
 ///
-/// The generated code expects the `Request` type to implement [`Metadata`], alongside a
-/// `Response` type that implements [`OutgoingResponse`] (for `cfg(feature = "server")`) and /
-/// or [`IncomingResponse`] (for `cfg(feature = "client")`).
+/// The generated code expects the `Request` type to implement [`Metadata`],
+/// alongside a `Response` type that implements [`OutgoingResponse`] (for
+/// `cfg(feature = "server")`) and / or [`IncomingResponse`] (for `cfg(feature =
+/// "client")`).
 ///
-/// The `Content-Type` header of the `OutgoingRequest` is unset for endpoints using the `GET`
-/// method, and defaults to `application/json` for all other methods, except if the `raw_body`
-/// attribute is set on a field, in which case it defaults to `application/octet-stream`.
+/// The `Content-Type` header of the `OutgoingRequest` is unset for endpoints
+/// using the `GET` method, and defaults to `application/json` for all other
+/// methods, except if the `raw_body` attribute is set on a field, in which case
+/// it defaults to `application/octet-stream`.
 ///
-/// By default, the type this macro is used on gets a `#[non_exhaustive]` attribute. This
-/// behavior can be controlled by setting the `ruma_unstable_exhaustive_types` compile-time
-/// `cfg` setting as `--cfg=ruma_unstable_exhaustive_types` using `RUSTFLAGS` or
-/// `.cargo/config.toml` (under `[build]` -> `rustflags = ["..."]`). When that setting is
+/// By default, the type this macro is used on gets a `#[non_exhaustive]`
+/// attribute. This behavior can be controlled by setting the
+/// `ruma_unstable_exhaustive_types` compile-time `cfg` setting as
+/// `--cfg=ruma_unstable_exhaustive_types` using `RUSTFLAGS` or `.cargo/config.
+/// toml` (under `[build]` -> `rustflags = ["..."]`). When that setting is
 /// activated, the attribute is not applied so the type is exhaustive.
 ///
 /// ## Container Attributes
 ///
-/// * `#[request(error = ERROR_TYPE)]`: Override the `EndpointError` associated type of the
-///   `OutgoingRequest` and `IncomingRequest` implementations. The default error type is
-///   [`Error`](error::Error).
+/// * `#[request(error = ERROR_TYPE)]`: Override the `EndpointError` associated
+///   type of the `OutgoingRequest` and `IncomingRequest` implementations. The
+///   default error type is [`Error`](error::Error).
 ///
 /// ## Field Attributes
 ///
 /// To declare which part of the request a field belongs to:
 ///
-/// * `#[ruma_api(header = HEADER_NAME)]`: Fields with this attribute will be treated as HTTP
-///   headers on the request. The value must implement `ToString` and `FromStr`. Generally this
-///   is a `String`. The attribute value shown above as `HEADER_NAME` must be a `const`
-///   expression of the type `http::header::HeaderName`, like one of the constants from
-///   `http::header`, e.g. `CONTENT_TYPE`. During deserialization of the request, if the field
-///   is an `Option` and parsing the header fails, the error will be ignored and the value will
-///   be `None`.
-/// * `#[ruma_api(path)]`: Fields with this attribute will be inserted into the matching path
-///   component of the request URL. If there are multiple of these fields, the order in which
-///   they are declared must match the order in which they occur in the request path.
-/// * `#[ruma_api(query)]`: Fields with this attribute will be inserting into the URL's query
-///   string.
-/// * `#[ruma_api(query_all)]`: Instead of individual query fields, one query_all field, of any
-///   type that can be (de)serialized by [serde_html_form], can be used for cases where
-///   multiple endpoints should share a query fields type, the query fields are better
-///   expressed as an `enum` rather than a `struct`, or the endpoint supports arbitrary query
+/// * `#[ruma_api(header = HEADER_NAME)]`: Fields with this attribute will be
+///   treated as HTTP headers on the request. The value must implement
+///   `ToString` and `FromStr`. Generally this is a `String`. The attribute
+///   value shown above as `HEADER_NAME` must be a `const` expression of the
+///   type `http::header::HeaderName`, like one of the constants from
+///   `http::header`, e.g. `CONTENT_TYPE`. During deserialization of the
+///   request, if the field is an `Option` and parsing the header fails, the
+///   error will be ignored and the value will be `None`.
+/// * `#[ruma_api(path)]`: Fields with this attribute will be inserted into the
+///   matching path component of the request URL. If there are multiple of these
+///   fields, the order in which they are declared must match the order in which
+///   they occur in the request path.
+/// * `#[ruma_api(query)]`: Fields with this attribute will be inserting into
+///   the URL's query string.
+/// * `#[ruma_api(query_all)]`: Instead of individual query fields, one
+///   query_all field, of any type that can be (de)serialized by
+///   [serde_html_form], can be used for cases where multiple endpoints should
+///   share a query fields type, the query fields are better expressed as an
+///   `enum` rather than a `struct`, or the endpoint supports arbitrary query
 ///   parameters.
-/// * No attribute: Fields without an attribute are part of the body. They can use `#[serde]`
-///   attributes to customize (de)serialization.
-/// * `#[ruma_api(body)]`: Use this if multiple endpoints should share a request body type, or
-///   the request body is better expressed as an `enum` rather than a `struct`. The value of
-///   the field will be used as the JSON body (rather than being a field in the request body
-///   object).
-/// * `#[ruma_api(raw_body)]`: Like `body` in that the field annotated with it represents the
-///   entire request body, but this attribute is for endpoints where the body can be anything,
-///   not just JSON. The field type must be `Vec<u8>`.
+/// * No attribute: Fields without an attribute are part of the body. They can
+///   use `#[serde]` attributes to customize (de)serialization.
+/// * `#[ruma_api(body)]`: Use this if multiple endpoints should share a request
+///   body type, or the request body is better expressed as an `enum` rather
+///   than a `struct`. The value of the field will be used as the JSON body
+///   (rather than being a field in the request body object).
+/// * `#[ruma_api(raw_body)]`: Like `body` in that the field annotated with it
+///   represents the entire request body, but this attribute is for endpoints
+///   where the body can be anything, not just JSON. The field type must be
+///   `Vec<u8>`.
 ///
 /// ## Examples
 ///
@@ -145,46 +154,52 @@ pub use ruma_macros::OutgoingBodyJson;
 pub use ruma_macros::request;
 /// Generates [`OutgoingResponse`] and [`IncomingResponse`] implementations.
 ///
-/// The `OutgoingResponse` impl is feature-gated behind `cfg(feature = "server")`.
-/// The `IncomingResponse` impl is feature-gated behind `cfg(feature = "client")`.
+/// The `OutgoingResponse` impl is feature-gated behind `cfg(feature =
+/// "server")`. The `IncomingResponse` impl is feature-gated behind `cfg(feature
+/// = "client")`.
 ///
-/// The `Content-Type` header of the `OutgoingResponse` defaults to `application/json`, except
-/// if the `raw_body` attribute is set on a field, in which case it defaults to
-/// `application/octet-stream`.
+/// The `Content-Type` header of the `OutgoingResponse` defaults to
+/// `application/json`, except if the `raw_body` attribute is set on a field, in
+/// which case it defaults to `application/octet-stream`.
 ///
-/// By default, the type this macro is used on gets a `#[non_exhaustive]` attribute. This
-/// behavior can be controlled by setting the `ruma_unstable_exhaustive_types` compile-time
-/// `cfg` setting as `--cfg=ruma_unstable_exhaustive_types` using `RUSTFLAGS` or
-/// `.cargo/config.toml` (under `[build]` -> `rustflags = ["..."]`). When that setting is
+/// By default, the type this macro is used on gets a `#[non_exhaustive]`
+/// attribute. This behavior can be controlled by setting the
+/// `ruma_unstable_exhaustive_types` compile-time `cfg` setting as
+/// `--cfg=ruma_unstable_exhaustive_types` using `RUSTFLAGS` or `.cargo/config.
+/// toml` (under `[build]` -> `rustflags = ["..."]`). When that setting is
 /// activated, the attribute is not applied so the type is exhaustive.
 ///
 /// ## Container Attributes
 ///
-/// * `#[response(error = ERROR_TYPE)]`: Override the `EndpointError` associated type of the
-///   `IncomingResponse` implementation. The default error type is [`Error`](error::Error).
-/// * `#[response(status = HTTP_STATUS)]`: Override the status code of `OutgoingResponse`.
-///   `HTTP_STATUS` must be a status code constant from [`http::StatusCode`], e.g.
-///   `IM_A_TEAPOT`. The default status code is [`200 OK`](http::StatusCode::OK);
+/// * `#[response(error = ERROR_TYPE)]`: Override the `EndpointError` associated
+///   type of the `IncomingResponse` implementation. The default error type is
+///   [`Error`](error::Error).
+/// * `#[response(status = HTTP_STATUS)]`: Override the status code of
+///   `OutgoingResponse`. `HTTP_STATUS` must be a status code constant from
+///   [`http::StatusCode`], e.g. `IM_A_TEAPOT`. The default status code is [`200
+///   OK`](http::StatusCode::OK);
 ///
 /// ## Field Attributes
 ///
 /// To declare which part of the response a field belongs to:
 ///
-/// * `#[ruma_api(header = HEADER_NAME)]`: Fields with this attribute will be treated as HTTP
-///   headers on the response. `HEADER_NAME` must implement
-///   `TryInto<http::header::HeaderName>`, this is usually a constant from [`http::header`].
-///   The value of the field must implement `ToString` and `FromStr`, this is usually a
-///   `String`. During deserialization of the response, if the field is an `Option` and parsing
-///   the header fails, the error will be ignored and the value will be `None`.
-/// * No attribute: Fields without an attribute are part of the body. They can use `#[serde]`
-///   attributes to customize (de)serialization.
-/// * `#[ruma_api(body)]`: Use this if multiple endpoints should share a response body type, or
-///   the response body is better expressed as an `enum` rather than a `struct`. The value of
-///   the field will be used as the JSON body (rather than being a field in the response body
-///   object).
-/// * `#[ruma_api(raw_body)]`: Like `body` in that the field annotated with it represents the
-///   entire response body, but this attribute is for endpoints where the body can be anything,
-///   not just JSON. The field type must be `Vec<u8>`.
+/// * `#[ruma_api(header = HEADER_NAME)]`: Fields with this attribute will be
+///   treated as HTTP headers on the response. `HEADER_NAME` must implement
+///   `TryInto<http::header::HeaderName>`, this is usually a constant from
+///   [`http::header`]. The value of the field must implement `ToString` and
+///   `FromStr`, this is usually a `String`. During deserialization of the
+///   response, if the field is an `Option` and parsing the header fails, the
+///   error will be ignored and the value will be `None`.
+/// * No attribute: Fields without an attribute are part of the body. They can
+///   use `#[serde]` attributes to customize (de)serialization.
+/// * `#[ruma_api(body)]`: Use this if multiple endpoints should share a
+///   response body type, or the response body is better expressed as an `enum`
+///   rather than a `struct`. The value of the field will be used as the JSON
+///   body (rather than being a field in the response body object).
+/// * `#[ruma_api(raw_body)]`: Like `body` in that the field annotated with it
+///   represents the entire response body, but this attribute is for endpoints
+///   where the body can be anything, not just JSON. The field type must be
+///   `Vec<u8>`.
 ///
 /// ## Examples
 ///
@@ -257,7 +272,8 @@ use crate::{DeviceId, UserId};
 pub mod appservice;
 pub mod auth_scheme;
 mod body;
-// These two modules only contain endpoint definitions, which are empty without a direction.
+// These two modules only contain endpoint definitions, which are empty without
+// a direction.
 #[cfg(any(feature = "client", feature = "server"))]
 pub mod client;
 pub mod error;
@@ -287,15 +303,18 @@ pub trait OutgoingRequest: Metadata + Clone {
     ///
     /// The endpoints path will be appended to the given `base_url`, for example
     /// `https://matrix.org`. Since all paths begin with a slash, it is not necessary for the
-    /// `base_url` to have a trailing slash. If it has one however, it will be ignored.
+    /// `base_url` to have a trailing slash. If it has one however, it will be
+    /// ignored.
     ///
     /// ## Errors
     ///
     /// This method can return an error in the following cases:
     ///
-    /// * On endpoints that have several versions for the path, when there are no supported versions
-    ///   for the endpoint, i.e. when [`PathBuilder::make_endpoint_url()`] returns an error.
-    /// * If the request serialization fails, which should only happen in case of bugs in Ruma.
+    /// * On endpoints that have several versions for the path, when there are
+    ///   no supported versions for the endpoint, i.e. when
+    ///   [`PathBuilder::make_endpoint_url()`] returns an error.
+    /// * If the request serialization fails, which should only happen in case
+    ///   of bugs in Ruma.
     ///
     /// [`AuthScheme::add_authentication()`]: auth_scheme::AuthScheme::add_authentication
     /// [`PathBuilder::make_endpoint_url()`]: path_builder::PathBuilder::make_endpoint_url
@@ -312,17 +331,21 @@ pub trait OutgoingRequestExt: OutgoingRequest {
     ///
     /// The endpoints path will be appended to the given `base_url`, for example
     /// `https://matrix.org`. Since all paths begin with a slash, it is not necessary for the
-    /// `base_url` to have a trailing slash. If it has one however, it will be ignored.
+    /// `base_url` to have a trailing slash. If it has one however, it will be
+    /// ignored.
     ///
     /// ## Errors
     ///
     /// This method can return an error in the following cases:
     ///
-    /// * On endpoints that require authentication, when adequate information isn't provided through
-    ///   `authentication_input`, i.e. when [`AuthScheme::add_authentication()`] returns an error.
-    /// * On endpoints that have several versions for the path, when there are no supported versions
-    ///   for the endpoint, i.e. when [`PathBuilder::make_endpoint_url()`] returns an error.
-    /// * If the request serialization fails, which should only happen in case of bugs in Ruma.
+    /// * On endpoints that require authentication, when adequate information
+    ///   isn't provided through `authentication_input`, i.e. when
+    ///   [`AuthScheme::add_authentication()`] returns an error.
+    /// * On endpoints that have several versions for the path, when there are
+    ///   no supported versions for the endpoint, i.e. when
+    ///   [`PathBuilder::make_endpoint_url()`] returns an error.
+    /// * If the request serialization fails, which should only happen in case
+    ///   of bugs in Ruma.
     ///
     /// [`AuthScheme::add_authentication()`]: auth_scheme::AuthScheme::add_authentication
     /// [`PathBuilder::make_endpoint_url()`]: path_builder::PathBuilder::make_endpoint_url
@@ -380,11 +403,13 @@ pub trait IncomingResponseExt: IncomingResponse {
 
 impl<T: IncomingResponse> IncomingResponseExt for T {}
 
-/// An extension to [`OutgoingRequest`] which provides Appservice specific methods.
+/// An extension to [`OutgoingRequest`] which provides Appservice specific
+/// methods.
 ///
-/// This is only implemented for implementors of [`AuthScheme`](auth_scheme::AuthScheme) that use a
-/// [`SendAccessToken`](auth_scheme::SendAccessToken), because application services should only use
-/// these methods with the Client-Server API.
+/// This is only implemented for implementors of
+/// [`AuthScheme`](auth_scheme::AuthScheme) that use a
+/// [`SendAccessToken`](auth_scheme::SendAccessToken), because application
+/// services should only use these methods with the Client-Server API.
 pub trait OutgoingRequestAppserviceExt: OutgoingRequest
 where
     for<'a> Self::Authentication:
@@ -416,14 +441,16 @@ impl<T: OutgoingRequest> OutgoingRequestAppserviceExt for T where
 
 /// A request type for a Matrix API endpoint, used for receiving requests.
 pub trait IncomingRequest: Metadata {
-    /// A type capturing the error conditions that can be returned in the response.
+    /// A type capturing the error conditions that can be returned in the
+    /// response.
     type EndpointError: EndpointError;
 
     /// Response type to return when the request is successful.
     type OutgoingResponse: OutgoingResponse;
 
-    /// Check whether the given HTTP method from an incoming request is compatible with the expected
-    /// [`METHOD`](Metadata::METHOD) of this endpoint.
+    /// Check whether the given HTTP method from an incoming request is
+    /// compatible with the expected [`METHOD`](Metadata::METHOD) of this
+    /// endpoint.
     fn check_request_method(method: &http::Method) -> Result<(), FromHttpRequestError> {
         if !(method == Self::METHOD
             || (Self::METHOD == http::Method::GET && method == http::Method::HEAD))
@@ -457,8 +484,9 @@ pub trait OutgoingResponse: Sized {
 
     /// Tries to convert this response into an `http::Response`.
     ///
-    /// This method should only fail when invalid header values are specified. It may also fail with
-    /// a serialization error in case of bugs in Ruma though.
+    /// This method should only fail when invalid header values are specified.
+    /// It may also fail with a serialization error in case of bugs in Ruma
+    /// though.
     fn try_into_http_response_inner(self) -> Result<http::Response<Self::Body>, IntoHttpError>;
 }
 
@@ -466,8 +494,9 @@ pub trait OutgoingResponse: Sized {
 pub trait OutgoingResponseExt: OutgoingResponse {
     /// Tries to convert this response into an `http::Response`.
     ///
-    /// This method should only fail when invalid header values are specified. It may also fail with
-    /// a serialization error in case of bugs in Ruma though.
+    /// This method should only fail when invalid header values are specified.
+    /// It may also fail with a serialization error in case of bugs in Ruma
+    /// though.
     fn try_into_http_response<T: Default + BufMut + AsRef<[u8]>>(
         self,
     ) -> Result<http::Response<T>, IntoHttpError> {
@@ -478,12 +507,13 @@ pub trait OutgoingResponseExt: OutgoingResponse {
 
 impl<T: OutgoingResponse> OutgoingResponseExt for T {}
 
-/// Gives users the ability to define their own serializable / deserializable errors.
+/// Gives users the ability to define their own serializable / deserializable
+/// errors.
 pub trait EndpointError: OutgoingResponse + StdError + Sized + Send + 'static {
     /// Tries to construct `Self` from an `http::Response`.
     ///
-    /// This will always return `Err` variant when no `error` field is defined in
-    /// the `ruma_api` macro.
+    /// This will always return `Err` variant when no `error` field is defined
+    /// in the `ruma_api` macro.
     fn from_http_response(response: http::Response<&[u8]>) -> Self;
 }
 
@@ -516,8 +546,8 @@ impl Direction {
 pub struct AppserviceUserIdentity<'a> {
     /// The ID of the virtual user.
     ///
-    /// If this is not set, the user implied by the `sender_localpart` property of the registration
-    /// will be used by the server.
+    /// If this is not set, the user implied by the `sender_localpart` property
+    /// of the registration will be used by the server.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<&'a UserId>,
 

@@ -1023,10 +1023,7 @@ async fn test_keys_from_an_unauthenticated_backup_are_not_legacy_sessions() {
 
     let session =
         machine.store().get_inbound_group_session(&room_id, session_id).await.unwrap().unwrap();
-    assert_matches!(
-        session.sender_data,
-        SenderData::UnknownDevice { legacy_session: true, .. }
-    );
+    assert_matches!(session.sender_data, SenderData::UnknownDevice { legacy_session: true, .. });
 
     // A backup we could not authenticate: it is not.
     let machine = OlmMachine::new(user_id(), alice_device_id()).await;
@@ -1043,10 +1040,7 @@ async fn test_keys_from_an_unauthenticated_backup_are_not_legacy_sessions() {
 
     let session =
         machine.store().get_inbound_group_session(&room_id, session_id).await.unwrap().unwrap();
-    assert_matches!(
-        session.sender_data,
-        SenderData::UnknownDevice { legacy_session: false, .. }
-    );
+    assert_matches!(session.sender_data, SenderData::UnknownDevice { legacy_session: false, .. });
 }
 
 /// A Megolm ciphertext says nothing about the event it arrived in, so a
@@ -2159,10 +2153,7 @@ async fn test_retry_decryption_of_bundled_events() {
 
     let original_event_id = ruma::event_id!("$original:example.org");
     let edit_content = RoomMessageEventContent::text_plain("edited").make_replacement(
-        ruma::events::room::message::ReplacementMetadata::new(
-            original_event_id.to_owned(),
-            None,
-        ),
+        ruma::events::room::message::ReplacementMetadata::new(original_event_id.to_owned(), None),
     );
     let edit = alice.encrypt_room_event(room_id, edit_content).await.unwrap();
 

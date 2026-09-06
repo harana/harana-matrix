@@ -68,7 +68,6 @@ use vodozemac::{Curve25519PublicKey, Ed25519Signature, megolm::DecryptionError};
 
 #[cfg(feature = "experimental-push-secrets")]
 use crate::error::SecretPushError;
-use crate::machine::replay_protection::{ReplayCheck, ReplayProtection};
 #[cfg(feature = "experimental-send-custom-to-device")]
 use crate::session_manager::split_devices_for_share_strategy;
 #[cfg(feature = "experimental-x509-identity-verification")]
@@ -81,6 +80,7 @@ use crate::{
     error::{EventError, MegolmError, MegolmResult, OlmError, OlmResult, SetRoomSettingsError},
     gossiping::GossipMachine,
     identities::{Device, IdentityManager, UserDevices, user::UserIdentity},
+    machine::replay_protection::{ReplayCheck, ReplayProtection},
     olm::{
         Account, CrossSigningStatus, EncryptionSettings, IdentityKeys, InboundGroupSession,
         KnownSenderData, OlmDecryptionInfo, PrivateCrossSigningIdentity, SenderData,
@@ -3441,7 +3441,6 @@ impl OlmMachine {
     pub(crate) fn identity_manager(&self) -> &IdentityManager {
         &self.inner.identity_manager
     }
-
 }
 
 fn sender_data_to_verification_state(

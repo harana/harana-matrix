@@ -378,8 +378,7 @@ async fn test_update_sender_unverified_senderdata_when_the_sender_becomes_verifi
 
     // Now Bob verifies Alice. No device of hers changes; only her identity does.
     bob.bootstrap_cross_signing(false).await.unwrap();
-    let bob_identity =
-        bob.get_identity(bob.user_id(), None).await.unwrap().unwrap().own().unwrap();
+    let bob_identity = bob.get_identity(bob.user_id(), None).await.unwrap().unwrap().own().unwrap();
     let alice_identity =
         bob.get_identity(alice.user_id(), None).await.unwrap().unwrap().other().unwrap();
     let signature_upload = alice_identity.verify().await.unwrap();

@@ -1102,11 +1102,7 @@ trait SqliteObjectCryptoStoreExt: SqliteAsyncConnExt {
             .optional()?)
     }
 
-    async fn delete_received_room_key_bundle(
-        &self,
-        room_id: Key,
-        sender_user: Key,
-    ) -> Result<()> {
+    async fn delete_received_room_key_bundle(&self, room_id: Key, sender_user: Key) -> Result<()> {
         self.execute(
             "DELETE FROM received_room_key_bundle WHERE room_id = ? AND sender_user_id = ?",
             (room_id, sender_user),

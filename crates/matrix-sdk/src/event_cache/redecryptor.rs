@@ -470,10 +470,7 @@ impl EventCache {
         let mut updated_events = Vec::with_capacity(events.len());
 
         for (event_id, mut event) in events {
-            match machine
-                .retry_decryption_of_bundled_events(&mut event, room_id, settings)
-                .await
-            {
+            match machine.retry_decryption_of_bundled_events(&mut event, room_id, settings).await {
                 Ok(true) => updated_events.push(ResolvedUtd {
                     event_id,
                     decrypted_event: event,

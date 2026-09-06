@@ -12,7 +12,8 @@ mod pdu;
 
 pub use self::{factory::*, pdu::*};
 
-/// Get the default room ID in the proper format according to the room version rules.
+/// Get the default room ID in the proper format according to the room version
+/// rules.
 pub fn default_room_id(format: &RoomIdFormatVersion) -> OwnedRoomId {
     match format {
         RoomIdFormatVersion::V1 => owned_room_id!("!room:matrix.local"),

@@ -1,20 +1,20 @@
-use crate::{
-    EventId, MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId, TransactionId, UserId,
-    serde::{JsonCastable, from_raw_json_value},
-};
-#[cfg(feature = "unstable-msc3381")]
-use crate::events::{
-    poll::{start::PollStartEventContent, unstable_start::UnstablePollStartEventContent},
-    room::encrypted::Replacement,
-};
 use ruma_macros::{EventEnumFromEvent, event_enum};
 use serde::{Deserialize, Serialize, de};
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::room::encrypted;
+#[cfg(feature = "unstable-msc3381")]
+use crate::events::{
+    poll::{start::PollStartEventContent, unstable_start::UnstablePollStartEventContent},
+    room::encrypted::Replacement,
+};
+use crate::{
+    EventId, MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId, TransactionId, UserId,
+    serde::{JsonCastable, from_raw_json_value},
+};
 
-/// Event types that servers should send as [stripped state] to help clients identify a room when
-/// they can't access the full room state.
+/// Event types that servers should send as [stripped state] to help clients
+/// identify a room when they can't access the full room state.
 ///
 /// [stripped state]: https://spec.matrix.org/v1.19/client-server-api/#stripped-state
 pub const RECOMMENDED_STRIPPED_STATE_EVENT_TYPES: &[StateEventType] = &[
@@ -27,8 +27,8 @@ pub const RECOMMENDED_STRIPPED_STATE_EVENT_TYPES: &[StateEventType] = &[
     StateEventType::RoomEncryption,
 ];
 
-/// Event types that servers should transfer upon [room upgrade]. The exact details for what is
-/// transferred is left as an implementation detail.
+/// Event types that servers should transfer upon [room upgrade]. The exact
+/// details for what is transferred is left as an implementation detail.
 ///
 /// [room upgrade]: https://spec.matrix.org/v1.19/client-server-api/#server-behaviour-21
 pub const RECOMMENDED_TRANSFERABLE_STATE_EVENT_TYPES: &[StateEventType] = &[
@@ -328,7 +328,8 @@ impl AnyTimelineEvent {
 
 /// Any sync room event.
 ///
-/// Sync room events are room event without a `room_id`, as returned in `/sync` responses.
+/// Sync room events are room event without a `room_id`, as returned in `/sync`
+/// responses.
 #[allow(clippy::large_enum_variant, clippy::exhaustive_enums)]
 #[derive(Clone, Debug, EventEnumFromEvent)]
 pub enum AnySyncTimelineEvent {
@@ -400,11 +401,14 @@ impl AnyTimelineEventContent {
     pub fn event_type(&self) -> TimelineEventType {
         match self {
             Self::MessageLike(content) => {
-                <AnyMessageLikeEventContent as crate::events::MessageLikeEventContent>::event_type(content)
-                    .into()
+                <AnyMessageLikeEventContent as crate::events::MessageLikeEventContent>::event_type(
+                    content,
+                )
+                .into()
             }
             Self::State(content) => {
-                <AnyStateEventContent as crate::events::StateEventContent>::event_type(content).into()
+                <AnyStateEventContent as crate::events::StateEventContent>::event_type(content)
+                    .into()
             }
         }
     }
@@ -454,8 +458,9 @@ impl<'de> Deserialize<'de> for AnySyncTimelineEvent {
 impl AnyMessageLikeEventContent {
     /// Get a copy of the event's `m.relates_to` field, if any.
     ///
-    /// This is a helper function intended for encryption. There should not be a reason to access
-    /// `m.relates_to` without first destructuring an `AnyMessageLikeEventContent` otherwise.
+    /// This is a helper function intended for encryption. There should not be a
+    /// reason to access `m.relates_to` without first destructuring an
+    /// `AnyMessageLikeEventContent` otherwise.
     pub fn relation(&self) -> Option<encrypted::Relation> {
         #[cfg(feature = "unstable-msc3489")]
         use super::beacon::BeaconEventContent;

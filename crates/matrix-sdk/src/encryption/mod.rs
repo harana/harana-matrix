@@ -67,8 +67,7 @@ use ruma::{
         client::{
             keys::{
                 get_keys, upload_keys, upload_signatures::v3::Request as UploadSignaturesRequest,
-                upload_signing_keys,
-                upload_signing_keys::v3::Request as UploadSigningKeysRequest,
+                upload_signing_keys, upload_signing_keys::v3::Request as UploadSigningKeysRequest,
             },
             message::send_message_event,
             to_device::send_event_to_device::v3::{
@@ -413,10 +412,7 @@ impl CrossSigningResetHandle {
                     sleep(RETRY_EVERY).await;
                 }
 
-                self.client
-                    .encryption()
-                    .mark_cross_signing_identity_as_published()
-                    .await?;
+                self.client.encryption().mark_cross_signing_identity_as_published().await?;
                 self.client.send(self.signatures_request.clone()).await?;
 
                 Ok(())

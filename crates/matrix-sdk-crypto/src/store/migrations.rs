@@ -182,10 +182,7 @@ impl DataMigration for PostVerifiedLatchSupport {
     }
 
     async fn migrate(&self, context: &DataMigrationContext<'_>) -> Result<()> {
-        context
-            .identity_manager
-            .mark_all_tracked_users_as_dirty(context.store.cache().await?)
-            .await
+        context.identity_manager.mark_all_tracked_users_as_dirty(context.store.cache().await?).await
     }
 }
 

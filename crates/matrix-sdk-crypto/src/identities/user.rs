@@ -1590,6 +1590,14 @@ pub(crate) mod tests {
         UserIdentityData,
         testing::{device, get_other_identity, get_own_identity},
     };
+    #[cfg(feature = "experimental-x509-identity-verification")]
+    use crate::x509::{
+        RustRawX509Signer, RustRawX509Verifier, X509Signer, X509Verifier,
+        tests::{
+            ca_cert, cert_and_key_with_email_in_subject_distinguished_name,
+            cert_and_key_with_email_signed_by, create_rust_signer_and_verifier,
+        },
+    };
     use crate::{
         CrossSigningKeyExport, OlmMachine, OtherUserIdentity, OtherUserIdentityData,
         identities::{
@@ -1604,16 +1612,6 @@ pub(crate) mod tests {
         store::{CryptoStoreWrapper, MemoryStore, Store},
         types::{CrossSigningKey, MasterPubkey, SelfSigningPubkey, Signatures, UserSigningPubkey},
         verification::VerificationMachine,
-    };
-    #[cfg(feature = "experimental-x509-identity-verification")]
-    use crate::{
-        x509::{
-            RustRawX509Signer, RustRawX509Verifier, X509Signer, X509Verifier,
-            tests::{
-                ca_cert, cert_and_key_with_email_in_subject_distinguished_name,
-                cert_and_key_with_email_signed_by, create_rust_signer_and_verifier,
-            },
-        },
     };
 
     #[test]

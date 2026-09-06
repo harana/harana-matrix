@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Namespace {
-    /// Whether this application service has exclusive access to events within this namespace.
+    /// Whether this application service has exclusive access to events within
+    /// this namespace.
     pub exclusive: bool,
 
     /// A regular expression defining which values this namespace includes.
@@ -48,8 +49,8 @@ pub struct Namespaces {
 }
 
 impl Namespaces {
-    /// Creates a new `Namespaces` instance with empty namespaces for `users`,  `aliases` and
-    /// `rooms` (none of them are explicitly required)
+    /// Creates a new `Namespaces` instance with empty namespaces for `users`,
+    /// `aliases` and `rooms` (none of them are explicitly required)
     pub fn new() -> Self {
         Self::default()
     }
@@ -57,14 +58,15 @@ impl Namespaces {
 
 /// Information required in the registration yaml file that a homeserver needs.
 ///
-/// To create an instance of this type, first create a `RegistrationInit` and convert it via
-/// `Registration::from` / `.into()`.
+/// To create an instance of this type, first create a `RegistrationInit` and
+/// convert it via `Registration::from` / `.into()`.
 ///
 /// Used for [appservice registration](https://spec.matrix.org/v1.18/application-service-api/#registration).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Registration {
-    /// A unique, user - defined ID of the application service which will never change.
+    /// A unique, user - defined ID of the application service which will never
+    /// change.
     pub id: String,
 
     /// The URL for the application service.
@@ -73,16 +75,19 @@ pub struct Registration {
     #[serde(deserialize_with = "Option::deserialize")]
     pub url: Option<String>,
 
-    /// A unique token for application services to use to authenticate requests to Homeservers.
+    /// A unique token for application services to use to authenticate requests
+    /// to Homeservers.
     pub as_token: String,
 
-    /// A unique token for Homeservers to use to authenticate requests to application services.
+    /// A unique token for Homeservers to use to authenticate requests to
+    /// application services.
     pub hs_token: String,
 
     /// The localpart of the user associated with the application service.
     pub sender_localpart: String,
 
-    /// A list of users, aliases and rooms namespaces that the application service controls.
+    /// A list of users, aliases and rooms namespaces that the application
+    /// service controls.
     pub namespaces: Namespaces,
 
     /// Whether requests from masqueraded users are rate-limited.
@@ -91,7 +96,8 @@ pub struct Registration {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_limited: Option<bool>,
 
-    /// The external protocols which the application service provides (e.g. IRC).
+    /// The external protocols which the application service provides (e.g.
+    /// IRC).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocols: Option<Vec<String>>,
 
@@ -104,14 +110,15 @@ pub struct Registration {
 
 /// Initial set of fields of `Registration`.
 ///
-/// This struct will not be updated even if additional fields are added to `Registration` in a new
-/// (non-breaking) release of the Matrix specification.
+/// This struct will not be updated even if additional fields are added to
+/// `Registration` in a new (non-breaking) release of the Matrix specification.
 ///
 /// Used for [appservice registration](https://spec.matrix.org/v1.18/application-service-api/#registration).
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct RegistrationInit {
-    /// A unique, user - defined ID of the application service which will never change.
+    /// A unique, user - defined ID of the application service which will never
+    /// change.
     pub id: String,
 
     /// The URL for the application service.
@@ -119,16 +126,19 @@ pub struct RegistrationInit {
     /// Optionally set to `null` if no traffic is required.
     pub url: Option<String>,
 
-    /// A unique token for application services to use to authenticate requests to Homeservers.
+    /// A unique token for application services to use to authenticate requests
+    /// to Homeservers.
     pub as_token: String,
 
-    /// A unique token for Homeservers to use to authenticate requests to application services.
+    /// A unique token for Homeservers to use to authenticate requests to
+    /// application services.
     pub hs_token: String,
 
     /// The localpart of the user associated with the application service.
     pub sender_localpart: String,
 
-    /// A list of users, aliases and rooms namespaces that the application service controls.
+    /// A list of users, aliases and rooms namespaces that the application
+    /// service controls.
     pub namespaces: Namespaces,
 
     /// Whether requests from masqueraded users are rate-limited.
@@ -136,7 +146,8 @@ pub struct RegistrationInit {
     /// The sender is excluded.
     pub rate_limited: Option<bool>,
 
-    /// The external protocols which the application service provides (e.g. IRC).
+    /// The external protocols which the application service provides (e.g.
+    /// IRC).
     pub protocols: Option<Vec<String>>,
 }
 

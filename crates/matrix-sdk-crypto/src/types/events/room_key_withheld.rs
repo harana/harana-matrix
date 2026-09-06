@@ -117,17 +117,13 @@ impl RoomKeyWithheldContent {
         };
 
         match algorithm {
-            EventEncryptionAlgorithm::MegolmV1AesSha2 => {
-                RoomKeyWithheldContent::MegolmV1AesSha2(MegolmV1AesSha2WithheldContent::NoOlm(
-                    content.into(),
-                ))
-            }
+            EventEncryptionAlgorithm::MegolmV1AesSha2 => RoomKeyWithheldContent::MegolmV1AesSha2(
+                MegolmV1AesSha2WithheldContent::NoOlm(content.into()),
+            ),
             #[cfg(feature = "experimental-algorithms")]
-            EventEncryptionAlgorithm::MegolmV2AesSha2 => {
-                RoomKeyWithheldContent::MegolmV2AesSha2(MegolmV2AesSha2WithheldContent::NoOlm(
-                    content.into(),
-                ))
-            }
+            EventEncryptionAlgorithm::MegolmV2AesSha2 => RoomKeyWithheldContent::MegolmV2AesSha2(
+                MegolmV2AesSha2WithheldContent::NoOlm(content.into()),
+            ),
             _ => unreachable!("Unsupported algorithm {algorithm}"),
         }
     }

@@ -2,13 +2,14 @@
 
 use std::ops::Deref;
 
-use crate::{CanonicalJsonObject, OwnedUserId, serde::from_raw_json_value};
-use crate::events::room::member::MembershipState;
-use crate::signatures::to_canonical_json_string_for_signing;
 use serde::Deserialize;
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::Event;
+use crate::{
+    CanonicalJsonObject, OwnedUserId, events::room::member::MembershipState,
+    serde::from_raw_json_value, signatures::to_canonical_json_string_for_signing,
+};
 
 /// A helper type for an [`Event`] of type `m.room.member`.
 ///
@@ -27,13 +28,14 @@ impl<E: Event> RoomMemberEvent<E> {
         RoomMemberEventContent(self.content()).membership()
     }
 
-    /// If this is a `join` event, the ID of a user on the homeserver that authorized it.
+    /// If this is a `join` event, the ID of a user on the homeserver that
+    /// authorized it.
     pub fn join_authorised_via_users_server(&self) -> Result<Option<OwnedUserId>, String> {
         RoomMemberEventContent(self.content()).join_authorised_via_users_server()
     }
 
-    /// If this is an `invite` event, details about the third-party invite that resulted in this
-    /// event.
+    /// If this is an `invite` event, details about the third-party invite that
+    /// resulted in this event.
     pub(crate) fn third_party_invite(&self) -> Result<Option<ThirdPartyInvite>, String> {
         RoomMemberEventContent(self.content()).third_party_invite()
     }
@@ -68,7 +70,8 @@ impl<E: Event> RoomMemberEventOptionExt for Option<RoomMemberEvent<E>> {
 pub(crate) struct RoomMemberEventContent<'a>(&'a RawJsonValue);
 
 impl<'a> RoomMemberEventContent<'a> {
-    /// Construct a new `RoomMemberEventContent` around the given raw JSON content.
+    /// Construct a new `RoomMemberEventContent` around the given raw JSON
+    /// content.
     pub(crate) fn new(content: &'a RawJsonValue) -> Self {
         Self(content)
     }
@@ -89,7 +92,8 @@ impl RoomMemberEventContent<'_> {
         Ok(content.membership)
     }
 
-    /// If this is a `join` event, the ID of a user on the homeserver that authorized it.
+    /// If this is a `join` event, the ID of a user on the homeserver that
+    /// authorized it.
     pub(crate) fn join_authorised_via_users_server(&self) -> Result<Option<OwnedUserId>, String> {
         #[derive(Deserialize)]
         struct RoomMemberContentJoinAuthorizedViaUsersServer {
@@ -105,8 +109,8 @@ impl RoomMemberEventContent<'_> {
         Ok(content.join_authorised_via_users_server)
     }
 
-    /// If this is an `invite` event, details about the third-party invite that resulted in this
-    /// event.
+    /// If this is an `invite` event, details about the third-party invite that
+    /// resulted in this event.
     pub(crate) fn third_party_invite(&self) -> Result<Option<ThirdPartyInvite>, String> {
         #[derive(Deserialize)]
         struct RoomMemberContentThirdPartyInvite {

@@ -859,7 +859,8 @@ impl OutboundGroupSession {
     /// session with it, at the session's current message index.
     #[cfg(all(test, feature = "automatic-room-key-forwarding"))]
     pub(crate) async fn mark_withheld_no_olm_to(&self, user_id: &UserId, device_id: &DeviceId) {
-        let share_info = ShareInfo::new_withheld(WithheldCode::NoOlm, Some(self.message_index().await));
+        let share_info =
+            ShareInfo::new_withheld(WithheldCode::NoOlm, Some(self.message_index().await));
 
         self.shared_with_set
             .write()
@@ -1022,7 +1023,10 @@ mod tests {
         let info = ShareInfo::new_withheld(WithheldCode::NoOlm, Some(7));
         let json = serde_json::to_value(&info).unwrap();
 
-        assert_eq!(json, serde_json::json!({ "Withheld": { "code": "m.no_olm", "message_index": 7 } }));
+        assert_eq!(
+            json,
+            serde_json::json!({ "Withheld": { "code": "m.no_olm", "message_index": 7 } })
+        );
 
         let parsed: ShareInfo = serde_json::from_value(json).unwrap();
         assert_matches::assert_matches!(parsed, ShareInfo::Withheld(info) => {

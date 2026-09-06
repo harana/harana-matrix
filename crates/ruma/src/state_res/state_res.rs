@@ -7,15 +7,16 @@ use std::{
     sync::OnceLock,
 };
 
+use tracing::{debug, info, instrument, trace, warn};
+
 use crate::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedUserId,
+    events::{
+        StateEventType, TimelineEventType,
+        room::{member::MembershipState, power_levels::UserPowerLevel},
+    },
     room_version_rules::{AuthorizationRules, StateResolutionV2Rules},
 };
-use crate::events::{
-    StateEventType, TimelineEventType,
-    room::{member::MembershipState, power_levels::UserPowerLevel},
-};
-use tracing::{debug, info, instrument, trace, warn};
 
 #[cfg(test)]
 mod tests;
@@ -29,38 +30,43 @@ use crate::state_res::{
     utils::{RoomIdExt, event_id_map::EventIdMap, event_id_set::EventIdSet},
 };
 
-/// A mapping of event type and state_key to some value `T`, usually an `EventId`.
+/// A mapping of event type and state_key to some value `T`, usually an
+/// `EventId`.
 ///
-/// This is the representation of what the Matrix specification calls a "room state" or a "state
-/// map" during [state resolution].
+/// This is the representation of what the Matrix specification calls a "room
+/// state" or a "state map" during [state resolution].
 ///
 /// [state resolution]: https://spec.matrix.org/v1.18/rooms/v2/#state-resolution
 pub type StateMap<T> = HashMap<(StateEventType, String), T>;
 
-/// Apply the [state resolution] algorithm introduced in room version 2 to resolve the state of a
-/// room.
+/// Apply the [state resolution] algorithm introduced in room version 2 to
+/// resolve the state of a room.
 ///
 /// ## Arguments
 ///
-/// * `auth_rules` - The authorization rules to apply for the version of the current room.
+/// * `auth_rules` - The authorization rules to apply for the version of the
+///   current room.
 ///
-/// * `state_res_rules` - The state resolution rules to apply for the version of the current room.
+/// * `state_res_rules` - The state resolution rules to apply for the version of
+///   the current room.
 ///
-/// * `state_maps` - The incoming states to resolve. Each `StateMap` represents a possible fork in
-///   the state of a room.
+/// * `state_maps` - The incoming states to resolve. Each `StateMap` represents
+///   a possible fork in the state of a room.
 ///
-/// * `auth_chains` - The list of full recursive sets of `auth_events` for each event in the
-///   `state_maps`.
+/// * `auth_chains` - The list of full recursive sets of `auth_events` for each
+///   event in the `state_maps`.
 ///
 /// * `fetch_event` - Function to fetch an event in the room given its event ID.
 ///
-/// * `fetch_conflicted_state_subgraph` - Function to fetch the conflicted state subgraph for the
-///   given conflicted state set, for state resolution rules that use it. If it is called and
-///   returns `None`, this function will return an error.
+/// * `fetch_conflicted_state_subgraph` - Function to fetch the conflicted state
+///   subgraph for the given conflicted state set, for state resolution rules
+///   that use it. If it is called and returns `None`, this function will return
+///   an error.
 ///
 /// ## Invariants
 ///
-/// The caller of `resolve` must ensure that all the events are from the same room.
+/// The caller of `resolve` must ensure that all the events are from the same
+/// room.
 ///
 /// ## Returns
 ///
@@ -111,8 +117,8 @@ where
         EventIdSet::new()
     };
 
-    // The full conflicted set is the union of the conflicted state set and the auth difference,
-    // and since v12, the conflicted state subgraph.
+    // The full conflicted set is the union of the conflicted state set and the auth
+    // difference, and since v12, the conflicted state subgraph.
     let full_conflicted_set: EventIdSet<_> = auth_difference(auth_chains)
         .chain(conflicted_state_set.into_values().flatten())
         .chain(conflicted_state_subgraph)
@@ -123,9 +129,10 @@ where
     info!(count = full_conflicted_set.len(), "full conflicted set");
     trace!(set = ?full_conflicted_set, "full conflicted set");
 
-    // 1. Select the set X of all power events that appear in the full conflicted set. For each such
-    //    power event P, enlarge X by adding the events in the auth chain of P which also belong to
-    //    the full conflicted set. Sort X into a list using the reverse topological power ordering.
+    // 1. Select the set X of all power events that appear in the full conflicted
+    //    set. For each such power event P, enlarge X by adding the events in the
+    //    auth chain of P which also belong to the full conflicted set. Sort X into
+    //    a list using the reverse topological power ordering.
     let conflicted_power_events = full_conflicted_set
         .iter()
         .filter(|&id| is_power_event_id(id.borrow(), &fetch_event))
@@ -138,10 +145,12 @@ where
     debug!(count = sorted_power_events.len(), "power events");
     trace!(list = ?sorted_power_events, "sorted power events");
 
-    // 2. Apply the iterative auth checks algorithm, starting from the unconflicted state map, to
-    //    the list of events from the previous step to get a partially resolved state.
+    // 2. Apply the iterative auth checks algorithm, starting from the unconflicted
+    //    state map, to the list of events from the previous step to get a partially
+    //    resolved state.
 
-    // Since v12, begin the first phase of iterative auth checks with an empty state map.
+    // Since v12, begin the first phase of iterative auth checks with an empty state
+    // map.
     let initial_state_map = if state_res_rules.begin_iterative_auth_checks_with_empty_state_map {
         HashMap::new()
     } else {
@@ -154,8 +163,9 @@ where
     debug!(count = partially_resolved_state.len(), "resolved power events");
     trace!(map = ?partially_resolved_state, "resolved power events");
 
-    // 3. Take all remaining events that weren’t picked in step 1 and order them by the mainline
-    //    ordering based on the power level in the partially resolved state obtained in step 2.
+    // 3. Take all remaining events that weren’t picked in step 1 and order them by
+    //    the mainline ordering based on the power level in the partially resolved
+    //    state obtained in step 2.
     let sorted_power_events_set = sorted_power_events.into_iter().collect::<EventIdSet<_>>();
     let remaining_events = full_conflicted_set
         .iter()
@@ -176,8 +186,8 @@ where
 
     trace!(list = ?sorted_remaining_events, "events left, sorted");
 
-    // 4. Apply the iterative auth checks algorithm on the partial resolved state and the list of
-    //    events from the previous step.
+    // 4. Apply the iterative auth checks algorithm on the partial resolved state
+    //    and the list of events from the previous step.
     let mut resolved_state = iterative_auth_checks(
         auth_rules,
         &sorted_remaining_events,
@@ -185,8 +195,9 @@ where
         &fetch_event,
     )?;
 
-    // 5. Update the result by replacing any event with the event with the same key from the
-    //    unconflicted state map, if such an event exists, to get the final resolved state.
+    // 5. Update the result by replacing any event with the event with the same key
+    //    from the unconflicted state map, if such an event exists, to get the final
+    //    resolved state.
     resolved_state.extend(unconflicted_state_map);
 
     info!("state resolution finished");
@@ -198,18 +209,20 @@ where
 ///
 /// Definition in the specification:
 ///
-/// > If a given key _K_ is present in every _Si_ with the same value _V_ in each state map, then
-/// > the pair (_K_, _V_) belongs to the unconflicted state map. Otherwise, _V_ belongs to the
+/// > If a given key _K_ is present in every _Si_ with the same value _V_ in
+/// > each state map, then
+/// > the pair (_K_, _V_) belongs to the unconflicted state map. Otherwise, _V_
+/// > belongs to the
 /// > conflicted state set.
 ///
-/// It means that, for a given (event type, state key) tuple, if all state maps have the same event
-/// ID, it lands in the unconflicted state map, otherwise the event IDs land in the conflicted state
-/// set.
+/// It means that, for a given (event type, state key) tuple, if all state maps
+/// have the same event ID, it lands in the unconflicted state map, otherwise
+/// the event IDs land in the conflicted state set.
 ///
 /// ## Arguments
 ///
-/// * `state_maps` - The incoming states to resolve. Each `StateMap` represents a possible fork in
-///   the state of a room.
+/// * `state_maps` - The incoming states to resolve. Each `StateMap` represents
+///   a possible fork in the state of a room.
 ///
 /// ## Returns
 ///
@@ -251,9 +264,12 @@ where
 ///
 /// Definition in the specification:
 ///
-/// > The auth difference is calculated by first calculating the full auth chain for each state
-/// > _Si_, that is the union of the auth chains for each event in _Si_, and then taking every event
-/// > that doesn’t appear in every auth chain. If _Ci_ is the full auth chain of _Si_, then the auth
+/// > The auth difference is calculated by first calculating the full auth chain
+/// > for each state
+/// > _Si_, that is the union of the auth chains for each event in _Si_, and
+/// > then taking every event
+/// > that doesn’t appear in every auth chain. If _Ci_ is the full auth chain of
+/// > _Si_, then the auth
 /// > difference is ∪_Ci_ − ∩_Ci_.
 ///
 /// ## Arguments
@@ -262,7 +278,8 @@ where
 ///
 /// ## Returns
 ///
-/// Returns an iterator over all the event IDs that are not present in all the auth chains.
+/// Returns an iterator over all the event IDs that are not present in all the
+/// auth chains.
 fn auth_difference<Id>(auth_chains: Vec<EventIdSet<Id>>) -> impl Iterator<Item = Id>
 where
     Id: Eq + Hash + Borrow<EventId>,
@@ -277,12 +294,14 @@ where
     id_counts.into_iter().filter_map(move |(id, count)| (count < num_sets).then_some(id))
 }
 
-/// Enlarge the given list of conflicted power events by adding the events in their auth chain that
-/// are in the full conflicted set, and sort it using reverse topological power ordering.
+/// Enlarge the given list of conflicted power events by adding the events in
+/// their auth chain that are in the full conflicted set, and sort it using
+/// reverse topological power ordering.
 ///
 /// ## Arguments
 ///
-/// * `conflicted_power_events` - The list of power events in the full conflicted set.
+/// * `conflicted_power_events` - The list of power events in the full
+///   conflicted set.
 ///
 /// * `full_conflicted_set` - The full conflicted set.
 ///
@@ -302,8 +321,8 @@ fn sort_power_events<E: Event>(
 ) -> Result<Vec<E::Id>> {
     debug!("reverse topological sort of power events");
 
-    // A representation of the DAG, a map of event ID to its list of auth events that are in the
-    // full conflicted set.
+    // A representation of the DAG, a map of event ID to its list of auth events
+    // that are in the full conflicted set.
     let mut graph = EventIdMap::new();
 
     // Fill the graph.
@@ -317,8 +336,9 @@ fn sort_power_events<E: Event>(
 
     // The map of event ID to the power level of the sender of the event.
     let mut event_to_power_level = EventIdMap::new();
-    // We need to know the creator in case of missing power levels. Given that it's the same for all
-    // the events in the room, we will just load it for the first event and reuse it.
+    // We need to know the creator in case of missing power levels. Given that it's
+    // the same for all the events in the room, we will just load it for the
+    // first event and reuse it.
     let creators_lock = OnceLock::new();
 
     // Get the power level of the sender of each event in the graph.
@@ -352,30 +372,39 @@ fn sort_power_events<E: Event>(
 ///
 /// Definition in the specification:
 ///
-/// > The reverse topological power ordering of a set of events is the lexicographically smallest
-/// > topological ordering based on the DAG formed by auth events. The reverse topological power
-/// > ordering is ordered from earliest event to latest. For comparing two topological orderings to
-/// > determine which is the lexicographically smallest, the following comparison relation on events
+/// > The reverse topological power ordering of a set of events is the
+/// > lexicographically smallest
+/// > topological ordering based on the DAG formed by auth events. The reverse
+/// > topological power
+/// > ordering is ordered from earliest event to latest. For comparing two
+/// > topological orderings to
+/// > determine which is the lexicographically smallest, the following
+/// > comparison relation on events
 /// > is used: for events x and y, x < y if
 /// >
-/// > 1. x’s sender has greater power level than y’s sender, when looking at their respective
+/// > 1. x’s sender has greater power level than y’s sender, when looking at
+/// > their respective
 /// > auth_events; or
-/// > 2. the senders have the same power level, but x’s origin_server_ts is less than y’s
+/// > 2. the senders have the same power level, but x’s origin_server_ts is less
+/// > than y’s
 /// > origin_server_ts; or
-/// > 3. the senders have the same power level and the events have the same origin_server_ts, but
+/// > 3. the senders have the same power level and the events have the same
+/// > origin_server_ts, but
 /// > x’s event_id is less than y’s event_id.
 /// >
-/// > The reverse topological power ordering can be found by sorting the events using Kahn’s
-/// > algorithm for topological sorting, and at each step selecting, among all the candidate
+/// > The reverse topological power ordering can be found by sorting the events
+/// > using Kahn’s
+/// > algorithm for topological sorting, and at each step selecting, among all
+/// > the candidate
 /// > vertices, the smallest vertex using the above comparison relation.
 ///
 /// ## Arguments
 ///
-/// * `graph` - The graph to sort. A map of event ID to its auth events that are in the full
-///   conflicted set.
+/// * `graph` - The graph to sort. A map of event ID to its auth events that are
+///   in the full conflicted set.
 ///
-/// * `event_details_fn` - Function to obtain a (power level, origin_server_ts) of an event for
-///   breaking ties.
+/// * `event_details_fn` - Function to obtain a (power level, origin_server_ts)
+///   of an event for breaking ties.
 ///
 /// ## Returns
 ///
@@ -419,8 +448,8 @@ where
         }
     }
 
-    // We consider that the DAG is directed from most recent events to oldest events, so an event is
-    // an incoming edge to its auth events.
+    // We consider that the DAG is directed from most recent events to oldest
+    // events, so an event is an incoming edge to its auth events.
 
     // Map of event to the list of events in its auth events.
     let mut outgoing_edges_map: EventIdMap<_, EventIdSet<_>> = EventIdMap::new();
@@ -428,12 +457,12 @@ where
     // Map of event to the list of events that reference it in its auth events.
     let mut incoming_edges_map: EventIdMap<_, EventIdSet<_>> = EventIdMap::new();
 
-    // Vec of events that have an outdegree of zero (no outgoing edges), i.e. the oldest events.
-    // Use a BinaryHeap to keep the events sorted.
+    // Vec of events that have an outdegree of zero (no outgoing edges), i.e. the
+    // oldest events. Use a BinaryHeap to keep the events sorted.
     let mut heap = BinaryHeap::new();
 
-    // Populate the list of events with an outdegree of zero, and the maps of incoming and outgoing
-    // edges with the graph.
+    // Populate the list of events with an outdegree of zero, and the maps of
+    // incoming and outgoing edges with the graph.
     for (event_id, outgoing_edges) in graph {
         if outgoing_edges.is_empty() {
             let (power_level, origin_server_ts) = event_details_fn(event_id.borrow())?;
@@ -476,8 +505,9 @@ where
             // Push on the heap once all the outgoing edges have been removed.
             if parent_has_zero_outdegrees {
                 let (power_level, origin_server_ts) = event_details_fn(parent_id)?;
-                // Because the parent has no more outgoing edges, we can remove its entry from the
-                // outgoing edges map to get the owned event ID used for the key.
+                // Because the parent has no more outgoing edges, we can remove its entry from
+                // the outgoing edges map to get the owned event ID used for the
+                // key.
                 let (parent_id, _) = outgoing_edges_map
                     .remove_entry(parent_id)
                     .expect("outgoing edges map should have a key for all event IDs");
@@ -496,29 +526,31 @@ where
     Ok(sorted)
 }
 
-/// Find the power level for the sender of the event of the given event ID or return a default value
-/// of zero.
+/// Find the power level for the sender of the event of the given event ID or
+/// return a default value of zero.
 ///
-/// We find the most recent `m.room.power_levels` by walking backwards in the auth chain of the
-/// event.
+/// We find the most recent `m.room.power_levels` by walking backwards in the
+/// auth chain of the event.
 ///
 /// Do NOT use this anywhere but topological sort.
 ///
 /// ## Arguments
 ///
-/// * `event_id` - The event ID of the event to get the power level of the sender of.
+/// * `event_id` - The event ID of the event to get the power level of the
+///   sender of.
 ///
 /// * `rules` - The authorization rules for the current room version.
 ///
-/// * `creator_lock` - A lock used to cache the user ID of the creator of the room. If it is empty
-///   the creator will be fetched in the auth chain and used to populate the lock.
+/// * `creator_lock` - A lock used to cache the user ID of the creator of the
+///   room. If it is empty the creator will be fetched in the auth chain and
+///   used to populate the lock.
 ///
 /// * `fetch_event` - Function to fetch an event in the room given its event ID.
 ///
 /// ## Returns
 ///
-/// Returns the power level of the sender of the event or an `Err(_)` if one of the auth events if
-/// malformed.
+/// Returns the power level of the sender of the event or an `Err(_)` if one of
+/// the auth events if malformed.
 fn power_level_for_sender<E: Event>(
     event_id: &EventId,
     rules: &AuthorizationRules,
@@ -533,7 +565,8 @@ fn power_level_for_sender<E: Event>(
         && rules.room_create_event_id_as_room_id
         && creators_lock.get().is_none()
     {
-        // The m.room.create event is not in the auth events, we can get its ID via the room ID.
+        // The m.room.create event is not in the auth events, we can get its ID via the
+        // room ID.
         room_create_event = event
             .room_id()
             .and_then(|room_id| room_id.room_create_event_id().ok())
@@ -585,12 +618,18 @@ fn power_level_for_sender<E: Event>(
 ///
 /// Definition in the specification:
 ///
-/// > The iterative auth checks algorithm takes as input an initial room state and a sorted list of
-/// > state events, and constructs a new room state by iterating through the event list and applying
-/// > the state event to the room state if the state event is allowed by the authorization rules. If
-/// > the state event is not allowed by the authorization rules, then the event is ignored. If a
-/// > (event_type, state_key) key that is required for checking the authorization rules is not
-/// > present in the state, then the appropriate state event from the event’s auth_events is used if
+/// > The iterative auth checks algorithm takes as input an initial room state
+/// > and a sorted list of
+/// > state events, and constructs a new room state by iterating through the
+/// > event list and applying
+/// > the state event to the room state if the state event is allowed by the
+/// > authorization rules. If
+/// > the state event is not allowed by the authorization rules, then the event
+/// > is ignored. If a
+/// > (event_type, state_key) key that is required for checking the
+/// > authorization rules is not
+/// > present in the state, then the appropriate state event from the event’s
+/// > auth_events is used if
 /// > the auth event is not rejected.
 ///
 /// ## Arguments
@@ -605,8 +644,8 @@ fn power_level_for_sender<E: Event>(
 ///
 /// ## Returns
 ///
-/// Returns the partially resolved state, or an `Err(_)` if one of the state events in the room has
-/// an unexpected format.
+/// Returns the partially resolved state, or an `Err(_)` if one of the state
+/// events in the room has an unexpected format.
 fn iterative_auth_checks<E: Event + Clone>(
     rules: &AuthorizationRules,
     events: &[E::Id],
@@ -638,8 +677,8 @@ fn iterative_auth_checks<E: Event + Clone>(
             }
         }
 
-        // If the `m.room.create` event is not in the auth events, we need to add it, because it's
-        // always part of the state and required in the auth rules.
+        // If the `m.room.create` event is not in the auth events, we need to add it,
+        // because it's always part of the state and required in the auth rules.
         if rules.room_create_event_id_as_room_id
             && *event.event_type() != TimelineEventType::RoomCreate
         {
@@ -705,15 +744,20 @@ fn iterative_auth_checks<E: Event + Clone>(
 ///
 /// Definition in the spec:
 ///
-/// > Given mainline positions calculated from P, the mainline ordering based on P of a set of
-/// > events is the ordering, from smallest to largest, using the following comparison relation on
+/// > Given mainline positions calculated from P, the mainline ordering based on
+/// > P of a set of
+/// > events is the ordering, from smallest to largest, using the following
+/// > comparison relation on
 /// > events: for events x and y, x < y if
 /// >
-/// > 1. the mainline position of x is greater than the mainline position of y (i.e. the auth chain
+/// > 1. the mainline position of x is greater than the mainline position of y
+/// > (i.e. the auth chain
 /// > of x is based on an earlier event in the mainline than y); or
-/// > 2. the mainline positions of the events are the same, but x’s origin_server_ts is less than
+/// > 2. the mainline positions of the events are the same, but x’s
+/// > origin_server_ts is less than
 /// > y’s origin_server_ts; or
-/// > 3. the mainline positions of the events are the same and the events have the same
+/// > 3. the mainline positions of the events are the same and the events have
+/// > the same
 /// > origin_server_ts, but x’s event_id is less than y’s event_id.
 ///
 /// ## Arguments
@@ -726,8 +770,8 @@ fn iterative_auth_checks<E: Event + Clone>(
 ///
 /// ## Returns
 ///
-/// Returns the sorted list of event IDs, or an `Err(_)` if one the event in the room has an
-/// unexpected format.
+/// Returns the sorted list of event IDs, or an `Err(_)` if one the event in the
+/// room has an unexpected format.
 fn mainline_sort<E: Event>(
     events: &[E::Id],
     mut power_level: Option<E::Id>,
@@ -811,21 +855,30 @@ fn mainline_sort<E: Event>(
 ///
 /// Definition in the spec:
 ///
-/// > Let P = P0 be an m.room.power_levels event. Starting with i = 0, repeatedly fetch Pi+1, the
-/// > m.room.power_levels event in the auth_events of Pi. Increment i and repeat until Pi has no
-/// > m.room.power_levels event in its auth_events. The mainline of P0 is the list of events [P0 ,
+/// > Let P = P0 be an m.room.power_levels event. Starting with i = 0,
+/// > repeatedly fetch Pi+1, the
+/// > m.room.power_levels event in the auth_events of Pi. Increment i and repeat
+/// > until Pi has no
+/// > m.room.power_levels event in its auth_events. The mainline of P0 is the
+/// > list of events [P0 ,
 /// > P1, … , Pn], fetched in this way.
 /// >
-/// > Let e = e0 be another event (possibly another m.room.power_levels event). We can compute a
-/// > similar list of events [e1, …, em], where ej+1 is the m.room.power_levels event in the
-/// > auth_events of ej and where em has no m.room.power_levels event in its auth_events. (Note that
-/// > the event we started with, e0, is not included in this list. Also note that it may be empty,
-/// > because e may not cite an m.room.power_levels event in its auth_events at all.)
+/// > Let e = e0 be another event (possibly another m.room.power_levels event).
+/// > We can compute a
+/// > similar list of events [e1, …, em], where ej+1 is the m.room.power_levels
+/// > event in the
+/// > auth_events of ej and where em has no m.room.power_levels event in its
+/// > auth_events. (Note that
+/// > the event we started with, e0, is not included in this list. Also note
+/// > that it may be empty,
+/// > because e may not cite an m.room.power_levels event in its auth_events at
+/// > all.)
 /// >
 /// > Now compare these two lists as follows.
 /// >
 /// > * Find the smallest index j ≥ 1 for which ej belongs to the mainline of P.
-/// > * If such a j exists, then ej = Pi for some unique index i ≥ 0. Otherwise set i = ∞, where ∞
+/// > * If such a j exists, then ej = Pi for some unique index i ≥ 0. Otherwise
+/// > set i = ∞, where ∞
 /// > is a sentinel value greater than any integer.
 /// > * In both cases, the mainline position of e is i.
 ///
@@ -839,13 +892,14 @@ fn mainline_sort<E: Event>(
 ///
 /// ## Returns
 ///
-/// Returns the mainline position of the event, or an `Err(_)` if one of the events in the auth
-/// chain of the event was not found.
+/// Returns the mainline position of the event, or an `Err(_)` if one of the
+/// events in the auth chain of the event was not found.
 ///
-/// `None` is returned for the spec's `i = ∞` case (no power-levels ancestor in the auth chain).
-/// The position is the reverse of the spec encoding: `1` is the deepest mainline event and `N`
-/// the current power-levels event. Ascending sort by `(position, origin_server_ts, event_id)`
-/// then matches the spec mainline ordering.
+/// `None` is returned for the spec's `i = ∞` case (no power-levels ancestor in
+/// the auth chain). The position is the reverse of the spec encoding: `1` is
+/// the deepest mainline event and `N` the current power-levels event. Ascending
+/// sort by `(position, origin_server_ts, event_id)` then matches the spec
+/// mainline ordering.
 fn mainline_position<E: Event>(
     event: E,
     mainline_map: &EventIdMap<E::Id, NonZero<usize>>,
@@ -880,8 +934,8 @@ fn mainline_position<E: Event>(
     Ok(None)
 }
 
-/// Add the event with the given event ID and all the events in its auth chain that are in the full
-/// conflicted set to the graph.
+/// Add the event with the given event ID and all the events in its auth chain
+/// that are in the full conflicted set to the graph.
 fn add_event_and_auth_chain_to_graph<E: Event>(
     graph: &mut EventIdMap<E::Id, EventIdSet<E::Id>>,
     event_id: E::Id,
@@ -904,7 +958,8 @@ fn add_event_and_auth_chain_to_graph<E: Event>(
         {
             // If the auth event ID is in the full conflicted set…
             if full_conflicted_set.contains(auth_event_id.borrow()) {
-                // If the auth event ID is not in the graph, we need to check its auth events later.
+                // If the auth event ID is not in the graph, we need to check its auth events
+                // later.
                 if !graph.contains_event_id(auth_event_id.borrow()) {
                     state.push(auth_event_id.to_owned());
                 }
@@ -934,9 +989,12 @@ fn is_type_and_key(event: impl Event, event_type: &TimelineEventType, state_key:
 ///
 /// Definition in the spec:
 ///
-/// > A power event is a state event with type `m.room.power_levels` or `m.room.join_rules`, or a
-/// > state event with type `m.room.member` where the `membership` is `leave` or `ban` and the
-/// > `sender` does not match the `state_key`. The idea behind this is that power events are events
+/// > A power event is a state event with type `m.room.power_levels` or
+/// > `m.room.join_rules`, or a
+/// > state event with type `m.room.member` where the `membership` is `leave` or
+/// > `ban` and the
+/// > `sender` does not match the `state_key`. The idea behind this is that
+/// > power events are events
 /// > that might remove someone’s ability to do something in the room.
 fn is_power_event(event: impl Event) -> bool {
     match event.event_type() {

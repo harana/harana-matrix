@@ -2,26 +2,28 @@
 //! These types are used by other Ruma crates.
 //!
 //! All data exchanged over Matrix is expressed as an event.
-//! Different event types represent different actions, such as joining a room or sending a message.
-//! Events are stored and transmitted as simple JSON structures.
-//! While anyone can create a new event type for their own purposes, the Matrix specification
-//! defines a number of event types which are considered core to the protocol.
-//! This module contains Rust types for all of the event types defined by the specification and
-//! facilities for extending the event system for custom event types.
+//! Different event types represent different actions, such as joining a room or
+//! sending a message. Events are stored and transmitted as simple JSON
+//! structures. While anyone can create a new event type for their own purposes,
+//! the Matrix specification defines a number of event types which are
+//! considered core to the protocol. This module contains Rust types for all of
+//! the event types defined by the specification and facilities for extending
+//! the event system for custom event types.
 //!
 //! # Core event types
 //!
-//! This module includes Rust types for all event types in the Matrix specification.
-//! To better organize the crate, these types live in separate modules with a hierarchy that matches
-//! the reverse domain name notation of the event type. For example, the `m.room.message` event
-//! lives at `ruma::events::room::message::RoomMessageEvent`. Each type's module also contains a
-//! Rust type for that event type's `content` field, and any other supporting types required by the
-//! event's other fields.
+//! This module includes Rust types for all event types in the Matrix
+//! specification. To better organize the crate, these types live in separate
+//! modules with a hierarchy that matches the reverse domain name notation of
+//! the event type. For example, the `m.room.message` event
+//! lives at `ruma::events::room::message::RoomMessageEvent`. Each type's module
+//! also contains a Rust type for that event type's `content` field, and any
+//! other supporting types required by the event's other fields.
 //!
 //! # Extending Ruma with custom events
 //!
-//! For our examples we will start with a simple custom state event. `ruma_event`
-//! specifies the state event's `type` and its `kind`.
+//! For our examples we will start with a simple custom state event.
+//! `ruma_event` specifies the state event's `type` and its `kind`.
 //!
 //! ```rust
 //! use ruma::events::macros::EventContent;
@@ -37,8 +39,9 @@
 //! This can be used with events structs, such as passing it into
 //! `ruma::api::client::state::send_state_event`'s `Request`.
 //!
-//! As a more advanced example we create a reaction message event. For this event we will use a
-//! [`OriginalSyncMessageLikeEvent`] struct but any [`OriginalMessageLikeEvent`] struct would work.
+//! As a more advanced example we create a reaction message event. For this
+//! event we will use a [`OriginalSyncMessageLikeEvent`] struct but any
+//! [`OriginalMessageLikeEvent`] struct would work.
 //!
 //! ```rust
 //! use ruma::OwnedEventId;
@@ -104,8 +107,9 @@
 
 use std::collections::BTreeSet;
 
-use crate::{EventEncryptionAlgorithm, OwnedUserId, room_version_rules::RedactionRules};
 use serde::{Deserialize, Serialize, Serializer, de::IgnoredAny};
+
+use crate::{EventEncryptionAlgorithm, OwnedUserId, room_version_rules::RedactionRules};
 
 // Needs to be public for trybuild tests
 #[doc(hidden)]
@@ -182,9 +186,9 @@ pub mod room_key_request;
 #[cfg(feature = "unstable-msc4310")]
 pub mod rtc;
 pub mod secret;
+pub mod secret_storage;
 #[cfg(feature = "unstable-msc3834")]
 pub mod signatures_hash;
-pub mod secret_storage;
 pub mod space;
 #[cfg(feature = "unstable-msc3230")]
 pub mod space_order;
@@ -217,14 +221,16 @@ pub trait RedactContent {
     /// The redacted form of the event's content.
     type Redacted;
 
-    /// Transform `self` into a redacted form (removing most or all fields) according to the spec.
+    /// Transform `self` into a redacted form (removing most or all fields)
+    /// according to the spec.
     ///
-    /// A small number of events have room-version specific redaction behavior, so a
-    /// [`RedactionRules`] has to be specified.
+    /// A small number of events have room-version specific redaction behavior,
+    /// so a [`RedactionRules`] has to be specified.
     fn redact(self, rules: &RedactionRules) -> Self::Redacted;
 }
 
-/// Helper struct to determine the event kind from a `serde_json::value::RawValue`.
+/// Helper struct to determine the event kind from a
+/// `serde_json::value::RawValue`.
 #[doc(hidden)]
 #[derive(Deserialize)]
 #[allow(clippy::exhaustive_structs)]
@@ -250,8 +256,9 @@ pub struct UnsignedDeHelper {
     pub redacted_because: Option<IgnoredAny>,
 }
 
-/// Helper function for erroring when trying to serialize an event enum _Custom variant that can
-/// only be created by deserializing from an unknown event type.
+/// Helper function for erroring when trying to serialize an event enum _Custom
+/// variant that can only be created by deserializing from an unknown event
+/// type.
 #[doc(hidden)]
 #[allow(clippy::ptr_arg)]
 pub fn serialize_custom_event_error<T, S: Serializer>(_: &T, _: S) -> Result<S::Ok, S::Error> {

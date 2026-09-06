@@ -997,8 +997,8 @@ mod tests {
 
     use super::{Error, StoreCipher};
     use crate::{
-        EncryptedStoreCipher, EncryptedValue, EncryptedValueBase64, EncryptedValueBase64DecodeError,
-        JsonCodec, MessagePackCodec,
+        EncryptedStoreCipher, EncryptedValue, EncryptedValueBase64,
+        EncryptedValueBase64DecodeError, JsonCodec, MessagePackCodec,
     };
 
     #[test]

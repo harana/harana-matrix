@@ -1651,12 +1651,7 @@ mod tests {
         let second_account = alice_2_account();
         let alice_device = DeviceData::from_account(&second_account);
         alice_device.set_trust_state(LocalTrust::Verified);
-        machine
-            .inner
-            .store
-            .save_device_data(std::slice::from_ref(&alice_device))
-            .await
-            .unwrap();
+        machine.inner.store.save_device_data(std::slice::from_ref(&alice_device)).await.unwrap();
 
         let (outbound, session) = account.create_group_session_pair_with_defaults(room_id()).await;
         let result = outbound.encrypt("m.dummy", &message_like_event_content!({})).await;

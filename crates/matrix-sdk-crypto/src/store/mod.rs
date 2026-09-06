@@ -2216,9 +2216,11 @@ mod tests {
         store::{
             Changes, MemoryStore,
             crypto_store_wrapper::CryptoStoreWrapper,
-            types::{DeviceChanges, PendingChanges},
+            types::{
+                DehydratedDeviceKey, DeviceChanges, PendingChanges, RoomKeyWithheldEntry,
+                StoredRoomKeyBundleData,
+            },
         },
-        store::types::{DehydratedDeviceKey, RoomKeyWithheldEntry, StoredRoomKeyBundleData},
         types::{
             EventEncryptionAlgorithm,
             events::{
@@ -2230,7 +2232,9 @@ mod tests {
 
     /// Build `count` Olm sessions between two accounts, each with the given age
     /// since it was last used.
-    async fn sessions_with_ages(ages: &[std::time::Duration]) -> (Account, Vec<crate::olm::Session>) {
+    async fn sessions_with_ages(
+        ages: &[std::time::Duration],
+    ) -> (Account, Vec<crate::olm::Session>) {
         use ruma::SecondsSinceUnixEpoch;
 
         let alice = Account::with_device_id(user_id!("@a:s.co"), device_id!("ABC"));

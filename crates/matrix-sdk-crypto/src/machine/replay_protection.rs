@@ -124,8 +124,7 @@ impl ReplayProtection {
         event_id: &ruma::EventId,
         origin_server_ts: MilliSecondsSinceUnixEpoch,
     ) -> ReplayCheck {
-        let fingerprint =
-            EventFingerprint { event_id: event_id.to_owned(), origin_server_ts };
+        let fingerprint = EventFingerprint { event_id: event_id.to_owned(), origin_server_ts };
 
         if !self.sessions.contains_key(session_id) {
             if self.insertion_order.len() >= MAX_TRACKED_SESSIONS
@@ -154,7 +153,9 @@ impl ReplayProtection {
 mod tests {
     use ruma::{MilliSecondsSinceUnixEpoch, event_id};
 
-    use super::{MAX_TRACKED_INDICES_PER_SESSION, MAX_TRACKED_SESSIONS, ReplayCheck, ReplayProtection};
+    use super::{
+        MAX_TRACKED_INDICES_PER_SESSION, MAX_TRACKED_SESSIONS, ReplayCheck, ReplayProtection,
+    };
 
     fn ts(millis: u64) -> MilliSecondsSinceUnixEpoch {
         MilliSecondsSinceUnixEpoch(millis.try_into().unwrap())
@@ -256,5 +257,4 @@ mod tests {
         assert_eq!(records.by_index.len(), MAX_TRACKED_INDICES_PER_SESSION);
         assert!(!records.by_index.contains_key(&0), "the oldest index was evicted");
     }
-
 }
