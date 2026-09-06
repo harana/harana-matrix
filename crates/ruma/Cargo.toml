@@ -12,12 +12,6 @@ rust-version = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 
-[package.metadata.cargo-machete]
-ignored = [
-    # Only used to enable the `js` feature for WASM.
-    "getrandom",
-]
-
 [features]
 default = []
 
@@ -122,80 +116,76 @@ full = [
 ]
 
 # `OutgoingRequest` / `IncomingResponse` impls, for code talking to a homeserver.
-client = []
+client = ["dep:client-api", "client-api/client", "common/client", "federation-api?/client"]
 # `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
-server = []
+server = ["dep:client-api", "client-api/server", "common/server", "federation-api?/server"]
 
 # The application service API, in `api::appservice`. Only the registration file
 # format is vendored, so the client and server halves are the same thing here.
-appservice-api = []
+appservice-api = ["dep:appservice-api"]
 appservice-api-c = ["appservice-api"]
 appservice-api-s = ["appservice-api"]
 
 # The server-server (federation) API, in `api::federation`.
-federation-api = [
-    "signatures",
-    "dep:headers",
-    "dep:http-auth",
-    "dep:httparse",
-    "dep:memchr",
-    "dep:mime",
-    "dep:rand",
-]
+federation-api = ["dep:federation-api", "signatures"]
 # Digital signatures, in `signatures`.
-signatures = ["dep:ed25519-dalek", "dep:pkcs8", "dep:rand", "dep:sha2"]
+signatures = ["dep:signatures"]
 # State resolution and PDU authorization rules, in `state_res`. Needs
 # `signatures` for the reference hash used to check an event's format.
-state-res = ["signatures"]
+state-res = ["dep:state-res", "signatures"]
 # HTML parsing and sanitizing, in `html`.
-html = ["dep:html5ever"]
+html = ["dep:html", "events/html"]
 # Parse markdown to construct messages.
-markdown = ["dep:pulldown-cmark"]
+markdown = ["events/markdown"]
 # Generate random identifiers.
-rand = ["dep:getrandom", "dep:rand", "dep:uuid"]
+rand = ["common/rand"]
 # Randomness and current system time in browser environments.
-js = ["getrandom?/wasm_js", "uuid?/js"]
+js = ["common/js"]
 # UniFFI bindings for _some_ types. Work in progress.
-unstable-uniffi = ["dep:uniffi"]
+unstable-uniffi = ["common/unstable-uniffi", "events/unstable-uniffi"]
 
 # Compatibility with known, reasonable deviations from the spec in external data. These never
 # make this crate produce data that is not spec-compliant.
-
 # Allow IDs to exceed 255 bytes.
-compat-arbitrary-length-ids = ["ruma-identifiers-validation/compat-arbitrary-length-ids"]
+compat-arbitrary-length-ids = ["common/compat-arbitrary-length-ids"]
 # Don't validate `ServerSigningKeyVersion`.
-compat-server-signing-key-version = ["ruma-identifiers-validation/compat-server-signing-key-version"]
+compat-server-signing-key-version = ["common/compat-server-signing-key-version"]
 # Allow some mandatory fields to be missing, defaulting them to an empty string.
-compat-empty-string-null = []
+compat-empty-string-null = [
+    "common/compat-empty-string-null",
+    "events/compat-empty-string-null",
+    "client-api?/compat-empty-string-null",
+]
 # Treat `null` in certain fields the same as the field being absent.
-compat-null = []
+compat-null = ["common/compat-null"]
 # Allow certain spec-mandatory fields to be absent, yielding a default value.
-compat-optional = []
+compat-optional = ["common/compat-optional", "events/compat-optional"]
 # Unset avatars by sending an empty string, same as what Element Web does, c.f.
 # https://github.com/matrix-org/matrix-spec/issues/378#issuecomment-1055831264
-compat-unset-avatar = []
+compat-unset-avatar = ["client-api?/compat-unset-avatar"]
 # Always serialize the threepids response field in `get_3pids::v3::Response`.
-compat-get-3pids = []
+compat-get-3pids = ["client-api?/compat-get-3pids"]
 # Accept `message` as an alias for `error` in `upload_signatures::v3::Failure`, as Synapse sends.
-compat-upload-signatures = []
+compat-upload-signatures = ["client-api?/compat-upload-signatures"]
 # Allow `TagInfo` to contain a stringified floating-point value for the `order` field.
-compat-tag-info = []
+compat-tag-info = ["events/compat-tag-info"]
 # Support encrypted stickers, as sent by several bridges.
 # https://github.com/matrix-org/matrix-spec/issues/1667
-compat-encrypted-stickers = []
+compat-encrypted-stickers = ["events/compat-encrypted-stickers"]
 # Allow the `pdus` field in a federation transaction request to be missing.
-compat-optional-txn-pdus = []
+compat-optional-txn-pdus = ["federation-api?/compat-optional-txn-pdus"]
 # Ignore the `predecessor` field of `RoomCreateEventContent` if it fails to deserialize.
-compat-lax-room-create-deser = []
+compat-lax-room-create-deser = ["events/compat-lax-room-create-deser"]
 # Ignore the `m.topic` field of `RoomTopicEventContent` if it fails to deserialize.
-compat-lax-room-topic-deser = []
-
+compat-lax-room-topic-deser = ["events/compat-lax-room-topic-deser"]
 # unstable: by using any of the below features, you opt out of all semver guarantees
 #           that Ruma otherwise provides!
-
 # Ignore name and avatar fields of rooms and hero users in a sync v5 response if they fail to
 # deserialize.
-unstable-compat-lax-syncv5-deser = ["unstable-msc4186"]
+unstable-compat-lax-syncv5-deser = [
+    "unstable-msc4186",
+    "client-api?/unstable-compat-lax-syncv5-deser",
+]
 unstable-extensible-events = [
     "unstable-msc3246",
     "unstable-msc3488",
@@ -203,144 +193,118 @@ unstable-extensible-events = [
     "unstable-msc3954",
     "unstable-msc3955",
 ]
-unstable-msc1763 = []
-unstable-msc1767 = []
-unstable-msc2448 = []
-unstable-msc2654 = []
-unstable-msc2747 = []
-unstable-msc2867 = []
-unstable-msc2870 = []
-unstable-msc3230 = []
-unstable-msc3245 = ["unstable-msc3246"]
+unstable-msc1763 = ["events/unstable-msc1763", "client-api?/unstable-msc1763"]
+unstable-msc1767 = ["events/unstable-msc1767", "client-api?/unstable-msc1767"]
+unstable-msc2448 = ["events/unstable-msc2448", "client-api?/unstable-msc2448"]
+unstable-msc2654 = ["client-api?/unstable-msc2654"]
+unstable-msc2747 = ["events/unstable-msc2747"]
+unstable-msc2867 = ["events/unstable-msc2867"]
+unstable-msc2870 = ["common/unstable-msc2870"]
+unstable-msc3230 = ["events/unstable-msc3230"]
+unstable-msc3245 = ["unstable-msc3246", "events/unstable-msc3245"]
 # Support the m.room.message fallback fields from the first version of MSC3245, implemented in
 # Element Web and documented at
 # https://github.com/matrix-org/matrix-spec-proposals/blob/83f6c5b469c1d78f714e335dcaa25354b255ffa5/proposals/3245-voice-messages.md
-unstable-msc3245-v1-compat = []
-unstable-msc3246 = ["unstable-msc3927"]
-unstable-msc3381 = ["unstable-msc1767"]
-unstable-msc3401 = []
-unstable-msc3417 = []
-unstable-msc3488 = ["unstable-msc1767"]
-unstable-msc3489 = ["unstable-msc3488"]
-unstable-msc3551 = ["unstable-msc3956"]
-unstable-msc3552 = ["unstable-msc3551"]
-unstable-msc3553 = ["unstable-msc3552"]
-unstable-msc3554 = ["unstable-msc1767"]
-unstable-msc3618 = []
-unstable-msc3723 = []
-unstable-msc3768 = []
-unstable-msc3814 = []
-unstable-msc3834 = []
-unstable-msc3843 = []
-unstable-msc3927 = ["unstable-msc3551"]
-unstable-msc3930 = []
-unstable-msc3931 = []
-unstable-msc3932 = ["unstable-msc3931"]
-unstable-msc3954 = ["unstable-msc1767"]
-unstable-msc3955 = ["unstable-msc1767"]
-unstable-msc3956 = ["unstable-msc1767"]
-unstable-msc3983 = []
-unstable-msc4075 = ["unstable-msc3401"]
-unstable-msc4095 = []
-unstable-msc4108 = []
-unstable-msc4121 = []
-unstable-msc4125 = []
-unstable-msc4140 = []
-unstable-msc4143 = []
-unstable-msc4171 = []
-unstable-msc4186 = []
-unstable-msc4195 = ["unstable-msc4143"]
+unstable-msc3245-v1-compat = ["events/unstable-msc3245-v1-compat"]
+unstable-msc3246 = ["unstable-msc3927", "events/unstable-msc3246"]
+unstable-msc3381 = ["unstable-msc1767", "events/unstable-msc3381"]
+unstable-msc3401 = ["events/unstable-msc3401"]
+unstable-msc3417 = ["common/unstable-msc3417", "events/unstable-msc3417"]
+unstable-msc3488 = ["unstable-msc1767", "events/unstable-msc3488", "client-api?/unstable-msc3488"]
+unstable-msc3489 = ["unstable-msc3488", "events/unstable-msc3489"]
+unstable-msc3551 = ["unstable-msc3956", "events/unstable-msc3551"]
+unstable-msc3552 = ["unstable-msc3551", "events/unstable-msc3552"]
+unstable-msc3553 = ["unstable-msc3552", "events/unstable-msc3553"]
+unstable-msc3554 = ["unstable-msc1767", "events/unstable-msc3554"]
+unstable-msc3618 = ["federation-api?/unstable-msc3618"]
+unstable-msc3723 = ["federation-api?/unstable-msc3723"]
+unstable-msc3768 = ["common/unstable-msc3768"]
+unstable-msc3814 = ["client-api?/unstable-msc3814"]
+unstable-msc3834 = [
+    "common/unstable-msc3834",
+    "events/unstable-msc3834",
+    "client-api?/unstable-msc3834",
+]
+unstable-msc3843 = ["common/unstable-msc3843", "federation-api?/unstable-msc3843"]
+unstable-msc3927 = ["unstable-msc3551", "events/unstable-msc3927"]
+unstable-msc3930 = ["common/unstable-msc3930"]
+unstable-msc3931 = ["common/unstable-msc3931"]
+unstable-msc3932 = ["unstable-msc3931", "common/unstable-msc3932"]
+unstable-msc3954 = ["unstable-msc1767", "events/unstable-msc3954"]
+unstable-msc3955 = ["unstable-msc1767", "events/unstable-msc3955"]
+unstable-msc3956 = ["unstable-msc1767", "events/unstable-msc3956"]
+unstable-msc3983 = ["client-api?/unstable-msc3983"]
+unstable-msc4075 = ["unstable-msc3401", "events/unstable-msc4075"]
+unstable-msc4095 = ["events/unstable-msc4095"]
+unstable-msc4108 = ["common/unstable-msc4108", "client-api?/unstable-msc4108"]
+unstable-msc4121 = ["client-api?/unstable-msc4121"]
+unstable-msc4125 = ["federation-api?/unstable-msc4125"]
+unstable-msc4140 = ["common/unstable-msc4140", "client-api?/unstable-msc4140"]
+unstable-msc4143 = ["client-api?/unstable-msc4143"]
+unstable-msc4171 = ["events/unstable-msc4171"]
+unstable-msc4186 = ["common/unstable-msc4186", "client-api?/unstable-msc4186"]
+unstable-msc4195 = ["unstable-msc4143", "client-api?/unstable-msc4195"]
 # Profile Updates Sliding Sync Extension
-unstable-msc4262 = []
-unstable-msc4274 = []
-unstable-msc4278 = []
-unstable-msc4286 = []
-unstable-msc4293 = []
+unstable-msc4262 = ["common/unstable-msc4262", "client-api?/unstable-msc4262"]
+unstable-msc4274 = ["events/unstable-msc4274"]
+unstable-msc4278 = ["events/unstable-msc4278"]
+unstable-msc4286 = ["html?/unstable-msc4286"]
+unstable-msc4293 = ["events/unstable-msc4293", "client-api?/unstable-msc4293"]
 # Thread subscription support.
-unstable-msc4306 = []
-unstable-msc4308 = []
-unstable-msc4310 = []
-unstable-msc4319 = []
-unstable-msc4334 = ["dep:language-tags"]
+unstable-msc4306 = ["common/unstable-msc4306", "client-api?/unstable-msc4306"]
+unstable-msc4308 = ["client-api?/unstable-msc4308"]
+unstable-msc4310 = ["events/unstable-msc4310"]
+unstable-msc4319 = ["events/unstable-msc4319"]
+unstable-msc4334 = ["common/unstable-msc4334", "events/unstable-msc4334"]
 # Sticky Events
-unstable-msc4354 = []
-unstable-msc4359 = []
-unstable-msc4362 = []
-unstable-msc4380 = []
-unstable-msc4383 = []
-unstable-msc4385 = []
+unstable-msc4354 = ["events/unstable-msc4354", "client-api?/unstable-msc4354"]
+unstable-msc4359 = ["events/unstable-msc4359"]
+unstable-msc4362 = ["events/unstable-msc4362"]
+unstable-msc4380 = ["events/unstable-msc4380"]
+unstable-msc4383 = ["client-api?/unstable-msc4383"]
+unstable-msc4385 = ["events/unstable-msc4385"]
 # Secure out-of-band channel for QR code sign in
-unstable-msc4388 = []
+unstable-msc4388 = ["common/unstable-msc4388", "client-api?/unstable-msc4388"]
 # M_SENDER_IGNORED
-unstable-msc4406 = []
+unstable-msc4406 = ["common/unstable-msc4406"]
 # User Status Profile Fields.
-unstable-msc4426 = []
-unstable-msc4439 = []
-unstable-msc4466 = []
-unstable-msc4471 = []
-unstable-msc4480 = ["unstable-msc4354"]
-unstable-msc4494 = []
+unstable-msc4426 = ["common/unstable-msc4426"]
+unstable-msc4439 = ["client-api?/unstable-msc4439"]
+unstable-msc4466 = ["client-api?/unstable-msc4466"]
+unstable-msc4471 = ["events/unstable-msc4471"]
+unstable-msc4480 = ["unstable-msc4354", "client-api?/unstable-msc4480"]
+unstable-msc4494 = ["common/unstable-msc4494", "events/unstable-msc4494"]
 # Selective Presence
-unstable-msc4495 = []
+unstable-msc4495 = [
+    "common/unstable-msc4495",
+    "events/unstable-msc4495",
+    "federation-api?/unstable-msc4495",
+]
 
 [dependencies]
-as_variant.workspace = true
-assign = "1.1.1"
-base64.workspace = true
-bytes = "1.11.1"
-date_header = "1.0.5"
-form_urlencoded = "1.2.2"
-http = { workspace = true, features = ["std"] }
-indexmap = { workspace = true, features = ["serde", "std"] }
-js_int = { version = "0.2.2", features = ["serde"] }
-js_option = "0.2.0"
-konst = { version = "0.4.3", default-features = false, features = ["cmp", "iter", "parsing"] }
-maplit = "1.0.2"
-percent-encoding = "2.3.2"
-regex = { workspace = true, features = ["perf"] }
-ruma-identifiers-validation.workspace = true
-ruma-macros.workspace = true
-serde.workspace = true
-serde_html_form = { version = "0.4.1" }
-serde_json = { workspace = true, features = ["raw_value"] }
-thiserror.workspace = true
-time = "0.3.47"
-tracing = { workspace = true, features = ["attributes"] }
-url = { workspace = true, features = ["serde"] }
-web-time = "1.1.0"
-wildmatch = "2.6.1"
-zeroize.workspace = true
+common = { path = "../common", version = "0.16.0" }
+events = { path = "../events", version = "0.16.0" }
 
-# `rand` / `js`
-getrandom = { workspace = true, optional = true }
-rand = { workspace = true, optional = true, features = ["sys_rng"] }
-uuid = { workspace = true, optional = true, features = ["v4"] }
-
-# `signatures`
-ed25519-dalek = { version = "3.0.0", optional = true, features = ["alloc", "pkcs8"] }
-pkcs8 = { version = "0.11.0", optional = true, features = ["alloc"] }
-sha2 = { workspace = true, optional = true }
-
-# `federation-api`
-headers = { version = "0.4.0", optional = true }
-http-auth = { version = "0.1.9", optional = true, default-features = false }
-httparse = { version = "1.9.0", optional = true }
-memchr = { version = "2.7.0", optional = true }
-mime = { workspace = true, optional = true }
-
-# `html`, `markdown`, `unstable-msc4334`, `unstable-uniffi`
-html5ever = { version = "0.39.0", optional = true }
-language-tags = { version = "0.3.2", optional = true, features = ["serde"] }
-pulldown-cmark = { version = "0.13.0", optional = true, default-features = false, features = ["html"] }
-uniffi = { workspace = true, optional = true }
+appservice-api = { path = "../appservice-api", version = "0.16.0", optional = true }
+client-api = { path = "../client-api", version = "0.16.0", optional = true }
+federation-api = { path = "../federation-api", version = "0.16.0", optional = true }
+html = { path = "../html", version = "0.16.0", optional = true }
+signatures = { path = "../signatures", version = "0.16.0", optional = true }
+state-res = { path = "../state-res", version = "0.16.0", optional = true }
 
 [dev-dependencies]
 assert_matches2.workspace = true
+assign = "1.1.1"
+bytes = "1.11.1"
+http = { workspace = true, features = ["std"] }
 insta.workspace = true
-macro_rules_attribute = "0.2.2"
+js_int = { version = "0.2.2", features = ["serde"] }
+maplit = "1.0.2"
+ruma-macros.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
 similar-asserts.workspace = true
-smol-macros = "0.1.1"
-test-log = { version = "0.2", default-features = false, features = ["trace"] }
+tracing = { workspace = true, features = ["attributes"] }
 
 [lints]
 workspace = true

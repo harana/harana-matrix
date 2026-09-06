@@ -21,6 +21,8 @@ crypto    /
       store (base, + all the store impls)
         |
       common (sdk-common)
+        |
+   protocol types (ruma, over common/events/client-api/...)
 ```
 
 Where the store implementations are `sqlite` and
@@ -37,6 +39,36 @@ Notable data types include:
 - the `Room`, which represents a room and its state (notably via the observable
   `RoomInfo`), and allows running queries that are room-specific, notably
   sending events.
+
+## `crates/ruma` and the protocol type crates
+
+`ruma` is a facade over a vendored, trimmed-down fork of
+[ruma](https://github.com/ruma/ruma). It owns no types of its own: it re-exports
+one crate per upstream crate, under the module name upstream uses, so consumers
+keep writing `ruma::events::...`, `ruma::api::client::...` and so on.
+
+| crate here                          | upstream crate                | contents                                                                            |
+| ----------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| `crates/common`                     | `ruma-common`                 | identifiers, (de)serialization helpers, push rules, canonical JSON, the core request/response traits of `api` |
+| `crates/events`                     | `ruma-events`                 | the event types, at `ruma::events`                                                   |
+| `crates/client-api`                 | `ruma-client-api`             | the client-server endpoints, at `ruma::api::client`                                  |
+| `crates/federation-api`             | `ruma-federation-api`         | the server-server endpoints, at `ruma::api::federation`                              |
+| `crates/appservice-api`             | `ruma-appservice-api`         | the appservice registration file format, at `ruma::api::appservice`                  |
+| `crates/html`                       | `ruma-html`                   | HTML parsing and sanitizing, at `ruma::html`                                          |
+| `crates/signatures`                 | `ruma-signatures`             | digital signatures, at `ruma::signatures`                                            |
+| `crates/state-res`                  | `ruma-state-res`              | state resolution and PDU authorization, at `ruma::state_res`                          |
+| `crates/ruma-macros`                | `ruma-macros`                 | the derive and attribute macros the crates above are built on                        |
+| `crates/ruma-identifiers-validation` | `ruma-identifiers-validation` | the identifier grammar the `common` identifiers validate against                     |
+
+The sources were vendored while all of this was a single crate, so they refer to
+each other through `crate::...` paths. Rather than rewrite every one of those, each
+split crate carries a `__ruma` shim module that reproduces the old crate root,
+and the paths were rewritten to `crate::__ruma::...`. `common` needs no shim: it is
+the old crate root.
+
+Only the parts this workspace uses are vendored: of the appservice API only the
+registration file format, and the identity-service and push-gateway APIs not at
+all.
 
 ## `crates/harana-olm`
 

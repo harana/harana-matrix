@@ -36,7 +36,7 @@ Som = "Som"
 Ba = "Ba"
 Yur = "Yur" # as found in crates/indexeddb/src/crypto_store/migrations/mod.rs
 TYE = "TYE" # as found in testing/sdk-test/src/test_json/keys_query_sets.rs
-NAX = "NAX" # as found in crates/ruma/src/events/room/thumbnail_source_serde.rs
+NAX = "NAX" # as found in crates/events/src/room/thumbnail_source_serde.rs
 Pn = "Pn" # as found in crates/harana-olm
 
 [files]

@@ -1,18 +1,19 @@
 //! Types and traits for working with the [Matrix](https://matrix.org) protocol.
 //!
-//! This crate is a vendored and trimmed-down fork of [ruma](https://github.com/ruma/ruma),
-//! merged into a single crate. The upstream `ruma-common`, `ruma-events`, `ruma-client-api`,
-//! `ruma-federation-api`, `ruma-html` and `ruma-signatures` crates are modules here:
+//! This crate is the facade over a vendored and trimmed-down fork of
+//! [ruma](https://github.com/ruma/ruma). Each of the upstream crates is a crate of this
+//! workspace, re-exported here under the module name upstream uses:
 //!
-//! | upstream crate         | module here          |
-//! | ---------------------- | -------------------- |
-//! | `ruma-common`          | crate root           |
-//! | `ruma-events`          | [`events`]           |
-//! | `ruma-client-api`      | [`api::client`]      |
-//! | `ruma-federation-api`  | `api::federation`    |
-//! | `ruma-html`            | `html`               |
-//! | `ruma-signatures`      | `signatures`         |
-//! | `ruma-state-res`       | [`state_res`]        |
+//! | upstream crate         | crate here       | module here          |
+//! | ---------------------- | ---------------- | -------------------- |
+//! | `ruma-common`          | `common`         | crate root           |
+//! | `ruma-events`          | `events`         | [`events`]           |
+//! | `ruma-client-api`      | `client-api`     | [`api::client`]      |
+//! | `ruma-federation-api`  | `federation-api` | `api::federation`    |
+//! | `ruma-appservice-api`  | `appservice-api` | [`api::appservice`]  |
+//! | `ruma-html`            | `html`           | `html`               |
+//! | `ruma-signatures`      | `signatures`     | `signatures`         |
+//! | `ruma-state-res`       | `state-res`      | [`state_res`]        |
 //!
 //! Only the parts used by this workspace are kept: of the appservice API only the registration
 //! file format ([`api::appservice`]) is vendored, and the identity-service and push-gateway APIs
@@ -28,7 +29,7 @@
 //! * `server` -- `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
 //! * `appservice-api` -- the application service registration types ([`api::appservice`]). Also
 //!   available as `appservice-api-c` and `appservice-api-s`, for parity with upstream `ruma`.
-//! * `federation-api` -- the server-server API ([`api::federation`]). Implies `signatures`.
+//! * `federation-api` -- the server-server API (`api::federation`). Implies `signatures`.
 //! * `signatures` -- digital signatures (`signatures`).
 //! * `state-res` -- state resolution and the PDU authorization rules ([`state_res`]). Implies
 //!   `signatures`.
@@ -51,98 +52,36 @@
 //! * `RUMA_UNSTABLE_EXHAUSTIVE_TYPES` -- compile all types as exhaustive. Opts you out of all
 //!   semver guarantees.
 
-#![recursion_limit = "1024"]
 #![warn(missing_docs)]
-// https://github.com/rust-lang/rust-clippy/issues/9029
-#![allow(clippy::derive_partial_eq_without_eq)]
-// Upstream ruma style; `&[] as &[u8]` in tests reads better than the alternatives.
-#![allow(trivial_casts)]
-// Upstream ruma allows this; most `new()`s here take required arguments in other endpoints.
-#![allow(clippy::new_without_default)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-// Lets this crate's own procedural macros resolve the `::ruma` paths they generate.
-extern crate self as ruma;
-
-#[cfg(feature = "unstable-uniffi")]
-uniffi::setup_scaffolding!();
-
-pub mod api;
-pub mod authentication;
-pub mod canonical_json;
-pub mod directory;
-pub mod encryption;
-pub mod events;
-pub mod http_headers;
+pub use common::*;
+#[doc(inline)]
+pub use ::events;
 #[cfg(feature = "html")]
-pub mod html;
-mod identifiers;
-pub mod media;
-mod percent_encode;
-pub mod power_levels;
-pub mod presence;
-mod priv_owned_str;
-pub mod profile;
-pub mod push;
-pub mod room;
-pub mod room_version_rules;
-pub mod serde;
+#[doc(inline)]
+pub use ::html;
 #[cfg(feature = "signatures")]
-pub mod signatures;
+#[doc(inline)]
+pub use ::signatures;
 #[cfg(feature = "state-res")]
-pub mod state_res;
-pub mod third_party_invite;
-pub mod thirdparty;
-mod timestamp;
-pub mod to_device;
+#[doc(inline)]
+pub use ::state_res;
 
-#[doc(no_inline)]
-pub use assign::assign;
-#[doc(no_inline)]
-pub use js_int::{Int, UInt, int, uint};
-#[doc(no_inline)]
-pub use js_option::JsOption;
-#[cfg(feature = "unstable-msc4334")]
-#[doc(no_inline)]
-pub use language_tags::LanguageTag;
-pub use web_time as time;
-
-/// Alias for [`Sync`] off WASM, an empty trait implemented by everything on it.
+/// Core types used to define the requests and responses for each endpoint in the various
+/// [Matrix API specifications][apis], and the endpoints themselves.
 ///
-/// A few futures here borrow a caller-supplied event type across an await, and
-/// the SDK built on this crate spawns them, so they have to be `Send`, which in
-/// turn makes the borrowed type `Sync`. WASM has no threads and its host types
-/// are not `Sync`, so requiring it there would rule out valid callers and
-/// nothing else. `sdk_common` has the same pair of markers; this crate
-/// cannot use them, since that crate depends on this one.
-#[cfg(not(target_family = "wasm"))]
-pub trait SyncOutsideWasm: Sync {}
-#[cfg(not(target_family = "wasm"))]
-impl<T: Sync + ?Sized> SyncOutsideWasm for T {}
+/// [apis]: https://spec.matrix.org/v1.19/#matrix-apis
+pub mod api {
+    pub use common::api::*;
 
-/// Alias for [`Sync`] off WASM, an empty trait implemented by everything on it.
-#[cfg(target_family = "wasm")]
-pub trait SyncOutsideWasm {}
-#[cfg(target_family = "wasm")]
-impl<T: ?Sized> SyncOutsideWasm for T {}
-
-pub use self::{
-    canonical_json::{CanonicalJsonError, CanonicalJsonObject, CanonicalJsonValue},
-    identifiers::*,
-    timestamp::{MilliSecondsSinceUnixEpoch, SecondsSinceUnixEpoch},
-};
-
-priv_owned_str!(uniffi);
-
-/// Re-exports used by macro-generated code.
-///
-/// It is not considered part of this module's public API.
-#[doc(hidden)]
-pub mod exports {
-    pub use bytes;
-    pub use http;
-    pub use ruma_macros;
-    pub use serde;
-    pub use serde_html_form;
-    pub use serde_json;
+    #[cfg(feature = "appservice-api")]
+    #[doc(inline)]
+    pub use ::appservice_api as appservice;
+    #[cfg(any(feature = "client", feature = "server"))]
+    #[doc(inline)]
+    pub use ::client_api as client;
+    #[cfg(all(feature = "federation-api", any(feature = "client", feature = "server")))]
+    #[doc(inline)]
+    pub use ::federation_api as federation;
 }

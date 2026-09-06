@@ -1,0 +1,114 @@
+[package]
+name = "common"
+version = "0.16.0"
+description = "Common types for working with the Matrix protocol."
+categories = ["api-bindings", "web-programming"]
+keywords = ["matrix", "chat", "messaging", "ruma"]
+license = "MIT"
+repository = "https://github.com/ruma/ruma"
+edition = "2024"
+rust-version = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+[package.metadata.cargo-machete]
+ignored = [
+    # Only used to enable the `js` feature for WASM.
+    "getrandom",
+]
+
+[features]
+default = []
+
+# `OutgoingRequest` / `IncomingResponse` impls, for code talking to a homeserver.
+client = []
+# `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
+server = []
+# Generate random identifiers.
+rand = ["dep:getrandom", "dep:rand", "dep:uuid"]
+# Randomness and current system time in browser environments.
+js = ["getrandom?/wasm_js", "uuid?/js"]
+# UniFFI bindings for _some_ types. Work in progress.
+unstable-uniffi = ["dep:uniffi"]
+
+# Compatibility with known, reasonable deviations from the spec in external data. These never
+# make this crate produce data that is not spec-compliant.
+# Allow IDs to exceed 255 bytes.
+compat-arbitrary-length-ids = ["ruma-identifiers-validation/compat-arbitrary-length-ids"]
+# Don't validate `ServerSigningKeyVersion`.
+compat-server-signing-key-version = [
+    "ruma-identifiers-validation/compat-server-signing-key-version",
+]
+# Allow some mandatory fields to be missing, defaulting them to an empty string.
+compat-empty-string-null = []
+# Treat `null` in certain fields the same as the field being absent.
+compat-null = []
+# Allow certain spec-mandatory fields to be absent, yielding a default value.
+compat-optional = []
+unstable-msc2870 = []
+unstable-msc3417 = []
+unstable-msc3768 = []
+unstable-msc3834 = []
+unstable-msc3843 = []
+unstable-msc3930 = []
+unstable-msc3931 = []
+unstable-msc3932 = ["unstable-msc3931"]
+unstable-msc4108 = []
+unstable-msc4140 = []
+unstable-msc4186 = []
+# Profile Updates Sliding Sync Extension
+unstable-msc4262 = []
+# Thread subscription support.
+unstable-msc4306 = []
+unstable-msc4334 = ["dep:language-tags"]
+# Secure out-of-band channel for QR code sign in
+unstable-msc4388 = []
+# M_SENDER_IGNORED
+unstable-msc4406 = []
+# User Status Profile Fields.
+unstable-msc4426 = []
+unstable-msc4494 = []
+# Selective Presence
+unstable-msc4495 = []
+
+[dependencies]
+as_variant.workspace = true
+assign = "1.1.1"
+base64.workspace = true
+bytes = "1.11.1"
+date_header = "1.0.5"
+form_urlencoded = "1.2.2"
+getrandom = { workspace = true, optional = true }
+http = { workspace = true, features = ["std"] }
+indexmap = { workspace = true, features = ["serde", "std"] }
+js_int = { version = "0.2.2", features = ["serde"] }
+js_option = "0.2.0"
+konst = { version = "0.4.3", default-features = false, features = ["cmp", "iter", "parsing"] }
+language-tags = { version = "0.3.2", optional = true, features = ["serde"] }
+maplit = "1.0.2"
+percent-encoding = "2.3.2"
+rand = { workspace = true, optional = true, features = ["sys_rng"] }
+regex = { workspace = true, features = ["perf"] }
+ruma-identifiers-validation.workspace = true
+ruma-macros.workspace = true
+serde.workspace = true
+serde_html_form = "0.4.1"
+serde_json = { workspace = true, features = ["raw_value"] }
+thiserror.workspace = true
+time = "0.3.47"
+tracing = { workspace = true, features = ["attributes"] }
+uniffi = { workspace = true, optional = true }
+url = { workspace = true, features = ["serde"] }
+uuid = { workspace = true, optional = true, features = ["v4"] }
+web-time = "1.1.0"
+wildmatch = "2.6.1"
+zeroize.workspace = true
+
+[dev-dependencies]
+assert_matches2.workspace = true
+macro_rules_attribute = "0.2.2"
+smol-macros = "0.1.1"
+ruma = { path = "../ruma", features = ["full"] }
+
+[lints]
+workspace = true

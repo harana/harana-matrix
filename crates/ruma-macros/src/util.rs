@@ -6,28 +6,49 @@ use syn::{
     Attribute, Field, Ident, LitStr, meta::ParseNestedMeta, punctuated::Punctuated, visit::Visit,
 };
 
-/// The path to the `ruma` crate, which holds the types that used to live in `ruma-common`.
+/// The path to the `common` crate, which holds the types that used to live in `ruma-common`.
 ///
 /// To access a reexported crate, prefer to use the [`reexported()`](Self::reexported) method.
 pub(crate) struct RumaCommon(TokenStream);
 
-/// The path to use for imports from the `ruma` crate.
+/// The path to use for imports from `wanted`, one of the crates the vendored ruma was split into.
 ///
-/// `ruma` declares `extern crate self as ruma;` so this also works inside `ruma` itself.
-fn ruma_crate_path() -> TokenStream {
-    match crate_name("ruma") {
-        Ok(FoundCrate::Itself) => quote! { ::ruma },
+/// Each of them declares `extern crate self as <name>;`, so this also works inside the crate
+/// itself. Crates that depend only on the `ruma` facade, or on the SDK that re-exports it, reach
+/// the same items through `facade_module` of those.
+fn split_crate_path(wanted: &str, facade_module: Option<&str>) -> TokenStream {
+    let facade = |path: TokenStream| match facade_module {
+        Some(module) => {
+            let module = Ident::new(module, Span::call_site());
+            quote! { #path::#module }
+        }
+        None => path,
+    };
+
+    match crate_name(wanted) {
+        Ok(FoundCrate::Itself) => {
+            let import = format_ident!("{}", wanted.replace('-', "_"));
+            quote! { ::#import }
+        }
         Ok(FoundCrate::Name(name)) => {
             let import = format_ident!("{name}");
             quote! { ::#import }
         }
-        // Downstream crates that only depend on matrix reach `ruma` through its re-export.
-        Err(_) => match crate_name("matrix") {
+        // Crates that depend on the `ruma` facade reach the split crates through it.
+        Err(_) => match crate_name("ruma") {
+            Ok(FoundCrate::Itself) => facade(quote! { ::ruma }),
             Ok(FoundCrate::Name(name)) => {
                 let import = format_ident!("{name}");
-                quote! { ::#import::ruma }
+                facade(quote! { ::#import })
             }
-            _ => quote! { ::ruma },
+            // Downstream crates that only depend on matrix reach `ruma` through its re-export.
+            Err(_) => match crate_name("matrix") {
+                Ok(FoundCrate::Name(name)) => {
+                    let import = format_ident!("{name}");
+                    facade(quote! { ::#import::ruma })
+                }
+                _ => facade(quote! { ::ruma }),
+            },
         },
     }
 }
@@ -35,7 +56,8 @@ fn ruma_crate_path() -> TokenStream {
 impl RumaCommon {
     /// Construct a new `RumaCommon`.
     pub(crate) fn new() -> Self {
-        Self(ruma_crate_path())
+        // The facade re-exports the whole of `common` at its root.
+        Self(split_crate_path("common", None))
     }
 
     /// The path to use for imports from the given reexported crate.
@@ -95,8 +117,7 @@ pub(crate) struct RumaEvents(TokenStream);
 impl RumaEvents {
     /// Construct a new `RumaEvents`.
     pub(crate) fn new() -> Self {
-        let ruma = ruma_crate_path();
-        Self(quote! { #ruma::events })
+        Self(split_crate_path("events", Some("events")))
     }
 
     /// The path to use for imports from the given reexported crate.
