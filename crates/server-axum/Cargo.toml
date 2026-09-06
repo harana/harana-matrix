@@ -1,0 +1,68 @@
+[package]
+authors = ["Harana"]
+description = "The complete route table of a Matrix homeserver, as an axum router."
+edition = "2024"
+homepage = "https://github.com/harana/harana-matrix"
+license = "Apache-2.0"
+name = "server-axum"
+readme = "README.md"
+repository = "https://github.com/harana/harana-matrix"
+rust-version.workspace = true
+version = "0.18.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+
+[features]
+default = [
+    "unstable-msc1763",
+    "unstable-msc4140",
+    "unstable-msc4143",
+    "unstable-msc4306",
+    "unstable-msc4308",
+    "unstable-msc4388",
+]
+
+# Room retention policies.
+unstable-msc1763 = ["ruma/unstable-msc1763"]
+# The `/_matrix/federation/unstable/org.matrix.msc3723/versions` endpoint.
+unstable-msc3723 = ["ruma/unstable-msc3723"]
+# Dehydrated devices, second version.
+unstable-msc3814 = ["ruma/unstable-msc3814"]
+# Federated content reporting.
+unstable-msc3843 = ["ruma/unstable-msc3843"]
+# One-time key claiming with fallback keys, fourth version.
+unstable-msc3983 = ["ruma/unstable-msc3983"]
+# The rendezvous endpoints used by QR code login.
+unstable-msc4108 = ["ruma/unstable-msc4108"]
+# Delayed events (futures).
+unstable-msc4140 = ["ruma/unstable-msc4140"]
+# MatrixRTC transports.
+unstable-msc4143 = ["ruma/unstable-msc4143"]
+# Simplified sliding sync (`/_matrix/client/unstable/org.matrix.simplified_msc3575/sync`).
+unstable-msc4186 = ["ruma/unstable-msc4186"]
+# Thread subscriptions.
+unstable-msc4306 = ["ruma/unstable-msc4306"]
+# Thread subscription changes.
+unstable-msc4308 = ["ruma/unstable-msc4308"]
+# A secure out-of-band channel for QR code sign in, superseding MSC4108.
+unstable-msc4388 = ["ruma/unstable-msc4388"]
+# Federated presence recipients.
+unstable-msc4495 = ["ruma/unstable-msc4495"]
+
+[dependencies]
+axum = { version = "0.8.9", default-features = false }
+bytes = { version = "1.12.1", default-features = false, features = ["std"] }
+http.workspace = true
+ruma = { workspace = true, features = ["server", "federation-api"] }
+serde_json.workspace = true
+tracing = { workspace = true, features = ["attributes"] }
+
+[dev-dependencies]
+http-body-util = "0.1.2"
+tokio = { workspace = true, features = ["macros", "rt"] }
+tower = { version = "0.5.3", default-features = false, features = ["util"] }
+
+[lints]
+workspace = true
