@@ -2557,12 +2557,9 @@ async fn test_mark_all_tracked_users_as_dirty() {
     // Mark them as not dirty.
     store.save_tracked_users(&[(damir, false), (ben, false), (ivan, false)]).await.unwrap();
 
-    // Let's imagine the migration has been done: this is useful so that tracked
-    // users are not marked as dirty when creating the `OlmMachine`.
-    store
-        .set_custom_value(OlmMachine::key_for_has_migrated_verification_latch(), vec![0])
-        .await
-        .unwrap();
+    // Let's imagine the data migrations have been run: this is useful so that
+    // tracked users are not marked as dirty when creating the `OlmMachine`.
+    crate::store::migrations::mark_all_data_migrations_as_done(&store).await.unwrap();
 
     let alice = OlmMachineBuilder::new(user_id(), alice_device_id())
         .with_crypto_store(store)
@@ -2615,9 +2612,15 @@ async fn test_verified_latch_migration() {
     // Ensure it does so only once
     alice_store.save_tracked_users(&to_track_not_dirty).await.unwrap();
 
-    OlmMachine::migration_post_verified_latch_support(alice_store, alice.identity_manager())
-        .await
-        .unwrap();
+    crate::store::migrations::run_data_migrations(
+        &crate::store::migrations::DataMigrationContext {
+            store: alice_store,
+            identity_manager: alice.identity_manager(),
+        },
+        &crate::store::migrations::builtin_data_migrations(),
+    )
+    .await
+    .unwrap();
 
     // Migration already done, so user should not be marked as dirty
     alice_store.load_tracked_users().await.unwrap().iter().for_each(|tu| {

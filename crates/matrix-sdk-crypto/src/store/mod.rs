@@ -94,6 +94,7 @@ pub mod caches;
 mod crypto_store_wrapper;
 mod error;
 mod memorystore;
+pub(crate) mod migrations;
 mod traits;
 pub mod types;
 

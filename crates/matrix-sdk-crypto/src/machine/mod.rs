@@ -297,7 +297,6 @@ impl std::fmt::Debug for OlmMachine {
 
 impl OlmMachine {
     const CURRENT_GENERATION_STORE_KEY: &'static str = "generation-counter";
-    const HAS_MIGRATED_VERIFICATION_LATCH: &'static str = "HAS_MIGRATED_VERIFICATION_LATCH";
 
     /// Create a new memory based OlmMachine.
     ///
@@ -536,9 +535,17 @@ impl OlmMachine {
             x509_signer,
         );
 
-        // FIXME: We might want in the future a more generic high-level data migration
-        // mechanism (at the store wrapper layer).
-        Self::migration_post_verified_latch_support(&store, &identity_manager).await?;
+        // Migrations of the store's *contents*, as opposed to a backend's schema.
+        // These run above the backends, so they are written once rather than once
+        // per backend.
+        crate::store::migrations::run_data_migrations(
+            &crate::store::migrations::DataMigrationContext {
+                store: &store,
+                identity_manager: &identity_manager,
+            },
+            &crate::store::migrations::builtin_data_migrations(),
+        )
+        .await?;
 
         Ok(Self::new_helper(
             &device_id,
@@ -548,28 +555,6 @@ impl OlmMachine {
             identity,
             maybe_backup_key,
         ))
-    }
-
-    // The sdk now support verified identity change detection.
-    // This introduces a new local flag (`verified_latch` on
-    // `OtherUserIdentityData`). In order to ensure that this flag is up-to-date and
-    // for the sake of simplicity we force a re-download of tracked users by marking
-    // them as dirty.
-    //
-    // pub(crate) visibility for testing.
-    pub(crate) async fn migration_post_verified_latch_support(
-        store: &Store,
-        identity_manager: &IdentityManager,
-    ) -> Result<(), CryptoStoreError> {
-        let maybe_migrate_for_identity_verified_latch =
-            store.get_custom_value(Self::HAS_MIGRATED_VERIFICATION_LATCH).await?.is_none();
-
-        if maybe_migrate_for_identity_verified_latch {
-            identity_manager.mark_all_tracked_users_as_dirty(store.cache().await?).await?;
-
-            store.set_custom_value(Self::HAS_MIGRATED_VERIFICATION_LATCH, vec![0]).await?
-        }
-        Ok(())
     }
 
     /// Get the crypto store associated with this `OlmMachine` instance.
@@ -3457,11 +3442,6 @@ impl OlmMachine {
         &self.inner.identity_manager
     }
 
-    /// Returns a store key, only useful for testing purposes.
-    #[cfg(test)]
-    pub(crate) fn key_for_has_migrated_verification_latch() -> &'static str {
-        Self::HAS_MIGRATED_VERIFICATION_LATCH
-    }
 }
 
 fn sender_data_to_verification_state(
