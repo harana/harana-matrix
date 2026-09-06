@@ -57,7 +57,7 @@
 //! subscribes to [`RedecryptorReport`] stream.
 //!
 //! ```markdown
-//! 
+//!
 //!      .----------------------.
 //!     |                        |
 //!     |      Beeb, boop!       |
@@ -1979,7 +1979,7 @@ mod tests {
         sender: &Client,
         room_id: &RoomId,
         event_id: &EventId,
-        content: serde_json::Value,
+        content: Value,
     ) -> (Raw<AnySyncTimelineEvent>, Raw<ToDeviceEvent<ToDeviceEncryptedEventContent>>) {
         let sender_user_id = sender.user_id().unwrap();
         let room = sender.get_room(room_id).expect("The sender should have access to the room");
@@ -2005,8 +2005,8 @@ mod tests {
         event: &Raw<AnySyncTimelineEvent>,
         edit: &Raw<AnySyncTimelineEvent>,
     ) -> Raw<AnySyncTimelineEvent> {
-        let mut event: serde_json::Value = serde_json::from_str(event.json().get()).unwrap();
-        let edit: serde_json::Value = serde_json::from_str(edit.json().get()).unwrap();
+        let mut event: Value = serde_json::from_str(event.json().get()).unwrap();
+        let edit: Value = serde_json::from_str(edit.json().get()).unwrap();
 
         event["unsigned"] = json!({ "m.relations": { "m.replace": edit } });
 
@@ -2121,7 +2121,7 @@ mod tests {
         );
 
         // And its content is the decrypted edit.
-        let event: serde_json::Value = serde_json::from_str(decrypted.event.json().get()).unwrap();
+        let event: Value = serde_json::from_str(decrypted.event.json().get()).unwrap();
         assert_eq!(
             event["unsigned"]["m.relations"]["m.replace"]["content"]["m.new_content"]["body"],
             "It's a secret to nobody"

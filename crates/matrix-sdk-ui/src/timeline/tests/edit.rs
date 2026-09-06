@@ -367,10 +367,7 @@ async fn test_chained_bundled_edits_resolve_to_the_most_recent_one() {
     let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
     let event = item.as_event().unwrap();
     assert_eq!(event.content().as_message().unwrap().body(), "edit 2");
-    assert_eq!(
-        event.latest_edit_json().unwrap().deserialize().unwrap().event_id(),
-        edit2_event_id
-    );
+    assert_eq!(event.latest_edit_json().unwrap().deserialize().unwrap().event_id(), edit2_event_id);
 
     let date_divider = assert_next_matches!(stream, VectorDiff::PushFront { value } => value);
     assert!(date_divider.is_date_divider());

@@ -516,33 +516,21 @@ fn media_uris_of(event: &Event) -> Vec<OwnedMxcUri> {
                 MessageType::File(content) => {
                     uris.push(uri_of(&content.source));
                     uris.extend(
-                        content
-                            .info
-                            .and_then(|info| info.thumbnail_source)
-                            .as_ref()
-                            .map(uri_of),
+                        content.info.and_then(|info| info.thumbnail_source).as_ref().map(uri_of),
                     );
                 }
 
                 MessageType::Image(content) => {
                     uris.push(uri_of(&content.source));
                     uris.extend(
-                        content
-                            .info
-                            .and_then(|info| info.thumbnail_source)
-                            .as_ref()
-                            .map(uri_of),
+                        content.info.and_then(|info| info.thumbnail_source).as_ref().map(uri_of),
                     );
                 }
 
                 MessageType::Video(content) => {
                     uris.push(uri_of(&content.source));
                     uris.extend(
-                        content
-                            .info
-                            .and_then(|info| info.thumbnail_source)
-                            .as_ref()
-                            .map(uri_of),
+                        content.info.and_then(|info| info.thumbnail_source).as_ref().map(uri_of),
                     );
                 }
 
