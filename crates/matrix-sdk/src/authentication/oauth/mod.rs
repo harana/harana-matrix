@@ -193,7 +193,7 @@ use ruma::{
 use serde::{Deserialize, Serialize};
 use sha2::Digest as _;
 use tokio::sync::Mutex;
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use url::Url;
 
 mod auth_code_builder;
@@ -225,6 +225,7 @@ use self::{
 use super::{AuthData, SessionTokens};
 use crate::{
     Client, RefreshTokenError, Result,
+    authentication::matrix::MatrixSession,
     client::{SessionChange, caches::CachedValue},
     executor::spawn,
     utils::UrlOrQuery,
@@ -711,6 +712,97 @@ impl OAuth {
             .expect("Client authentication data was already set");
     }
 
+    /// Migrate a session of the native Matrix authentication API to this one.
+    ///
+    /// A homeserver that moves to an authentication server keeps the access
+    /// tokens it had issued working, but a session stored before the move
+    /// carries no OAuth 2.0 data, so restoring it with
+    /// [`MatrixAuth::restore_session()`] keeps using the legacy API: the
+    /// account management URLs of the authentication server are then out of
+    /// reach, and so is anything else this API offers. This turns such a
+    /// session into an OAuth 2.0 one, registering client credentials with the
+    /// authentication server on the way, and returns it so the caller can
+    /// store it in place of the one it had.
+    ///
+    /// This is deliberately not done inside
+    /// [`MatrixAuth::restore_session()`]: it costs two requests, and restoring
+    /// a session is expected to work offline. Call it when a stored
+    /// `MatrixSession` is about to be restored and the caller is willing to
+    /// pay for the check, or after
+    /// [`OAuth::server_metadata()`][Self::server_metadata] has shown that the
+    /// homeserver now has an authentication server.
+    ///
+    /// The access token is not verified here, no more than it is when
+    /// restoring any other session: a token the homeserver rejects surfaces on
+    /// the first request, as `M_UNKNOWN_TOKEN`, and means the user has to log
+    /// in again.
+    ///
+    /// # Arguments
+    ///
+    /// * `session` - The session of the native Matrix authentication API to
+    ///   migrate.
+    ///
+    /// * `registration_data` - The data to restore or register the client with
+    ///   the authentication server. Not needed if [`OAuth::register_client()`]
+    ///   or [`OAuth::restore_registered_client()`] was called before.
+    ///
+    /// * `room_load_settings` — Specify how many rooms must be restored; use
+    ///   `::default()` if you don't know which value to pick.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OAuthDiscoveryError::NotSupported`] when the homeserver has
+    /// no authentication server, so there is nothing to migrate to, and the
+    /// session should be restored with [`MatrixAuth::restore_session()`] as
+    /// before.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a session was already restored or logged in.
+    ///
+    /// [`MatrixAuth::restore_session()`]:
+    ///     crate::authentication::matrix::MatrixAuth::restore_session
+    /// [`OAuthDiscoveryError::NotSupported`]:
+    ///     crate::authentication::oauth::error::OAuthDiscoveryError::NotSupported
+    #[instrument(skip_all)]
+    pub async fn migrate_matrix_session(
+        &self,
+        session: MatrixSession,
+        registration_data: Option<&ClientRegistrationData>,
+        room_load_settings: RoomLoadSettings,
+    ) -> Result<OAuthSession> {
+        let MatrixSession { meta, tokens, homeserver } = session;
+
+        // Ask the server the session belongs to, which is not necessarily the one this
+        // client was built with.
+        if let Some(homeserver) = &homeserver
+            && *homeserver != self.client.homeserver()
+        {
+            debug!(%homeserver, "Using the homeserver stored with the session");
+            self.client.set_homeserver(homeserver.clone());
+        }
+
+        // Fails with `NotSupported` if the homeserver has no authentication server, in
+        // which case there is nothing to migrate to.
+        let server_metadata = self.server_metadata().await.map_err(OAuthError::from)?;
+
+        info!("Migrating a session of the native Matrix authentication API to OAuth 2.0");
+
+        // The stored session has no client credentials -- it predates the move -- so
+        // they have to be registered, unless the caller already did.
+        self.use_registration_data(&server_metadata, registration_data).await?;
+
+        let client_id =
+            self.client_id().expect("registering the client sets its credentials").clone();
+
+        let user = UserSession { meta, tokens, homeserver };
+
+        // The credentials were set just above, so they must not be set again.
+        self.restore_user_session(None, user.clone(), room_load_settings).await?;
+
+        Ok(OAuthSession { client_id, user })
+    }
+
     /// Restore a previously logged in session.
     ///
     /// This can be used to restore the client to a logged in state, including
@@ -731,7 +823,23 @@ impl OAuth {
         session: OAuthSession,
         room_load_settings: RoomLoadSettings,
     ) -> Result<()> {
-        let OAuthSession { client_id, user: UserSession { meta, tokens, homeserver } } = session;
+        let OAuthSession { client_id, user } = session;
+
+        self.restore_user_session(Some(client_id), user, room_load_settings).await
+    }
+
+    /// Restore a user session, registering the client credentials unless they
+    /// were registered already.
+    ///
+    /// `client_id` is `None` when the caller has already set the credentials,
+    /// which is what registering the client does; setting them twice panics.
+    async fn restore_user_session(
+        &self,
+        client_id: Option<ClientId>,
+        user: UserSession,
+        room_load_settings: RoomLoadSettings,
+    ) -> Result<()> {
+        let UserSession { meta, tokens, homeserver } = user;
 
         // A session that knows where it came from spares us the `.well-known` lookup
         // that discovering the homeserver again would cost, and works offline.
@@ -742,7 +850,8 @@ impl OAuth {
             self.client.set_homeserver(homeserver.clone());
         }
 
-        let data = OAuthAuthData { client_id, authorization_data: Default::default() };
+        let data = client_id
+            .map(|client_id| OAuthAuthData { client_id, authorization_data: Default::default() });
 
         self.client.auth_ctx().set_session_tokens(tokens.clone());
         self.client
@@ -757,12 +866,14 @@ impl OAuth {
         #[cfg(feature = "e2e-encryption")]
         self.deferred_enable_cross_process_refresh_lock().await;
 
-        self.client
-            .inner
-            .auth_ctx
-            .auth_data
-            .set(AuthData::OAuth(data))
-            .expect("Client authentication data was already set");
+        if let Some(data) = data {
+            self.client
+                .inner
+                .auth_ctx
+                .auth_data
+                .set(AuthData::OAuth(data))
+                .expect("Client authentication data was already set");
+        }
 
         // Initialize the cross-process locking by saving our tokens' hash into the
         // database, if we've enabled the cross-process lock.
