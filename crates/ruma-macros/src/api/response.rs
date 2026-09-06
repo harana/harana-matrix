@@ -26,8 +26,11 @@ pub fn expand_response(attrs: ResponseAttrs, item: syn::ItemStruct) -> TokenStre
     let status_ident = attrs.status_or_default();
     // `#[derive(Response)]` reads its settings back off `#[ruma_api(..)]`, so
     // anything set on `#[response(..)]` has to be passed along there.
-    let manual_body_serde =
-        attrs.manual_body_serde.then(|| quote! { , manual_body_serde }).unwrap_or_default();
+    let manual_body_serde = if attrs.manual_body_serde {
+        quote! { , manual_body_serde }
+    } else {
+        TokenStream::new()
+    };
 
     cfg_if! {
         // Make the macro expand the internal derives, such that Rust Analyzer's expand macro helper can
