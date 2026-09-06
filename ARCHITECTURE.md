@@ -70,6 +70,16 @@ Only the parts this workspace uses are vendored: of the appservice API only the
 registration file format, and the identity-service and push-gateway APIs not at
 all.
 
+## `crates/server-axum`
+
+The route table of a Matrix homeserver, as an [axum](https://docs.rs/axum)
+router. It is built on the endpoint metadata of the protocol type crates above:
+every client-server and server-server endpoint they define is registered, on
+every path it has ever had, with the extractor and response types that turn HTTP
+requests into Ruma request types and Ruma response types back into HTTP
+responses. It contains no server logic of its own; endpoints without a handler
+answer `404 M_UNRECOGNIZED`.
+
 ## `crates/harana-olm`
 
 The Olm and Megolm implementation, vendored from
