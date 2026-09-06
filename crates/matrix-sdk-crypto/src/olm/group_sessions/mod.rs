@@ -111,6 +111,36 @@ pub struct ExportedRoomKey {
     /// [MSC3061]: https://github.com/matrix-org/matrix-spec-proposals/pull/3061
     #[serde(default, rename = "m.shared_history", alias = "org.matrix.msc3061.shared_history")]
     pub shared_history: bool,
+
+    /// What we knew about the sender of the session when it was exported.
+    ///
+    /// Restoring a session from a backup or an export used to lose this, so a
+    /// message decrypted with a restored key could not be attributed to its
+    /// sender however much we had established about them at the time.
+    ///
+    /// The field name is vendor-prefixed: there is no MSC for it yet, and other
+    /// implementations ignore it.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "org.matrix.matrix_rust_sdk.sender_data"
+    )]
+    pub sender_data: Option<SenderData>,
+
+    /// Who forwarded the session to us, if it did not come from its creator.
+    ///
+    /// See [MSC4268].
+    ///
+    /// The field name is vendor-prefixed for the same reason as
+    /// [`Self::sender_data`].
+    ///
+    /// [MSC4268]: https://github.com/matrix-org/matrix-spec-proposals/pull/4268
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "org.matrix.matrix_rust_sdk.forwarder_data"
+    )]
+    pub forwarder_data: Option<ForwarderData>,
 }
 
 impl ExportedRoomKey {
@@ -129,6 +159,8 @@ impl ExportedRoomKey {
             sender_claimed_keys,
             forwarding_curve25519_key_chain,
             shared_history,
+            sender_data,
+            forwarder_data,
         } = room_key;
 
         Self {
@@ -140,6 +172,8 @@ impl ExportedRoomKey {
             sender_claimed_keys,
             forwarding_curve25519_key_chain,
             shared_history,
+            sender_data,
+            forwarder_data,
         }
     }
 }
@@ -198,6 +232,36 @@ pub struct BackedUpRoomKey {
     /// [MSC3061]: https://github.com/matrix-org/matrix-spec-proposals/pull/3061
     #[serde(default, rename = "m.shared_history", alias = "org.matrix.msc3061.shared_history")]
     pub shared_history: bool,
+
+    /// What we knew about the sender of the session when it was exported.
+    ///
+    /// Restoring a session from a backup or an export used to lose this, so a
+    /// message decrypted with a restored key could not be attributed to its
+    /// sender however much we had established about them at the time.
+    ///
+    /// The field name is vendor-prefixed: there is no MSC for it yet, and other
+    /// implementations ignore it.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "org.matrix.matrix_rust_sdk.sender_data"
+    )]
+    pub sender_data: Option<SenderData>,
+
+    /// Who forwarded the session to us, if it did not come from its creator.
+    ///
+    /// See [MSC4268].
+    ///
+    /// The field name is vendor-prefixed for the same reason as
+    /// [`Self::sender_data`].
+    ///
+    /// [MSC4268]: https://github.com/matrix-org/matrix-spec-proposals/pull/4268
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "org.matrix.matrix_rust_sdk.forwarder_data"
+    )]
+    pub forwarder_data: Option<ForwarderData>,
 }
 
 impl TryFrom<ExportedRoomKey> for ForwardedRoomKeyContent {
@@ -268,6 +332,8 @@ impl From<ExportedRoomKey> for BackedUpRoomKey {
             sender_claimed_keys,
             forwarding_curve25519_key_chain,
             shared_history,
+            sender_data,
+            forwarder_data,
         } = value;
 
         Self {
@@ -277,6 +343,8 @@ impl From<ExportedRoomKey> for BackedUpRoomKey {
             sender_claimed_keys,
             forwarding_curve25519_key_chain,
             shared_history,
+            sender_data,
+            forwarder_data,
         }
     }
 }
@@ -303,6 +371,8 @@ impl TryFrom<ForwardedRoomKeyContent> for ExportedRoomKey {
                     sender_key: content.claimed_sender_key,
                     session_key: content.session_key,
                     shared_history: false,
+                    sender_data: None,
+                    forwarder_data: None,
                 })
             }
             #[cfg(feature = "experimental-algorithms")]
@@ -315,6 +385,8 @@ impl TryFrom<ForwardedRoomKeyContent> for ExportedRoomKey {
                 sender_key: content.claimed_sender_key,
                 session_key: content.session_key,
                 shared_history: false,
+                sender_data: None,
+                forwarder_data: None,
             }),
             ForwardedRoomKeyContent::Unknown(c) => Err(SessionExportError::Algorithm(c.algorithm)),
         }

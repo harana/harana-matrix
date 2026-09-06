@@ -123,6 +123,8 @@ impl From<ExportedRoomKey> for HistoricRoomKey {
             sender_claimed_keys,
             shared_history: _,
             forwarding_curve25519_key_chain: _,
+            sender_data: _,
+            forwarder_data: _,
         } = exported_room_key;
         HistoricRoomKey {
             algorithm,

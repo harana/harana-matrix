@@ -1744,12 +1744,28 @@ impl Store {
 
             match session {
                 Ok(mut session) => {
-                    if authenticity == BackupAuthenticity::Unauthenticated {
+                    match authenticity {
+                        // The backup was written by one of our own devices, so what it
+                        // recorded about the sender is what we ourselves established at
+                        // the time. Restore it rather than treating the session as one
+                        // whose sender we never looked into.
+                        BackupAuthenticity::Authenticated => {
+                            if let Some(sender_data) = key.sender_data.clone() {
+                                session.sender_data = sender_data;
+                            }
+
+                            session.forwarder_data = key.forwarder_data.clone();
+                        }
+
                         // A backup we cannot tie to our own identity or to a verified
-                        // device tells us nothing about who sent these keys, so the
-                        // sessions must not claim the benefit of the doubt that
-                        // sessions predating sender data collection get.
-                        session.sender_data = SenderData::unknown();
+                        // device tells us nothing about who sent these keys, so anything
+                        // it claims about them is dropped, and the sessions do not get
+                        // the benefit of the doubt that sessions predating sender data
+                        // collection get.
+                        BackupAuthenticity::Unauthenticated => {
+                            session.sender_data = SenderData::unknown();
+                            session.forwarder_data = None;
+                        }
                     }
 
                     Some(session)

@@ -456,6 +456,8 @@ impl InboundGroupSession {
             sender_claimed_keys: (*self.creator_info.signing_keys).clone(),
             session_key,
             shared_history: self.shared_history,
+            sender_data: Some(self.sender_data.clone()),
+            forwarder_data: self.forwarder_data.clone(),
         }
     }
 
@@ -814,6 +816,11 @@ impl TryFrom<&ExportedRoomKey> for InboundGroupSession {
             sender_claimed_keys,
             forwarding_curve25519_key_chain: _,
             shared_history,
+            // Sender data from an export is only honoured where the export can be
+            // authenticated, which is a decision for the importer to make, so the
+            // conversion itself never trusts it.
+            sender_data: _,
+            forwarder_data: _,
         } = key;
 
         let config = OutboundGroupSession::session_config(algorithm)?;

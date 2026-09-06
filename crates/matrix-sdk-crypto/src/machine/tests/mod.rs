@@ -911,6 +911,72 @@ async fn test_megolm_encryption() {
     }
 }
 
+/// A session restored from a backup used to lose everything we had established
+/// about its sender, so its messages showed as coming from nobody in
+/// particular even though the backup was written by one of our own devices.
+#[async_test]
+async fn test_sender_data_survives_a_round_trip_through_an_authenticated_backup() {
+    let (alice, bob) =
+        get_machine_pair_with_setup_sessions_test_helper(alice_id(), user_id(), false).await;
+    let room_id = room_id!("!test:example.org");
+
+    // Alice shares a room key with Bob, who ends up with sender data for it.
+    let to_device_requests = alice
+        .share_room_key(room_id, iter::once(bob.user_id()), EncryptionSettings::default())
+        .await
+        .unwrap();
+    let event = ToDeviceEvent::new(
+        alice.user_id().to_owned(),
+        to_device_requests_to_content(to_device_requests),
+    );
+
+    let decryption_settings =
+        DecryptionSettings { sender_device_trust_requirement: TrustRequirement::Untrusted };
+
+    let session = bob
+        .store()
+        .with_transaction(async |tr| {
+            let res = bob
+                .decrypt_to_device_event(tr, &event, &mut Changes::default(), &decryption_settings)
+                .await?;
+            Ok(res)
+        })
+        .await
+        .unwrap()
+        .inbound_group_session
+        .unwrap();
+    bob.store().save_inbound_group_sessions(&[session.clone()]).await.unwrap();
+
+    let original_sender_data = session.sender_data.clone();
+    assert_matches!(original_sender_data, SenderData::DeviceInfo { .. });
+
+    let exported = session.export().await;
+    assert!(exported.sender_data.is_some(), "The export should carry the sender data");
+
+    // A fresh client restoring that key from a backup it trusts gets the sender
+    // data back.
+    let carol = OlmMachine::new(user_id(), alice_device_id()).await;
+    carol
+        .store()
+        .import_backed_up_room_keys(
+            vec![exported],
+            "1",
+            BackupAuthenticity::Authenticated,
+            |_, _| {},
+        )
+        .await
+        .unwrap();
+
+    let restored = carol
+        .store()
+        .get_inbound_group_session(room_id, session.session_id())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_matches!(restored.sender_data, SenderData::DeviceInfo { .. });
+}
+
 /// Anyone who can write to the account's key backup can put keys in it, so
 /// keys from a backup we cannot tie to our own identity or to a verified device
 /// must not get the benefit of the doubt that sessions predating sender data
