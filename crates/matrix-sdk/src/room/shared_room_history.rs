@@ -296,10 +296,18 @@ pub(crate) async fn maybe_accept_key_bundle(room: &Room, inviter: &UserId) -> Re
         }
     }
 
-    // TODO: Now that we downloaded and imported the bundle, or the bundle was
-    // invalid, we can safely remove the info about the bundle.
-    // olm_machine.store().clear_received_room_key_bundle_data(room.room_id(),
-    // user_id).await?;
+    // The bundle has either been imported or found to be malformed. Either way it
+    // has served its purpose, and what it holds - the location of an encrypted
+    // file on the media repository, and the key to decrypt it - is worth keeping
+    // no longer than that.
+    //
+    // The file itself stays on the server: the client-server API has no way to
+    // delete a piece of media, so the upload outlives its use however carefully
+    // the sender behaves.
+    olm_machine
+        .store()
+        .clear_received_room_key_bundle_data(room.room_id(), &bundle_info.sender_user)
+        .await?;
 
     // If we have reached this point, the bundle was either successfully imported,
     // or was malformed and failed to deserialise. In either case, we can clear

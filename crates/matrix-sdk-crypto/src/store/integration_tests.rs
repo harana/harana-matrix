@@ -246,6 +246,79 @@ macro_rules! cryptostore_integration_tests {
             }
 
             #[async_test]
+            async fn test_clear_received_room_key_bundle_data() {
+                use ruma::owned_room_id;
+
+                use $crate::{
+                    store::types::StoredRoomKeyBundleData,
+                    types::events::room_key_bundle::RoomKeyBundleContent,
+                };
+
+                let store = get_store("clear_received_room_key_bundle_data", None, true).await;
+
+                let room_id = owned_room_id!("!room:localhost");
+                let sender = bob_id().to_owned();
+
+                let bundle_data = StoredRoomKeyBundleData {
+                    sender_user: sender.clone(),
+                    sender_key: vodozemac::Curve25519PublicKey::from_base64(
+                        "LTpv2DGMhggPAXO02+7f68CNEp6A7DcS1c1c3RRAWDs",
+                    )
+                    .unwrap(),
+                    sender_data: SenderData::unknown(),
+                    bundle_data: RoomKeyBundleContent {
+                        room_id: room_id.clone(),
+                        file: serde_json::from_value(serde_json::json!({
+                            "url": "mxc://localhost/bundle",
+                            "key": {
+                                "kty": "oct",
+                                "key_ops": ["encrypt", "decrypt"],
+                                "alg": "A256CTR",
+                                "k": "GRAOOjXCbAJtqA1kJqfxKQmDkjTBpXfNDvPnMBK5Yfg",
+                                "ext": true,
+                            },
+                            "iv": "AAAAAAAAAAAAAAAAAAAAAA",
+                            "hashes": {
+                                "sha256": "olqPHIZoBLZlWCRl7pOSMwLbz3Bo8gFxxxN6WdVCYAo",
+                            },
+                            "v": "v2",
+                        }))
+                        .unwrap(),
+                    },
+                };
+
+                store
+                    .save_changes(Changes {
+                        received_room_key_bundles: vec![bundle_data],
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap();
+
+                assert!(
+                    store
+                        .get_received_room_key_bundle_data(&room_id, &sender)
+                        .await
+                        .unwrap()
+                        .is_some()
+                );
+
+                store.clear_received_room_key_bundle_data(&room_id, &sender).await.unwrap();
+
+                assert!(
+                    store
+                        .get_received_room_key_bundle_data(&room_id, &sender)
+                        .await
+                        .unwrap()
+                        .is_none(),
+                    "The bundle data should be gone once it has been used",
+                );
+
+                // Clearing something that is not there is not an error.
+                store.clear_received_room_key_bundle_data(&room_id, &sender).await.unwrap();
+            }
+
+            #[async_test]
             async fn test_delete_sessions() {
                 let store = get_store("delete_sessions", None, true).await;
                 let (account, session) = get_account_and_session().await;

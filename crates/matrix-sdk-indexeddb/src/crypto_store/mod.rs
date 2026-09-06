@@ -1656,6 +1656,24 @@ impl_crypto_store! {
         Ok(result)
     }
 
+    async fn clear_received_room_key_bundle_data(
+        &self,
+        room_id: &RoomId,
+        user_id: &UserId,
+    ) -> Result<()> {
+        let key = self.serializer.encode_key(keys::RECEIVED_ROOM_KEY_BUNDLES, (room_id, user_id));
+
+        let tx = self
+            .inner
+            .transaction(keys::RECEIVED_ROOM_KEY_BUNDLES)
+            .with_mode(TransactionMode::Readwrite)
+            .build()?;
+
+        tx.object_store(keys::RECEIVED_ROOM_KEY_BUNDLES)?.delete(&key).build()?;
+
+        Ok(tx.commit().await?)
+    }
+
     async fn has_downloaded_all_room_keys(&self, room_id: &RoomId) -> Result<bool> {
         let key = self.serializer.encode_key(keys::ROOM_KEY_BACKUPS_FULLY_DOWNLOADED, room_id);
         let result = self
