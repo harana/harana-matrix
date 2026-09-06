@@ -21,7 +21,6 @@ use std::{
 
 use async_trait::async_trait;
 use gloo_utils::format::JsValueSerdeExt;
-use growable_bloom_filter::GrowableBloom;
 use indexed_db_futures::{
     KeyRange, cursor::CursorDirection, database::Database, error::OpenDbError, prelude::*,
     transaction::TransactionMode,
@@ -39,6 +38,7 @@ use client_base::{
     },
     ttl::TtlValue,
 };
+use client_common::bloom_filter::GrowableBloom;
 use client_store_encryption::{Error as EncryptionError, StoreCipher};
 use common_ruma::{
     CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri,

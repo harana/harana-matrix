@@ -22,8 +22,7 @@ use std::{
 
 use as_variant::as_variant;
 use async_trait::async_trait;
-use growable_bloom_filter::GrowableBloom;
-use client_common::{AsyncTraitDeps, ttl::TtlValue};
+use client_common::{AsyncTraitDeps, bloom_filter::GrowableBloom, ttl::TtlValue};
 use common_ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri, OwnedRoomId,
     OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UserId,

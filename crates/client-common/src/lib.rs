@@ -32,6 +32,7 @@ use futures_core::Future;
 pub use common_ruma as ruma;
 
 pub mod backoff;
+pub mod bloom_filter;
 pub mod content_disposition;
 pub mod cross_process_lock;
 pub mod debug;
@@ -47,6 +48,7 @@ pub mod runtime;
 pub mod serde_helpers;
 pub mod single_flight;
 pub mod sleep;
+pub mod stable_hasher;
 pub mod stream;
 pub mod task_monitor;
 pub mod timeout;

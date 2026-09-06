@@ -23,7 +23,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use growable_bloom_filter::{GrowableBloom, GrowableBloomBuilder};
+use client_common::bloom_filter::{GrowableBloom, GrowableBloomBuilder};
 use client_matrix::{Client, sleep::sleep, task_monitor::BackgroundTaskHandle};
 use client_base::{
     SendOutsideWasm, StateStoreDataKey, StateStoreDataValue, StoreError, SyncOutsideWasm,

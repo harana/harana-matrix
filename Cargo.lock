@@ -990,7 +990,6 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "gloo-timers",
- "growable-bloom-filter",
  "http",
  "proptest",
  "regex",
@@ -1029,6 +1028,7 @@ dependencies = [
  "proptest",
  "sanitize-filename",
  "serde",
+ "serde_bytes",
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
@@ -1039,6 +1039,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1165,7 +1166,6 @@ dependencies = [
  "getrandom 0.4.3",
  "gloo-timers",
  "gloo-utils",
- "growable-bloom-filter",
  "hkdf",
  "js-sys",
  "matrix_indexed_db_futures",
@@ -1503,7 +1503,6 @@ dependencies = [
  "futures-core",
  "futures-util",
  "fuzzy-matcher",
- "growable-bloom-filter",
  "imbl",
  "indexmap",
  "itertools 0.15.0",
@@ -3439,18 +3438,6 @@ dependencies = [
  "log",
  "plain",
  "scroll",
-]
-
-[[package]]
-name = "growable-bloom-filter"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d174ccb4ba660d431329e7f0797870d0a4281e36353ec4b4a3c5eab6c2cfb6f1"
-dependencies = [
- "serde",
- "serde_bytes",
- "serde_derive",
- "xxhash-rust",
 ]
 
 [[package]]

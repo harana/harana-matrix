@@ -20,7 +20,7 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 default = ["e2e-encryption", "state-store", "event-cache-store", "media-store", "tokio-runtime"]
 event-cache-store = ["dep:client-base", "media-store", "indexed-type-serializer"]
 media-store = ["dep:client-base", "indexed-type-serializer"]
-state-store = ["dep:client-base", "growable-bloom-filter", "safe-encode-traits"]
+state-store = ["dep:client-base", "safe-encode-traits"]
 e2e-encryption = ["dep:client-base", "dep:client-crypto", "safe-encode-serializer"]
 safe-encode-traits = []
 safe-encode-serializer = ["dep:client-crypto", "safe-encode-traits"]
@@ -47,7 +47,6 @@ async-trait.workspace = true
 base64.workspace = true
 futures-util.workspace = true
 gloo-utils.workspace = true
-growable-bloom-filter = { workspace = true, optional = true }
 hkdf.workspace = true
 indexed_db_futures = { workspace = true, features = [
     "serde",
@@ -57,6 +56,7 @@ indexed_db_futures = { workspace = true, features = [
 ]}
 js-sys.workspace = true
 client-base = { workspace = true, features = ["js"], optional = true }
+client-common = { workspace = true, features = ["js"] }
 client-crypto = { workspace = true, features = ["js"], optional = true }
 client-store-encryption.workspace = true
 rmp-serde.workspace = true
@@ -83,7 +83,6 @@ assert_matches.workspace = true
 assert_matches2.workspace = true
 gloo-timers = { workspace = true, features = ["futures"] }
 client-base = { workspace = true, features = ["testing"] }
-client-common = { workspace = true, features = ["js"] }
 client-crypto = { workspace = true, features = ["js", "testing"] }
 common-test.workspace = true
 rand.workspace = true

@@ -11,6 +11,10 @@ repository = "https://github.com/matrix-org/matrix-rust-sdk"
 rust-version.workspace = true
 version = "0.18.0"
 
+[package.metadata.cargo-machete]
+# Used through `#[serde(with = "serde_bytes")]` in the `bloom_filter` module.
+ignored = ["serde_bytes"]
+
 [package.metadata.docs.rs]
 default-target = "x86_64-unknown-linux-gnu"
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
@@ -44,6 +48,7 @@ imbl.workspace = true
 common-ruma.workspace = true
 sanitize-filename.workspace = true
 serde.workspace = true
+serde_bytes.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 # Only for the runtime-agnostic synchronisation primitives, plus the optional
@@ -51,6 +56,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uniffi = { workspace = true, optional = true }
+xxhash-rust.workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 futures-executor.workspace = true

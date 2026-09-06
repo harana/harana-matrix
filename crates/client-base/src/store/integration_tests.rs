@@ -7,8 +7,7 @@ use std::{
 
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use growable_bloom_filter::GrowableBloomBuilder;
-use client_common::ttl::TtlValue;
+use client_common::{bloom_filter::GrowableBloomBuilder, ttl::TtlValue};
 use common_test::{TestResult, event_factory::EventFactory};
 use common_ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedUserId, RoomId, TransactionId, UserId,

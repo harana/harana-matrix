@@ -19,8 +19,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use growable_bloom_filter::GrowableBloom;
-use client_common::{ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK, ttl::TtlValue};
+use client_common::{
+    ROOM_VERSION_FALLBACK, ROOM_VERSION_RULES_FALLBACK, bloom_filter::GrowableBloom, ttl::TtlValue,
+};
 use common_ruma::{
     CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedMxcUri,
     OwnedRoomId, OwnedTransactionId, OwnedUserId, RoomId, TransactionId, UserId,

@@ -89,7 +89,6 @@ decancer = { version = "3.3.3", default-features = false }
 eyeball = { workspace = true, features = ["async-lock"] }
 eyeball-im.workspace = true
 futures-util.workspace = true
-growable-bloom-filter.workspace = true
 http = { workspace = true, optional = true }
 client-common.workspace = true
 client-crypto = { workspace = true, optional = true }
