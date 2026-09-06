@@ -698,6 +698,11 @@ async fn test_cross_signing_status() {
         .await
         .expect("We should have the private cross-signing keys after the bootstrap process");
     assert!(status.is_complete(), "We should have all the private cross-signing keys locally");
+    assert!(
+        status.is_published,
+        "The identity reached the homeserver, so it should not be reported as unpublished: \
+         a consumer that believes it is would keep republishing it"
+    );
 
     server.verify().await;
 }

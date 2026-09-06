@@ -67,6 +67,7 @@ use ruma::{
         client::{
             keys::{
                 get_keys, upload_keys, upload_signatures::v3::Request as UploadSignaturesRequest,
+                upload_signing_keys,
                 upload_signing_keys::v3::Request as UploadSigningKeysRequest,
             },
             message::send_message_event,
@@ -412,6 +413,10 @@ impl CrossSigningResetHandle {
                     sleep(RETRY_EVERY).await;
                 }
 
+                self.client
+                    .encryption()
+                    .mark_cross_signing_identity_as_published()
+                    .await?;
                 self.client.send(self.signatures_request.clone()).await?;
 
                 Ok(())
@@ -1474,6 +1479,7 @@ impl Encryption {
             self.client.send_outgoing_request(req).await?;
         }
         self.client.send(upload_signing_keys_req).await?;
+        self.mark_cross_signing_identity_as_published().await?;
         self.client.send(upload_signatures_req).await?;
 
         Ok(())
@@ -1554,10 +1560,27 @@ impl Encryption {
                 Err(error.into())
             }
         } else {
+            self.mark_cross_signing_identity_as_published().await?;
             self.client.send(upload_signatures_req).await?;
 
             Ok(None)
         }
+    }
+
+    /// Tell the [`OlmMachine`] that the cross-signing identity's public keys
+    /// reached the homeserver.
+    ///
+    /// Until it is told, `CrossSigningStatus::is_published` stays `false`, and
+    /// a consumer following that flag republishes an identity that is already
+    /// on the server. The `/keys/device_signing/upload` request is sent
+    /// directly rather than through `send_outgoing_request`, so nothing else
+    /// does this for us; the request ID is ignored for this response type.
+    async fn mark_cross_signing_identity_as_published(&self) -> Result<()> {
+        let response = upload_signing_keys::v3::Response::new();
+
+        self.client.mark_request_as_sent(&TransactionId::new(), &response).await?;
+
+        Ok(())
     }
 
     /// Query the user's own device keys, if, and only if, we didn't have their
