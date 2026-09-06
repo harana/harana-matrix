@@ -24,16 +24,19 @@ pub(crate) struct IdentifierConstructor {
 }
 
 impl IdentifierConstructor {
-    /// Validate the input string and generate its conversion from the string value.
+    /// Validate the input string and generate its conversion from the string
+    /// value.
     ///
-    /// The conversion uses the `TryFrom<&str>` implementation of the given type at
-    /// runtime.
+    /// The conversion uses the `TryFrom<&str>` implementation of the given type
+    /// at runtime.
     ///
     /// ## Parameters
     ///
-    /// * `id_type`: The type of the identifier to convert to. The type must be located at the root
-    ///   of the `src_crate` and may be preceded with a `&` if the output is a borrowed type.
-    /// * `error_message`: The message to present if the compile-time validation fails.
+    /// * `id_type`: The type of the identifier to convert to. The type must be
+    ///   located at the root of the `src_crate` and may be preceded with a `&`
+    ///   if the output is a borrowed type.
+    /// * `error_message`: The message to present if the compile-time validation
+    ///   fails.
     /// * `validate_fn`: The function to use to validate the string value.
     ///
     /// Panics with the given error message if the validation fails.

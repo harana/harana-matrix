@@ -18,24 +18,24 @@ use std::{fmt::Debug, mem::MaybeUninit, ptr::addr_of_mut, sync::Arc, time::Durat
 
 use eyeball_im::VectorDiff;
 use futures_util::{StreamExt, pin_mut};
-use client_matrix::{
+use harana_matrix_client::{
     Room as SdkRoom,
+    common::{SendOutsideWasm, SyncOutsideWasm},
     ruma::{
         OwnedRoomId, RoomId,
         api::client::sync::sync_events::UnreadNotificationsCount as RumaUnreadNotificationsCount,
     },
-};
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use client_ui::{
-    room_list_service::filters::{
-        BoxedFilterFn, ReadReceiptsCategory, RoomCategory, new_filter_all, new_filter_any,
-        new_filter_category, new_filter_deduplicate_versions, new_filter_favourite,
-        new_filter_fuzzy_match_room_name, new_filter_identifiers, new_filter_invite,
-        new_filter_joined, new_filter_low_priority, new_filter_non_left, new_filter_none,
-        new_filter_normalized_match_room_name, new_filter_not, new_filter_read_receipts,
-        new_filter_space,
+    ui::{
+        room_list_service::filters::{
+            BoxedFilterFn, ReadReceiptsCategory, RoomCategory, new_filter_all, new_filter_any,
+            new_filter_category, new_filter_deduplicate_versions, new_filter_favourite,
+            new_filter_fuzzy_match_room_name, new_filter_identifiers, new_filter_invite,
+            new_filter_joined, new_filter_low_priority, new_filter_non_left, new_filter_none,
+            new_filter_normalized_match_room_name, new_filter_not, new_filter_read_receipts,
+            new_filter_space,
+        },
+        unable_to_decrypt_hook::UtdHookManager,
     },
-    unable_to_decrypt_hook::UtdHookManager,
 };
 
 use crate::{
@@ -65,9 +65,9 @@ pub enum RoomListError {
     IncorrectRoomMembership { expected: Vec<Membership>, actual: Membership },
 }
 
-impl From<client_ui::room_list_service::Error> for RoomListError {
-    fn from(value: client_ui::room_list_service::Error) -> Self {
-        use client_ui::room_list_service::Error::*;
+impl From<harana_matrix_client::ui::room_list_service::Error> for RoomListError {
+    fn from(value: harana_matrix_client::ui::room_list_service::Error) -> Self {
+        use harana_matrix_client::ui::room_list_service::Error::*;
 
         match value {
             SlidingSync(error) => Self::SlidingSync { error: error.to_string() },
@@ -86,11 +86,11 @@ impl From<harana_matrix_common::IdParseError> for RoomListError {
 
 #[derive(uniffi::Object)]
 pub struct RoomListService {
-    pub(crate) inner: Arc<client_ui::RoomListService>,
+    pub(crate) inner: Arc<harana_matrix_client::ui::RoomListService>,
     pub(crate) utd_hook: Option<Arc<UtdHookManager>>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomListService {
     fn state(&self, listener: Box<dyn RoomListServiceStateListener>) -> Arc<TaskHandle> {
         let mut state_stream = self.inner.state();
@@ -181,10 +181,10 @@ fn borrow_room_ids(room_ids: &[OwnedRoomId]) -> Vec<&RoomId> {
 #[derive(uniffi::Object)]
 pub struct RoomList {
     room_list_service: Arc<RoomListService>,
-    inner: Arc<client_ui::room_list_service::RoomList>,
+    inner: Arc<harana_matrix_client::ui::room_list_service::RoomList>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomList {
     fn loading_state(
         &self,
@@ -212,7 +212,7 @@ impl RoomList {
         let this = self;
 
         // The following code deserves a bit of explanation.
-        // `client_ui::room_list_service::RoomList::entries_with_dynamic_adapters`
+        // `harana_matrix_client::ui::room_list_service::RoomList::entries_with_dynamic_adapters`
         // returns a `Stream` with a lifetime bounds to its `self` (`RoomList`). This is
         // problematic here as this `Stream` is returned as part of
         // `RoomListEntriesWithDynamicAdaptersResult` but it is not possible to store
@@ -315,7 +315,7 @@ pub struct RoomListEntriesWithDynamicAdaptersResult {
     entries_stream: Arc<TaskHandle>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomListEntriesWithDynamicAdaptersResult {
     fn controller(&self) -> Arc<RoomListDynamicEntriesController> {
         self.controller.clone()
@@ -344,9 +344,9 @@ pub enum RoomListServiceState {
     Terminated,
 }
 
-impl From<client_ui::room_list_service::State> for RoomListServiceState {
-    fn from(value: client_ui::room_list_service::State) -> Self {
-        use client_ui::room_list_service::State as S;
+impl From<harana_matrix_client::ui::room_list_service::State> for RoomListServiceState {
+    fn from(value: harana_matrix_client::ui::room_list_service::State) -> Self {
+        use harana_matrix_client::ui::room_list_service::State as S;
 
         match value {
             S::Init => Self::Initial,
@@ -365,9 +365,11 @@ pub enum RoomListServiceSyncIndicator {
     Hide,
 }
 
-impl From<client_ui::room_list_service::SyncIndicator> for RoomListServiceSyncIndicator {
-    fn from(value: client_ui::room_list_service::SyncIndicator) -> Self {
-        use client_ui::room_list_service::SyncIndicator as SI;
+impl From<harana_matrix_client::ui::room_list_service::SyncIndicator>
+    for RoomListServiceSyncIndicator
+{
+    fn from(value: harana_matrix_client::ui::room_list_service::SyncIndicator) -> Self {
+        use harana_matrix_client::ui::room_list_service::SyncIndicator as SI;
 
         match value {
             SI::Show => Self::Show,
@@ -382,9 +384,11 @@ pub enum RoomListLoadingState {
     Loaded { maximum_number_of_rooms: Option<u32> },
 }
 
-impl From<client_ui::room_list_service::RoomListLoadingState> for RoomListLoadingState {
-    fn from(value: client_ui::room_list_service::RoomListLoadingState) -> Self {
-        use client_ui::room_list_service::RoomListLoadingState as LS;
+impl From<harana_matrix_client::ui::room_list_service::RoomListLoadingState>
+    for RoomListLoadingState
+{
+    fn from(value: harana_matrix_client::ui::room_list_service::RoomListLoadingState) -> Self {
+        use harana_matrix_client::ui::room_list_service::RoomListLoadingState as LS;
 
         match value {
             LS::NotLoaded => Self::NotLoaded,
@@ -393,17 +397,17 @@ impl From<client_ui::room_list_service::RoomListLoadingState> for RoomListLoadin
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomListServiceStateListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, state: RoomListServiceState);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomListLoadingStateListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, state: RoomListLoadingState);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomListServiceSyncIndicatorListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, sync_indicator: RoomListServiceSyncIndicator);
 }
@@ -463,25 +467,25 @@ impl RoomListEntriesUpdate {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomListEntriesListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, room_entries_update: Vec<RoomListEntriesUpdate>);
 }
 
 #[derive(uniffi::Object)]
 pub struct RoomListDynamicEntriesController {
-    inner: client_ui::room_list_service::RoomListDynamicEntriesController,
+    inner: harana_matrix_client::ui::room_list_service::RoomListDynamicEntriesController,
 }
 
 impl RoomListDynamicEntriesController {
     fn new(
-        dynamic_entries_controller: client_ui::room_list_service::RoomListDynamicEntriesController,
+        dynamic_entries_controller: harana_matrix_client::ui::room_list_service::RoomListDynamicEntriesController,
     ) -> Self {
         Self { inner: dynamic_entries_controller }
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomListDynamicEntriesController {
     fn set_filter(&self, kind: RoomListEntriesDynamicFilterKind) -> bool {
         self.inner.set_filter(kind.into())
@@ -568,7 +572,7 @@ pub struct UnreadNotificationsCount {
     notification_count: u32,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl UnreadNotificationsCount {
     fn highlight_count(&self) -> u32 {
         self.highlight_count
@@ -600,8 +604,11 @@ impl From<RumaUnreadNotificationsCount> for UnreadNotificationsCount {
 
 #[cfg(test)]
 mod tests {
-    use client_matrix::{ruma::room_id, test_utils::mocks::MatrixMockServer};
-    use client_ui::room_list_service::{RoomListItem, filters::BoxedFilterFn};
+    use harana_matrix_client::{
+        ruma::room_id,
+        test_utils::mocks::MatrixMockServer,
+        ui::room_list_service::{RoomListItem, filters::BoxedFilterFn},
+    };
 
     use super::RoomListEntriesDynamicFilterKind as Kind;
 

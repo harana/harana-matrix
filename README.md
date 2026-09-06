@@ -9,7 +9,19 @@ That means that we add features, merge PRs, fix bugs, update dependencies etc at
 We diverge in a number of ways:
 
 * *Everything* is pluggable so Tokio, Sqlite, Tantivy, TLS etc are all optional.
-* [Ruma](https://github.com/ruma/ruma), [Vodozemac](https://github.com/harana/harana-olm), [Tuwunel](https://github.com/matrix-construct/tuwunel) have all been inlined to make the library simpler and improve velocity. 
+* [Ruma](https://github.com/ruma/ruma), [Vodozemac](https://github.com/harana/harana-olm), [Tuwunel](https://github.com/matrix-construct/tuwunel) have all been inlined to make the library simpler and improve velocity.
+* There are three crates rather than thirty, one per tier, with a module (and usually a feature) where each of the old crates used to be.
+
+## Crates
+
+| crate | what it is |
+| --- | --- |
+| [`harana-matrix-client`](./crates/client) | the client SDK: the `Client`, the stores, the crypto state machine, the UI layer |
+| [`harana-matrix-common`](./crates/common) | the Matrix protocol types and algorithms, and the Olm ratchets; shared by both sides |
+| [`harana-matrix-server`](./crates/server) | homeserver-side building blocks |
+| [`harana-matrix-macros`](./crates/macros) | the derive and attribute macros the three above are built on |
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for what lives where.
 
 ## License
 

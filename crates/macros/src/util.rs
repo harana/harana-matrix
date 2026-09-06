@@ -6,17 +6,18 @@ use syn::{
     Attribute, Field, Ident, LitStr, meta::ParseNestedMeta, punctuated::Punctuated, visit::Visit,
 };
 
-/// The path to the root of `harana-matrix-common`, which holds the types that used to live in
-/// `ruma-common`.
+/// The path to the root of `harana-matrix-common`, which holds the types that
+/// used to live in `ruma-common`.
 ///
-/// To access a reexported crate, prefer to use the [`reexported()`](Self::reexported) method.
+/// To access a reexported crate, prefer to use the
+/// [`reexported()`](Self::reexported) method.
 pub(crate) struct RumaCommon(TokenStream);
 
 /// The path to `harana-matrix-common`, optionally to `module` inside it.
 ///
-/// The crate declares `extern crate self as harana_matrix_common;`, so this also works inside the
-/// crate itself. Crates that only depend on `harana-matrix-client` reach the same items through
-/// its `ruma` re-export.
+/// The crate declares `extern crate self as harana_matrix_common;`, so this
+/// also works inside the crate itself. Crates that only depend on
+/// `harana-matrix-client` reach the same items through its `ruma` re-export.
 fn common_path(module: Option<&str>) -> TokenStream {
     let with_module = |path: TokenStream| match module {
         Some(module) => {
@@ -32,7 +33,8 @@ fn common_path(module: Option<&str>) -> TokenStream {
             let import = format_ident!("{name}");
             with_module(quote! { ::#import })
         }
-        Err(_) => match crate_name("harana-matrix-client").or_else(|_| crate_name("client-matrix")) {
+        Err(_) => match crate_name("harana-matrix-client").or_else(|_| crate_name("client-matrix"))
+        {
             Ok(FoundCrate::Itself) => with_module(quote! { ::harana_matrix_client::ruma }),
             Ok(FoundCrate::Name(name)) => {
                 let import = format_ident!("{name}");
@@ -100,8 +102,8 @@ impl ToTokens for RumaCommonReexport {
 
 /// The path to use for imports from the ruma-events crate.
 ///
-/// To access a reexported crate, prefer to use [`reexported()`](Self::reexported) or one of the
-/// other methods.
+/// To access a reexported crate, prefer to use
+/// [`reexported()`](Self::reexported) or one of the other methods.
 pub(crate) struct RumaEvents(TokenStream);
 
 impl RumaEvents {
@@ -115,7 +117,8 @@ impl RumaEvents {
         quote! { #self::exports::#reexport }
     }
 
-    /// The path to use for imports from the crate root, where the common types live.
+    /// The path to use for imports from the crate root, where the common types
+    /// live.
     pub(crate) fn ruma_common(&self) -> RumaCommon {
         RumaCommon::new()
     }
@@ -159,8 +162,8 @@ pub(crate) fn to_camel_case(name: &Ident) -> Ident {
     Ident::new(&s, span)
 }
 
-/// Splits the given string on `.` and `_` removing the `m.` then camel casing to give a Rust type
-/// name.
+/// Splits the given string on `.` and `_` removing the `m.` then camel casing
+/// to give a Rust type name.
 pub(crate) fn m_prefix_name_to_type_name(name: &LitStr) -> syn::Result<Ident> {
     let span = name.span();
     let name = name.value();
@@ -323,14 +326,15 @@ pub(crate) trait StructFieldExt {
     /// Get the `#[cfg]` attributes on this field.
     fn cfg_attrs(&self) -> impl Iterator<Item = &'_ Attribute>;
 
-    /// Get the serde meta items on this field, if it has `#[serde(…)]` attributes.
+    /// Get the serde meta items on this field, if it has `#[serde(…)]`
+    /// attributes.
     fn serde_meta_items(&self) -> impl Iterator<Item = syn::Meta>;
 
     /// Whether this field has a `#[serde(…)]` containing the given meta item.
     fn has_serde_meta_item(&self, meta: SerdeMetaItem) -> bool;
 
-    /// If this field has a `#[serde(default = "…")]` attribute, get the expression in the
-    /// literal string.
+    /// If this field has a `#[serde(default = "…")]` attribute, get the
+    /// expression in the literal string.
     fn serde_default_expr(&self) -> Option<syn::ExprPath>;
 }
 

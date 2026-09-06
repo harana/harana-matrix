@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use assign::assign;
-use client_matrix::{
+use harana_matrix_client::{
     RoomState, ruma::api::client::room::create_room::v3::Request as CreateRoomRequest,
 };
 

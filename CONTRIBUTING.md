@@ -98,7 +98,7 @@ We use towncrier to generate changelogs from individual fragment files. Each
 change must be documented as a changelog fragment in the appropriate crate:
 
 ```text
-/crates/<crate-name>/changelog.d/
+/crates/<crate>/changelog.d/
 ```
 
 Each changelog fragment must include **both the pull request number and the

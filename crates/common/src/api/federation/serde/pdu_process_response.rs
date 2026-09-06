@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
 
-use crate::__ruma::OwnedEventId;
 #[cfg(feature = "client")]
 use serde::de::{Deserializer, MapAccess, Visitor};
 #[cfg(feature = "server")]
 use serde::ser::{SerializeMap, Serializer};
+
+use crate::__ruma::OwnedEventId;
 
 #[cfg_attr(feature = "client", derive(serde::Deserialize))]
 #[cfg_attr(feature = "server", derive(serde::Serialize))]
@@ -70,10 +71,10 @@ where
 
 #[cfg(all(test, feature = "client"))]
 mod tests_client {
-    use crate::__ruma::event_id;
     use serde_json::json;
 
     use super::deserialize;
+    use crate::__ruma::event_id;
 
     #[test]
     fn deserialize_error() {
@@ -127,10 +128,10 @@ mod tests_client {
 mod tests_server {
     use std::collections::BTreeMap;
 
-    use crate::__ruma::{OwnedEventId, owned_event_id};
     use serde_json::{json, value::Serializer as JsonSerializer};
 
     use super::serialize;
+    use crate::__ruma::{OwnedEventId, owned_event_id};
 
     #[test]
     fn serialize_error() {

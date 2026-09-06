@@ -15,8 +15,9 @@
 use std::sync::{Arc, RwLock};
 
 use futures_util::StreamExt;
-use client_matrix::{
+use harana_matrix_client::{
     Account,
+    common::{SendOutsideWasm, SyncOutsideWasm},
     encryption::{
         Encryption,
         identities::UserIdentity,
@@ -24,7 +25,6 @@ use client_matrix::{
     },
     ruma::events::key::verification::VerificationMethod,
 };
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
 use harana_matrix_common::UserId;
 use tracing::{error, warn};
 
@@ -38,7 +38,7 @@ pub struct SessionVerificationEmoji {
     description: String,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SessionVerificationEmoji {
     pub fn symbol(&self) -> String {
         self.symbol.clone()
@@ -79,7 +79,7 @@ pub struct SessionVerificationRequestDetails {
     first_seen_timestamp: Timestamp,
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SessionVerificationControllerDelegate: SyncOutsideWasm + SendOutsideWasm {
     fn did_receive_verification_request(&self, details: SessionVerificationRequestDetails);
     fn did_accept_verification_request(&self);
@@ -105,7 +105,7 @@ pub struct SessionVerificationController {
     sas_verification: Arc<RwLock<Option<SasVerification>>>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SessionVerificationController {
     pub fn set_delegate(&self, delegate: Option<Box<dyn SessionVerificationControllerDelegate>>) {
         *self.delegate.write().unwrap() = delegate.map(Arc::from);

@@ -1,214 +1,172 @@
 # Architecture
 
-## Crate naming
+## Crates
 
-Every crate in the workspace carries a tier prefix that says who it is for:
+The workspace publishes four crates. Three are the tiers, and the fourth exists
+only because a proc-macro crate cannot be merged into a normal library:
 
-| prefix    | tier                                                                       |
-| --------- | -------------------------------------------------------------------------- |
-| `common-` | Matrix protocol types and algorithms, and shared test helpers: used by both sides |
-| `client-` | the client SDK, its stores, its UI layer and its FFI bindings                |
-| `server-` | homeserver-side building blocks                                             |
+| crate                   | at              | who it is for                                                              |
+| ----------------------- | --------------- | -------------------------------------------------------------------------- |
+| `harana-matrix-common`  | `crates/common` | Matrix protocol types and algorithms, and the Olm ratchets: used by both sides |
+| `harana-matrix-client`  | `crates/client` | the client SDK, its stores, its UI layer and its test helpers                |
+| `harana-matrix-server`  | `crates/server` | homeserver-side building blocks                                             |
+| `harana-matrix-macros`  | `crates/macros` | the derive and attribute macros the three above are built on                |
 
-The prefix is part of the package name, so a dependency is `client-crypto` in
-`Cargo.toml` and `client_crypto::` in Rust. Modules re-exported from a crate keep
-their own names: the facade still exposes `common_ruma::events`, and
-`client_common::ruma` is still spelled `ruma`.
+Each crate is a merge of what used to be a crate per module, so a module is the
+unit of organisation and a feature usually switches one on. A dependency is
+`harana-matrix-client` in `Cargo.toml` and `harana_matrix_client::` in Rust.
 
-The SDK is split into multiple layers:
+The SDK is layered like this, top to bottom, all within `harana-matrix-client`
+except where noted:
 
 ```text
         WASM (external crate matrix-rust-sdk-crypto-wasm)
           /
          /        uniffi
         /        /
-       /     bindings (client-matrix-ffi)
+       /     bindings (bindings/client-matrix-ffi)
    crypto        |
   bindings       |
       |          |
-      |    UI (client-ui)
+      |       `ui`
       |           \
       |            \
-      |      main (client-matrix)
+      |        crate root
       |    /       /
-  client-crypto   /
+   `crypto`       /
            \     /
-     store (client-base, + all the store impls)
+      `base`, and the store implementations `sqlite` and `indexeddb`
                |
-     common helpers (client-common)
+           `common`
                |
-     protocol types (common-ruma, over common-types,
-     common-events, common-client-api, ...)
+     harana-matrix-common (protocol types, `events`, `api::client`, ...)
 ```
 
-Where the store implementations are `client-sqlite` and
-`client-indexeddb` as well as `MemoryStore` which is defined in
-`client-base`.
+`MemoryStore` lives in `base` alongside the traits the other two implement.
 
-## `crates/client-matrix`
+## `crates/common` — `harana-matrix-common`
 
-This is the main crate, and one that is expected to be used by most consumers.
-Notable data types include:
+Everything the client and the server halves share. It is two vendored forks in
+one crate.
 
-- the `Client`, which can run room-independent requests: logging in/out,
-  creating rooms, running sync, etc.
-- the `Room`, which represents a room and its state (notably via the observable
-  `RoomInfo`), and allows running queries that are room-specific, notably
-  sending events.
+### The ruma fork
 
-## `crates/common-ruma` and the protocol type crates
+A trimmed-down fork of [ruma](https://github.com/ruma/ruma), whose crates are
+the modules named after them:
 
-`common-ruma` is a facade over a vendored, trimmed-down fork of
-[ruma](https://github.com/ruma/ruma). It owns no types of its own: it re-exports
-one crate per upstream crate, under the module name upstream uses, so consumers
-keep writing `common_ruma::events::...`, `common_ruma::api::client::...` and so
-on.
-
-| crate here                          | upstream crate                | contents                                                                            |
-| ----------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
-| `crates/common-types`               | `ruma-common`                 | identifiers, (de)serialization helpers, push rules, canonical JSON, the core request/response traits of `api` |
-| `crates/common-events`              | `ruma-events`                 | the event types, at `common_ruma::events`                                            |
-| `crates/common-client-api`          | `ruma-client-api`             | the client-server endpoints, at `common_ruma::api::client`                           |
-| `crates/common-federation-api`      | `ruma-federation-api`         | the server-server endpoints, at `common_ruma::api::federation`                       |
-| `crates/common-appservice-api`      | `ruma-appservice-api`         | the appservice registration file format, at `common_ruma::api::appservice`           |
-| `crates/common-html`                | `ruma-html`                   | HTML parsing and sanitizing, at `common_ruma::html`                                  |
-| `crates/common-signatures`          | `ruma-signatures`             | digital signatures, at `common_ruma::signatures`                                     |
-| `crates/common-state-res`           | `ruma-state-res`              | state resolution and PDU authorization, at `common_ruma::state_res`                  |
-| `crates/common-macros`              | `ruma-macros`                 | the derive and attribute macros the crates above are built on                        |
-| `crates/common-identifiers-validation` | `ruma-identifiers-validation` | the identifier grammar the `common-types` identifiers validate against            |
+| module here            | upstream crate                | contents                                                                            |
+| ---------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| crate root             | `ruma-common`                 | identifiers, (de)serialization helpers, push rules, canonical JSON, the core request/response traits of `api` |
+| `events`               | `ruma-events`                 | the event types                                                                      |
+| `api::client`          | `ruma-client-api`             | the client-server endpoints                                                          |
+| `api::federation`      | `ruma-federation-api`         | the server-server endpoints                                                          |
+| `api::appservice`      | `ruma-appservice-api`         | the appservice registration file format                                              |
+| `html`                 | `ruma-html`                   | HTML parsing and sanitizing                                                          |
+| `signatures`           | `ruma-signatures`             | digital signatures                                                                   |
+| `state_res`            | `ruma-state-res`              | state resolution and PDU authorization                                               |
+| `validation`           | `ruma-identifiers-validation` | the identifier grammar the identifiers validate against                              |
 
 The sources were vendored while all of this was a single crate, so they refer to
-each other through `crate::...` paths. Rather than rewrite every one of those, each
-split crate carries a `__ruma` shim module that reproduces the old crate root,
-and the paths were rewritten to `crate::__ruma::...`. `common-types` needs no
-shim: it is the old crate root.
+each other through `crate::...` paths. Rather than rewrite every one of those,
+the crate root carries `pub use crate as __ruma;` and those paths were rewritten
+to `crate::__ruma::...`, which lands back at the root and so still resolves.
 
 Only the parts this workspace uses are vendored: of the appservice API only the
 registration file format, and the identity-service and push-gateway APIs not at
 all.
 
-## `crates/common-olm`
+### The Olm fork
 
-The Olm and Megolm implementation, vendored from
+The `olm` module is the Olm and Megolm implementation, vendored from
 [harana-olm](https://github.com/harana/harana-olm), a fork of
-[vodozemac](https://github.com/matrix-org/vodozemac). Consumers reach it as
-`common_olm::`. See [its README](./crates/common-olm/README.md) for provenance
-and re-sync notes.
+[vodozemac](https://github.com/matrix-org/vodozemac). See
+[OLM-README.md](./crates/common/OLM-README.md) for provenance and re-sync notes.
+It keeps `base64` 0.22 under the `olm-base64` alias, because its public API
+exposes `base64::DecodeError` while the rest of the crate is on 0.23.
 
-## `crates/client-base`
+The crate is therefore MIT **and** Apache-2.0: the ruma fork is MIT, the
+vodozemac fork is Apache-2.0.
 
-A _sans I/O_ crate to represent the base data types persisted in the SDK. No
-network or storage I/O happens in this crate, although it defines traits
-(`StateStore` and `EventCacheStore`) representing storage backends, as well as
-dummy in-memory implementations of these traits.
+### Testing
 
-## `crates/client-common`
+`testing` switches on the `testing` module, which holds
+`init_tracing_for_tests!`. The vendored ruma test suite needs the whole feature
+set: `cargo test -p harana-matrix-common --features full`.
 
-Common helpers used by most of the other client crates; almost a leaf in the dependency
-tree of our own crates (the only crate it's using is test helpers).
+## `crates/client` — `harana-matrix-client`
 
-## `crates/client-crypto`
+The main crate, and the one most consumers want. Its root is the SDK proper:
 
-A _sans I/O_ implementation of a state machine that handles end-to-end
-encryption for Matrix clients. It defines a `CryptoStore` trait representing
-storage backends that will perform the actual storage I/O later, as well as a
-dummy in-memory implementation of this trait.
+- the `Client`, which runs room-independent requests: logging in/out, creating
+  rooms, running sync, and so on.
+- the `Room`, which represents a room and its state (notably via the observable
+  `RoomInfo`), and runs the room-specific queries, notably sending events.
 
-## `crates/client-indexeddb`
+Everything under it is a module, each behind a feature except the three that are
+always compiled in:
 
-Implementations of `EventCacheStore`, `StateStore` and `CryptoStore` for a
-indexeddb backend (for use in Web browsers, via WebAssembly).
-
-## `crates/client-qrcode`
-
-Implementation of QR codes for interactive verifications, used in the
-`client-crypto` crate.
-
-## `crates/client-sqlite`
-
-Implementations of `EventCacheStore`, `StateStore` and `CryptoStore` for a
-SQLite backend.
-
-## `crates/client-store-encryption`
-
-Low-level primitives for encrypting/decrypting/hashing values. Store
-implementations that implement encryption at rest can use those primitives.
-
-## `crates/client-ui`
-
-Very high-level primitives implementing the best practices and cutting-edge
-Matrix tech:
-
-- `EncryptionSyncService`: a specialized service running simplified sliding sync
-  (MSC4186) for everything related to crypto and E2EE for the current `Client`.
-- `RoomListService`: a specialized service running simplified sliding sync
-  (MSC4186) for retrieving the list of current rooms, and exposing its entries.
-- `SyncService`: a wrapper for the two previous services, coordinating their
-  running and shutting down.
-- `Timeline`: a high-level view for a `Room`'s timeline of events, grouping
-  related events (aggregations) into single timeline items.
-
-## `crates/client-contentscanner`
-
-An optional client for a [content scanner], so media can be checked for malware
-before it reaches the user.
+| module             | feature                      | contents                                                                     |
+| ------------------ | ---------------------------- | ---------------------------------------------------------------------------- |
+| `common`           | always                       | helpers used by most of the other modules; nearly a leaf                      |
+| `base`             | always                       | the _sans I/O_ base data types, the `StateStore` / `EventCacheStore` traits, and `MemoryStore` |
+| `store_encryption` | always                       | low-level primitives for encrypting, decrypting and hashing stored values     |
+| `crypto`           | `e2e-encryption`             | the _sans I/O_ end-to-end encryption state machine and its `CryptoStore` trait |
+| `qrcode`           | `qrcode`                     | QR codes for interactive verification, used by `crypto`                       |
+| `sqlite`           | `sqlite`                     | `EventCacheStore`, `StateStore` and `CryptoStore` over SQLite                 |
+| `indexeddb`        | `indexeddb`                  | the same three over IndexedDB, for browsers via WebAssembly                   |
+| `search`           | `experimental-search-core`   | the client-side full-text index over a room's timeline, Tantivy behind `experimental-search` |
+| `ui`               | `ui`                         | the high-level services: `RoomListService`, `EncryptionSyncService`, `SyncService`, `Timeline` |
+| `contentscanner`   | `contentscanner`             | a client for a [content scanner], so media is checked for malware first       |
+| `ruma_client`      | `ruma-client`                | a minimal Matrix client over the protocol types, vendored from [ruma-client]; independent of the rest |
+| `test`             | `testing`                    | the test helpers the whole workspace uses                                     |
 
 [content scanner]: https://github.com/element-hq/matrix-content-scanner-python
+[ruma-client]: https://github.com/ruma/ruma
 
-## `crates/client-search`
+`_crypto` is the module gate `e2e-encryption` and the store sub-features hang
+off; do not enable it directly.
 
-The client-side full-text search index over a room's timeline, with a Tantivy
-backend behind the `tantivy` feature and a `backend` module of traits for
-supplying an engine of your own.
-
-## `crates/client-ruma`
-
-A minimal Matrix client library over the protocol types, vendored from
-[ruma-client](https://github.com/ruma/ruma). It is independent of the rest of
-the client SDK.
-
-## The `server-` crates
+## `crates/server` — `harana-matrix-server`
 
 Homeserver-side building blocks, mostly ported from
 [tuwunel](https://github.com/matrix-construct/tuwunel). None of them depend on
-the client SDK.
+the client SDK. Each module is behind a feature of the same name, all on by
+default, and documented by `crates/server/docs/<module>.md`.
 
-| crate                       | contents                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------- |
-| `crates/server-appservice`  | application service registration and namespace matching                          |
-| `crates/server-resolver`    | server name resolution: the `.well-known` and SRV ladder of the server-server spec |
-| `crates/server-state-res`   | asynchronous, store-backed adapters over `common_ruma::state_res`                |
-| `crates/server-store-codec` | a compact, order-preserving binary codec for key-value store records             |
-| `crates/server-thumbnail`   | thumbnail generation for Matrix media, with a bounded decode budget              |
+| module        | contents                                                                        |
+| ------------- | ------------------------------------------------------------------------------- |
+| `appservice`  | application service registration and namespace matching                          |
+| `resolver`    | server name resolution: the `.well-known` and SRV ladder of the server-server spec |
+| `state_res`   | asynchronous, store-backed adapters over `harana_matrix_common::state_res`       |
+| `store_codec` | a compact, order-preserving binary codec for key-value store records             |
+| `thumbnail`   | thumbnail generation for Matrix media, with a bounded decode budget              |
+
+## `crates/macros` — `harana-matrix-macros`
+
+The derive and attribute macros, upstream's `ruma-macros` plus `#[async_test]`
+and the `#[uniffi_export]` helper the FFI bindings use. They are pooled into one
+crate because a proc-macro crate can only export proc macros, so each of them
+would otherwise need a crate of its own.
+
+It also carries a private copy of `harana-matrix-common`'s `validation` module:
+the macros validate identifier literals at expansion time, so they need the same
+logic, and a proc-macro crate cannot depend on the crate that depends on it. The
+two copies are kept byte-identical, and `cargo xtask ci validation-sync` fails if
+they drift. The compat features that change validation behaviour are mirrored
+here and forwarded by `harana-matrix-common`.
 
 ## `bindings/client-crypto-ffi/`
 
-FFI bindings for the crypto crate, used in a Web browser context via
+FFI bindings for the crypto module, used in a Web browser context via
 WebAssembly. These use `wasm-bindgen` to generate the bindings. These bindings
 are used in Element Web and the legacy Element apps, as of 2024-11-07.
 
 ## `bindings/client-matrix-ffi/`
 
-FFI bindings for important concepts in `client-ui` and `client-matrix`,
+FFI bindings for important concepts in the `ui` module and the SDK proper,
 generated with [UniFFI](https://github.com/mozilla/uniffi-rs) and to be used
 from other languages like Swift/Go/Kotlin. These bindings are used in the
 ElementX apps, as of 2024-11-07.
-
-## `bindings/client-matrix-ffi-macros/`
-
-Macros used in `bindings/client-matrix-ffi`.
-
-## `testing/common-test/`
-
-Common test helpers, used by all the other crates.
-
-## `testing/common-test-macros/`
-
-Implementation of the `#[async_test]` test macro.
-
-## `testing/common-test-utils/`
-
-Smaller test utilities shared by the crates' own test suites.
 
 ## `testing/client-integration-testing/`
 

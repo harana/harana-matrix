@@ -13,7 +13,8 @@ use crate::events::{EmptyStateKey, PrivOwnedStr};
 ///
 /// The room's presence sharing hint indicates either:
 /// 1. Sharing presence within the room is prohibited ([Self::Forbid]), or
-/// 2. Sharing presence within the room should be recommended by clients ([Self::Suggest])
+/// 2. Sharing presence within the room should be recommended by clients
+///    ([Self::Suggest])
 ///
 /// This type is defined in [MSC4495].
 ///
@@ -36,7 +37,8 @@ pub enum PresenceSharingHint {
 ///
 /// The room's presence sharing hint indicates either:
 /// 1. Sharing presence within the room is prohibited (`forbid`), or
-/// 2. Sharing presence within the room should be recommended by clients (`suggest`)
+/// 2. Sharing presence within the room should be recommended by clients
+///    (`suggest`)
 ///
 /// This event uses the unstable prefix defined in [MSC4495].
 ///
@@ -58,11 +60,10 @@ impl RoomPresenceSharingEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{PresenceSharingHint, RoomPresenceSharingEventContent};
-    use crate::events::OriginalStateEvent;
+    use crate::{__ruma::canonical_json::assert_to_canonical_json_eq, events::OriginalStateEvent};
 
     #[test]
     fn serialization() {

@@ -1,11 +1,9 @@
 //! `POST /_matrix/client/*/delayed_events/{delayed_id}`
 //!
-//! Send a delayed event update. This can be a updateing/canceling/sending the associated delayed
-//! event.
+//! Send a delayed event update. This can be a updateing/canceling/sending the
+//! associated delayed event.
 
-use crate::__ruma::serde::StringEnum;
-
-use crate::api::client::PrivOwnedStr;
+use crate::{__ruma::serde::StringEnum, api::client::PrivOwnedStr};
 
 /// The possible update actions we can do for updating a delayed event.
 #[derive(Clone, StringEnum)]
@@ -14,8 +12,8 @@ use crate::api::client::PrivOwnedStr;
 pub enum UpdateAction {
     /// Restart the delayed event timeout. (heartbeat ping)
     Restart,
-    /// Send the delayed event immediately independent of the timeout state. (deletes all
-    /// timers)
+    /// Send the delayed event immediately independent of the timeout state.
+    /// (deletes all timers)
     Send,
     /// Delete the delayed event and never send it. (deletes all timers)
     Cancel,
@@ -31,12 +29,11 @@ pub mod unstable_v2 {
     //!
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/4140
 
+    use super::UpdateAction;
     use crate::__ruma::{
         api::{auth_scheme::NoAccessToken, request, response},
         metadata,
     };
-
-    use super::UpdateAction;
 
     metadata! {
         method: POST,
@@ -47,7 +44,8 @@ pub mod unstable_v2 {
         }
     }
 
-    /// Request type for the [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
+    /// Request type for the
+    /// [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
     /// endpoint.
     #[request]
     pub struct Request {
@@ -66,7 +64,8 @@ pub mod unstable_v2 {
         }
     }
 
-    /// Response type for the [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
+    /// Response type for the
+    /// [`update_delayed_event`](crate::api::client::delayed_events::update_delayed_event)
     /// endpoint.
     #[response]
     pub struct Response {}
@@ -82,12 +81,12 @@ pub mod unstable_v2 {
     mod client_tests {
         use std::borrow::Cow;
 
-        use crate::__ruma::api::{
-            MatrixVersion, OutgoingRequestExt as _, SupportedVersions, auth_scheme::SendAccessToken,
-        };
         use serde_json::{Value as JsonValue, json};
 
         use super::{Request, UpdateAction};
+        use crate::__ruma::api::{
+            MatrixVersion, OutgoingRequestExt as _, SupportedVersions, auth_scheme::SendAccessToken,
+        };
 
         #[test]
         fn serialize_update_delayed_event_request() {
@@ -121,9 +120,8 @@ pub mod unstable_v2 {
     #[cfg(all(test, feature = "server"))]
     mod server_tests {
 
-        use crate::__ruma::api::IncomingRequest;
-
         use super::{Request, UpdateAction};
+        use crate::__ruma::api::IncomingRequest;
 
         #[test]
         fn deserialize_update_delayed_events_request() {

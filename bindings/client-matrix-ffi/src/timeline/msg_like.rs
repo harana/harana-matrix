@@ -14,7 +14,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use client_base::crypto::types::events::UtdCause;
+use harana_matrix_client::base::crypto::types::events::UtdCause;
 use harana_matrix_common::events::{
     MessageLikeEventContent, MessageLikeEventType, room::MediaSource as RumaMediaSource,
 };
@@ -92,11 +92,13 @@ pub struct MessageContent {
     pub mentions: Option<Mentions>,
 }
 
-impl TryFrom<client_ui::timeline::MsgLikeContent> for MsgLikeContent {
+impl TryFrom<harana_matrix_client::ui::timeline::MsgLikeContent> for MsgLikeContent {
     type Error = (ClientError, String);
 
-    fn try_from(value: client_ui::timeline::MsgLikeContent) -> Result<Self, Self::Error> {
-        use client_ui::timeline::MsgLikeKind as Kind;
+    fn try_from(
+        value: harana_matrix_client::ui::timeline::MsgLikeContent,
+    ) -> Result<Self, Self::Error> {
+        use harana_matrix_client::ui::timeline::MsgLikeKind as Kind;
 
         let reactions = value
             .reactions
@@ -272,8 +274,8 @@ pub enum EncryptedMessage {
 }
 
 impl EncryptedMessage {
-    pub(crate) fn new(msg: &client_ui::timeline::EncryptedMessage) -> Self {
-        use client_ui::timeline::EncryptedMessage as Message;
+    pub(crate) fn new(msg: &harana_matrix_client::ui::timeline::EncryptedMessage) -> Self {
+        use harana_matrix_client::ui::timeline::EncryptedMessage as Message;
 
         match msg {
             Message::OlmV1Curve25519AesSha2 { sender_key } => {
@@ -306,7 +308,7 @@ pub struct ThreadSummary {
     pub private_read_receipt_event_id: Option<String>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ThreadSummary {
     pub fn latest_event(&self) -> EmbeddedEventDetails {
         self.latest_event.clone()
@@ -317,8 +319,8 @@ impl ThreadSummary {
     }
 }
 
-impl From<client_ui::timeline::ThreadSummary> for ThreadSummary {
-    fn from(value: client_ui::timeline::ThreadSummary) -> Self {
+impl From<harana_matrix_client::ui::timeline::ThreadSummary> for ThreadSummary {
+    fn from(value: harana_matrix_client::ui::timeline::ThreadSummary) -> Self {
         Self {
             latest_event: EmbeddedEventDetails::from(value.latest_event),
             num_replies: value.num_replies,

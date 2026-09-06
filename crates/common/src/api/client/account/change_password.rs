@@ -7,12 +7,13 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3accountpassword
 
-    use crate::__ruma::{
-        api::{auth_scheme::AccessTokenOptional, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::AccessTokenOptional, request, response},
+            metadata,
+        },
+        api::client::uiaa::{AuthData, UiaaResponse},
     };
-
-    use crate::api::client::uiaa::{AuthData, UiaaResponse};
 
     metadata! {
         method: POST,
@@ -30,20 +31,21 @@ pub mod v3 {
         /// The new password for the account.
         pub new_password: String,
 
-        /// True to revoke the user's other access tokens, and their associated devices if the
-        /// request succeeds.
+        /// True to revoke the user's other access tokens, and their associated
+        /// devices if the request succeeds.
         ///
         /// Defaults to true.
         ///
-        /// When false, the server can still take advantage of the soft logout method for the
-        /// user's remaining devices.
+        /// When false, the server can still take advantage of the soft logout
+        /// method for the user's remaining devices.
         #[serde(
             default = "crate::__ruma::serde::default_true",
             skip_serializing_if = "crate::__ruma::serde::is_true"
         )]
         pub logout_devices: bool,
 
-        /// Additional authentication information for the user-interactive authentication API.
+        /// Additional authentication information for the user-interactive
+        /// authentication API.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub auth: Option<AuthData>,
     }

@@ -1,14 +1,16 @@
-//! Types for the `org.matrix.msc3489.beacon_info` state event, the unstable version of
-//! `m.beacon_info` ([MSC3489]).
+//! Types for the `org.matrix.msc3489.beacon_info` state event, the unstable
+//! version of `m.beacon_info` ([MSC3489]).
 //!
 //! [MSC3489]: https://github.com/matrix-org/matrix-spec-proposals/pull/3489
 
-use crate::__ruma::{MilliSecondsSinceUnixEpoch, OwnedUserId};
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 use web_time::{Duration, SystemTime};
 
-use crate::events::location::AssetContent;
+use crate::{
+    __ruma::{MilliSecondsSinceUnixEpoch, OwnedUserId},
+    events::location::AssetContent,
+};
 
 /// The content of a beacon_info state.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
@@ -42,8 +44,9 @@ pub struct BeaconInfoEventContent {
 }
 
 impl BeaconInfoEventContent {
-    /// Creates a new `BeaconInfoEventContent` with the given description, live, timeout and
-    /// optional ts. If ts is None, the current time will be used.
+    /// Creates a new `BeaconInfoEventContent` with the given description, live,
+    /// timeout and optional ts. If ts is None, the current time will be
+    /// used.
     pub fn new(
         description: Option<String>,
         timeout: Duration,
@@ -69,8 +72,8 @@ impl BeaconInfoEventContent {
         self.live = false;
     }
 
-    /// Start time plus its timeout, it returns `false`, indicating that the beacon is not live.
-    /// Otherwise, it returns `true`.
+    /// Start time plus its timeout, it returns `false`, indicating that the
+    /// beacon is not live. Otherwise, it returns `true`.
     pub fn is_live(&self) -> bool {
         self.live
             && self

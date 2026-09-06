@@ -20,7 +20,7 @@ use crate::error::ClientError;
 /// server name has one.
 ///
 /// Returns an error if the user ID is invalid.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn server_name_from_user_id(user_id: String) -> Result<String, ClientError> {
     let user_id = UserId::parse(user_id)?;
     Ok(user_id.server_name().to_string())

@@ -2,19 +2,21 @@
 //!
 //! [`m.room.tombstone`]: https://spec.matrix.org/v1.19/client-server-api/#mroomtombstone
 
-use crate::__ruma::OwnedRoomId;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::{
-    EmptyStateKey, PossiblyRedactedStateEventContent, RedactContent, StateEventType,
-    StaticEventContent,
+use crate::{
+    __ruma::OwnedRoomId,
+    events::{
+        EmptyStateKey, PossiblyRedactedStateEventContent, RedactContent, StateEventType,
+        StaticEventContent,
+    },
 };
 
 /// The content of an `m.room.tombstone` event.
 ///
-/// A state event signifying that a room has been upgraded to a different room version, and that
-/// clients should go there.
+/// A state event signifying that a room has been upgraded to a different room
+/// version, and that clients should go there.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[ruma_event(
     type = "m.room.tombstone",
@@ -26,8 +28,9 @@ use crate::events::{
 pub struct RoomTombstoneEventContent {
     /// A server-defined message.
     ///
-    /// If the `compat-optional` feature is enabled, this field being absent in JSON will result
-    /// in an empty string instead of an error when deserializing.
+    /// If the `compat-optional` feature is enabled, this field being absent in
+    /// JSON will result in an empty string instead of an error when
+    /// deserializing.
     #[cfg_attr(feature = "compat-optional", serde(default))]
     pub body: String,
 
@@ -36,7 +39,8 @@ pub struct RoomTombstoneEventContent {
 }
 
 impl RoomTombstoneEventContent {
-    /// Creates a new `RoomTombstoneEventContent` with the given body and replacement room ID.
+    /// Creates a new `RoomTombstoneEventContent` with the given body and
+    /// replacement room ID.
     pub fn new(body: String, replacement_room: OwnedRoomId) -> Self {
         Self { body, replacement_room }
     }
@@ -44,7 +48,8 @@ impl RoomTombstoneEventContent {
 
 /// The possibly redacted form of [`RoomTombstoneEventContent`].
 ///
-/// This type is used when it's not obvious whether the content is redacted or not.
+/// This type is used when it's not obvious whether the content is redacted or
+/// not.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct PossiblyRedactedRoomTombstoneEventContent {

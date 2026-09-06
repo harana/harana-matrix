@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3directorylistroomroomid
 
-    use crate::__ruma::{
-        OwnedRoomId,
-        api::{auth_scheme::NoAccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedRoomId,
+            api::{auth_scheme::NoAccessToken, request, response},
+            metadata,
+        },
+        api::client::room::Visibility,
     };
-
-    use crate::api::client::room::Visibility;
 
     metadata! {
         method: GET,

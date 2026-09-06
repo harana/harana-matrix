@@ -98,8 +98,8 @@ struct Request {
     /// The body.
     body: Body,
 
-    /// The type used for the `EndpointError` associated type on `OutgoingRequest` and
-    /// `IncomingRequest` implementations.
+    /// The type used for the `EndpointError` associated type on
+    /// `OutgoingRequest` and `IncomingRequest` implementations.
     error_ty: syn::Type,
 }
 
@@ -158,7 +158,8 @@ impl Request {
 pub struct RequestPath(Vec<syn::Field>);
 
 impl RequestPath {
-    /// Generate code to test the path parameters for the request with the given ident.
+    /// Generate code to test the path parameters for the request with the given
+    /// ident.
     fn expand_tests(&self, ident: &syn::Ident, ruma_common: &RumaCommon) -> TokenStream {
         let path_fields = self.0.iter().map(|f| f.ident().to_string());
 
@@ -201,8 +202,8 @@ enum RequestQuery {
 }
 
 impl RequestQuery {
-    /// Generate code to define a `struct RequestQuery` used for (de)serializing the query of
-    /// request.
+    /// Generate code to define a `struct RequestQuery` used for (de)serializing
+    /// the query of request.
     fn expand_serde_struct_definition(
         &self,
         harana_matrix_macros: &TokenStream,

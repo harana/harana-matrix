@@ -2,9 +2,10 @@
 //!
 //! [`m.typing`]: https://spec.matrix.org/v1.19/client-server-api/#mtyping
 
-use crate::__ruma::OwnedUserId;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
+
+use crate::__ruma::OwnedUserId;
 
 /// The content of an `m.typing` event.
 ///

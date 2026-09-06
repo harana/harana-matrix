@@ -36,15 +36,16 @@ pub struct PolicyDefinition {
 
     /// Map from language codes to details of the document in that language.
     ///
-    /// Language codes SHOULD be formatted as per Section 2.2 of RFC 5646, though some
-    /// implementations may use an underscore instead of dash (for example, en_US instead of
-    /// en-US).
+    /// Language codes SHOULD be formatted as per Section 2.2 of RFC 5646,
+    /// though some implementations may use an underscore instead of dash
+    /// (for example, en_US instead of en-US).
     #[serde(flatten)]
     pub translations: BTreeMap<String, PolicyTranslation>,
 }
 
 impl PolicyDefinition {
-    /// Construct a new `PolicyDefinition` with the given version and translations.
+    /// Construct a new `PolicyDefinition` with the given version and
+    /// translations.
     pub fn new(version: String, translations: BTreeMap<String, PolicyTranslation>) -> Self {
         Self { version, translations }
     }
@@ -76,8 +77,8 @@ impl PolicyTranslation {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct OAuthParams {
-    /// A URL pointing to the homeserver’s OAuth 2.0 account management web UI where the user can
-    /// approve the action.
+    /// A URL pointing to the homeserver’s OAuth 2.0 account management web UI
+    /// where the user can approve the action.
     ///
     /// Must be a valid URI with scheme `http://` or `https://`, the latter being recommended.
     pub url: String,
@@ -92,10 +93,10 @@ impl OAuthParams {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{LoginTermsParams, PolicyDefinition, PolicyTranslation};
+    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
 
     #[test]
     fn serialize_login_terms_params() {

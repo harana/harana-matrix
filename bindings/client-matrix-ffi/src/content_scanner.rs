@@ -14,14 +14,16 @@
 
 use std::sync::Arc;
 
-use client_matrix::media::MediaFetcher;
-use client_contentscanner::{ContentScannerMediaFetcher, MediaScanResponse};
+use harana_matrix_client::{
+    contentscanner::{ContentScannerMediaFetcher, MediaScanResponse},
+    media::MediaFetcher,
+};
 
 use crate::{client::Client, error::ClientError, ruma::MediaSource};
 
 #[derive(Debug, uniffi::Object)]
 pub struct ContentScanner {
-    pub(crate) inner: Arc<client_contentscanner::ContentScanner>,
+    pub(crate) inner: Arc<harana_matrix_client::contentscanner::ContentScanner>,
 }
 
 impl ContentScanner {
@@ -30,13 +32,13 @@ impl ContentScanner {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ContentScanner {
     /// Instantiate a new [`ContentScanner`] using the `scanner_url`.
     #[uniffi::constructor]
     pub fn new(scanner_url: String) -> Arc<Self> {
         Arc::new(Self {
-            inner: Arc::new(client_contentscanner::ContentScanner::new(scanner_url)),
+            inner: Arc::new(harana_matrix_client::contentscanner::ContentScanner::new(scanner_url)),
         })
     }
 

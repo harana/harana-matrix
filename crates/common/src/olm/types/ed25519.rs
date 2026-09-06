@@ -14,12 +14,12 @@
 
 use std::fmt::Display;
 
-use olm_base64::decoded_len_estimate;
 use base64ct::Encoding;
 use curve25519_dalek::EdwardsPoint;
 use ed25519_dalek::{
     PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH, Signature, Signer, SigningKey, VerifyingKey,
 };
+use olm_base64::decoded_len_estimate;
 use rand::rng;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
@@ -286,7 +286,7 @@ impl Ed25519SecretKey {
     /// # Examples
     ///
     /// ```
-    /// use harana_matrix_common::olm::{Ed25519SecretKey, Ed25519PublicKey};
+    /// use harana_matrix_common::olm::{Ed25519PublicKey, Ed25519SecretKey};
     ///
     /// let secret = Ed25519SecretKey::new();
     /// let message = "It's dangerous to go alone";
@@ -295,7 +295,9 @@ impl Ed25519SecretKey {
     ///
     /// let public_key = secret.public_key();
     ///
-    /// public_key.verify(message.as_bytes(), &signature).expect("The signature has to be valid");
+    /// public_key
+    ///     .verify(message.as_bytes(), &signature)
+    ///     .expect("The signature has to be valid");
     /// ```
     pub fn sign(&self, message: &[u8]) -> Ed25519Signature {
         Ed25519Signature(self.0.sign(message))
@@ -509,7 +511,9 @@ mod tests {
     use assert_matches2::assert_matches;
 
     use super::ExpandedSecretKey;
-    use crate::olm::{Ed25519Keypair, Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature, KeyError};
+    use crate::olm::{
+        Ed25519Keypair, Ed25519PublicKey, Ed25519SecretKey, Ed25519Signature, KeyError,
+    };
 
     #[test]
     fn byte_decoding_roundtrip_succeeds_for_secret_key() {

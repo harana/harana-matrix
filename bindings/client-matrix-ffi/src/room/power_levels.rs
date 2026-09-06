@@ -37,7 +37,7 @@ impl RoomPowerLevels {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomPowerLevels {
     fn values(&self) -> RoomPowerLevelsValues {
         self.inner.clone().into()

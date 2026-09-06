@@ -14,15 +14,16 @@ type Result<T> = std::result::Result<T, CanonicalJsonError>;
 
 /// A [`serde::Serializer`] whose output is a [`CanonicalJsonValue`].
 ///
-/// This behaves similarly to [`serde_json::value::Serializer`], except for the following
-/// restrictions which return errors:
+/// This behaves similarly to [`serde_json::value::Serializer`], except for the
+/// following restrictions which return errors:
 ///
 /// - Integers must be in the range accepted by [`js_int::Int`].
 /// - Floats and bytes are not serializable.
-/// - Booleans and integers cannot be used as keys for an object. `serde_json` accepts those types
-///   as keys by serializing them as strings.
-/// - The same key cannot be serialized twice in an object. `serde_json` uses the last value that is
-///   serialized for the same key (at the time of writing).
+/// - Booleans and integers cannot be used as keys for an object. `serde_json`
+///   accepts those types as keys by serializing them as strings.
+/// - The same key cannot be serialized twice in an object. `serde_json` uses
+///   the last value that is serialized for the same key (at the time of
+///   writing).
 pub struct Serializer;
 
 impl serde::Serializer for Serializer {
@@ -604,7 +605,8 @@ pub enum SerializeStruct {
 }
 
 impl SerializeStruct {
-    /// The hardcoded name of the field used by `serde_json` to detect a `RawValue`.
+    /// The hardcoded name of the field used by `serde_json` to detect a
+    /// `RawValue`.
     // source: https://github.com/serde-rs/json/blob/4f6dbfac79647d032b0997b5ab73022340c6dab7/src/raw.rs#L299
     const RAW_VALUE_FIELD_NAME: &str = "$serde_json::private::RawValue";
 }

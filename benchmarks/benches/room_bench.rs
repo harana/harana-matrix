@@ -3,17 +3,18 @@
 use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use client_matrix::{
-    cross_process_lock::CrossProcessLockConfig, store::RoomLoadSettings,
+use harana_matrix_client::{
+    base::{
+        BaseClient, DmRoomDefinition, RoomInfo, RoomState, SessionMeta, StateChanges, StateStore,
+        ThreadingSupport, store::StoreConfig,
+    },
+    cross_process_lock::CrossProcessLockConfig,
+    sqlite::SqliteStateStore,
+    store::RoomLoadSettings,
+    test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory},
     test_utils::mocks::MatrixMockServer,
+    ui::timeline::{TimelineBuilder, TimelineFocus},
 };
-use client_base::{
-    BaseClient, DmRoomDefinition, RoomInfo, RoomState, SessionMeta, StateChanges, StateStore,
-    ThreadingSupport, store::StoreConfig,
-};
-use client_sqlite::SqliteStateStore;
-use common_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
-use client_ui::timeline::{TimelineBuilder, TimelineFocus};
 use harana_matrix_common::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId,
     api::client::membership::get_member_events,

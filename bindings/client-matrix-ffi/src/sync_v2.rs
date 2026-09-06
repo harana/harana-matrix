@@ -14,13 +14,13 @@
 
 use std::time::Duration;
 
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
+use harana_matrix_client::common::{SendOutsideWasm, SyncOutsideWasm};
 
 /// A listener for the sync loop.
 ///
 /// Called after each successful sync response when using
 /// [`Client::sync_v2`](crate::client::Client::sync_v2).
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SyncListenerV2: SyncOutsideWasm + SendOutsideWasm {
     /// Called after each successful sync response.
     fn on_update(&self, response: SyncResponseV2);
@@ -38,9 +38,9 @@ pub struct SyncSettingsV2 {
     pub full_state: bool,
 }
 
-impl From<SyncSettingsV2> for client_matrix::config::SyncSettings {
+impl From<SyncSettingsV2> for harana_matrix_client::config::SyncSettings {
     fn from(value: SyncSettingsV2) -> Self {
-        let mut settings = client_matrix::config::SyncSettings::new();
+        let mut settings = harana_matrix_client::config::SyncSettings::new();
         if let Some(timeout_ms) = value.timeout_ms {
             settings = settings.timeout(Duration::from_millis(timeout_ms));
         }
@@ -74,8 +74,8 @@ pub struct SyncResponseRoomsV2 {
     pub knocked: Vec<String>,
 }
 
-impl From<client_matrix::sync::SyncResponse> for SyncResponseV2 {
-    fn from(value: client_matrix::sync::SyncResponse) -> Self {
+impl From<harana_matrix_client::sync::SyncResponse> for SyncResponseV2 {
+    fn from(value: harana_matrix_client::sync::SyncResponse) -> Self {
         Self {
             next_batch: value.next_batch,
             rooms: SyncResponseRoomsV2 {

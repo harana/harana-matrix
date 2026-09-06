@@ -90,8 +90,8 @@ struct Response {
     /// The fields representing the body of the response.
     body: Body,
 
-    /// The type used for the `EndpointError` associated type on `OutgoingResponse` and
-    /// `IncomingResponse` implementations.
+    /// The type used for the `EndpointError` associated type on
+    /// `OutgoingResponse` and `IncomingResponse` implementations.
     error_ty: syn::Type,
 
     /// The HTTP status code to use for the response.

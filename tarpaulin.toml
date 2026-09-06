@@ -6,23 +6,23 @@ exclude-files = [
     "testing/*",
     "labs/*",
     "**/tests/*",
+    # wasm only, can't get coverage
+    "crates/client/src/indexeddb/*",
+    # until it doesn't segfault anymore, this is excluded :(
+    "crates/client/src/base/*",
+    # test helpers
+    "crates/client/src/test/*",
+    "crates/common/src/testing.rs",
 ]
 workspace = true
-# sqlite crypto store is not tested otherwise because it's only activated by
-# crypto-ffi, which is excluded from testing below.
+# the sqlite crypto store is not tested otherwise, because it is only switched
+# on by crypto-ffi, which is excluded from testing below.
 features = "crypto-store"
 exclude = [
     # bindings
     "client-crypto-ffi",
     "client-matrix-ffi",
-    # wasm only, can't get coverage
-    "client-indexeddb",
-    # testing
-    "common-test",
-    "common-test-macros",
     # repo automation (ci, codegen)
     "uniffi-bindgen",
     "xtask",
-    # until it doesn't segfault anymore, this is excluded :(
-    "client-base",
 ]

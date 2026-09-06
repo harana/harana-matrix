@@ -2,8 +2,7 @@
 
 use std::collections::HashMap;
 
-use http::Response;
-use client_crypto::{
+use harana_matrix_client::crypto::{
     CrossSigningBootstrapRequests,
     types::requests::{
         AnyIncomingResponse, KeysBackupRequest, OutgoingRequest,
@@ -30,6 +29,7 @@ use harana_matrix_common::{
     assign,
     events::MessageLikeEventContent,
 };
+use http::Response;
 use serde_json::json;
 
 #[derive(uniffi::Record)]
@@ -139,7 +139,7 @@ pub enum Request {
 
 impl From<OutgoingRequest> for Request {
     fn from(r: OutgoingRequest) -> Self {
-        use client_crypto::types::requests::AnyOutgoingRequest::*;
+        use harana_matrix_client::crypto::types::requests::AnyOutgoingRequest::*;
 
         match r.request() {
             KeysUpload(u) => {

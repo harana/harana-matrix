@@ -10,13 +10,15 @@ pub mod v3 {
     use std::collections::BTreeMap;
 
     use js_int::UInt;
-    use crate::__ruma::{
-        OwnedRoomId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-    };
 
-    use crate::api::client::backup::RoomKeyBackup;
+    use crate::{
+        __ruma::{
+            OwnedRoomId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::backup::RoomKeyBackup,
+    };
 
     metadata! {
         method: PUT,
@@ -46,8 +48,8 @@ pub mod v3 {
     pub struct Response {
         /// An opaque string representing stored keys in the backup.
         ///
-        /// Clients can compare it with  the etag value they received in the request of their last
-        /// key storage request.
+        /// Clients can compare it with  the etag value they received in the
+        /// request of their last key storage request.
         pub etag: String,
 
         /// The number of keys stored in the backup.

@@ -1,6 +1,7 @@
 //! `POST /_matrix/client/*/logout/all`
 //!
-//! Invalidates all access tokens for a user, so that they can no longer be used for authorization.
+//! Invalidates all access tokens for a user, so that they can no longer be used
+//! for authorization.
 
 pub mod v3 {
     //! `/v3/` ([spec])

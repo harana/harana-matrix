@@ -1,5 +1,5 @@
 use crossterm::event::KeyEvent;
-use client_matrix::{
+use harana_matrix_client::{
     deserialized_responses::TimelineEvent,
     ruma::{
         OwnedRoomId, OwnedUserId,

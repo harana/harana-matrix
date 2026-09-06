@@ -1,0 +1,136 @@
+// Copyright 2022 The Matrix.org Foundation C.I.C.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// The crate this module came from did not warn on these; the merged crate root
+// does, because the SDK proper did.
+#![allow(missing_docs, missing_debug_implementations)]
+#![doc = include_str!("../../docs/common.md")]
+#![warn(missing_debug_implementations)]
+// Async methods must hand back futures that can be spawned on a
+// multi-threaded runtime, which is what consumers of this crate do with
+// them. WASM has no threads and its host types are not `Send`, so the lint
+// is only applied elsewhere.
+#![cfg_attr(not(target_family = "wasm"), deny(clippy::future_not_send))]
+
+use std::pin::Pin;
+
+use futures_core::Future;
+#[doc(no_inline)]
+pub use harana_matrix_common as ruma;
+use harana_matrix_common::{RoomVersionId, room_version_rules::RoomVersionRules};
+
+pub mod backoff;
+pub mod content_disposition;
+pub mod cross_process_lock;
+pub mod debug;
+pub mod deserialized_responses;
+mod edit_validation;
+pub mod executor;
+pub mod failures_cache;
+pub mod linked_chunk;
+pub mod locks;
+pub mod mutex_map;
+pub mod ring_buffer;
+pub mod runtime;
+pub mod serde_helpers;
+pub mod single_flight;
+pub mod sleep;
+pub mod stream;
+pub mod task_monitor;
+pub mod timeout;
+pub mod tracing_timer;
+pub mod ttl;
+pub mod types;
+
+// We cannot currently measure test coverage in the WASM environment, so
+// js_tracing is incorrectly flagged as untested. Disable coverage checking for
+// it.
+#[cfg(all(target_family = "wasm", not(tarpaulin_include)))]
+pub mod js_tracing;
+
+pub use cross_process_lock::LEASE_DURATION_MS;
+pub use edit_validation::*;
+
+/// Alias for `Send` on non-wasm, empty trait (implemented by everything) on
+/// wasm.
+#[cfg(not(target_family = "wasm"))]
+pub trait SendOutsideWasm: Send {}
+#[cfg(not(target_family = "wasm"))]
+impl<T: Send + ?Sized> SendOutsideWasm for T {}
+
+/// Alias for `Send` on non-wasm, empty trait (implemented by everything) on
+/// wasm.
+#[cfg(target_family = "wasm")]
+pub trait SendOutsideWasm {}
+#[cfg(target_family = "wasm")]
+impl<T: ?Sized> SendOutsideWasm for T {}
+
+/// Alias for `Sync` on non-wasm, empty trait (implemented by everything) on
+/// wasm.
+#[cfg(not(target_family = "wasm"))]
+pub trait SyncOutsideWasm: Sync {}
+#[cfg(not(target_family = "wasm"))]
+impl<T: Sync + ?Sized> SyncOutsideWasm for T {}
+
+/// Alias for `Sync` on non-wasm, empty trait (implemented by everything) on
+/// wasm.
+#[cfg(target_family = "wasm")]
+pub trait SyncOutsideWasm {}
+#[cfg(target_family = "wasm")]
+impl<T: ?Sized> SyncOutsideWasm for T {}
+
+/// Super trait that is used for our store traits, this trait will differ if
+/// it's used on WASM. WASM targets will not require `Send` and `Sync` to have
+/// implemented, while other targets will.
+pub trait AsyncTraitDeps: std::fmt::Debug + SendOutsideWasm + SyncOutsideWasm {}
+impl<T: std::fmt::Debug + SendOutsideWasm + SyncOutsideWasm> AsyncTraitDeps for T {}
+
+// TODO: Remove in favor of impl Trait once allowed in associated types
+#[macro_export]
+macro_rules! boxed_into_future {
+    () => {
+        $crate::boxed_into_future!(extra_bounds: );
+    };
+    (extra_bounds: $($extra_bounds:tt)*) => {
+        #[cfg(target_family = "wasm")]
+        type IntoFuture = ::std::pin::Pin<::std::boxed::Box<
+            dyn ::std::future::Future<Output = Self::Output> + $($extra_bounds)*
+        >>;
+        #[cfg(not(target_family = "wasm"))]
+        type IntoFuture = ::std::pin::Pin<::std::boxed::Box<
+            dyn ::std::future::Future<Output = Self::Output> + Send + $($extra_bounds)*
+        >>;
+    };
+}
+
+/// A `Box::pin` future that is `Send` on non-wasm, and without `Send` on wasm.
+#[cfg(target_family = "wasm")]
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+#[cfg(not(target_family = "wasm"))]
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// The room version to use as a fallback when the version of a room is unknown.
+pub const ROOM_VERSION_FALLBACK: RoomVersionId = RoomVersionId::V11;
+
+/// The room version rules to use as a fallback when the version of a room is
+/// unknown or unsupported.
+///
+/// These are the rules of the [`ROOM_VERSION_FALLBACK`].
+pub const ROOM_VERSION_RULES_FALLBACK: RoomVersionRules = RoomVersionRules::V11;
+
+// `#[macro_export]` puts these at the crate root; re-export them here too, so
+// that they are reachable under the module that defines them, as they were when
+// it was its own crate.
+#[doc(hidden)]
+pub use crate::{boxed_into_future, timer};

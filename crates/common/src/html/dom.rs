@@ -21,8 +21,9 @@ use crate::html::SanitizerConfig;
 
 /// An HTML fragment.
 ///
-/// To get the serialized HTML, use its `Display` implementation. Due to the fact that the HTML is
-/// parsed, note that malformed HTML and comments will be stripped from the output.
+/// To get the serialized HTML, use its `Display` implementation. Due to the
+/// fact that the HTML is parsed, note that malformed HTML and comments will be
+/// stripped from the output.
 #[derive(Debug)]
 pub struct Html {
     document: NodeRef,
@@ -31,8 +32,8 @@ pub struct Html {
 impl Html {
     /// Construct a new `Html` by parsing the given string.
     ///
-    /// This is infallible, any error encountered while parsing the HTML is logged with
-    /// `tracing::debug!`.
+    /// This is infallible, any error encountered while parsing the HTML is
+    /// logged with `tracing::debug!`.
     pub fn parse(string: &str) -> Self {
         let sink = Self::default();
         let mut parser = parse_fragment(
@@ -48,8 +49,8 @@ impl Html {
 
     /// Sanitize this HTML according to the Matrix specification.
     ///
-    /// This is equivalent to calling [`Self::sanitize_with()`] with a `config` value of
-    /// `SanitizerConfig::compat().remove_reply_fallback()`.
+    /// This is equivalent to calling [`Self::sanitize_with()`] with a `config`
+    /// value of `SanitizerConfig::compat().remove_reply_fallback()`.
     pub fn sanitize(&self) {
         let config = SanitizerConfig::compat().remove_reply_fallback();
         self.sanitize_with(&config);
@@ -319,10 +320,11 @@ pub struct ElementData {
 }
 
 impl ElementData {
-    /// Convert this element data to typed data as [suggested by the Matrix Specification][spec].
+    /// Convert this element data to typed data as [suggested by the Matrix
+    /// Specification][spec].
     ///
     /// [spec]: https://spec.matrix.org/v1.19/client-server-api/#mroommessage-msgtypes
-        pub fn to_matrix(&self) -> matrix::MatrixElementData {
+    pub fn to_matrix(&self) -> matrix::MatrixElementData {
         matrix::MatrixElementData::parse(&self.name, &self.attrs.borrow())
     }
 }
@@ -356,7 +358,8 @@ impl NodeRef {
         self.0.children.borrow_mut().push(child);
     }
 
-    /// If this node has a parent, get it and the node's position in the parent's children.
+    /// If this node has a parent, get it and the node's position in the
+    /// parent's children.
     fn parent_and_index(&self) -> Option<(NodeRef, usize)> {
         let parent = self.0.parent()?;
         let i = parent
@@ -381,8 +384,9 @@ impl NodeRef {
         parent.0.children.borrow_mut().insert(index, self.clone());
     }
 
-    /// Constructs a new element `NodeRef` with the same data as this one, but with a different
-    /// element name and use it to replace this one in the parent.
+    /// Constructs a new element `NodeRef` with the same data as this one, but
+    /// with a different element name and use it to replace this one in the
+    /// parent.
     ///
     /// Panics if this node is not in the tree and is not an element node.
     pub(crate) fn replace_with_element_name(self, name: LocalName) -> NodeRef {

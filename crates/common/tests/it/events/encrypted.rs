@@ -1,18 +1,18 @@
 use assert_matches2::{assert_let, assert_matches};
 use harana_matrix_common::{
     canonical_json::assert_to_canonical_json_eq,
-    owned_device_id, owned_event_id, owned_mxc_uri,
-    serde::{Base64, Raw},
-};
-use harana_matrix_common::events::{
-    relation::{Annotation, Reference, Reply, Thread},
-    room::{
-        EncryptedFile, EncryptedFileHash, EncryptedFileInfo, V2EncryptedFileInfo,
-        encrypted::{
-            EncryptedEventScheme, MegolmV1AesSha2ContentInit, Relation, Replacement,
-            RoomEncryptedEventContent,
+    events::{
+        relation::{Annotation, Reference, Reply, Thread},
+        room::{
+            EncryptedFile, EncryptedFileHash, EncryptedFileInfo, V2EncryptedFileInfo,
+            encrypted::{
+                EncryptedEventScheme, MegolmV1AesSha2ContentInit, Relation, Replacement,
+                RoomEncryptedEventContent,
+            },
         },
     },
+    owned_device_id, owned_event_id, owned_mxc_uri,
+    serde::{Base64, Raw},
 };
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 

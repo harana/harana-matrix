@@ -6,21 +6,23 @@ use super::{CustomProfileFieldValue, ProfileFieldName, ProfileFieldValue};
 
 /// Helper type to deserialize [`ProfileFieldValue`].
 ///
-/// If the field name is set, this will try to deserialize a map entry using this key, otherwise
-/// this will deserialize the first key-value pair encountered.
+/// If the field name is set, this will try to deserialize a map entry using
+/// this key, otherwise this will deserialize the first key-value pair
+/// encountered.
 pub struct ProfileFieldValueVisitor(Option<ProfileFieldName>);
 
 impl ProfileFieldValueVisitor {
-    /// Construct a `ProfileFieldValueVisitor` for the given optional field name.
+    /// Construct a `ProfileFieldValueVisitor` for the given optional field
+    /// name.
     pub fn new(field: Option<ProfileFieldName>) -> Self {
         Self(field)
     }
 
-    /// Try to find the key in the map matching the proper field name if it is set, or return the
-    /// first key if it is not set.
+    /// Try to find the key in the map matching the proper field name if it is
+    /// set, or return the first key if it is not set.
     ///
-    /// Returns `Ok(Some(_))` if the field name was found, `Ok(None)` if it wasn't found, and
-    /// `Err(_)` if deserialization of a key failed.
+    /// Returns `Ok(Some(_))` if the field name was found, `Ok(None)` if it
+    /// wasn't found, and `Err(_)` if deserialization of a key failed.
     fn find_field_name<'de, V>(self, map: &mut V) -> Result<Option<ProfileFieldName>, V::Error>
     where
         V: de::MapAccess<'de>,

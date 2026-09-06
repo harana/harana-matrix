@@ -2,8 +2,8 @@
 //!
 //! [`m.room.language`]: https://github.com/matrix-org/matrix-spec-proposals/pull/4334
 
-use language_tags::LanguageTag;
 use harana_matrix_macros::EventContent;
+use language_tags::LanguageTag;
 use serde::{Deserialize, Serialize};
 
 use crate::events::EmptyStateKey;
@@ -28,11 +28,13 @@ impl RoomLanguageEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::RoomLanguageEventContent;
-    use crate::events::{OriginalStateEvent, room::language::LanguageTag};
+    use crate::{
+        __ruma::canonical_json::assert_to_canonical_json_eq,
+        events::{OriginalStateEvent, room::language::LanguageTag},
+    };
 
     #[test]
     fn serialization() {

@@ -7,12 +7,13 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3pushers
 
-    use crate::__ruma::{
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::push::Pusher,
     };
-
-    use crate::api::client::push::Pusher;
 
     metadata! {
         method: GET,

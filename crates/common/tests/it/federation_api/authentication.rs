@@ -1,21 +1,23 @@
 #![cfg(all(feature = "client", feature = "server"))]
 
-use js_int::uint;
 use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch,
-    api::{OutgoingRequestExt as _, auth_scheme::AuthScheme},
+    api::{
+        OutgoingRequestExt as _,
+        auth_scheme::AuthScheme,
+        federation::{
+            authentication::{ServerSignatures, ServerSignaturesInput},
+            transactions::send_transaction_message,
+        },
+    },
     owned_server_name,
     serde::Base64,
     server_name,
+    signatures::{Ed25519KeyPair, PublicKeyMap, PublicKeySet},
 };
-use harana_matrix_common::api::federation::{
-    authentication::{ServerSignatures, ServerSignaturesInput},
-    transactions::send_transaction_message,
-};
-use harana_matrix_common::signatures::{Ed25519KeyPair, PublicKeyMap, PublicKeySet};
+use js_int::uint;
 
-static PKCS8_ED25519_DER: &[u8] =
-    include_bytes!("../signatures/keys/ed25519.der");
+static PKCS8_ED25519_DER: &[u8] = include_bytes!("../signatures/keys/ed25519.der");
 
 #[test]
 fn server_signatures_roundtrip() {

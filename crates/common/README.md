@@ -1,10 +1,10 @@
-# common-ruma (vendored)
+# harana-matrix-common
 
-A fork of [ruma](https://github.com/ruma/ruma), inlined into this workspace.
-This crate is the facade: it holds no types of its own, and re-exports the
-crates below under the module names upstream uses.
+Everything the client and the server halves of this workspace share: the Matrix
+protocol types and algorithms, and the Olm and Megolm ratchets. Both are
+vendored forks, inlined here.
 
-## Provenance
+## The ruma fork
 
 | | |
 | --- | --- |
@@ -12,31 +12,31 @@ crates below under the module names upstream uses.
 | Revision | `bf21677a8fcba04fd01e341809eb5991908441a2` (the `matrix-org/ruma` fork of `0908aaa9847093ecb32bc6edf0af525f726717fd`) |
 | License | MIT, see `LICENSE` |
 
-## Layout
+One module per upstream crate:
 
-One crate per upstream crate, re-exported here:
+| upstream crate | module here |
+| --- | --- |
+| `ruma-common` | crate root |
+| `ruma-events` | `events` |
+| `ruma-client-api` | `api::client` |
+| `ruma-federation-api` | `api::federation` |
+| `ruma-appservice-api` | `api::appservice` |
+| `ruma-html` | `html` |
+| `ruma-signatures` | `signatures` |
+| `ruma-state-res` | `state_res` |
+| `ruma-identifiers-validation` | `validation` |
 
-| upstream crate | crate here | path here |
-| --- | --- | --- |
-| `ruma-common` | `common-types` | crate root |
-| `ruma-events` | `common-events` | `common_ruma::events` |
-| `ruma-client-api` | `common-client-api` | `common_ruma::api::client` |
-| `ruma-federation-api` | `common-federation-api` | `common_ruma::api::federation` |
-| `ruma-appservice-api` | `common-appservice-api` | `common_ruma::api::appservice` |
-| `ruma-html` | `common-html` | `common_ruma::html` |
-| `ruma-signatures` | `common-signatures` | `common_ruma::signatures` |
-| `ruma-state-res` | `common-state-res` | `common_ruma::state_res` |
-
-`ruma-macros` is `common-macros` and `ruma-identifiers-validation` is
-`common-identifiers-validation`: the first is a proc-macro crate, the second is
-shared between `common-types` and the macros at compile time.
+`ruma-macros` is `harana-matrix-macros`: a proc-macro crate cannot be merged
+into a normal library. It carries a byte-identical private copy of `validation`,
+because it validates identifier literals at expansion time and cannot depend on
+this crate; `cargo xtask ci validation-sync` fails if the two drift.
 
 The sources were vendored while all of this was one crate, so they still refer
-to each other through `crate::` paths. Each split crate carries a `__ruma` shim
-module that reproduces the old crate root, and those paths were rewritten to
-`crate::__ruma::`. `common-types` needs no shim: it is the old crate root.
+to each other through `crate::` paths. The crate root carries
+`pub use crate as __ruma;` and those paths were rewritten to `crate::__ruma::`,
+which lands back at the root and so still resolves.
 
-## What was dropped
+### What was dropped
 
 Nothing in this workspace used these, so they are not vendored:
 
@@ -45,16 +45,16 @@ Nothing in this workspace used these, so they are not vendored:
 - the `ring-compat` PKCS#8 fallback for keys written by old `ring` versions
 - upstream's trybuild UI tests, which asserted macro diagnostics text
 
+## The Olm fork
+
+The `olm` module, behind the `olm` feature. See [OLM-README.md](./OLM-README.md)
+for provenance and re-sync notes. It is Apache-2.0, which is why this crate is
+`MIT AND Apache-2.0`.
+
 ## Tests
 
-The vendored test suite needs every feature:
+The vendored ruma test suite needs every feature:
 
 ```sh
-cargo test -p ruma --features full
-```
-
-Each split crate also carries the unit tests that came with its sources:
-
-```sh
-cargo test -p common -p events -p client-api --all-features
+cargo test -p harana-matrix-common --features full
 ```

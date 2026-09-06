@@ -118,7 +118,9 @@ impl Shared3DHSecret {
 #[cfg(test)]
 mod test {
     use super::{RemoteShared3DHSecret, Shared3DHSecret};
-    use crate::olm::{Curve25519PublicKey as PublicKey, types::Curve25519SecretKey as StaticSecret};
+    use crate::olm::{
+        Curve25519PublicKey as PublicKey, types::Curve25519SecretKey as StaticSecret,
+    };
 
     #[test]
     fn triple_diffie_hellman() {

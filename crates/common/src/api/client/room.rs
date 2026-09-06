@@ -9,9 +9,7 @@ pub mod report_content;
 pub mod report_room;
 pub mod upgrade_room;
 
-use crate::__ruma::serde::StringEnum;
-
-use crate::api::client::PrivOwnedStr;
+use crate::{__ruma::serde::StringEnum, api::client::PrivOwnedStr};
 
 /// Whether or not a newly created room will be listed in the room directory.
 #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc/string_enum.md"))]

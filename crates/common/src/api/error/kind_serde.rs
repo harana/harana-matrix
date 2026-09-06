@@ -1,7 +1,6 @@
 use std::{borrow::Cow, fmt, time::Duration};
 
 use js_int::UInt;
-use crate::serde::JsonObject;
 use serde::{
     de::{self, Deserialize, Deserializer, MapAccess, Visitor},
     ser::{self, Serialize, SerializeMap, Serializer},
@@ -13,6 +12,7 @@ use super::{
     LimitExceededErrorData, ResourceLimitExceededErrorData, RetryAfter, UnknownTokenErrorData,
     UserLimitExceededErrorData, WrongRoomKeysVersionErrorData,
 };
+use crate::serde::JsonObject;
 #[cfg(feature = "unstable-msc4406")]
 use crate::{OwnedUserId, api::error::SenderIgnoredErrorData};
 
@@ -444,10 +444,10 @@ impl Serialize for ErrorKind {
 
 #[cfg(test)]
 mod tests {
-    use crate::room_version_id;
     use serde_json::{from_value as from_json_value, json};
 
     use super::{ErrorKind, IncompatibleRoomVersionErrorData};
+    use crate::room_version_id;
 
     #[test]
     fn deserialize_forbidden() {

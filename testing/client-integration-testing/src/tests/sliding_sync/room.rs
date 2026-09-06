@@ -11,9 +11,10 @@ use anyhow::Result;
 use assert_matches::assert_matches;
 use eyeball_im::VectorDiff;
 use futures_util::{StreamExt as _, pin_mut};
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, RoomInfo, RoomMemberships, RoomState, SlidingSyncList, SlidingSyncMode,
     assert_let_timeout,
+    base::ruma::{api::client::sync::sync_events::v5 as http, owned_room_id, room_alias_id},
     bytes::Bytes,
     config::SyncSettings,
     room_preview::RoomPreview,
@@ -39,15 +40,12 @@ use client_matrix::{
         room_id, uint,
     },
     sliding_sync::VersionBuilder,
+    test::async_test,
     test_utils::{logged_in_client_with_server, mocks::MatrixMockServer},
-};
-use client_base::ruma::{
-    api::client::sync::sync_events::v5 as http, owned_room_id, room_alias_id,
-};
-use common_test::async_test;
-use client_ui::{
-    RoomListService, room_list_service::filters::new_filter_all, sync_service::SyncService,
-    timeline::RoomExt,
+    ui::{
+        RoomListService, room_list_service::filters::new_filter_all, sync_service::SyncService,
+        timeline::RoomExt,
+    },
 };
 use rand::{Rng as _, RngExt};
 use serde_json::Value;
@@ -598,7 +596,7 @@ async fn test_room_notification_count() -> Result<()> {
     settings
         .set_room_notification_mode(
             alice_room.room_id(),
-            client_matrix::notification_settings::RoomNotificationMode::MentionsAndKeywordsOnly,
+            harana_matrix_client::notification_settings::RoomNotificationMode::MentionsAndKeywordsOnly,
         )
         .await?;
     warn!("Done!");

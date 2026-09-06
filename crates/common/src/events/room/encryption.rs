@@ -2,8 +2,8 @@
 //!
 //! [`m.room.encryption`]: https://spec.matrix.org/v1.19/client-server-api/#mroomencryption
 
-use js_int::{UInt, uint};
 use harana_matrix_macros::EventContent;
+use js_int::{UInt, uint};
 use serde::{Deserialize, Serialize};
 
 use crate::events::{EmptyStateKey, EventEncryptionAlgorithm};
@@ -15,7 +15,8 @@ use crate::events::{EmptyStateKey, EventEncryptionAlgorithm};
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room.encryption", kind = State, state_key_type = EmptyStateKey)]
 pub struct RoomEncryptionEventContent {
-    /// The encryption algorithm to be used to encrypt messages sent in this room.
+    /// The encryption algorithm to be used to encrypt messages sent in this
+    /// room.
     ///
     /// Must be `m.megolm.v1.aes-sha2`.
     pub algorithm: EventEncryptionAlgorithm,
@@ -51,11 +52,11 @@ impl RoomEncryptionEventContent {
         }
     }
 
-    /// Creates a new `RoomEncryptionEventContent` with the mandatory algorithm and the recommended
-    /// defaults.
+    /// Creates a new `RoomEncryptionEventContent` with the mandatory algorithm
+    /// and the recommended defaults.
     ///
-    /// Note that changing the values of the fields is not a breaking change and you shouldn't rely
-    /// on those specific values.
+    /// Note that changing the values of the fields is not a breaking change and
+    /// you shouldn't rely on those specific values.
     pub fn with_recommended_defaults() -> Self {
         // Defaults defined at <https://spec.matrix.org/v1.19/client-server-api/#mroomencryption>
         Self {

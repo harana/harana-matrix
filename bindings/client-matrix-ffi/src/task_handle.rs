@@ -12,7 +12,7 @@
 // See the License for that specific language governing permissions and
 // limitations under the License.
 
-use client_common::executor::JoinHandle;
+use harana_matrix_client::common::executor::JoinHandle;
 use tracing::debug;
 
 /// A task handle is a way to keep the handle a task running by itself in
@@ -31,7 +31,7 @@ impl TaskHandle {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl TaskHandle {
     // Cancel a task handle.
     pub fn cancel(&self) {

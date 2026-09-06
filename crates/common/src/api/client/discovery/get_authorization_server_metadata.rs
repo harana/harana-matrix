@@ -1,6 +1,7 @@
 //! `GET /_matrix/client/*/auth_metadata`
 //!
-//! Get the metadata of the authorization server that is trusted by the homeserver.
+//! Get the metadata of the authorization server that is trusted by the
+//! homeserver.
 
 mod serde;
 
@@ -11,16 +12,18 @@ pub mod v1 {
 
     use std::collections::BTreeSet;
 
-    use crate::__ruma::{
-        DeviceId,
-        api::{auth_scheme::NoAccessToken, request, response},
-        metadata,
-        serde::{Raw, StringEnum},
-    };
     use serde::Serialize;
     use url::Url;
 
-    use crate::api::client::PrivOwnedStr;
+    use crate::{
+        __ruma::{
+            DeviceId,
+            api::{auth_scheme::NoAccessToken, request, response},
+            metadata,
+            serde::{Raw, StringEnum},
+        },
+        api::client::PrivOwnedStr,
+    };
 
     metadata! {
         method: GET,
@@ -55,7 +58,8 @@ pub mod v1 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given serialized authorization server metadata.
+        /// Creates a new `Response` with the given serialized authorization
+        /// server metadata.
         pub fn new(metadata: Raw<AuthorizationServerMetadata>) -> Self {
             Self { metadata }
         }
@@ -63,12 +67,14 @@ pub mod v1 {
 
     /// Metadata describing the configuration of the authorization server.
     ///
-    /// While the metadata properties and their values are declared for OAuth 2.0 in [RFC 8414] and
-    /// other RFCs, this type only supports properties and values that are used for Matrix, as
-    /// specified in [MSC3861] and its dependencies.
+    /// While the metadata properties and their values are declared for OAuth
+    /// 2.0 in [RFC 8414] and other RFCs, this type only supports properties
+    /// and values that are used for Matrix, as specified in [MSC3861] and
+    /// its dependencies.
     ///
-    /// This type is validated to have at least all the required values during deserialization. The
-    /// URLs are not validated during deserialization, to validate them use
+    /// This type is validated to have at least all the required values during
+    /// deserialization. The URLs are not validated during deserialization,
+    /// to validate them use
     /// [`AuthorizationServerMetadata::validate_urls()`] or
     /// [`AuthorizationServerMetadata::insecure_validate_urls()`].
     ///
@@ -84,7 +90,8 @@ pub mod v1 {
         /// This should be a URL with no query or fragment components.
         pub issuer: Url,
 
-        /// URL of the authorization server's authorization endpoint ([RFC 6749]).
+        /// URL of the authorization server's authorization endpoint ([RFC
+        /// 6749]).
         ///
         /// [RFC 6749]: https://datatracker.ietf.org/doc/html/rfc6749
         pub authorization_endpoint: Url,
@@ -94,36 +101,43 @@ pub mod v1 {
         /// [RFC 6749]: https://datatracker.ietf.org/doc/html/rfc6749
         pub token_endpoint: Url,
 
-        /// URL of the authorization server's OAuth 2.0 Dynamic Client Registration endpoint
-        /// ([RFC 7591]).
+        /// URL of the authorization server's OAuth 2.0 Dynamic Client
+        /// Registration endpoint ([RFC 7591]).
         ///
         /// [RFC 7591]: https://datatracker.ietf.org/doc/html/rfc7591
         #[serde(skip_serializing_if = "Option::is_none")]
         pub registration_endpoint: Option<Url>,
 
-        /// List of the OAuth 2.0 `response_type` values that this authorization server supports.
+        /// List of the OAuth 2.0 `response_type` values that this authorization
+        /// server supports.
         ///
-        /// Those values are the same as those used with the `response_types` parameter defined by
-        /// OAuth 2.0 Dynamic Client Registration ([RFC 7591]).
+        /// Those values are the same as those used with the `response_types`
+        /// parameter defined by OAuth 2.0 Dynamic Client Registration
+        /// ([RFC 7591]).
         ///
         /// This field must include [`ResponseType::Code`].
         ///
         /// [RFC 7591]: https://datatracker.ietf.org/doc/html/rfc7591
         pub response_types_supported: BTreeSet<ResponseType>,
 
-        /// List of the OAuth 2.0 `response_mode` values that this authorization server supports.
+        /// List of the OAuth 2.0 `response_mode` values that this authorization
+        /// server supports.
         ///
-        /// Those values are specified in [OAuth 2.0 Multiple Response Type Encoding Practices].
+        /// Those values are specified in [OAuth 2.0 Multiple Response Type
+        /// Encoding Practices].
         ///
-        /// This field must include [`ResponseMode::Query`] and [`ResponseMode::Fragment`].
+        /// This field must include [`ResponseMode::Query`] and
+        /// [`ResponseMode::Fragment`].
         ///
         /// [OAuth 2.0 Multiple Response Type Encoding Practices]: https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html
         pub response_modes_supported: BTreeSet<ResponseMode>,
 
-        /// List of the OAuth 2.0 `grant_type` values that this authorization server supports.
+        /// List of the OAuth 2.0 `grant_type` values that this authorization
+        /// server supports.
         ///
-        /// Those values are the same as those used with the `grant_types` parameter defined by
-        /// OAuth 2.0 Dynamic Client Registration ([RFC 7591]).
+        /// Those values are the same as those used with the `grant_types`
+        /// parameter defined by OAuth 2.0 Dynamic Client Registration
+        /// ([RFC 7591]).
         ///
         /// This field must include [`GrantType::AuthorizationCode`] and
         /// [`GrantType::RefreshToken`].
@@ -131,21 +145,22 @@ pub mod v1 {
         /// [RFC 7591]: https://datatracker.ietf.org/doc/html/rfc7591
         pub grant_types_supported: BTreeSet<GrantType>,
 
-        /// URL of the authorization server's OAuth 2.0 revocation endpoint ([RFC 7009]).
+        /// URL of the authorization server's OAuth 2.0 revocation endpoint
+        /// ([RFC 7009]).
         ///
         /// [RFC 7009]: https://datatracker.ietf.org/doc/html/rfc7009
         pub revocation_endpoint: Url,
 
-        /// List of Proof Key for Code Exchange (PKCE) code challenge methods supported by this
-        /// authorization server ([RFC 7636]).
+        /// List of Proof Key for Code Exchange (PKCE) code challenge methods
+        /// supported by this authorization server ([RFC 7636]).
         ///
         /// This field must include [`CodeChallengeMethod::S256`].
         ///
         /// [RFC 7636]: https://datatracker.ietf.org/doc/html/rfc7636
         pub code_challenge_methods_supported: BTreeSet<CodeChallengeMethod>,
 
-        /// URL where the user is able to access the account management capabilities of the
-        /// authorization server ([spec]).
+        /// URL where the user is able to access the account management
+        /// capabilities of the authorization server ([spec]).
         ///
         /// [spec]: https://spec.matrix.org/v1.19/client-server-api/#account-management-url-discovery
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -157,14 +172,15 @@ pub mod v1 {
         #[serde(skip_serializing_if = "BTreeSet::is_empty")]
         pub account_management_actions_supported: BTreeSet<AccountManagementAction>,
 
-        /// URL of the authorization server's device authorization endpoint ([RFC 8628]).
+        /// URL of the authorization server's device authorization endpoint
+        /// ([RFC 8628]).
         ///
         /// [RFC 8628]: https://datatracker.ietf.org/doc/html/rfc8628
         #[serde(skip_serializing_if = "Option::is_none")]
         pub device_authorization_endpoint: Option<Url>,
 
-        /// The [`Prompt`] values supported by the authorization server ([Initiating User
-        /// Registration via OpenID Connect 1.0]).
+        /// The [`Prompt`] values supported by the authorization server
+        /// ([Initiating User Registration via OpenID Connect 1.0]).
         ///
         /// [Initiating User Registration via OpenID Connect 1.0]: https://openid.net/specs/openid-connect-prompt-create-1_0.html
         #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -176,26 +192,30 @@ pub mod v1 {
         ///
         /// This checks that:
         ///
-        /// * The `issuer` is a valid URL using an `https` scheme and without a query or fragment.
+        /// * The `issuer` is a valid URL using an `https` scheme and without a
+        ///   query or fragment.
         ///
         /// * All the URLs use an `https` scheme.
         pub fn validate_urls(&self) -> Result<(), AuthorizationServerMetadataUrlError> {
             self.validate_urls_inner(false)
         }
 
-        /// Weak validation the URLs `AuthorizationServerMetadata` are all absolute URLs.
+        /// Weak validation the URLs `AuthorizationServerMetadata` are all
+        /// absolute URLs.
         ///
-        /// This only checks that the `issuer` is a valid URL without a query or fragment.
+        /// This only checks that the `issuer` is a valid URL without a query or
+        /// fragment.
         ///
-        /// In production, you should prefer [`AuthorizationServerMetadata`] that also check if the
-        /// URLs use an `https` scheme. This method is meant for development purposes, when
-        /// interacting with a local authorization server.
+        /// In production, you should prefer [`AuthorizationServerMetadata`]
+        /// that also check if the URLs use an `https` scheme. This
+        /// method is meant for development purposes, when interacting
+        /// with a local authorization server.
         pub fn insecure_validate_urls(&self) -> Result<(), AuthorizationServerMetadataUrlError> {
             self.validate_urls_inner(true)
         }
 
-        /// Get an iterator over the URLs of this `AuthorizationServerMetadata`, except the
-        /// `issuer`.
+        /// Get an iterator over the URLs of this `AuthorizationServerMetadata`,
+        /// except the `issuer`.
         fn validate_urls_inner(
             &self,
             insecure: bool,
@@ -234,10 +254,12 @@ pub mod v1 {
             Ok(())
         }
 
-        /// Whether the given account management action is advertised as supported by the server.
+        /// Whether the given account management action is advertised as
+        /// supported by the server.
         ///
-        /// This function tries to be backwards compatible with unstable implementations by checking
-        /// both the stable and unstable values of the given action, if they differ.
+        /// This function tries to be backwards compatible with unstable
+        /// implementations by checking both the stable and unstable
+        /// values of the given action, if they differ.
         pub fn is_account_management_action_supported(
             &self,
             action: &AccountManagementAction,
@@ -273,10 +295,11 @@ pub mod v1 {
 
         /// Build the account management URL with the given action.
         ///
-        /// This function tries to be backwards compatible with unstable implementations by
-        /// selecting the proper action value to add to the URL (stable or unstable) given
-        /// the supported actions advertised in this metadata. If the action is not present
-        /// in the metadata, the stable value is used.
+        /// This function tries to be backwards compatible with unstable
+        /// implementations by selecting the proper action value to add
+        /// to the URL (stable or unstable) given the supported actions
+        /// advertised in this metadata. If the action is not present in
+        /// the metadata, the stable value is used.
         ///
         /// Returns `None` if the `account_management_uri` is `None`.
         pub fn account_management_url_with_action(
@@ -387,10 +410,11 @@ pub mod v1 {
         _Custom(PrivOwnedStr),
     }
 
-    /// The mechanism to be used for returning authorization response parameters from the
-    /// authorization endpoint.
+    /// The mechanism to be used for returning authorization response parameters
+    /// from the authorization endpoint.
     ///
-    /// The values are specified in [OAuth 2.0 Multiple Response Type Encoding Practices].
+    /// The values are specified in [OAuth 2.0 Multiple Response Type Encoding
+    /// Practices].
     #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc/string_enum.md"))]
     ///
     /// [OAuth 2.0 Multiple Response Type Encoding Practices]: https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html
@@ -398,12 +422,13 @@ pub mod v1 {
     #[ruma_enum(rename_all = "lowercase")]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub enum ResponseMode {
-        /// Authorization Response parameters are encoded in the fragment added to the
-        /// `redirect_uri` when redirecting back to the client.
+        /// Authorization Response parameters are encoded in the fragment added
+        /// to the `redirect_uri` when redirecting back to the client.
         Query,
 
-        /// Authorization Response parameters are encoded in the query string added to the
-        /// `redirect_uri` when redirecting back to the client.
+        /// Authorization Response parameters are encoded in the query string
+        /// added to the `redirect_uri` when redirecting back to the
+        /// client.
         Fragment,
 
         #[doc(hidden)]
@@ -452,9 +477,11 @@ pub mod v1 {
 
     /// The [action] that the user wishes to do at the account management URL.
     ///
-    /// This enum supports both the values that were first specified in [MSC4191] and the values
-    /// that replaced them in the [Matrix specification], for backwards compatibility with unstable
-    /// implementations. The variants that were replaced all use an `Unstable` prefix.
+    /// This enum supports both the values that were first specified in
+    /// [MSC4191] and the values that replaced them in the [Matrix
+    /// specification], for backwards compatibility with unstable
+    /// implementations. The variants that were replaced all use an `Unstable`
+    /// prefix.
     #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc/string_enum.md"))]
     ///
     /// [MSC4191]: https://github.com/matrix-org/matrix-spec-proposals/pull/4191
@@ -462,14 +489,16 @@ pub mod v1 {
     #[derive(Clone, StringEnum)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub enum AccountManagementAction {
-        /// The user wishes to view or edit their profile (name, avatar, contact details).
+        /// The user wishes to view or edit their profile (name, avatar, contact
+        /// details).
         #[ruma_enum(rename = "org.matrix.profile")]
         Profile,
 
         /// The unstable version of [`AccountManagementAction::DevicesList`].
         ///
-        /// This uses the `org.matrix.sessions_list` string that was first specified in [MSC4191]
-        /// before being replaced by `org.matrix.devices_list`.
+        /// This uses the `org.matrix.sessions_list` string that was first
+        /// specified in [MSC4191] before being replaced by
+        /// `org.matrix.devices_list`.
         ///
         /// [MSC4191]: https://github.com/matrix-org/matrix-spec-proposals/pull/4191
         #[ruma_enum(rename = "org.matrix.sessions_list")]
@@ -481,8 +510,9 @@ pub mod v1 {
 
         /// The unstable version of [`AccountManagementAction::DeviceView`].
         ///
-        /// This uses the `org.matrix.session_view` string that was first specified in [MSC4191]
-        /// before being replaced by `org.matrix.device_view`.
+        /// This uses the `org.matrix.session_view` string that was first
+        /// specified in [MSC4191] before being replaced by
+        /// `org.matrix.device_view`.
         ///
         /// [MSC4191]: https://github.com/matrix-org/matrix-spec-proposals/pull/4191
         #[ruma_enum(rename = "org.matrix.session_view")]
@@ -494,8 +524,9 @@ pub mod v1 {
 
         /// The unstable version of [`AccountManagementAction::DeviceDelete`].
         ///
-        /// This uses the `org.matrix.session_end` string that was first specified in [MSC4191]
-        /// before being replaced by `org.matrix.device_delete`.
+        /// This uses the `org.matrix.session_end` string that was first
+        /// specified in [MSC4191] before being replaced by
+        /// `org.matrix.device_delete`.
         ///
         /// [MSC4191]: https://github.com/matrix-org/matrix-spec-proposals/pull/4191
         #[ruma_enum(rename = "org.matrix.session_end")]
@@ -511,7 +542,8 @@ pub mod v1 {
 
         /// The user wishes to reset their cross-signing keys.
         ///
-        /// Servers should use this action in the URL of the [`m.oauth`] UIA type.
+        /// Servers should use this action in the URL of the [`m.oauth`] UIA
+        /// type.
         ///
         /// [`m.oauth`]: https://spec.matrix.org/v1.19/client-server-api/#oauth-authentication
         #[ruma_enum(rename = "org.matrix.cross_signing_reset")]
@@ -521,14 +553,15 @@ pub mod v1 {
         _Custom(PrivOwnedStr),
     }
 
-    /// The [action] that the user wishes to do at the account management URL with its associated
-    /// data.
+    /// The [action] that the user wishes to do at the account management URL
+    /// with its associated data.
     ///
     /// [action]: https://spec.matrix.org/v1.19/client-server-api/#account-management-url-actions
     #[derive(Debug, Clone)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub enum AccountManagementActionData<'a> {
-        /// The user wishes to view or edit their profile (name, avatar, contact details).
+        /// The user wishes to view or edit their profile (name, avatar, contact
+        /// details).
         Profile,
 
         /// The user wishes to view a list of their devices.
@@ -589,7 +622,8 @@ pub mod v1 {
         }
     }
 
-    /// The possible errors when validating URLs of [`AuthorizationServerMetadata`].
+    /// The possible errors when validating URLs of
+    /// [`AuthorizationServerMetadata`].
     #[derive(Debug, Clone, thiserror::Error)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub enum AuthorizationServerMetadataUrlError {
@@ -607,8 +641,8 @@ pub mod v1 {
     #[ruma_enum(rename_all = "lowercase")]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub enum Prompt {
-        /// The user wants to create a new account ([Initiating User Registration via OpenID
-        /// Connect 1.0]).
+        /// The user wants to create a new account ([Initiating User
+        /// Registration via OpenID Connect 1.0]).
         ///
         /// [Initiating User Registration via OpenID Connect 1.0]: https://openid.net/specs/openid-connect-prompt-create-1_0.html
         Create,
@@ -620,15 +654,16 @@ pub mod v1 {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::device_id;
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
     use url::Url;
 
     use super::v1::{
         AccountManagementAction, AccountManagementActionData, AuthorizationServerMetadata,
     };
+    use crate::__ruma::device_id;
 
-    /// A valid `AuthorizationServerMetadata` with all fields and values, as a JSON object.
+    /// A valid `AuthorizationServerMetadata` with all fields and values, as a
+    /// JSON object.
     pub(super) fn authorization_server_metadata_json() -> JsonValue {
         json!({
             "issuer": "https://server.local/",

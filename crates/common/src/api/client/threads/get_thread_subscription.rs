@@ -37,7 +37,8 @@ pub mod unstable {
     /// Response type for the `get_thread_subscription` endpoint.
     #[response]
     pub struct Response {
-        /// Whether the subscription was made automatically by a client, not by manual user choice.
+        /// Whether the subscription was made automatically by a client, not by
+        /// manual user choice.
         pub automatic: bool,
     }
 

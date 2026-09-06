@@ -18,26 +18,26 @@ use crossterm::{
     execute,
 };
 use futures_util::{StreamExt as _, pin_mut};
-use imbl::Vector;
-use layout::Flex;
-use client_matrix::{
+use harana_matrix_client::{
     AuthSession, Client, SqliteCryptoStore, SqliteEventCacheStore, SqliteStateStore,
     ThreadingSupport,
     authentication::matrix::MatrixSession,
+    base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard},
+    common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex},
     config::StoreConfig,
     encryption::{BackupDownloadStrategy, EncryptionSettings},
     reqwest::Url,
     ruma::{OwnedRoomId, api::client::room::create_room::v3::Request as CreateRoomRequest},
     search_index::{SearchIndexGuard, SearchIndexStoreKind},
+    ui::{
+        Timeline as SdkTimeline,
+        room_list_service::{self, State, filters::new_filter_non_left},
+        sync_service::SyncService,
+        timeline::{RoomExt as _, TimelineFocus, TimelineItem},
+    },
 };
-use client_base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard};
-use client_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex};
-use client_ui::{
-    Timeline as SdkTimeline,
-    room_list_service::{self, State, filters::new_filter_non_left},
-    sync_service::SyncService,
-    timeline::{RoomExt as _, TimelineFocus, TimelineItem},
-};
+use imbl::Vector;
+use layout::Flex;
 use ratatui::{DefaultTerminal, prelude::*, style::palette::tailwind, widgets::*};
 use throbber_widgets_tui::{Throbber, ThrobberState};
 use tokio::{

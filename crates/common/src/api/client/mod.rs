@@ -3,9 +3,9 @@
 //!
 //! [client-api]: https://spec.matrix.org/v1.19/client-server-api/
 
-// This crate is not useful without either of those features, so export nothing if they are not
-// enabled to avoid errors when running checks wrongly without enabling any of them.
-
+// This crate is not useful without either of those features, so export nothing
+// if they are not enabled to avoid errors when running checks wrongly without
+// enabling any of them.
 
 pub mod account;
 pub mod admin;
@@ -60,4 +60,3 @@ pub mod voip;
 
 #[doc(hidden)]
 pub use crate::__ruma::PrivOwnedStr;
-

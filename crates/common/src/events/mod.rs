@@ -16,9 +16,9 @@
 //! specification. To better organize the crate, these types live in separate
 //! modules with a hierarchy that matches the reverse domain name notation of
 //! the event type. For example, the `m.room.message` event
-//! lives at `harana_matrix_common::events::room::message::RoomMessageEvent`. Each type's module
-//! also contains a Rust type for that event type's `content` field, and any
-//! other supporting types required by the event's other fields.
+//! lives at `harana_matrix_common::events::room::message::RoomMessageEvent`.
+//! Each type's module also contains a Rust type for that event type's `content`
+//! field, and any other supporting types required by the event's other fields.
 //!
 //! # Extending Ruma with custom events
 //!
@@ -102,10 +102,6 @@
 //!     }) if key == "👍"
 //! ));
 //! ```
-
-
-
-
 
 use std::collections::BTreeSet;
 
@@ -312,4 +308,3 @@ impl Mentions {
 
 #[doc(hidden)]
 pub use crate::__ruma::PrivOwnedStr;
-

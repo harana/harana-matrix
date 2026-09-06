@@ -4,7 +4,8 @@ use crate::html::{Html, HtmlSanitizerMode, SanitizerConfig};
 
 /// Sanitize the given HTML string.
 ///
-/// This removes the [tags and attributes] that are not listed in the Matrix specification.
+/// This removes the [tags and attributes] that are not listed in the Matrix
+/// specification.
 ///
 /// It can also optionally remove the [rich reply] fallback.
 ///
@@ -42,8 +43,8 @@ pub enum RemoveReplyFallback {
 
 /// Remove the [rich reply] fallback of the given HTML string.
 ///
-/// Due to the fact that the HTML is parsed, note that malformed HTML and comments will be stripped
-/// from the output.
+/// Due to the fact that the HTML is parsed, note that malformed HTML and
+/// comments will be stripped from the output.
 ///
 /// [rich reply]: https://spec.matrix.org/v1.19/client-server-api/#rich-replies
 pub fn remove_html_reply_fallback(s: &str) -> String {

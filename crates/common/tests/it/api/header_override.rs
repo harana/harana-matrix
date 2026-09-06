@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 
-use http::header::{CONTENT_TYPE, Entry, LOCATION};
 use harana_matrix_common::{
     api::{
         MatrixVersion, OutgoingRequestExt as _, OutgoingResponseExt as _, SupportedVersions,
@@ -10,6 +9,7 @@ use harana_matrix_common::{
     },
     metadata,
 };
+use http::header::{CONTENT_TYPE, Entry, LOCATION};
 
 metadata! {
     method: GET,

@@ -4,11 +4,12 @@
 
 use std::time::Duration;
 
-use crate::__ruma::{api::request, metadata};
-
-use crate::api::federation::{
-    authenticated_media::{ContentMetadata, FileOrLocation, ResponseBody},
-    authentication::ServerSignatures,
+use crate::{
+    __ruma::{api::request, metadata},
+    api::federation::{
+        authenticated_media::{ContentMetadata, FileOrLocation, ResponseBody},
+        authentication::ServerSignatures,
+    },
 };
 
 metadata! {
@@ -25,8 +26,9 @@ pub struct Request {
     #[ruma_api(path)]
     pub media_id: String,
 
-    /// The maximum duration that the client is willing to wait to start receiving data, in the
-    /// case that the content has not yet been uploaded.
+    /// The maximum duration that the client is willing to wait to start
+    /// receiving data, in the case that the content has not yet been
+    /// uploaded.
     ///
     /// The default value is 20 seconds.
     #[ruma_api(query)]

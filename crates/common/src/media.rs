@@ -22,13 +22,14 @@ pub enum Method {
     _Custom(PrivOwnedStr),
 }
 
-/// The default duration that the client should be willing to wait to start receiving data.
+/// The default duration that the client should be willing to wait to start
+/// receiving data.
 pub fn default_download_timeout() -> Duration {
     Duration::from_secs(20)
 }
 
-/// Whether the given duration is the default duration that the client should be willing to wait to
-/// start receiving data.
+/// Whether the given duration is the default duration that the client should be
+/// willing to wait to start receiving data.
 pub fn is_default_download_timeout(timeout: &Duration) -> bool {
     timeout.as_secs() == 20
 }

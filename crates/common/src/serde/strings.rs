@@ -50,7 +50,8 @@ where
     }
 }
 
-/// Take either a floating point number or a string and deserialize to an floating-point number.
+/// Take either a floating point number or a string and deserialize to an
+/// floating-point number.
 ///
 /// To be used like this:
 /// `#[serde(deserialize_with = "deserialize_as_number_or_string")]`
@@ -114,7 +115,8 @@ where
 #[derive(Deserialize)]
 struct NumberOrStringWrapper(#[serde(deserialize_with = "deserialize_as_number_or_string")] f64);
 
-/// Deserializes an `Option<f64>` from an encoded f64 or string or integer (i64 or u64).
+/// Deserializes an `Option<f64>` from an encoded f64 or string or integer (i64
+/// or u64).
 pub fn deserialize_as_optional_number_or_string<'de, D>(
     deserializer: D,
 ) -> Result<Option<f64>, D::Error>
@@ -124,7 +126,8 @@ where
     Ok(Option::<NumberOrStringWrapper>::deserialize(deserializer)?.map(|w| w.0))
 }
 
-/// Take either an integer number or a string and deserialize to an integer number.
+/// Take either an integer number or a string and deserialize to an integer
+/// number.
 ///
 /// To be used like this:
 /// `#[serde(deserialize_with = "deserialize_v1_powerlevel")]`
@@ -194,8 +197,8 @@ where
     de.deserialize_any(IntOrStringVisitor)
 }
 
-/// Take a BTreeMap with values of either an integer number or a string and deserialize
-/// those to integer numbers.
+/// Take a BTreeMap with values of either an integer number or a string and
+/// deserialize those to integer numbers.
 ///
 /// To be used like this:
 /// `#[serde(deserialize_with = "btreemap_deserialize_v1_powerlevel_values")]`

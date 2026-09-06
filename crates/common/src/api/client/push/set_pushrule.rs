@@ -1,6 +1,7 @@
 //! `PUT /_matrix/client/*/pushrules/global/{kind}/{ruleId}`
 //!
-//! This endpoint allows the creation and modification of push rules for this user ID.
+//! This endpoint allows the creation and modification of push rules for this
+//! user ID.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -30,12 +31,13 @@ pub mod v3 {
         /// The rule.
         pub rule: NewPushRule,
 
-        /// Use 'before' with a rule_id as its value to make the new rule the next-most important
-        /// rule with respect to the given user defined rule.
+        /// Use 'before' with a rule_id as its value to make the new rule the
+        /// next-most important rule with respect to the given user
+        /// defined rule.
         pub before: Option<String>,
 
-        /// This makes the new rule the next-less important rule relative to the given user defined
-        /// rule.
+        /// This makes the new rule the next-less important rule relative to the
+        /// given user defined rule.
         pub after: Option<String>,
     }
 

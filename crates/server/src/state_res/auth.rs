@@ -262,6 +262,8 @@ where
 ///
 /// Room versions from 12 onwards use the create event's reference hash as the
 /// room ID, so the two differ only by their sigil.
-fn room_create_event_id(room_id: &RoomId) -> Result<OwnedEventId, harana_matrix_common::IdParseError> {
+fn room_create_event_id(
+    room_id: &RoomId,
+) -> Result<OwnedEventId, harana_matrix_common::IdParseError> {
     EventId::parse(format!("${}", room_id.strip_sigil()))
 }

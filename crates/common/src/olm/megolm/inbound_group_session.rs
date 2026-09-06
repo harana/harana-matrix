@@ -236,15 +236,24 @@ impl InboundGroupSession {
     /// # Example
     ///
     /// ```
-    /// use harana_matrix_common::olm::megolm::{GroupSession, InboundGroupSession, SessionOrdering};
+    /// use harana_matrix_common::olm::megolm::{
+    ///     GroupSession, InboundGroupSession, SessionOrdering,
+    /// };
     ///
     /// let session = GroupSession::new(Default::default());
     /// let session_key = session.session_key();
     ///
-    /// let mut first_session = InboundGroupSession::new(&session_key, Default::default());
-    /// let mut second_session = InboundGroupSession::import(&first_session.export_at(10).unwrap(), Default::default());
+    /// let mut first_session =
+    ///     InboundGroupSession::new(&session_key, Default::default());
+    /// let mut second_session = InboundGroupSession::import(
+    ///     &first_session.export_at(10).unwrap(),
+    ///     Default::default(),
+    /// );
     ///
-    /// assert_eq!(first_session.compare(&mut second_session), SessionOrdering::Better);
+    /// assert_eq!(
+    ///     first_session.compare(&mut second_session),
+    ///     SessionOrdering::Better
+    /// );
     ///
     /// let mut merged = second_session.merge(&mut first_session).unwrap();
     ///

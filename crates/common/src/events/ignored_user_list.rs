@@ -4,9 +4,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::__ruma::OwnedUserId;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
+
+use crate::__ruma::OwnedUserId;
 
 /// The content of an `m.ignored_user_list` event.
 ///
@@ -23,12 +24,14 @@ pub struct IgnoredUserListEventContent {
 }
 
 impl IgnoredUserListEventContent {
-    /// Creates a new `IgnoredUserListEventContent` from the given map of ignored user.
+    /// Creates a new `IgnoredUserListEventContent` from the given map of
+    /// ignored user.
     pub fn new(ignored_users: BTreeMap<OwnedUserId, IgnoredUser>) -> Self {
         Self { ignored_users }
     }
 
-    /// Creates a new `IgnoredUserListEventContent` from the given list of users.
+    /// Creates a new `IgnoredUserListEventContent` from the given list of
+    /// users.
     pub fn users(ignored_users: impl IntoIterator<Item = OwnedUserId>) -> Self {
         Self::new(ignored_users.into_iter().map(|id| (id, IgnoredUser {})).collect())
     }
@@ -51,11 +54,13 @@ impl IgnoredUser {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::__ruma::{canonical_json::assert_to_canonical_json_eq, owned_user_id, user_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::IgnoredUserListEventContent;
-    use crate::events::AnyGlobalAccountDataEvent;
+    use crate::{
+        __ruma::{canonical_json::assert_to_canonical_json_eq, owned_user_id, user_id},
+        events::AnyGlobalAccountDataEvent,
+    };
 
     #[test]
     fn serialization() {

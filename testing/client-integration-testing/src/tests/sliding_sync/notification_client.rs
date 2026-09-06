@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use anyhow::{Result, ensure};
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
-use client_matrix::{
+use harana_matrix_client::{
     RoomState,
     config::SyncSettings,
     ruma::{
@@ -21,13 +21,13 @@ use client_matrix::{
         },
         serde::Raw,
     },
-};
-use client_ui::{
-    notification_client::{
-        Error, NotificationClient, NotificationEvent, NotificationItem, NotificationProcessSetup,
-        NotificationStatus,
+    ui::{
+        notification_client::{
+            Error, NotificationClient, NotificationEvent, NotificationItem,
+            NotificationProcessSetup, NotificationStatus,
+        },
+        sync_service::SyncService,
     },
-    sync_service::SyncService,
 };
 use tracing::warn;
 
@@ -119,7 +119,10 @@ async fn test_notification() -> Result<()> {
         let notification =
             notification_client.get_notification_with_context(&room_id, &event_id).await;
         // We aren't authorized to inspect events from rooms we were not invited to.
-        assert!(matches!(notification.unwrap_err(), Error::SdkError(client_matrix::Error::Http(..))));
+        assert!(matches!(
+            notification.unwrap_err(),
+            Error::SdkError(harana_matrix_client::Error::Http(..))
+        ));
     } else {
         warn!("Couldn't get the invite event.");
     }
@@ -190,14 +193,14 @@ async fn test_notification() -> Result<()> {
             ) => {
                 assert_matches!(
                     sync_timeline_event.as_ref(),
-                    client_matrix::ruma::events::AnySyncTimelineEvent::MessageLike(
-                        client_matrix::ruma::events::AnySyncMessageLikeEvent::RoomMessage(
+                    harana_matrix_client::ruma::events::AnySyncTimelineEvent::MessageLike(
+                        harana_matrix_client::ruma::events::AnySyncMessageLikeEvent::RoomMessage(
                             SyncMessageLikeEvent::Original(event)
                         )
                     ) => {
                         assert_matches!(
                             &event.content.msgtype,
-                            client_matrix::ruma::events::room::message::MessageType::Text(text) => {
+                            harana_matrix_client::ruma::events::room::message::MessageType::Text(text) => {
                                 assert_eq!(text.body, "Hello world!");
                             }
                         );

@@ -21,17 +21,18 @@ pub use self::{
 #[doc(inline)]
 pub use crate::assert_to_canonical_json_eq;
 
-/// Fallible conversion from any value that implements [`Serialize`] to a [`CanonicalJsonValue`].
+/// Fallible conversion from any value that implements [`Serialize`] to a
+/// [`CanonicalJsonValue`].
 ///
-/// This behaves similarly to [`serde_json::to_value()`], except for the following restrictions
-/// which return errors:
+/// This behaves similarly to [`serde_json::to_value()`], except for the
+/// following restrictions which return errors:
 ///
 /// - Integers must be in the range accepted by [`js_int::Int`].
 /// - Floats and bytes are not serializable.
-/// - Booleans and integers cannot be used as keys for an object. `serde_json` accepts those types
-///   as keys by serializing them as strings.
-/// - The same key cannot be serialized twice in an object. `serde_json` uses the last value that is
-///   serialized for the same key.
+/// - Booleans and integers cannot be used as keys for an object. `serde_json`
+///   accepts those types as keys by serializing them as strings.
+/// - The same key cannot be serialized twice in an object. `serde_json` uses
+///   the last value that is serialized for the same key.
 pub fn to_canonical_value<T: Serialize>(
     value: T,
 ) -> Result<CanonicalJsonValue, CanonicalJsonError> {
@@ -61,7 +62,8 @@ pub enum CanonicalJsonError {
     /// The same object key was serialized twice.
     DuplicateObjectKey(String),
 
-    /// An error occurred while re-serializing a [`serde_json::value::RawValue`].
+    /// An error occurred while re-serializing a
+    /// [`serde_json::value::RawValue`].
     InvalidRawValue(serde_json::Error),
 
     /// An other error happened.
@@ -126,8 +128,9 @@ pub trait CanonicalJsonObjectExt {
     /// # Parameters
     ///
     /// * `field`: The name of the field to access.
-    /// * `path`: The full path of the field that will be used in errors. This can be different than
-    ///   the `field`, to clarify if this is a field nested under several objects.
+    /// * `path`: The full path of the field that will be used in errors. This
+    ///   can be different than the `field`, to clarify if this is a field
+    ///   nested under several objects.
     ///
     /// # Errors
     ///
@@ -143,8 +146,9 @@ pub trait CanonicalJsonObjectExt {
     /// # Parameters
     ///
     /// * `field`: The name of the field to access.
-    /// * `path`: The full path of the field that will be used in errors. This can be different than
-    ///   the `field`, to clarify if this is a field nested under several objects.
+    /// * `path`: The full path of the field that will be used in errors. This
+    ///   can be different than the `field`, to clarify if this is a field
+    ///   nested under several objects.
     ///
     /// # Errors
     ///
@@ -163,8 +167,9 @@ pub trait CanonicalJsonObjectExt {
     /// # Parameters
     ///
     /// * `field`: The name of the field to access.
-    /// * `path`: The full path of the field that will be used in errors. This can be different than
-    ///   the `field`, to clarify if this is a field nested under several objects.
+    /// * `path`: The full path of the field that will be used in errors. This
+    ///   can be different than the `field`, to clarify if this is a field
+    ///   nested under several objects.
     ///
     /// # Errors
     ///
@@ -180,8 +185,9 @@ pub trait CanonicalJsonObjectExt {
     /// # Parameters
     ///
     /// * `field`: The name of the field to access.
-    /// * `path`: The full path of the field that will be used in errors. This can be different than
-    ///   the `field`, to clarify if this is a field nested under several objects.
+    /// * `path`: The full path of the field that will be used in errors. This
+    ///   can be different than the `field`, to clarify if this is a field
+    ///   nested under several objects.
     ///
     /// # Errors
     ///
@@ -195,13 +201,15 @@ pub trait CanonicalJsonObjectExt {
         self.get_as_object_mut(field, &path)?.ok_or(CanonicalJsonFieldError::Missing { path })
     }
 
-    /// Get the given required field as a mutable object or insert it if it is missing.
+    /// Get the given required field as a mutable object or insert it if it is
+    /// missing.
     ///
     /// # Parameters
     ///
     /// * `field`: The name of the field to access.
-    /// * `path`: The full path of the field that will be used in errors. This can be different than
-    ///   the `field`, to clarify if this is a field nested under several objects.
+    /// * `path`: The full path of the field that will be used in errors. This
+    ///   can be different than the `field`, to clarify if this is a field
+    ///   nested under several objects.
     ///
     /// # Errors
     ///
@@ -217,8 +225,9 @@ pub trait CanonicalJsonObjectExt {
     /// # Parameters
     ///
     /// * `field`: The name of the field to access.
-    /// * `path`: The full path of the field that will be used in errors. This can be different than
-    ///   the `field`, to clarify if this is a field nested under several objects.
+    /// * `path`: The full path of the field that will be used in errors. This
+    ///   can be different than the `field`, to clarify if this is a field
+    ///   nested under several objects.
     ///
     /// # Errors
     ///
@@ -234,8 +243,9 @@ pub trait CanonicalJsonObjectExt {
     /// # Parameters
     ///
     /// * `field`: The name of the field to access.
-    /// * `path`: The full path of the field that will be used in errors. This can be different than
-    ///   the `field`, to clarify if this is a field nested under several objects.
+    /// * `path`: The full path of the field that will be used in errors. This
+    ///   can be different than the `field`, to clarify if this is a field
+    ///   nested under several objects.
     ///
     /// # Errors
     ///
@@ -318,11 +328,13 @@ impl CanonicalJsonObjectExt for CanonicalJsonObject {
     }
 }
 
-/// Errors that can happen when trying to access a field from a [`CanonicalJsonObject`].
+/// Errors that can happen when trying to access a field from a
+/// [`CanonicalJsonObject`].
 #[derive(Debug)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub enum CanonicalJsonFieldError {
-    /// The field at `path` was expected to be of type `expected`, but was received as `found`.
+    /// The field at `path` was expected to be of type `expected`, but was
+    /// received as `found`.
     InvalidType {
         /// The path of the invalid field.
         path: String,

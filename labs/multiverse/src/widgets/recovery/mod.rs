@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent};
-use client_matrix::{Client, encryption::recovery::RecoveryState};
+use harana_matrix_client::{Client, encryption::recovery::RecoveryState};
 use ratatui::prelude::*;
 use recovering::RecoveringView;
 use throbber_widgets_tui::{Throbber, ThrobberState};

@@ -1,32 +1,38 @@
 use js_int::{UInt, uint};
-use crate::__ruma::{
-    EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomVersionId,
-    owned_event_id, owned_user_id,
-    room::JoinRule,
-    room_version_rules::{AuthorizationRules, RoomVersionRules},
-    serde::JsonObject,
-};
-use crate::__ruma::events::{StateEventType, TimelineEventType};
 use serde_json::{json, to_value as to_json_value};
 
 use super::{Pdu, default_room_id};
-use crate::state_res::{
-    StateMap, auth_types_for_event,
-    events::RoomCreateEvent,
-    utils::{event_id_map::EventIdMap, event_id_set::EventIdSet},
+use crate::{
+    __ruma::{
+        EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomVersionId,
+        events::{StateEventType, TimelineEventType},
+        owned_event_id, owned_user_id,
+        room::JoinRule,
+        room_version_rules::{AuthorizationRules, RoomVersionRules},
+        serde::JsonObject,
+    },
+    state_res::{
+        StateMap, auth_types_for_event,
+        events::RoomCreateEvent,
+        utils::{event_id_map::EventIdMap, event_id_set::EventIdSet},
+    },
 };
 
 /// A helper type to build a room timeline.
 ///
-/// This keeps track of the order of events and the room state at the end of the timeline.
+/// This keeps track of the order of events and the room state at the end of the
+/// timeline.
 ///
-/// In the most common case where you want a room that is already set up, this should be constructed
-/// with [`with_public_chat_preset()`](Self::with_public_chat_preset). It is also possible to only
-/// populate the `m.room.create` event with [`RoomCreatePduBuilder`] and create the factory with
+/// In the most common case where you want a room that is already set up, this
+/// should be constructed
+/// with [`with_public_chat_preset()`](Self::with_public_chat_preset). It is
+/// also possible to only populate the `m.room.create` event with
+/// [`RoomCreatePduBuilder`] and create the factory with
 /// [`.build_factory()`](RoomCreatePduBuilder::build_factory).
 ///
-/// Creating PDUs with this factory will create the proper content for the event type with good
-/// defaults, and populate the `prev_events` and `auth_events` according to the room history.
+/// Creating PDUs with this factory will create the proper content for the event
+/// type with good defaults, and populate the `prev_events` and `auth_events`
+/// according to the room history.
 ///
 /// Every PDU in the factory can be modified after creation if needed.
 pub struct RoomTimelineFactory {
@@ -56,11 +62,11 @@ pub struct RoomTimelineFactory {
 }
 
 impl RoomTimelineFactory {
-    /// Construct a `RoomTimelineFactory` with the default timeline for the `public_chat` preset for
-    /// the given room version.
+    /// Construct a `RoomTimelineFactory` with the default timeline for the
+    /// `public_chat` preset for the given room version.
     ///
-    /// Panics if the room version is not supported, i.e. it is not possible to get the room version
-    /// rules, or it doesn't enforce canonical JSON.
+    /// Panics if the room version is not supported, i.e. it is not possible to
+    /// get the room version rules, or it doesn't enforce canonical JSON.
     pub fn with_public_chat_preset(room_version: RoomVersionId) -> Self {
         let mut factory = RoomCreatePduBuilder::new(room_version).build_factory();
         let alice_id = UserFactory::Alice.user_id();
@@ -72,7 +78,8 @@ impl RoomTimelineFactory {
             RoomMemberPduContent::Join,
         );
 
-        // Initial power levels with Alice as an admin or creator, depending on the room version.
+        // Initial power levels with Alice as an admin or creator, depending on the room
+        // version.
         factory.add_room_power_levels(
             PublicChatInitialPdu::RoomPowerLevels.event_id(),
             alice_id.clone(),
@@ -127,8 +134,8 @@ impl RoomTimelineFactory {
 
     /// Remove the PDU with the given event ID from the map of PDUs.
     ///
-    /// Its event ID will still appear in the state map, the timeline, and possibly the
-    /// `prev_events` and `auth_events` of other PDUs.
+    /// Its event ID will still appear in the state map, the timeline, and
+    /// possibly the `prev_events` and `auth_events` of other PDUs.
     pub fn remove(&mut self, event_id: &EventId) {
         self.pdus.remove(event_id);
     }
@@ -138,7 +145,8 @@ impl RoomTimelineFactory {
         &self.state
     }
 
-    /// Get the event ID of the PDU for the given `type` and `state_key` in the current state.
+    /// Get the event ID of the PDU for the given `type` and `state_key` in the
+    /// current state.
     pub fn state_event_id(
         &self,
         event_type: &StateEventType,
@@ -153,7 +161,8 @@ impl RoomTimelineFactory {
         self.pdus.get(event_id)
     }
 
-    /// A function to get the state event for the given `type` and `state_key` in the current state.
+    /// A function to get the state event for the given `type` and `state_key`
+    /// in the current state.
     pub fn state_event_fn<'a>(
         &'a self,
     ) -> impl Fn(&StateEventType, &str) -> Option<&'a Pdu> + Copy {
@@ -219,7 +228,8 @@ impl RoomTimelineFactory {
     /// Add the given PDU to the end of the timeline.
     ///
     /// When a PDU is created directly with the constructors of [`Pdu`],
-    /// [`RoomTimelineFactory::prepare_to_add_pdu()`] must be used before this method.
+    /// [`RoomTimelineFactory::prepare_to_add_pdu()`] must be used before this
+    /// method.
     ///
     /// Returns a mutable reference to the added PDU.
     pub fn add_pdu(&mut self, pdu: Pdu) -> &mut Pdu {
@@ -236,8 +246,9 @@ impl RoomTimelineFactory {
 
     /// Create an `m.room.member` event prepared to be added to the timeline.
     ///
-    /// `target` will always be used as the `state_key`, and will also be used as the `sender` if
-    /// the membership is not allowed from another sender.
+    /// `target` will always be used as the `state_key`, and will also be used
+    /// as the `sender` if the membership is not allowed from another
+    /// sender.
     ///
     /// Returns the newly created PDU.
     pub fn create_room_member(
@@ -262,8 +273,8 @@ impl RoomTimelineFactory {
 
     /// Create an `m.room.member` event and add it to the end of the timeline.
     ///
-    /// `target` will always be used as the `state_key`, and will also be used as the `sender` if
-    /// the change is not allowed from another sender.
+    /// `target` will always be used as the `state_key`, and will also be used
+    /// as the `sender` if the change is not allowed from another sender.
     ///
     /// Returns a mutable reference to the added PDU.
     pub fn add_room_member(
@@ -276,7 +287,8 @@ impl RoomTimelineFactory {
         self.add_pdu(pdu)
     }
 
-    /// Create an `m.room.power_levels` event prepared to be added to the timeline.
+    /// Create an `m.room.power_levels` event prepared to be added to the
+    /// timeline.
     ///
     /// Returns the newly created PDU.
     pub fn create_room_power_levels(
@@ -297,7 +309,8 @@ impl RoomTimelineFactory {
         pdu
     }
 
-    /// Create an `m.room.power_levels` event and add it to the end of the timeline.
+    /// Create an `m.room.power_levels` event and add it to the end of the
+    /// timeline.
     ///
     /// Returns a mutable reference to the added PDU.
     pub fn add_room_power_levels(
@@ -310,7 +323,8 @@ impl RoomTimelineFactory {
         self.add_pdu(pdu)
     }
 
-    /// Create an `m.room.join_rules` event prepared to be added to the timeline.
+    /// Create an `m.room.join_rules` event prepared to be added to the
+    /// timeline.
     ///
     /// Returns the newly created PDU.
     pub fn create_room_join_rules(
@@ -331,7 +345,8 @@ impl RoomTimelineFactory {
         pdu
     }
 
-    /// Create an `m.room.join_rules` event and add it to the end of the timeline.
+    /// Create an `m.room.join_rules` event and add it to the end of the
+    /// timeline.
     ///
     /// Returns a mutable reference to the added PDU.
     pub fn add_room_join_rules(
@@ -367,7 +382,8 @@ impl RoomTimelineFactory {
         pdu
     }
 
-    /// Create an `m.room.redaction` event and add it to the end of the timeline.
+    /// Create an `m.room.redaction` event and add it to the end of the
+    /// timeline.
     ///
     /// Returns a mutable reference to the added PDU.
     pub fn add_room_redaction(
@@ -380,7 +396,8 @@ impl RoomTimelineFactory {
         self.add_pdu(pdu)
     }
 
-    /// Create a textual `m.room.message` event prepared to be added to the timeline.
+    /// Create a textual `m.room.message` event prepared to be added to the
+    /// timeline.
     ///
     /// Returns the newly created PDU.
     pub fn create_text_message(
@@ -403,7 +420,8 @@ impl RoomTimelineFactory {
         pdu
     }
 
-    /// Create an `m.room.third_party_invite` event prepared to be added to the timeline.
+    /// Create an `m.room.third_party_invite` event prepared to be added to the
+    /// timeline.
     ///
     /// The sender is [`Bob`](UserFactory::Bob). This is hardcoded to match
     /// [`create_room_member_third_party_invite()`](Self::create_room_member_third_party_invite).
@@ -438,7 +456,8 @@ impl RoomTimelineFactory {
         pdu
     }
 
-    /// Create an `m.room.third_party_invite` event and add it to the end of the timeline.
+    /// Create an `m.room.third_party_invite` event and add it to the end of the
+    /// timeline.
     ///
     /// The sender is [`Bob`](UserFactory::Bob). This is hardcoded to match
     /// [`create_room_member_third_party_invite()`](Self::create_room_member_third_party_invite).
@@ -449,12 +468,15 @@ impl RoomTimelineFactory {
         self.add_pdu(pdu)
     }
 
-    /// Create an `m.room.member` event with an `invite` membership and a `third_party_invite`.
+    /// Create an `m.room.member` event with an `invite` membership and a
+    /// `third_party_invite`.
     ///
-    /// The invite is for [`Zara`](UserFactory::Zara) and the sender is [`Bob`](UserFactory::Bob).
-    /// They are hardcoded because this event contains a hardcoded signature as well.
+    /// The invite is for [`Zara`](UserFactory::Zara) and the sender is
+    /// [`Bob`](UserFactory::Bob). They are hardcoded because this event
+    /// contains a hardcoded signature as well.
     ///
-    /// To have a valid state, [`add_room_third_party_invite()`](Self::add_room_third_party_invite)
+    /// To have a valid state,
+    /// [`add_room_third_party_invite()`](Self::add_room_third_party_invite)
     ///
     /// Returns the newly created PDU.
     pub fn create_room_member_third_party_invite(&mut self) -> Pdu {
@@ -501,8 +523,8 @@ impl RoomTimelineFactory {
 ///
 /// The variants use the same order as the events in the timeline.
 ///
-/// The event ID is named after the variant, i.e. the PDU named `FooBar` will have an event ID of
-/// `$foo-bar`.
+/// The event ID is named after the variant, i.e. the PDU named `FooBar` will
+/// have an event ID of `$foo-bar`.
 ///
 /// The `type`, `state_key` and `event_id` can be obtained with accessors.
 #[derive(Debug, Clone, Copy)]
@@ -512,14 +534,16 @@ pub enum PublicChatInitialPdu {
     ///
     /// By default the following fields are set in the `content`:
     ///
-    /// * `room_version` - Set to the version provided when the factory was constructed.
+    /// * `room_version` - Set to the version provided when the factory was
+    ///   constructed.
     /// * `creator` - Set for room versions before 11, the same as the sender.
     ///
-    /// The event ID is `$room-create` and [`Alice`](UserFactory::Alice) is the sender.
+    /// The event ID is `$room-create` and [`Alice`](UserFactory::Alice) is the
+    /// sender.
     RoomCreate,
 
-    /// The `m.room.member` event making [`Alice`](UserFactory::Alice), the creator, join the
-    /// room.
+    /// The `m.room.member` event making [`Alice`](UserFactory::Alice), the
+    /// creator, join the room.
     ///
     /// The event ID is `$room-member-alice-join`.
     RoomMemberAliceJoin,
@@ -528,10 +552,11 @@ pub enum PublicChatInitialPdu {
     ///
     /// By default the following fields are set in the `content`:
     ///
-    /// * `users` - For room versions before 11, the creator has a power level of `100`.
+    /// * `users` - For room versions before 11, the creator has a power level
+    ///   of `100`.
     ///
-    /// The event ID is `$room-power-levels` and [`Alice`](UserFactory::Alice) is the
-    /// sender.
+    /// The event ID is `$room-power-levels` and [`Alice`](UserFactory::Alice)
+    /// is the sender.
     RoomPowerLevels,
 
     /// The initial `m.room.join_rules` event.
@@ -540,18 +565,20 @@ pub enum PublicChatInitialPdu {
     ///
     /// * `join_rule` - Set to `public`.
     ///
-    /// The event ID is `$room-join-rules` and [`Alice`](UserFactory::Alice) is the
-    /// sender.
+    /// The event ID is `$room-join-rules` and [`Alice`](UserFactory::Alice) is
+    /// the sender.
     RoomJoinRules,
 
-    /// The `m.room.member` event making [`Bob`](UserFactory::Bob) join the room.
+    /// The `m.room.member` event making [`Bob`](UserFactory::Bob) join the
+    /// room.
     ///
     /// The event ID is `$room-member-bob-join`.
     RoomMemberBobJoin,
 }
 
 impl PublicChatInitialPdu {
-    /// The `type` and `state_key` tuple used as a key for the PDU in the state map.
+    /// The `type` and `state_key` tuple used as a key for the PDU in the state
+    /// map.
     pub fn type_and_state_key(self) -> (StateEventType, String) {
         match self {
             Self::RoomCreate => (StateEventType::RoomCreate, String::new()),
@@ -584,15 +611,17 @@ pub enum UserFactory {
     /// `@alice:matrix.local`
     ///
     /// When using `RoomCreatePduBuilder::new().build()` or
-    /// [`RoomTimelineFactory::with_public_chat_preset()`] this is the creator of the room.
+    /// [`RoomTimelineFactory::with_public_chat_preset()`] this is the creator
+    /// of the room.
     ///
-    /// When using [`RoomTimelineFactory::with_public_chat_preset()`] with a room with a version
-    /// before 12, this user has a power level of `100`.
+    /// When using [`RoomTimelineFactory::with_public_chat_preset()`] with a
+    /// room with a version before 12, this user has a power level of `100`.
     Alice,
 
     /// `@bob:matrix.local`
     ///
-    /// When using the default settings of [`RoomTimelineFactory`], this is a member of the room.
+    /// When using the default settings of [`RoomTimelineFactory`], this is a
+    /// member of the room.
     Bob,
 
     /// `@charlie:matrix.local`
@@ -620,8 +649,8 @@ impl UserFactory {
 
 /// A helper to construct a valid `m.room.create` [`Pdu`].
 ///
-/// This type purposefully doesn't allow to construct an invalid `m.room.create` event. The PDU can
-/// be modified after construction to make it invalid.
+/// This type purposefully doesn't allow to construct an invalid `m.room.create`
+/// event. The PDU can be modified after construction to make it invalid.
 pub struct RoomCreatePduBuilder {
     /// The version of the room.
     room_version: RoomVersionId,
@@ -636,8 +665,8 @@ pub struct RoomCreatePduBuilder {
 impl RoomCreatePduBuilder {
     /// Construct a `RoomCreatePduBuilder` with the given room version.
     ///
-    /// Panics if the room version is not supported, i.e. it is not possible to get the room version
-    /// rules, or it doesn't enforce canonical JSON.
+    /// Panics if the room version is not supported, i.e. it is not possible to
+    /// get the room version rules, or it doesn't enforce canonical JSON.
     pub fn new(room_version: RoomVersionId) -> Self {
         let rules = room_version.rules().expect("room version should be supported");
 
@@ -697,8 +726,8 @@ impl RoomCreatePduBuilder {
         self.build_inner()
     }
 
-    /// Consume this builder and return a [`RoomTimelineFactory`] initialized with the
-    /// `m.room.create` PDU.
+    /// Consume this builder and return a [`RoomTimelineFactory`] initialized
+    /// with the `m.room.create` PDU.
     pub fn build_factory(self) -> RoomTimelineFactory {
         let room_create = self.build_inner();
         let room_create_event_id = room_create.event_id.clone();
@@ -723,8 +752,8 @@ pub enum RoomMemberPduContent {
     /// The target user joins the room.
     Join,
 
-    /// The target user joins a restricted room, authorized by the server of the given member of the
-    /// room.
+    /// The target user joins a restricted room, authorized by the server of the
+    /// given member of the room.
     JoinAuthorized {
         /// A member of the room that can invite the target user.
         via_users_server: OwnedUserId,
@@ -798,7 +827,8 @@ impl RoomMemberPduContent {
 pub enum RoomPowerLevelsPduContent {
     /// The minimal content share with other variants.
     ///
-    /// In room versions 1 through 11, [`Alice`](UserFactory::Alice) has a power level of `100`.
+    /// In room versions 1 through 11, [`Alice`](UserFactory::Alice) has a power
+    /// level of `100`.
     Default,
 
     /// The power level required to send invites is changed to the given value.
@@ -807,7 +837,8 @@ pub enum RoomPowerLevelsPduContent {
         value: i32,
     },
 
-    /// The power level required to send the given event types is changed to the given value.
+    /// The power level required to send the given event types is changed to the
+    /// given value.
     Events {
         /// The event types.
         event_types: Vec<TimelineEventType>,
@@ -827,7 +858,8 @@ pub enum RoomPowerLevelsPduContent {
 }
 
 impl RoomPowerLevelsPduContent {
-    /// Construct the JSON object for this content for the given authorization rules.
+    /// Construct the JSON object for this content for the given authorization
+    /// rules.
     fn into_json(self, authorization_rules: &AuthorizationRules) -> JsonObject {
         let mut content = JsonObject::new();
 
@@ -869,15 +901,20 @@ impl RoomPowerLevelsPduContent {
 mod tests {
     use assert_matches2::assert_matches;
     use js_int::int;
-    use crate::__ruma::{
-        RoomVersionId, owned_event_id, room::JoinRuleKind, room_version_rules::AuthorizationRules,
-        user_id,
-    };
-    use crate::__ruma::events::{StateEventType, room::member::MembershipState};
 
     use super::RoomTimelineFactory;
-    use crate::state_res::events::{
-        RoomCreateEvent, RoomJoinRulesEvent, RoomMemberEvent, RoomPowerLevelsEvent,
+    use crate::{
+        __ruma::{
+            RoomVersionId,
+            events::{StateEventType, room::member::MembershipState},
+            owned_event_id,
+            room::JoinRuleKind,
+            room_version_rules::AuthorizationRules,
+            user_id,
+        },
+        state_res::events::{
+            RoomCreateEvent, RoomJoinRulesEvent, RoomMemberEvent, RoomPowerLevelsEvent,
+        },
     };
 
     #[test]

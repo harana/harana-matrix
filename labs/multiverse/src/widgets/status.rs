@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use client_common::locks::Mutex;
+use harana_matrix_client::common::locks::Mutex;
 use ratatui::{
     prelude::{Buffer, Rect, *},
     widgets::Paragraph,

@@ -13,15 +13,17 @@ pub mod delayed_state_event;
 
 use std::time::Duration;
 
-use crate::__ruma::{
-    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
-    api::error::StandardErrorBody,
-    serde::{Raw, StringEnum},
-};
-use crate::__ruma::events::{AnyTimelineEventContent, TimelineEventType};
 use serde::{Deserialize, Serialize};
 
-use crate::api::client::PrivOwnedStr;
+use crate::{
+    __ruma::{
+        MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
+        api::error::StandardErrorBody,
+        events::{AnyTimelineEventContent, TimelineEventType},
+        serde::{Raw, StringEnum},
+    },
+    api::client::PrivOwnedStr,
+};
 
 /// The structure of the data for returning a delayed event from a GET endpoint
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,8 +45,8 @@ pub struct DelayedEventData {
 
     /// The event content to send.
     ///
-    /// This is the content that was submitted to the send endpoint, not the content of the final
-    /// event
+    /// This is the content that was submitted to the send endpoint, not the
+    /// content of the final event
     pub content: Raw<AnyTimelineEventContent>,
 
     /// The duration that the server should wait before sending this event
@@ -65,7 +67,8 @@ pub struct DelayedEventData {
     pub event_id: Option<OwnedEventId>,
 
     /// The timestamp when the event was finalized.
-    /// Present only for events that were finalized (sent, failed to send, or cancelled).
+    /// Present only for events that were finalized (sent, failed to send, or
+    /// cancelled).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "finalised_ts")]
     pub finalized_ts: Option<MilliSecondsSinceUnixEpoch>,
@@ -141,8 +144,8 @@ pub enum DelayedEventStatus {
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(untagged)]
 pub enum DelayParameters {
-    /// Sending a delayed event with a timeout. The response will contain a (server
-    /// generated) `delay_id` instead of an `event_id`.
+    /// Sending a delayed event with a timeout. The response will contain a
+    /// (server generated) `delay_id` instead of an `event_id`.
     Timeout {
         /// The timeout duration for this delayed event.
         #[serde(with = "crate::__ruma::serde::duration::ms")]

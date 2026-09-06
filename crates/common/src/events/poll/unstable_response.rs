@@ -1,21 +1,20 @@
-//! Types for the `org.matrix.msc3381.poll.response` event, the unstable version of
-//! `m.poll.response`.
+//! Types for the `org.matrix.msc3381.poll.response` event, the unstable version
+//! of `m.poll.response`.
 
-use crate::__ruma::OwnedEventId;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{PollResponseData, unstable_start::UnstablePollStartContentBlock, validate_selections};
-use crate::events::relation::Reference;
+use crate::{__ruma::OwnedEventId, events::relation::Reference};
 
 /// The payload for an unstable poll response event.
 ///
-/// This is the event content that should be sent for room versions that don't support extensible
-/// events. As of Matrix 1.7, none of the stable room versions (1 through 10) support extensible
-/// events.
+/// This is the event content that should be sent for room versions that don't
+/// support extensible events. As of Matrix 1.7, none of the stable room
+/// versions (1 through 10) support extensible events.
 ///
-/// To send a poll response event for a room version that supports extensible events, use
-/// [`PollResponseEventContent`].
+/// To send a poll response event for a room version that supports extensible
+/// events, use [`PollResponseEventContent`].
 ///
 /// [`PollResponseEventContent`]: super::response::PollResponseEventContent
 #[derive(Clone, Debug, Serialize, Deserialize, EventContent)]
@@ -32,8 +31,8 @@ pub struct UnstablePollResponseEventContent {
 }
 
 impl UnstablePollResponseEventContent {
-    /// Creates a new `UnstablePollResponseEventContent` that responds to the given poll start event
-    /// ID, with the given answers.
+    /// Creates a new `UnstablePollResponseEventContent` that responds to the
+    /// given poll start event ID, with the given answers.
     pub fn new(answers: Vec<String>, poll_start_id: OwnedEventId) -> Self {
         Self {
             poll_response: UnstablePollResponseContentBlock::new(answers),
@@ -78,10 +77,12 @@ impl UnstablePollResponseContentBlock {
         Self { answers }
     }
 
-    /// Validate these selections against the given `UnstablePollStartContentBlock`.
+    /// Validate these selections against the given
+    /// `UnstablePollStartContentBlock`.
     ///
-    /// Returns the list of valid selections in this `UnstablePollResponseContentBlock`, or `None`
-    /// if there is no valid selection.
+    /// Returns the list of valid selections in this
+    /// `UnstablePollResponseContentBlock`, or `None` if there is no valid
+    /// selection.
     pub fn validate<'a>(
         &'a self,
         poll: &UnstablePollStartContentBlock,

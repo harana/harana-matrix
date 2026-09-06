@@ -1,22 +1,25 @@
 use std::sync::Arc;
 
 use futures_util::{Stream, StreamExt};
-use client_common::executor::Handle;
-use client_crypto::{
-    CancelInfo as RustCancelInfo, QrVerification as InnerQr, QrVerificationState, Sas as InnerSas,
-    SasState as RustSasState, Verification as InnerVerification,
-    VerificationRequest as InnerVerificationRequest,
-    VerificationRequestState as RustVerificationRequestState,
-    qrcode::QrVerificationData,
+use harana_matrix_client::{
+    common::executor::Handle,
+    crypto::{
+        CancelInfo as RustCancelInfo, QrVerification as InnerQr, QrVerificationState,
+        Sas as InnerSas, SasState as RustSasState, Verification as InnerVerification,
+        VerificationRequest as InnerVerificationRequest,
+        VerificationRequestState as RustVerificationRequestState, qrcode::QrVerificationData,
+    },
 };
-use harana_matrix_common::events::key::verification::VerificationMethod;
-use harana_matrix_common::olm::{base64_decode, base64_encode};
+use harana_matrix_common::{
+    events::key::verification::VerificationMethod,
+    olm::{base64_decode, base64_encode},
+};
 
 use crate::{CryptoStoreError, OutgoingVerificationRequest, SignatureUploadRequest};
 
 /// Listener that will be passed over the FFI to report changes to a SAS
 /// verification.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SasListener: Send {
     /// The callback that should be called on the Rust side
     ///
@@ -83,7 +86,7 @@ pub struct Verification {
     pub(crate) runtime: Handle,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Verification {
     /// Try to represent the `Verification` as an `Sas` verification object,
     /// returns `None` if the verification is not a `Sas` verification.
@@ -113,7 +116,7 @@ pub struct Sas {
     pub(crate) runtime: Handle,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Sas {
     /// Get the user id of the other side.
     pub fn other_user_id(&self) -> String {
@@ -277,7 +280,7 @@ impl Sas {
 
 /// Listener that will be passed over the FFI to report changes to a QrCode
 /// verification.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait QrCodeListener: Send {
     /// The callback that should be called on the Rust side
     ///
@@ -329,7 +332,7 @@ pub struct QrCode {
     pub(crate) runtime: Handle,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl QrCode {
     /// Get the user id of the other side.
     pub fn other_user_id(&self) -> String {
@@ -523,7 +526,7 @@ pub struct ConfirmVerificationResult {
 
 /// Listener that will be passed over the FFI to report changes to a
 /// verification request.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait VerificationRequestListener: Send {
     /// The callback that should be called on the Rust side
     ///
@@ -563,7 +566,7 @@ pub struct VerificationRequest {
     pub(crate) runtime: Handle,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl VerificationRequest {
     /// The id of the other user that is participating in this verification
     /// request.

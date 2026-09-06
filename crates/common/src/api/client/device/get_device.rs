@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3devicesdeviceid
 
-    use crate::__ruma::{
-        OwnedDeviceId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedDeviceId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::device::Device,
     };
-
-    use crate::api::client::device::Device;
 
     metadata! {
         method: GET,

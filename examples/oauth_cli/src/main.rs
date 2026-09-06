@@ -21,7 +21,7 @@ use std::{
 
 use anyhow::bail;
 use futures_util::StreamExt;
-use client_matrix::{
+use harana_matrix_client::{
     Client, ClientBuildError, Result, RoomState,
     authentication::oauth::{
         ClientId, OAuthAuthorizationData, OAuthError, OAuthSession, UserSession,
@@ -38,9 +38,9 @@ use client_matrix::{
         events::room::message::{MessageType, OriginalSyncRoomMessageEvent},
         serde::Raw,
     },
+    ui::sync_service::SyncService,
     utils::local_server::{LocalServerBuilder, LocalServerRedirectHandle, QueryString},
 };
-use client_ui::sync_service::SyncService;
 use rand::{RngExt, distr::Alphanumeric, rng};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io::AsyncBufReadExt as _};
@@ -66,8 +66,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // The folder containing this example's data.
-    let data_dir =
-        dirs::data_dir().expect("no data_dir directory found").join("matrix/oauth_cli");
+    let data_dir = dirs::data_dir().expect("no data_dir directory found").join("matrix/oauth_cli");
     // The file where the session is persisted.
     let session_file = data_dir.join("session.json");
 
@@ -463,25 +462,25 @@ impl OAuthCli {
                     res = sync_service_state.next() => {
                         if let Some(state) = res {
                             match state {
-                                client_ui::sync_service::State::Idle
-                                | client_ui::sync_service::State::Terminated => {
+                                harana_matrix_client::ui::sync_service::State::Idle
+                                | harana_matrix_client::ui::sync_service::State::Terminated => {
                                     num_errors = 0;
                                     num_running = 0;
                                 }
 
-                                client_ui::sync_service::State::Running => {
+                                harana_matrix_client::ui::sync_service::State::Running => {
                                     num_running += 1;
                                     if num_running > 1 {
                                         num_errors = 0;
                                     }
                                 }
 
-                                client_ui::sync_service::State::Backoff => {
+                                harana_matrix_client::ui::sync_service::State::Backoff => {
                                     // The sync service is waiting before restarting the
                                     // syncs on its own; nothing to do here.
                                 }
 
-                                client_ui::sync_service::State::Error(_) | client_ui::sync_service::State::Offline => {
+                                harana_matrix_client::ui::sync_service::State::Error(_) | harana_matrix_client::ui::sync_service::State::Offline => {
                                     num_errors += 1;
                                     num_running = 0;
 
@@ -525,13 +524,13 @@ impl OAuthCli {
         tokio::spawn(async move {
             while let Ok(update) = this.client.subscribe_to_session_changes().recv().await {
                 match update {
-                    client_matrix::SessionChange::UnknownToken(unknown_token) => {
+                    harana_matrix_client::SessionChange::UnknownToken(unknown_token) => {
                         println!(
                             "Received an unknown token error; soft logout? {:?}",
                             unknown_token.soft_logout
                         );
                     }
-                    client_matrix::SessionChange::TokensRefreshed => {
+                    harana_matrix_client::SessionChange::TokensRefreshed => {
                         // The tokens have been refreshed, persist them to disk.
                         if let Err(err) = this.update_stored_session().await {
                             println!("Unable to store a session in the background: {err}");

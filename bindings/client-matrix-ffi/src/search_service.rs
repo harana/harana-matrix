@@ -16,10 +16,12 @@ use std::{fmt::Debug, sync::Arc};
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt as _;
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use client_ui::search_service::{
-    MessageResult as UIMessageResult, PaginationState as SearchServicePaginationState,
-    ResultType as UIResultType, SearchService as UISearchService,
+use harana_matrix_client::{
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    ui::search_service::{
+        MessageResult as UIMessageResult, PaginationState as SearchServicePaginationState,
+        ResultType as UIResultType, SearchService as UISearchService,
+    },
 };
 
 use crate::{
@@ -31,7 +33,7 @@ use crate::{
     utils::Timestamp,
 };
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Client {
     /// Create a search service.
     ///
@@ -50,7 +52,7 @@ pub struct SearchService {
     inner: UISearchService,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SearchService {
     /// Set (or update) the search query.
     /// Clears the current results, restarts pagination from scratch and loads
@@ -105,12 +107,12 @@ impl SearchService {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SearchServicePaginationStateListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, pagination_state: SearchServicePaginationState);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SearchServiceResultsListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, updates: Vec<SearchServiceResultsUpdate>);
 }

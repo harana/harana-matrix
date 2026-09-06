@@ -9,7 +9,8 @@ use crate::events::EmptyStateKey;
 
 /// The content of an `m.room.name` event.
 ///
-/// The room name is a human-friendly string designed to be displayed to the end-user.
+/// The room name is a human-friendly string designed to be displayed to the
+/// end-user.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room.name", kind = State, state_key_type = EmptyStateKey)]
@@ -27,11 +28,10 @@ impl RoomNameEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::RoomNameEventContent;
-    use crate::events::OriginalStateEvent;
+    use crate::{__ruma::canonical_json::assert_to_canonical_json_eq, events::OriginalStateEvent};
 
     #[test]
     fn serialization() {

@@ -20,14 +20,20 @@ use std::{fs, path::PathBuf};
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
 #[cfg(feature = "experimental-x509-identity-verification")]
-use client_matrix::encryption::SignatureError;
+use harana_matrix_client::base::crypto::x509::{RawX509Signature, ValidityError};
+#[cfg(feature = "experimental-x509-identity-verification")]
+use harana_matrix_client::encryption::SignatureError;
 #[cfg(not(any(target_family = "wasm")))]
-use client_matrix::reqwest::Certificate;
+use harana_matrix_client::reqwest::Certificate;
 #[cfg(feature = "experimental-search")]
-use client_matrix::search_index::SearchIndexStoreKind;
-use client_matrix::{
+use harana_matrix_client::search_index::SearchIndexStoreKind;
+use harana_matrix_client::{
     Client as MatrixClient, ClientBuildError as MatrixClientBuildError, HttpError, IdParseError,
     RumaApiError, StoreProvider, ThreadingSupport,
+    base::{
+        DmRoomDefinition,
+        crypto::{CollectStrategy, DecryptionSettings, TrustRequirement},
+    },
     cross_process_lock::CrossProcessLockConfig as SdkCrossProcessLockConfig,
     encryption::{BackupDownloadStrategy, EncryptionSettings},
     event_cache::EventCacheError,
@@ -37,12 +43,6 @@ use client_matrix::{
         Error as MatrixSlidingSyncError, VersionBuilder as MatrixSlidingSyncVersionBuilder,
         VersionBuilderError,
     },
-};
-#[cfg(feature = "experimental-x509-identity-verification")]
-use client_base::crypto::x509::{RawX509Signature, ValidityError};
-use client_base::{
-    DmRoomDefinition,
-    crypto::{CollectStrategy, DecryptionSettings, TrustRequirement},
 };
 use harana_matrix_common::api::error::{DeserializationError, FromHttpResponseError};
 use tracing::debug;
@@ -197,7 +197,7 @@ pub struct ClientBuilder {
 /// size isn’t known beforehand.
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(60);
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ClientBuilder {
     #[uniffi::constructor]
     pub fn new() -> Arc<Self> {
@@ -222,7 +222,7 @@ impl ClientBuilder {
             encryption_settings: EncryptionSettings {
                 auto_enable_cross_signing: false,
                 backup_download_strategy:
-                    client_matrix::encryption::BackupDownloadStrategy::AfterDecryptionFailure,
+                    harana_matrix_client::encryption::BackupDownloadStrategy::AfterDecryptionFailure,
                 auto_enable_backups: false,
             },
             room_key_recipient_strategy: Default::default(),
@@ -275,9 +275,9 @@ impl ClientBuilder {
     /// notification process for example.
     ///
     /// So far, at the time of writing (2025-04-07), it changes the defaults of
-    /// `client_matrix::SqliteStoreConfig` (if the `sqlite` feature is enabled).
-    /// Please check
-    /// `client_matrix::SqliteStoreConfig::with_low_memory_config`.
+    /// `harana_matrix_client::SqliteStoreConfig` (if the `sqlite` feature is
+    /// enabled). Please check
+    /// `harana_matrix_client::SqliteStoreConfig::with_low_memory_config`.
     pub fn system_is_memory_constrained(self: Arc<Self>) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
         builder.system_is_memory_constrained = true;
@@ -643,7 +643,7 @@ impl ClientBuilder {
         }
 
         if let Some(config) = builder.request_config {
-            let mut updated_config = client_matrix::config::RequestConfig::default();
+            let mut updated_config = harana_matrix_client::config::RequestConfig::default();
             if let Some(retry_limit) = config.retry_limit {
                 updated_config =
                     updated_config.retry_limit(retry_limit.try_into().unwrap_or(usize::MAX));
@@ -677,14 +677,14 @@ impl ClientBuilder {
         if let Some(x509_sign) = builder.raw_x509_signer {
             use std::{future::ready, pin::Pin};
 
-            use client_base::crypto::x509::X509SignatureSigningError;
+            use harana_matrix_client::base::crypto::x509::X509SignatureSigningError;
 
             // Wrap the provided RawX509Signer impl in a shim which converts the
             // arguments and results.
             #[derive(Debug)]
             struct X509SignImpl(Arc<dyn RawX509Signer>);
 
-            impl client_base::crypto::x509::RawX509Signer for X509SignImpl {
+            impl harana_matrix_client::base::crypto::x509::RawX509Signer for X509SignImpl {
                 fn sign(
                     &self,
                     message: Vec<u8>,
@@ -713,13 +713,13 @@ impl ClientBuilder {
 
         #[cfg(feature = "experimental-x509-identity-verification")]
         if let Some(x509_verify) = builder.raw_x509_verifier {
-            use client_base::crypto::x509::X509SignatureVerificationError;
+            use harana_matrix_client::base::crypto::x509::X509SignatureVerificationError;
 
             // Wrap the provided RawX509Verifier impl in a shim which converts
             // the arguments.
             #[derive(Debug)]
             struct X509VerifyImpl(Arc<dyn RawX509Verifier>);
-            impl client_base::crypto::x509::RawX509Verifier for X509VerifyImpl {
+            impl harana_matrix_client::base::crypto::x509::RawX509Verifier for X509VerifyImpl {
                 fn verify(
                     &self,
                     message: &[u8],
@@ -745,7 +745,7 @@ impl ClientBuilder {
 }
 
 #[cfg(feature = "experimental-x509-identity-verification")]
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ClientBuilder {
     pub fn with_raw_x509_signer(self: Arc<Self>, x509_sign: Arc<dyn RawX509Signer>) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
@@ -783,7 +783,7 @@ impl ClientBuilder {
 }
 
 #[cfg(feature = "sqlite")]
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ClientBuilder {
     /// Use SQLite as the session storage.
     pub fn sqlite_store(self: Arc<Self>, config: Arc<store::SqliteStoreBuilder>) -> Arc<Self> {
@@ -808,7 +808,7 @@ impl ClientBuilder {
 }
 
 #[cfg(feature = "indexeddb")]
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ClientBuilder {
     /// Use IndexedDB as the session storage.
     pub fn indexeddb_store(
@@ -821,7 +821,7 @@ impl ClientBuilder {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ClientBuilder {
     pub fn proxy(self: Arc<Self>, url: String) -> Arc<Self> {
         let mut builder = unwrap_or_clone_arc(self);
@@ -922,7 +922,7 @@ impl From<CrossProcessLockConfig> for SdkCrossProcessLockConfig {
 }
 
 #[cfg(feature = "experimental-search")]
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ClientBuilder {
     /// Set up the search index store for this client, which is used to store
     /// the message search index locally.

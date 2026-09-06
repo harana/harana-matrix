@@ -2,14 +2,16 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#put_matrixfederationv2send_leaveroomideventid
 
-use crate::__ruma::{
-    OwnedEventId, OwnedRoomId,
-    api::{request, response},
-    metadata,
-};
 use serde_json::value::RawValue as RawJsonValue;
 
-use crate::api::federation::authentication::ServerSignatures;
+use crate::{
+    __ruma::{
+        OwnedEventId, OwnedRoomId,
+        api::{request, response},
+        metadata,
+    },
+    api::federation::authentication::ServerSignatures,
+};
 
 metadata! {
     method: PUT,
@@ -57,9 +59,8 @@ impl Response {
 
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use crate::__ruma::api::OutgoingResponseExt as _;
-
     use super::Response;
+    use crate::__ruma::api::OutgoingResponseExt as _;
 
     #[test]
     fn response_body() {

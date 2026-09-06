@@ -4,9 +4,9 @@ use harana_matrix_macros::IdDst;
 
 /// The order of an [`m.space.child`] event.
 ///
-/// Space child orders in Matrix are opaque character sequences consisting of ASCII characters
-/// within the range `\x20` (space) and `\x7E` (~), inclusive. Their length must must not exceed 50
-/// characters.
+/// Space child orders in Matrix are opaque character sequences consisting of
+/// ASCII characters within the range `\x20` (space) and `\x7E` (~), inclusive.
+/// Their length must must not exceed 50 characters.
 ///
 /// [`m.space.child`]: https://spec.matrix.org/v1.19/client-server-api/#mspacechild
 #[repr(transparent)]

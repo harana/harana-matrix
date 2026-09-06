@@ -21,10 +21,7 @@ futures-util.workspace = true
 imbl.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
-client-matrix = { path = "../../crates/client-matrix", features = ["sso-login", "sqlite", "experimental-search"] }
-client-base = { path = "../../crates/client-base" }
-client-common = { path = "../../crates/client-common" }
-client-ui = { path = "../../crates/client-ui" }
+harana-matrix-client = { workspace = true, default-features = true, features = ["sso-login", "sqlite", "experimental-search", "ui"] }
 ratatui = { version = "0.30.0", features = ["unstable-widget-ref"] }
 rpassword = "7.5.1"
 serde_json.workspace = true

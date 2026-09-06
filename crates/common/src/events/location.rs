@@ -2,21 +2,20 @@
 //!
 //! [MSC3488]: https://github.com/matrix-org/matrix-spec-proposals/pull/3488
 
-use js_int::UInt;
 use harana_matrix_macros::{EventContent, StringEnum};
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
 
 mod zoomlevel_serde;
 
-use crate::__ruma::MilliSecondsSinceUnixEpoch;
-
 use super::{message::TextContentBlock, room::message::Relation};
-use crate::events::PrivOwnedStr;
+use crate::{__ruma::MilliSecondsSinceUnixEpoch, events::PrivOwnedStr};
 
 /// The payload for an extensible location message.
 ///
-/// This is the new primary type introduced in [MSC3488] and should only be sent in rooms with a
-/// version that supports it. See the documentation of the [`message`] module for more information.
+/// This is the new primary type introduced in [MSC3488] and should only be sent
+/// in rooms with a version that supports it. See the documentation of the
+/// [`message`] module for more information.
 ///
 /// [MSC3488]: https://github.com/matrix-org/matrix-spec-proposals/pull/3488
 /// [`message`]: super::message
@@ -59,7 +58,8 @@ pub struct LocationEventContent {
 }
 
 impl LocationEventContent {
-    /// Creates a new `LocationEventContent` with the given fallback representation and location.
+    /// Creates a new `LocationEventContent` with the given fallback
+    /// representation and location.
     pub fn new(text: TextContentBlock, location: LocationContent) -> Self {
         Self {
             text,
@@ -72,8 +72,8 @@ impl LocationEventContent {
         }
     }
 
-    /// Creates a new `LocationEventContent` with the given plain text fallback representation and
-    /// location.
+    /// Creates a new `LocationEventContent` with the given plain text fallback
+    /// representation and location.
     pub fn with_plain_text(plain_text: impl Into<String>, location: LocationContent) -> Self {
         Self {
             text: TextContentBlock::plain(plain_text),

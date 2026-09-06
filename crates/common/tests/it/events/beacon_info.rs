@@ -3,14 +3,16 @@
 use std::time::Duration;
 
 use assert_matches2::assert_matches;
-use js_int::uint;
 use harana_matrix_common::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, event_id, room_id,
-    serde::CanBeEmpty, user_id,
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    event_id,
+    events::{AnyStateEvent, StateEvent, beacon_info::BeaconInfoEventContent, location::AssetType},
+    room_id,
+    serde::CanBeEmpty,
+    user_id,
 };
-use harana_matrix_common::events::{
-    AnyStateEvent, StateEvent, beacon_info::BeaconInfoEventContent, location::AssetType,
-};
+use js_int::uint;
 use serde_json::{from_value as from_json_value, json};
 
 fn get_beacon_info_event_content(

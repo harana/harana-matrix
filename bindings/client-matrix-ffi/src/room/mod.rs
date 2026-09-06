@@ -16,12 +16,13 @@ use std::{collections::HashMap, fs, path::PathBuf, pin::pin, sync::Arc};
 
 use anyhow::{Context, Result};
 use futures_util::{StreamExt, pin_mut};
-use client_matrix::{
+use harana_matrix_client::{
     ComposerDraft as SdkComposerDraft, ComposerDraftType as SdkComposerDraftType,
     DraftAttachment as SdkDraftAttachment, DraftAttachmentContent, DraftThumbnail, EncryptionState,
     PredecessorRoom as SdkPredecessorRoom, RoomHeroWithProfile as SdkRoomHeroWithProfile,
     RoomMembersUpdate as SdkRoomMembersUpdate, RoomMemberships, RoomState,
     SuccessorRoom as SdkSuccessorRoom,
+    common::{SendOutsideWasm, SyncOutsideWasm},
     deserialized_responses::{RawAnySyncOrStrippedState, TimelineEvent as SdkTimelineEvent},
     encryption::LocalTrust,
     room::{
@@ -29,13 +30,11 @@ use client_matrix::{
         power_levels::RoomPowerLevelChanges,
     },
     send_queue::RoomSendQueueUpdate as SdkRoomSendQueueUpdate,
+    ui::{
+        timeline::{RoomExt, TimelineBuilder, default_event_filter},
+        unable_to_decrypt_hook::UtdHookManager,
+    },
 };
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use client_ui::{
-    timeline::{RoomExt, TimelineBuilder, default_event_filter},
-    unable_to_decrypt_hook::UtdHookManager,
-};
-use mime::Mime;
 use harana_matrix_common::{
     EventId, Int, OwnedDeviceId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId, RoomAliasId,
     ServerName, UserId, assign,
@@ -51,6 +50,7 @@ use harana_matrix_common::{
     },
     serde::Raw,
 };
+use mime::Mime;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
 
@@ -128,7 +128,7 @@ fn state_event_json(event: &RawAnySyncOrStrippedState) -> String {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Room {
     /// Returns the room's name from the state event if available, otherwise
     /// compute a room name based on the room's nature (DM or not) and number of
@@ -283,7 +283,7 @@ impl Room {
         &self,
         configuration: TimelineConfiguration,
     ) -> Result<Arc<Timeline>, ClientError> {
-        let mut builder = client_ui::timeline::TimelineBuilder::new(&self.inner);
+        let mut builder = harana_matrix_client::ui::timeline::TimelineBuilder::new(&self.inner);
 
         builder = builder
             .with_focus(configuration.focus.try_into()?)
@@ -502,9 +502,9 @@ impl Room {
     ///
     /// Returns:
     ///     - If the user was present in the room, a
-    ///       [`client_matrix::room::RoomMemberWithSenderInfo`] containing both the
-    ///       user info and the member info of the sender of the `m.room.member`
-    ///       event.
+    ///       [`harana_matrix_client::room::RoomMemberWithSenderInfo`]
+    ///       containing both the user info and the member info of the sender of
+    ///       the `m.room.member` event.
     ///     - If the current user is not present, an error.
     pub async fn member_with_sender_info(
         &self,
@@ -1007,7 +1007,8 @@ impl Room {
     }
 
     pub async fn get_power_levels(&self) -> Result<Arc<RoomPowerLevels>, ClientError> {
-        let power_levels = self.inner.power_levels().await.map_err(client_matrix::Error::from)?;
+        let power_levels =
+            self.inner.power_levels().await.map_err(harana_matrix_client::Error::from)?;
         Ok(Arc::new(RoomPowerLevels::new(power_levels, self.inner.own_user_id().to_owned())))
     }
 
@@ -1611,13 +1612,13 @@ pub struct EventWithRelations {
 }
 
 /// A listener for receiving call decline events in a room.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait CallDeclineListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, decliner_user_id: String);
 }
 
-impl From<client_matrix::room::knock_requests::KnockRequest> for KnockRequest {
-    fn from(request: client_matrix::room::knock_requests::KnockRequest) -> Self {
+impl From<harana_matrix_client::room::knock_requests::KnockRequest> for KnockRequest {
+    fn from(request: harana_matrix_client::room::knock_requests::KnockRequest) -> Self {
         Self {
             event_id: request.event_id.to_string(),
             user_id: request.member_info.user_id.to_string(),
@@ -1633,7 +1634,7 @@ impl From<client_matrix::room::knock_requests::KnockRequest> for KnockRequest {
 }
 
 /// A listener for receiving new requests to a join a room.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait KnockRequestsListener: SendOutsideWasm + SyncOutsideWasm {
     fn call(&self, join_requests: Vec<KnockRequest>);
 }
@@ -1665,10 +1666,10 @@ pub struct KnockRequest {
 /// A set of actions to perform for a knock request.
 #[derive(Debug, Clone, uniffi::Object)]
 pub struct KnockRequestActions {
-    inner: client_matrix::room::knock_requests::KnockRequest,
+    inner: harana_matrix_client::room::knock_requests::KnockRequest,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl KnockRequestActions {
     /// Accepts the knock request by inviting the user to the room.
     pub async fn accept(&self) -> Result<(), ClientError> {
@@ -1697,7 +1698,7 @@ impl KnockRequestActions {
 }
 
 /// Generates a `matrix.to` permalink to the given room alias.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn matrix_to_room_alias_permalink(
     room_alias: String,
 ) -> std::result::Result<String, ClientError> {
@@ -1705,7 +1706,7 @@ pub fn matrix_to_room_alias_permalink(
     Ok(room_alias.matrix_to_uri().to_string())
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
     /// A new [`RoomInfo`], and what about the room changed to produce it.
     ///
@@ -1714,12 +1715,12 @@ pub trait RoomInfoListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, room_info: RoomInfo, reasons: Vec<RoomInfoUpdateReason>);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait MembershipListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, membership: Membership);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomMemberUpdatesListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, update: RoomMemberUpdate);
 }
@@ -1817,28 +1818,28 @@ pub struct RoomMemberListPage {
     pub total: u32,
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait TypingNotificationsListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, typing_user_ids: Vec<String>);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait IdentityStatusChangeListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, identity_status_change: Vec<IdentityStatusChange>);
 }
 
 #[derive(uniffi::Object)]
 pub struct RoomMembersIterator {
-    chunk_iterator: ChunkIterator<client_matrix::room::RoomMember>,
+    chunk_iterator: ChunkIterator<harana_matrix_client::room::RoomMember>,
 }
 
 impl RoomMembersIterator {
-    fn new(members: Vec<client_matrix::room::RoomMember>) -> Self {
+    fn new(members: Vec<harana_matrix_client::room::RoomMember>) -> Self {
         Self { chunk_iterator: ChunkIterator::new(members) }
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomMembersIterator {
     fn len(&self) -> u32 {
         self.chunk_iterator.len()
@@ -2331,7 +2332,7 @@ impl From<SdkPredecessorRoom> for PredecessorRoom {
 }
 
 /// A listener to send queue updates in a specific room.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SendQueueListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called every time the send queue dispatches an update for the given
     /// room.
@@ -2439,7 +2440,7 @@ impl TryFrom<SdkRoomSendQueueUpdate> for RoomSendQueueUpdate {
                 Self::RetryEvent { transaction_id: transaction_id.into() }
             }
             SdkRoomSendQueueUpdate::SendError { transaction_id, error, is_recoverable } => {
-                let as_queue_wedge_error: client_matrix::QueueWedgeError = (&*error).into();
+                let as_queue_wedge_error: harana_matrix_client::QueueWedgeError = (&*error).into();
                 Self::SendError {
                     transaction_id: transaction_id.into(),
                     error: as_queue_wedge_error.into(),
@@ -2457,11 +2458,11 @@ impl TryFrom<SdkRoomSendQueueUpdate> for RoomSendQueueUpdate {
 mod tests {
     use std::{collections::BTreeSet, time::Duration};
 
-    use client_matrix::{
+    use harana_matrix_client::{
         ruma::{event_id, room_id, user_id},
+        test::{JoinedRoomBuilder, event_factory::EventFactory},
         test_utils::mocks::MatrixMockServer,
     };
-    use common_test::{JoinedRoomBuilder, event_factory::EventFactory};
     use serde_json::json;
     use tempfile::tempdir;
 
@@ -2537,11 +2538,13 @@ mod tests {
     /// already holds, without going to the homeserver for them.
     #[tokio::test]
     async fn test_state_events_and_account_data_are_readable() {
-        use client_matrix::ruma::{
-            events::{RoomAccountDataEventType, StateEventType},
-            user_id,
+        use harana_matrix_client::{
+            ruma::{
+                events::{RoomAccountDataEventType, StateEventType},
+                user_id,
+            },
+            test::{JoinedRoomBuilder, event_factory::EventFactory},
         };
-        use common_test::{JoinedRoomBuilder, event_factory::EventFactory};
 
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
@@ -2714,7 +2717,7 @@ mod tests {
     /// store, as raw JSON in both directions.
     #[tokio::test]
     async fn test_room_account_data_is_written_and_read_back() {
-        use client_matrix::ruma::events::RoomAccountDataEventType;
+        use harana_matrix_client::ruma::events::RoomAccountDataEventType;
 
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
@@ -2770,7 +2773,7 @@ mod tests {
     /// Content that isn't JSON is rejected before it reaches the homeserver.
     #[tokio::test]
     async fn test_setting_account_data_to_invalid_json_is_an_error() {
-        use client_matrix::ruma::events::RoomAccountDataEventType;
+        use harana_matrix_client::ruma::events::RoomAccountDataEventType;
 
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;

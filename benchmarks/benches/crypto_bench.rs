@@ -1,9 +1,11 @@
 use std::{ops::Deref, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use client_crypto::{EncryptionSettings, OlmMachine, OlmMachineBuilder};
-use client_sqlite::SqliteCryptoStore;
-use common_test::ruma_response_from_json;
+use harana_matrix_client::{
+    crypto::{EncryptionSettings, OlmMachine, OlmMachineBuilder},
+    sqlite::SqliteCryptoStore,
+    test::ruma_response_from_json,
+};
 use harana_matrix_common::{
     DeviceId, OwnedUserId, TransactionId, UserId,
     api::client::{

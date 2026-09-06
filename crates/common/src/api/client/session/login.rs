@@ -10,19 +10,21 @@ pub mod v3 {
     use std::{borrow::Cow, fmt, time::Duration};
 
     use as_variant::as_variant;
-    use crate::__ruma::{
-        OwnedDeviceId, OwnedServerName, OwnedUserId,
-        api::{auth_scheme::AppserviceTokenOptional, request, response},
-        metadata,
-        serde::JsonObject,
-    };
     use serde::{
         Deserialize, Deserializer, Serialize,
         de::{self, DeserializeOwned},
     };
     use serde_json::Value as JsonValue;
 
-    use crate::api::client::uiaa::UserIdentifier;
+    use crate::{
+        __ruma::{
+            OwnedDeviceId, OwnedServerName, OwnedUserId,
+            api::{auth_scheme::AppserviceTokenOptional, request, response},
+            metadata,
+            serde::JsonObject,
+        },
+        api::client::uiaa::UserIdentifier,
+    };
 
     metadata! {
         method: POST,
@@ -67,7 +69,8 @@ pub mod v3 {
         /// An access token for the account.
         pub access_token: String,
 
-        /// The hostname of the homeserver on which the account has been registered.
+        /// The hostname of the homeserver on which the account has been
+        /// registered.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[deprecated = "\
             Since Matrix Client-Server API r0.4.0. Clients should instead use the \
@@ -77,20 +80,21 @@ pub mod v3 {
 
         /// ID of the logged-in device.
         ///
-        /// Will be the same as the corresponding parameter in the request, if one was
-        /// specified.
+        /// Will be the same as the corresponding parameter in the request, if
+        /// one was specified.
         pub device_id: OwnedDeviceId,
 
         /// Client configuration provided by the server.
         ///
-        /// If present, clients SHOULD use the provided object to reconfigure themselves.
+        /// If present, clients SHOULD use the provided object to reconfigure
+        /// themselves.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub well_known: Option<DiscoveryInfo>,
 
         /// A [refresh token] for the account.
         ///
-        /// This token can be used to obtain a new access token when it expires by calling the
-        /// [`refresh_token`] endpoint.
+        /// This token can be used to obtain a new access token when it expires
+        /// by calling the [`refresh_token`] endpoint.
         ///
         /// [refresh token]: https://spec.matrix.org/v1.19/client-server-api/#refreshing-access-tokens
         /// [`refresh_token`]: crate::api::client::session::refresh_token
@@ -99,11 +103,13 @@ pub mod v3 {
 
         /// The lifetime of the access token, in milliseconds.
         ///
-        /// Once the access token has expired, a new access token can be obtained by using the
-        /// provided refresh token. If no refresh token is provided, the client will need to
-        /// re-login to obtain a new access token.
+        /// Once the access token has expired, a new access token can be
+        /// obtained by using the provided refresh token. If no refresh
+        /// token is provided, the client will need to re-login to
+        /// obtain a new access token.
         ///
-        /// If this is `None`, the client can assume that the access token will not expire.
+        /// If this is `None`, the client can assume that the access token will
+        /// not expire.
         #[serde(
             with = "crate::__ruma::serde::duration::opt_ms",
             default,
@@ -125,7 +131,8 @@ pub mod v3 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given user ID, access token and device ID.
+        /// Creates a new `Response` with the given user ID, access token and
+        /// device ID.
         #[allow(deprecated)]
         pub fn new(user_id: OwnedUserId, access_token: String, device_id: OwnedDeviceId) -> Self {
             Self {
@@ -159,16 +166,19 @@ pub mod v3 {
     }
 
     impl LoginInfo {
-        /// Creates a new `IncomingLoginInfo` with the given `login_type` string, session and data.
+        /// Creates a new `IncomingLoginInfo` with the given `login_type`
+        /// string, session and data.
         ///
-        /// Prefer to use the public variants of `IncomingLoginInfo` where possible; this
-        /// constructor is meant be used for unsupported authentication mechanisms only and
-        /// does not allow setting arbitrary data for supported ones.
+        /// Prefer to use the public variants of `IncomingLoginInfo` where
+        /// possible; this constructor is meant be used for unsupported
+        /// authentication mechanisms only and does not allow setting
+        /// arbitrary data for supported ones.
         ///
         /// # Errors
         ///
-        /// Returns an error if the `login_type` is known and serialization of `data` to the
-        /// corresponding `IncomingLoginInfo` variant fails.
+        /// Returns an error if the `login_type` is known and serialization of
+        /// `data` to the corresponding `IncomingLoginInfo` variant
+        /// fails.
         pub fn new(login_type: &str, data: JsonObject) -> serde_json::Result<Self> {
             Ok(match login_type {
                 "m.login.password" => {
@@ -194,8 +204,9 @@ pub mod v3 {
 
         /// The data of this `LoginInfo`.
         ///
-        /// Prefer to use the public variants of `LoginInfo` where possible; this method is meant to
-        /// be used for unsupported login types only.
+        /// Prefer to use the public variants of `LoginInfo` where possible;
+        /// this method is meant to be used for unsupported login types
+        /// only.
         pub fn data(&self) -> Cow<'_, JsonObject> {
             fn serialize<T: Serialize>(obj: &T) -> JsonObject {
                 match serde_json::to_value(obj).expect("login info serialization to succeed") {
@@ -234,8 +245,9 @@ pub mod v3 {
                 serde_json::from_value(val).map_err(E::custom)
             }
 
-            // FIXME: Would be better to use serde_json::value::RawValue, but that would require
-            // implementing Deserialize manually for Request, bc. `#[serde(flatten)]` breaks things.
+            // FIXME: Would be better to use serde_json::value::RawValue, but that would
+            // require implementing Deserialize manually for Request, bc.
+            // `#[serde(flatten)]` breaks things.
             let mut data = JsonObject::deserialize(deserializer)?;
 
             let login_type =
@@ -437,11 +449,12 @@ pub mod v3 {
     #[cfg(test)]
     mod tests {
         use assert_matches2::assert_matches;
-        use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
         use serde_json::{from_value as from_json_value, json};
 
         use super::{LoginInfo, Token};
-        use crate::api::client::uiaa::UserIdentifier;
+        use crate::{
+            __ruma::canonical_json::assert_to_canonical_json_eq, api::client::uiaa::UserIdentifier,
+        };
 
         #[test]
         fn deserialize_login_type() {
@@ -494,14 +507,16 @@ pub mod v3 {
         fn serialize_login_request_body() {
             use std::borrow::Cow;
 
-            use crate::__ruma::api::{
-                MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
-                auth_scheme::SendAccessToken,
-            };
             use serde_json::Value as JsonValue;
 
             use super::{LoginInfo, Password, Request, Token};
-            use crate::api::client::uiaa::{EmailUserIdentifier, UserIdentifier};
+            use crate::{
+                __ruma::api::{
+                    MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
+                    auth_scheme::SendAccessToken,
+                },
+                api::client::uiaa::{EmailUserIdentifier, UserIdentifier},
+            };
 
             let supported = SupportedVersions {
                 versions: [MatrixVersion::V1_1].into(),

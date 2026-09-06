@@ -29,8 +29,8 @@ impl MxcUri {
         self.parts().map(|(s, _)| s)
     }
 
-    /// If this is a valid MXC URI, returns a `(server_name, media_id)` tuple, else it returns the
-    /// error.
+    /// If this is a valid MXC URI, returns a `(server_name, media_id)` tuple,
+    /// else it returns the error.
     pub fn parts(&self) -> Result<(&ServerName, &str)> {
         self.extract_slash_idx().map(|idx| {
             (

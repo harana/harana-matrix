@@ -9,18 +9,20 @@ pub mod v3 {
 
     use std::collections::BTreeMap;
 
-    use crate::__ruma::{
-        OwnedDeviceId, OwnedUserId,
-        api::{auth_scheme::AccessToken, request, response},
-        encryption::{CrossSigningKey, DeviceKeys},
-        metadata,
-        serde::{Raw, StringEnum},
-    };
     use serde::{Deserialize, Serialize};
     use serde_json::value::RawValue as RawJsonValue;
 
     pub use super::iter::SignedKeysIter;
-    use crate::api::client::PrivOwnedStr;
+    use crate::{
+        __ruma::{
+            OwnedDeviceId, OwnedUserId,
+            api::{auth_scheme::AccessToken, request, response},
+            encryption::{CrossSigningKey, DeviceKeys},
+            metadata,
+            serde::{Raw, StringEnum},
+        },
+        api::client::PrivOwnedStr,
+    };
 
     metadata! {
         method: POST,
@@ -125,9 +127,8 @@ pub mod v3 {
         #[cfg(feature = "compat-upload-signatures")]
         #[test]
         fn deserialize_synapse_response() {
-            use crate::__ruma::user_id;
-
             use super::FailureErrorCode;
+            use crate::__ruma::user_id;
 
             const JSON: &str = r#"{
                 "failures": {

@@ -21,12 +21,12 @@ path = "uniffi-bindgen.rs"
 
 [features]
 default = ["bundled-sqlite"]
-bundled-sqlite = ["client-sqlite/bundled"]
+bundled-sqlite = ["harana-matrix-client/bundled-sqlite"]
 
 # Enable experimental support for encrypting state events; see
 # https://github.com/matrix-org/matrix-rust-sdk/issues/5397.
 experimental-encrypted-state-events = [
-    "client-crypto/experimental-encrypted-state-events",
+    "harana-matrix-client/experimental-encrypted-state-events",
 ]
 
 [dependencies]
@@ -34,10 +34,17 @@ anyhow.workspace = true
 futures-util.workspace = true
 hmac.workspace = true
 http.workspace = true
-client-common = { workspace = true, features = ["tokio-runtime", "uniffi"] }
-client-matrix-ffi-macros.workspace = true
+harana-matrix-client = { workspace = true, features = [
+    "tokio-runtime",
+    "uniffi",
+    "qrcode",
+    "automatic-room-key-forwarding",
+    "sqlite",
+    "crypto-store",
+] }
 pbkdf2.workspace = true
 rand.workspace = true
+harana-matrix-macros.workspace = true
 harana-matrix-common = { workspace = true, features = [
     "olm",
     "insecure-pk-encryption",
@@ -58,13 +65,6 @@ version = "0.2.2"
 default-features = false
 features = ["lax_deserialize"]
 
-[dependencies.client-crypto]
-workspace = true
-features = ["qrcode", "automatic-room-key-forwarding", "uniffi"]
-
-[dependencies.client-sqlite]
-workspace = true
-features = ["crypto-store"]
 
 [dependencies.tokio]
 workspace = true

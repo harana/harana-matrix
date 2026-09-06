@@ -4,16 +4,16 @@ use anyhow::Result;
 use assert_matches2::assert_let;
 use assign::assign;
 use futures::{FutureExt, StreamExt, pin_mut};
-use client_matrix::{
+use harana_matrix_client::{
     assert_let_decrypted_state_event_content,
+    common::deserialized_responses::ProcessedToDeviceEvent,
     encryption::EncryptionSettings,
     ruma::{
         api::client::room::create_room::v3::{Request as CreateRoomRequest, RoomPreset},
         events::AnyStateEventContent,
     },
+    ui::sync_service::SyncService,
 };
-use client_common::deserialized_responses::ProcessedToDeviceEvent;
-use client_ui::sync_service::SyncService;
 use similar_asserts::assert_eq;
 use tracing::{Instrument, info};
 

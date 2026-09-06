@@ -1,0 +1,46 @@
+//! Test data for the matrix crates.
+//!
+//! Exporting each const allows all the test data to have a single source of
+//! truth. When running `cargo publish` no external folders are allowed so all
+//! the test data needs to be contained within this crate.
+
+use std::sync::LazyLock;
+
+use serde_json::{Value as JsonValue, json};
+
+use crate::test::DEFAULT_TEST_ROOM_ID;
+
+pub mod api_responses;
+pub mod keys_query;
+pub mod keys_query_sets;
+pub mod members;
+pub mod search_users;
+pub mod sync;
+
+pub use api_responses::{
+    DEVICE, DEVICES, GET_ALIAS, KEYS_QUERY, KEYS_QUERY_TWO_DEVICES_ONE_SIGNED, KEYS_UPLOAD, LOGIN,
+    LOGIN_RESPONSE_ERR, LOGIN_TYPES, LOGIN_WITH_DISCOVERY, LOGIN_WITH_REFRESH_TOKEN, NOT_FOUND,
+    PUBLIC_ROOMS, PUBLIC_ROOMS_FINAL_PAGE, REFRESH_TOKEN, REFRESH_TOKEN_WITH_REFRESH_TOKEN,
+    REGISTRATION_RESPONSE_ERR, UNKNOWN_TOKEN_SOFT_LOGOUT, VERSIONS, WELL_KNOWN, WHOAMI,
+};
+pub use members::MEMBERS;
+pub use sync::{
+    DEFAULT_SYNC_SUMMARY, INVITE_SYNC, JOIN_SPACE_SYNC, LEAVE_SYNC, LEAVE_SYNC_EVENT, SYNC,
+};
+
+/// An empty response.
+pub static EMPTY: LazyLock<JsonValue> = LazyLock::new(|| json!({}));
+
+/// A response with only an event ID.
+pub static EVENT_ID: LazyLock<JsonValue> = LazyLock::new(|| {
+    json!({
+        "event_id": "$h29iv0s8:example.com"
+    })
+});
+
+/// A response with only a room ID.
+pub static ROOM_ID: LazyLock<JsonValue> = LazyLock::new(|| {
+    json!({
+        "room_id": *DEFAULT_TEST_ROOM_ID
+    })
+});

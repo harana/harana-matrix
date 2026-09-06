@@ -2,12 +2,16 @@
 //!
 //! [`m.policy.rule.server`]: https://spec.matrix.org/v1.19/client-server-api/#mpolicyruleserver
 
-use crate::__ruma::room_version_rules::RedactionRules;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{PolicyRuleEventContent, PossiblyRedactedPolicyRuleEventContent};
-use crate::events::{PossiblyRedactedStateEventContent, RedactContent, StateEventType, StaticEventContent};
+use crate::{
+    __ruma::room_version_rules::RedactionRules,
+    events::{
+        PossiblyRedactedStateEventContent, RedactContent, StateEventType, StaticEventContent,
+    },
+};
 
 /// The content of an `m.policy.rule.server` event.
 ///
@@ -19,7 +23,8 @@ pub struct PolicyRuleServerEventContent(pub PolicyRuleEventContent);
 
 /// The possibly redacted form of [`PolicyRuleServerEventContent`].
 ///
-/// This type is used when it's not obvious whether the content is redacted or not.
+/// This type is used when it's not obvious whether the content is redacted or
+/// not.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::exhaustive_structs)]
 pub struct PossiblyRedactedPolicyRuleServerEventContent(pub PossiblyRedactedPolicyRuleEventContent);

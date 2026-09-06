@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 #[cfg(feature = "unstable-msc2654")]
 use js_int::UInt;
-use crate::__ruma::{OwnedEventId, serde::from_raw_json_value};
 use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue as RawJsonValue;
 
@@ -12,6 +11,7 @@ use super::{
     Ephemeral, JoinedRoom, LeftRoom, RoomAccountData, RoomSummary, State, StateEvents, Timeline,
     UnreadNotificationsCount,
 };
+use crate::__ruma::{OwnedEventId, serde::from_raw_json_value};
 
 #[derive(Debug, Deserialize)]
 struct StateDeHelper {

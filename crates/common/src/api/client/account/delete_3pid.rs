@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3account3piddelete
 
-    use crate::__ruma::{
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-        thirdparty::Medium,
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+            thirdparty::Medium,
+        },
+        api::client::account::ThirdPartyIdRemovalStatus,
     };
-
-    use crate::api::client::account::ThirdPartyIdRemovalStatus;
 
     metadata! {
         method: POST,

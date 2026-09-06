@@ -1,21 +1,22 @@
 //! `GET /_matrix/key/*/query/{serverName}`
 //!
-//! Query for another server's keys. The receiving (notary) server must sign the keys returned by
-//! the queried server.
+//! Query for another server's keys. The receiving (notary) server must sign the
+//! keys returned by the queried server.
 
 pub mod v2 {
     //! `/v2/` ([spec])
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixkeyv2queryservername
 
-    use crate::__ruma::{
-        MilliSecondsSinceUnixEpoch, OwnedServerName,
-        api::{auth_scheme::NoAuthentication, request, response},
-        metadata,
-        serde::Raw,
+    use crate::{
+        __ruma::{
+            MilliSecondsSinceUnixEpoch, OwnedServerName,
+            api::{auth_scheme::NoAuthentication, request, response},
+            metadata,
+            serde::Raw,
+        },
+        api::federation::discovery::ServerSigningKeys,
     };
-
-    use crate::api::federation::discovery::ServerSigningKeys;
 
     metadata! {
         method: GET,
@@ -31,10 +32,12 @@ pub mod v2 {
         #[ruma_api(path)]
         pub server_name: OwnedServerName,
 
-        /// A millisecond POSIX timestamp in milliseconds indicating when the returned certificates
-        /// will need to be valid until to be useful to the requesting server.
+        /// A millisecond POSIX timestamp in milliseconds indicating when the
+        /// returned certificates will need to be valid until to be
+        /// useful to the requesting server.
         ///
-        /// If not supplied, the current time as determined by the receiving server is used.
+        /// If not supplied, the current time as determined by the receiving
+        /// server is used.
         #[ruma_api(query)]
         #[serde(default = "MilliSecondsSinceUnixEpoch::now")]
         pub minimum_valid_until_ts: MilliSecondsSinceUnixEpoch,
@@ -48,7 +51,8 @@ pub mod v2 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given server name and `minimum_valid_until` timestamp.
+        /// Creates a new `Request` with the given server name and
+        /// `minimum_valid_until` timestamp.
         pub fn new(
             server_name: OwnedServerName,
             minimum_valid_until_ts: MilliSecondsSinceUnixEpoch,

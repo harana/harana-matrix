@@ -18,12 +18,13 @@ pub mod update_backup_version;
 use std::{borrow::Cow, collections::BTreeMap};
 
 use js_int::UInt;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::{Value as JsonValue, value::RawValue as RawJsonValue};
+
 use crate::__ruma::{
     CrossSigningOrDeviceSignatures,
     serde::{Base64, JsonObject, Raw, from_raw_json_value},
 };
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::{Value as JsonValue, value::RawValue as RawJsonValue};
 
 /// A wrapper around a mapping of session IDs to key data.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,8 +66,8 @@ impl BackupAlgorithm {
 
     /// Returns the data of the algorithm.
     ///
-    /// Prefer to use the public variants of `BackupAlgorithm` where possible; this method is meant
-    /// to be used for custom algorithms only.
+    /// Prefer to use the public variants of `BackupAlgorithm` where possible;
+    /// this method is meant to be used for custom algorithms only.
     pub fn auth_data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("backup data serialization to succeed") {
@@ -118,7 +119,8 @@ impl From<MegolmBackupV1Curve25519AesSha2AuthData> for BackupAlgorithm {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct MegolmBackupV1Curve25519AesSha2AuthData {
-    /// The curve25519 public key used to encrypt the backups, encoded in unpadded base64.
+    /// The curve25519 public key used to encrypt the backups, encoded in
+    /// unpadded base64.
     pub public_key: Base64,
 
     /// Signatures of the auth_data as Signed JSON.
@@ -126,7 +128,8 @@ pub struct MegolmBackupV1Curve25519AesSha2AuthData {
 }
 
 impl MegolmBackupV1Curve25519AesSha2AuthData {
-    /// Construct a new `MegolmBackupV1Curve25519AesSha2BackupAlgorithm` using the given public key.
+    /// Construct a new `MegolmBackupV1Curve25519AesSha2BackupAlgorithm` using
+    /// the given public key.
     pub fn new(public_key: Base64) -> Self {
         Self { public_key, signatures: Default::default() }
     }
@@ -145,18 +148,20 @@ pub struct CustomBackupAlgorithm {
 
 /// Information about the backup key.
 ///
-/// To create an instance of this type, first create a [`KeyBackupDataInit`] and convert it via
-/// `KeyBackupData::from` / `.into()`.
+/// To create an instance of this type, first create a [`KeyBackupDataInit`] and
+/// convert it via `KeyBackupData::from` / `.into()`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct KeyBackupData {
     /// The index of the first message in the session that the key can decrypt.
     pub first_message_index: UInt,
 
-    /// The number of times this key has been forwarded via key-sharing between devices.
+    /// The number of times this key has been forwarded via key-sharing between
+    /// devices.
     pub forwarded_count: UInt,
 
-    /// Whether the device backing up the key verified the device that the key is from.
+    /// Whether the device backing up the key verified the device that the key
+    /// is from.
     pub is_verified: bool,
 
     /// Encrypted data about the session.
@@ -165,18 +170,21 @@ pub struct KeyBackupData {
 
 /// Information about the backup key.
 ///
-/// This struct will not be updated even if additional fields are added to [`KeyBackupData`] in a
-/// new (non-breaking) release of the Matrix specification.
+/// This struct will not be updated even if additional fields are added to
+/// [`KeyBackupData`] in a new (non-breaking) release of the Matrix
+/// specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct KeyBackupDataInit {
     /// The index of the first message in the session that the key can decrypt.
     pub first_message_index: UInt,
 
-    /// The number of times this key has been forwarded via key-sharing between devices.
+    /// The number of times this key has been forwarded via key-sharing between
+    /// devices.
     pub forwarded_count: UInt,
 
-    /// Whether the device backing up the key verified the device that the key is from.
+    /// Whether the device backing up the key verified the device that the key
+    /// is from.
     pub is_verified: bool,
 
     /// Encrypted data about the session.
@@ -193,15 +201,17 @@ impl From<KeyBackupDataInit> for KeyBackupData {
 
 /// The encrypted algorithm-dependent data for backups.
 ///
-/// To create an instance of this type, first create an [`EncryptedSessionDataInit`] and convert it
-/// via `EncryptedSessionData::from` / `.into()`.
+/// To create an instance of this type, first create an
+/// [`EncryptedSessionDataInit`] and convert it via `EncryptedSessionData::from`
+/// / `.into()`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct EncryptedSessionData {
     /// Unpadded base64-encoded public half of the ephemeral key.
     pub ephemeral: Base64,
 
-    /// Ciphertext, encrypted using AES-CBC-256 with PKCS#7 padding, encoded in base64.
+    /// Ciphertext, encrypted using AES-CBC-256 with PKCS#7 padding, encoded in
+    /// base64.
     pub ciphertext: Base64,
 
     /// First 8 bytes of MAC key, encoded in base64.
@@ -210,15 +220,17 @@ pub struct EncryptedSessionData {
 
 /// The encrypted algorithm-dependent data for backups.
 ///
-/// This struct will not be updated even if additional fields are added to [`EncryptedSessionData`]
-/// in a new (non-breaking) release of the Matrix specification.
+/// This struct will not be updated even if additional fields are added to
+/// [`EncryptedSessionData`] in a new (non-breaking) release of the Matrix
+/// specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct EncryptedSessionDataInit {
     /// Unpadded base64-encoded public half of the ephemeral key.
     pub ephemeral: Base64,
 
-    /// Ciphertext, encrypted using AES-CBC-256 with PKCS#7 padding, encoded in base64.
+    /// Ciphertext, encrypted using AES-CBC-256 with PKCS#7 padding, encoded in
+    /// base64.
     pub ciphertext: Base64,
 
     /// First 8 bytes of MAC key, encoded in base64.
@@ -237,13 +249,13 @@ mod tests {
     use std::borrow::Cow;
 
     use assert_matches2::{assert_let, assert_matches};
+    use serde_json::{Value as JsonValue, from_value as from_json_value, json};
+
+    use super::{BackupAlgorithm, MegolmBackupV1Curve25519AesSha2AuthData};
     use crate::__ruma::{
         SigningKeyAlgorithm, SigningKeyId, canonical_json::assert_to_canonical_json_eq,
         owned_user_id, serde::Base64,
     };
-    use serde_json::{Value as JsonValue, from_value as from_json_value, json};
-
-    use super::{BackupAlgorithm, MegolmBackupV1Curve25519AesSha2AuthData};
 
     #[test]
     fn megolm_v1_backup_algorithm_serialize_roundtrip() {

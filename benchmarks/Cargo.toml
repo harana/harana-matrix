@@ -17,12 +17,7 @@ codspeed = []
 assert_matches.workspace = true
 criterion = { version = "4.2.1", features = ["async", "async_tokio", "html_reports"], package = "codspeed-criterion-compat" }
 futures-util.workspace = true
-client-matrix = { workspace = true, features = ["e2e-encryption", "sqlite", "testing", "rustls-aws-lc-rs"] }
-client-base.workspace = true
-client-crypto.workspace = true
-client-sqlite = { workspace = true, features = ["crypto-store"] }
-common-test.workspace = true
-client-ui.workspace = true
+harana-matrix-client = { workspace = true, features = ["e2e-encryption", "sqlite", "testing", "rustls-aws-lc-rs", "_crypto", "crypto-store", "ui"] }
 rand.workspace = true
 harana-matrix-common.workspace = true
 serde.workspace = true

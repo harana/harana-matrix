@@ -1,0 +1,388 @@
+[package]
+authors = ["Damir Jelić <poljar@termina.org.uk>", "Harana Contributors"]
+description = "A high level Matrix client-server library."
+edition = "2024"
+homepage = "https://github.com/harana/harana-matrix"
+keywords = ["matrix", "chat", "messaging", "ruma", "nio"]
+license = "Apache-2.0 AND MIT"
+name = "harana-matrix-client"
+readme = "README.md"
+repository = "https://github.com/harana/harana-matrix"
+rust-version.workspace = true
+version = "0.18.0"
+
+[package.metadata.docs.rs]
+features = ["docsrs"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+
+[features]
+# The `crypto` module. Not meant to be enabled directly: use `e2e-encryption`.
+_crypto = ["dep:aes", "dep:bs58", "dep:ctr", "dep:ulid"]
+_disable-minimum-rotation-period-ms = []
+automatic-room-key-forwarding = ["e2e-encryption"]
+bundled = ["rusqlite?/bundled"]
+bundled-sqlite = ["sqlite", "bundled"]
+# The old crate depended on the test helpers, but only its `#[cfg(test)]`
+# module used them, so this no longer drags them into a release build.
+contentscanner = ["e2e-encryption"]
+crypto-store = ["_crypto"]
+default = [
+    "e2e-encryption",
+    "automatic-room-key-forwarding",
+    "reqwest-transport",
+    "rustls-aws-lc-rs",
+    "tokio-runtime",
+]
+docsrs = [
+    "e2e-encryption",
+    "sqlite",
+    "indexeddb",
+    "sso-login",
+    "qrcode",
+    "federation-api",
+    "ui",
+    "contentscanner",
+    "ruma-client",
+]
+e2e-encryption = ["_crypto", "crypto-store", "safe-encode-serializer"]
+event-cache-store = ["media-store", "indexed-type-serializer"]
+experimental-algorithms = []
+experimental-element-recent-emojis = []
+experimental-encrypted-state-events = ["e2e-encryption", "harana-matrix-common/unstable-msc4362"]
+experimental-push-secrets = ["e2e-encryption", "harana-matrix-common/unstable-msc4385"]
+experimental-search = ["experimental-search-core", "tantivy"]
+experimental-search-core = []
+experimental-send-custom-to-device = ["e2e-encryption"]
+experimental-widgets = ["dep:uuid", "experimental-send-custom-to-device"]
+experimental-x509-identity-verification = [
+    "e2e-encryption",
+    "dep:cms",
+    "dep:pkcs1",
+    "dep:sha2_0_10",
+]
+federation-api = ["harana-matrix-common/federation-api"]
+image-proc = ["dep:blurhash", "dep:image"]
+indexed-type-serializer = ["safe-encode-serializer"]
+indexeddb = [
+    "state-store",
+    "event-cache-store",
+    "media-store",
+    "dep:gloo-utils",
+    "dep:indexed_db_futures",
+    "dep:js-sys",
+    "dep:serde-wasm-bindgen",
+    "dep:uuid",
+]
+js = [
+    "dep:wasm-bindgen-futures",
+    "harana-matrix-common/js",
+    "dep:getrandom",
+    "getrandom?/wasm_js",
+]
+local-server = ["dep:axum", "dep:tower", "tokio/net", "tokio/rt"]
+markdown = ["dep:pulldown-cmark", "harana-matrix-common/markdown"]
+media-store = ["indexed-type-serializer"]
+qrcode = ["e2e-encryption", "dep:qrcode"]
+reqwest = ["dep:reqwest"]
+reqwest-native-tls = ["reqwest", "reqwest?/native-tls"]
+reqwest-native-tls-no-alpn = ["reqwest", "reqwest?/native-tls-no-alpn"]
+reqwest-native-tls-vendored = ["reqwest", "reqwest?/native-tls-vendored"]
+reqwest-native-tls-vendored-no-alpn = ["reqwest", "reqwest?/native-tls-vendored-no-alpn"]
+reqwest-rustls = ["reqwest", "reqwest?/rustls"]
+reqwest-rustls-no-provider = ["reqwest", "reqwest?/rustls-no-provider"]
+reqwest-transport = ["dep:reqwest", "tokio-runtime"]
+ruma-client = ["dep:assign"]
+rust-x509-verifier-impl = [
+    "experimental-x509-identity-verification",
+    "dep:rustls",
+    "dep:rustls-pki-types",
+    "dep:rustls-webpki",
+    "dep:ring",
+]
+rustls-aws-lc-rs = ["reqwest-transport", "reqwest?/rustls"]
+rustls-ring = ["reqwest-transport", "reqwest?/rustls-no-provider", "dep:rustls"]
+safe-encode-serializer = ["_crypto", "safe-encode-traits"]
+safe-encode-traits = []
+socks = ["reqwest-transport", "reqwest?/socks"]
+sqlite = [
+    "state-store",
+    "event-cache-store",
+    "media-store",
+    "dep:deadpool",
+    "dep:num_cpus",
+    "dep:rusqlite",
+    "dep:serde_path_to_error",
+]
+sso-login = ["local-server"]
+state-store = ["safe-encode-traits"]
+tantivy = ["dep:tantivy", "dep:once_cell"]
+test-send-sync = []
+testing = [
+    "reqwest-transport",
+    "dep:harana-matrix-macros",
+    # The test helpers serialize `Response` objects to JSON, and build gallery
+    # events.
+    "harana-matrix-common/server",
+    "unstable-msc4274",
+    "dep:assert_matches",
+    "dep:assert_matches2",
+    "dep:ctor",
+    "dep:insta",
+    "dep:tracing-subscriber",
+    "dep:wasm-bindgen-test",
+    "dep:wiremock",
+]
+tokio-runtime = ["tokio/rt", "tokio/time"]
+ui = [
+    "e2e-encryption",
+    "dep:async-rx",
+    "dep:async_cell",
+    "dep:chrono",
+    "dep:emojis",
+    "dep:eyeball-im-util",
+    "dep:fuzzy-matcher",
+    "dep:unicode-segmentation",
+]
+uniffi = ["dep:uniffi", "dep:harana-matrix-macros"]
+unstable-msc3956 = ["harana-matrix-common/unstable-msc3956"]
+unstable-msc4274 = ["harana-matrix-common/unstable-msc4274"]
+unstable-msc4426 = ["harana-matrix-common/unstable-msc4426"]
+
+[dependencies]
+harana-matrix-common = { workspace = true, features = [
+    "rand",
+    "html",
+    "unstable-msc1767",
+    "unstable-msc2448",
+    "unstable-msc2867",
+    "unstable-msc3245-v1-compat",
+    "unstable-msc3381",
+    "unstable-msc3814",
+    "unstable-msc3930",
+    "unstable-msc4108",
+    "unstable-msc4186",
+    "unstable-msc4262",
+    "unstable-msc4278",
+    "olm",
+    "insecure-pk-encryption",
+    "experimental-session-config",
+] }
+
+aes = { version = "0.9.2", default-features = false, optional = true }
+anymap2 = { version = "0.13.0", default-features = false }
+as_variant.workspace = true
+async-channel = "2.5.0"
+async-stream.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+bitflags = { workspace = true, features = ["serde"] }
+blake3 = { version = "1.8.5", default-features = false }
+bs58 = { version = "0.5.1", default-features = false, features = ["std"], optional = true }
+byteorder.workspace = true
+bytes = { version = "1.12.1", default-features = false, features = ["std"] }
+bytesize = { version = "2.4.2", default-features = false, features = ["std"] }
+cfg-if.workspace = true
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc"] }
+ctr = { version = "0.10.1", default-features = false, optional = true }
+decancer = { version = "3.3.3", default-features = false }
+erased-serde.workspace = true
+event-listener = "5.4.2"
+eyeball = { workspace = true, features = ["async-lock"] }
+eyeball-im.workspace = true
+futures-channel.workspace = true
+futures-core.workspace = true
+futures-util = { workspace = true, features = ["async-await-macro", "channel"] }
+growable-bloom-filter.workspace = true
+hex = "0.4.3"
+hkdf.workspace = true
+hmac = { workspace = true, features = ["zeroize"] }
+http.workspace = true
+imbl = { workspace = true, features = ["serde"] }
+indexmap.workspace = true
+itertools.workspace = true
+js_int = "0.2.2"
+js_option = { version = "0.2.0", default-features = false }
+language-tags = { version = "0.3.2" }
+mime.workspace = true
+mime2ext = "0.1.54"
+oauth2.workspace = true
+pbkdf2.workspace = true
+percent-encoding = "2.3.2"
+pin-project-lite.workspace = true
+rand = { workspace = true, features = ["thread_rng"] }
+regex.workspace = true
+rmp-serde.workspace = true
+sanitize-filename.workspace = true
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_bytes.workspace = true
+serde_html_form.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+subtle = { version = "2.6.1", default-features = false, features = ["std", "i128"] }
+tempfile.workspace = true
+thiserror.workspace = true
+time = { version = "0.3.54", default-features = false, features = ["std", "formatting"] }
+tokio.workspace = true
+tokio-stream = { workspace = true, features = ["sync"] }
+tokio-util = "0.7.19"
+tracing = { workspace = true, features = ["attributes"] }
+ulid = { version = "3.0.0", default-features = false, features = ["std"], optional = true }
+unicode-normalization.workspace = true
+url = { workspace = true, features = ["serde"] }
+urlencoding = "2.1.3"
+zeroize = { workspace = true, features = ["zeroize_derive"] }
+
+# Error-type conversions, for callers that use these crates.
+anyhow = { workspace = true, optional = true }
+eyre = { version = "0.6.12", optional = true }
+
+# `ruma-client`
+assign = { version = "1.1.1", optional = true }
+
+# `qrcode`
+qrcode = { version = "0.14.1", default-features = false, optional = true }
+
+# `sqlite`
+deadpool = { version = "0.13", default-features = false, features = ["managed"], optional = true }
+num_cpus = { version = "1.17.0", default-features = false, optional = true }
+rusqlite = { version = "0.40.1", default-features = false, features = ["limits", "fallible_uint", "cache"], optional = true }
+serde_path_to_error = { version = "0.1.20", default-features = false, optional = true }
+
+# `indexeddb`
+gloo-utils = { workspace = true, optional = true }
+indexed_db_futures = { workspace = true, optional = true, features = ["serde", "cursors", "indices", "streams"] }
+js-sys = { workspace = true, optional = true }
+serde-wasm-bindgen = { version = "0.6.5", default-features = false, optional = true }
+uuid = { workspace = true, features = ["js", "serde", "v4"], optional = true }
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["IdbKeyRange", "console"] }
+
+# `ui`
+async-rx = { workspace = true, features = ["alloc"], optional = true }
+async_cell = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+emojis = { version = "0.9.0", default-features = false, optional = true }
+eyeball-im-util = { workspace = true, optional = true }
+fuzzy-matcher = { version = "0.3.7", default-features = false, optional = true }
+unicode-segmentation = { workspace = true, optional = true }
+
+# `experimental-search`
+once_cell = { workspace = true, optional = true }
+tantivy = { version = "0.26.1", default-features = false, features = ["mmap", "stopwords", "stemmer", "lz4-compression", "columnar-zstd-compression"], optional = true }
+
+# `experimental-x509-identity-verification` and `rust-x509-verifier-impl`
+cms = { version = "0.2.3", default-features = false, features = ["std"], optional = true }
+pkcs1 = { version = "0.7.5", default-features = false, optional = true }
+ring = { version = "0.17.14", optional = true, features = ["wasm32_unknown_unknown_js"] }
+rustls = { workspace = true, optional = true, features = ["logging", "ring", "std", "tls12"] }
+rustls-pki-types = { version = "1.15.1", optional = true, default-features = false, features = ["alloc", "web"] }
+rustls-webpki = { version = "0.103.13", default-features = false, optional = true }
+# An older `sha2` than the one above: the rest of the x509 dependencies need an
+# older `const-oid` than the current release is compatible with.
+sha2_0_10 = { package = "sha2", version = "0.10.9", features = ["oid"], optional = true }
+
+# `local-server`
+axum = { version = "0.8.9", optional = true }
+tower = { version = "0.5.3", features = ["util"], optional = true }
+
+# `image-proc`
+blurhash = { version = "0.2.3", default-features = false, optional = true }
+# Only the codecs `image-proc` can strip metadata from, to keep the build small.
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
+
+# `markdown`
+pulldown-cmark = { workspace = true, optional = true }
+
+# `js`
+getrandom = { workspace = true, optional = true }
+wasm-bindgen-futures = { version = "0.4.76", optional = true }
+
+# `uniffi`
+harana-matrix-macros = { workspace = true, optional = true }
+uniffi = { workspace = true, optional = true }
+
+# `testing`
+assert_matches = { workspace = true, optional = true }
+assert_matches2 = { workspace = true, optional = true }
+insta = { workspace = true, optional = true }
+wiremock = { workspace = true, optional = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+backon = { version = "1.6.0", default-features = false, features = ["std"] }
+ctor = { version = "0.2.9", optional = true }
+# only activate reqwest's stream feature on non-wasm, the wasm part seems to not
+# support *sending* streams, which makes it useless for us.
+reqwest = { workspace = true, optional = true, features = ["stream", "gzip", "http2", "rustls-no-provider"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
+tracing-subscriber = { workspace = true, optional = true, features = ["env-filter"] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+futures-executor.workspace = true
+getrandom = { workspace = true, features = ["wasm_js"] }
+gloo-timers = { workspace = true, features = ["futures"] }
+reqwest = { workspace = true, optional = true, features = ["gzip", "http2", "rustls-no-provider"] }
+tokio = { workspace = true, features = ["macros"] }
+tracing-subscriber = { workspace = true, features = ["fmt", "ansi"] }
+wasm-bindgen-test = { workspace = true, optional = true }
+
+[dev-dependencies]
+anyhow.workspace = true
+assert-json-diff.workspace = true
+assert_matches.workspace = true
+assert_matches2.workspace = true
+assign = "1.1.1"
+dirs = "6.0.0"
+erased-serde.workspace = true
+eyeball-im-util.workspace = true
+futures-executor.workspace = true
+glob = "0.3.4"
+harana-matrix-common = { workspace = true, features = ["testing"] }
+harana-matrix-macros.workspace = true
+image = { version = "0.25.10", default-features = false }
+insta.workspace = true
+proptest.workspace = true
+qrcode = { version = "0.14.1", default-features = false, features = ["image"] }
+rand.workspace = true
+rcgen = { workspace = true, features = ["pem", "aws_lc_rs", "x509-parser"] }
+reqwest = { workspace = true, features = ["rustls"] }
+rmp-serde.workspace = true
+serde_urlencoded = "0.7.1"
+similar-asserts.workspace = true
+stream_assert.workspace = true
+tempfile.workspace = true
+tokio-stream.workspace = true
+tokio-test = "0.4.5"
+tracing-subscriber = { workspace = true, features = ["env-filter", "registry", "tracing-log"] }
+url.workspace = true
+wiremock.workspace = true
+
+# The x509 tests use `rust-x509-verifier-impl`, so they need its dependencies.
+ring = { version = "0.17.14", features = ["wasm32_unknown_unknown_js"] }
+rustls = { workspace = true, default-features = false, features = ["std", "ring"] }
+rustls-pki-types = { version = "1.15.1", default-features = false, features = ["alloc", "web"] }
+rustls-webpki = { version = "0.103.13", default-features = false }
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+# Enable the JS feature for getrandom.
+getrandom = { workspace = true, default-features = false, features = ["wasm_js"] }
+getrandom3 = { version = "0.3.4", package = "getrandom", default-features = false, features = ["wasm_js"] }
+gloo-timers = { workspace = true, features = ["futures"] }
+js-sys.workspace = true
+wasm-bindgen-test.workspace = true
+web-sys = { workspace = true, features = ["IdbKeyRange", "Window", "Performance"] }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "integration"
+path = "tests/integration/main.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "ui"
+path = "tests/ui/main.rs"
+required-features = ["testing", "ui", "sqlite", "rustls-aws-lc-rs"]

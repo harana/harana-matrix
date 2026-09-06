@@ -8,14 +8,16 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#put_matrixclientv3room_keyskeysroomidsessionid
 
     use js_int::UInt;
-    use crate::__ruma::{
-        OwnedRoomId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-        serde::Raw,
-    };
 
-    use crate::api::client::backup::KeyBackupData;
+    use crate::{
+        __ruma::{
+            OwnedRoomId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+            serde::Raw,
+        },
+        api::client::backup::KeyBackupData,
+    };
 
     metadata! {
         method: PUT,
@@ -55,8 +57,8 @@ pub mod v3 {
     pub struct Response {
         /// An opaque string representing stored keys in the backup.
         ///
-        /// Clients can compare it with the etag value they received in the request of their last
-        /// key storage request.
+        /// Clients can compare it with the etag value they received in the
+        /// request of their last key storage request.
         pub etag: String,
 
         /// The number of keys stored in the backup.
@@ -64,7 +66,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given version, room_id, session_id and session_data.
+        /// Creates a new `Request` with the given version, room_id, session_id
+        /// and session_data.
         pub fn new(
             version: String,
             room_id: OwnedRoomId,

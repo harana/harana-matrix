@@ -50,23 +50,26 @@ pub mod v1 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given room ID, timestamp and direction.
+        /// Creates a new `Request` with the given room ID, timestamp and
+        /// direction.
         pub fn new(room_id: OwnedRoomId, ts: MilliSecondsSinceUnixEpoch, dir: Direction) -> Self {
             Self { room_id, ts, dir }
         }
 
-        /// Creates a new `Request` with the given room ID and timestamp, and the direction set to
-        /// `Backward`.
+        /// Creates a new `Request` with the given room ID and timestamp, and
+        /// the direction set to `Backward`.
         ///
-        /// Allows to have the latest event before or including the given timestamp.
+        /// Allows to have the latest event before or including the given
+        /// timestamp.
         pub fn until(room_id: OwnedRoomId, ts: MilliSecondsSinceUnixEpoch) -> Self {
             Self::new(room_id, ts, Direction::Backward)
         }
 
-        /// Creates a new `Request` with the given room ID and timestamp, and the direction set to
-        /// `Forward`.
+        /// Creates a new `Request` with the given room ID and timestamp, and
+        /// the direction set to `Forward`.
         ///
-        /// Allows to have the earliest event including or after the given timestamp.
+        /// Allows to have the earliest event including or after the given
+        /// timestamp.
         pub fn since(room_id: OwnedRoomId, ts: MilliSecondsSinceUnixEpoch) -> Self {
             Self::new(room_id, ts, Direction::Forward)
         }

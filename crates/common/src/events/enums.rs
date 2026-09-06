@@ -3,14 +3,14 @@ use serde::{Deserialize, Serialize, de};
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::room::encrypted;
+use crate::__ruma::{
+    EventId, MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId, TransactionId, UserId,
+    serde::{JsonCastable, from_raw_json_value},
+};
 #[cfg(feature = "unstable-msc3381")]
 use crate::events::{
     poll::{start::PollStartEventContent, unstable_start::UnstablePollStartEventContent},
     room::encrypted::Replacement,
-};
-use crate::__ruma::{
-    EventId, MilliSecondsSinceUnixEpoch, OwnedRoomId, RoomId, TransactionId, UserId,
-    serde::{JsonCastable, from_raw_json_value},
 };
 
 /// Event types that servers should send as [stripped state] to help clients

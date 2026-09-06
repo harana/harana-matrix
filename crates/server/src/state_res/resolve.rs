@@ -30,11 +30,11 @@ use crate::state_res::{
 
 /// Resolves conflicting state maps into one room state.
 ///
-/// This is [`harana_matrix_common::state_res::resolve`] driven against an asynchronous store.
-/// The lookups are seeded with every event named by `state_maps` and
-/// `auth_chains`, which is what the algorithm reads in the ordinary case; if it
-/// asks for anything else, that is fetched and resolution is re-run, up to
-/// [`MAX_FETCH_ROUNDS`] times.
+/// This is [`harana_matrix_common::state_res::resolve`] driven against an
+/// asynchronous store. The lookups are seeded with every event named by
+/// `state_maps` and `auth_chains`, which is what the algorithm reads in the
+/// ordinary case; if it asks for anything else, that is fetched and resolution
+/// is re-run, up to [`MAX_FETCH_ROUNDS`] times.
 ///
 /// `fetch_conflicted_state_subgraph` is only consulted by room versions whose
 /// state resolution rules use it, and returning `None` from it fails resolution

@@ -33,11 +33,11 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches2::assert_let;
 use futures::StreamExt;
-use client_matrix::{
+use harana_matrix_client::{
+    base::crypto::store::types::DehydratedDeviceKey,
     encryption::{EncryptionSettings, dehydrated_devices::DehydratedDeviceEvent},
     timeout::timeout,
 };
-use client_base::crypto::store::types::DehydratedDeviceKey;
 use tracing::{info, warn};
 
 use crate::helpers::TestClientBuilder;

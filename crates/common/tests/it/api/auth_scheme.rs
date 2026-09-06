@@ -1,9 +1,9 @@
 use assert_matches2::assert_matches;
-use http::header;
 use harana_matrix_common::api::auth_scheme::{
     AccessToken, AccessTokenOptional, AppserviceToken, AppserviceTokenOptional, AuthScheme,
     NoAccessToken, NoAuthentication, SendAccessToken,
 };
+use http::header;
 
 const TOKEN: &str = "token";
 const HEADER_VALUE: http::HeaderValue = http::HeaderValue::from_static("Bearer token");

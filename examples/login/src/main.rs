@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, RoomState,
     config::SyncSettings,
     ruma::{

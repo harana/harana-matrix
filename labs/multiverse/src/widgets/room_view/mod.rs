@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use crossterm::event::{Event, KeyCode, KeyModifiers};
 use futures_util::StreamExt;
-use imbl::Vector;
-use input::MessageOrCommand;
-use invited_room::InvitedRoomView;
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, RoomState,
     locks::Mutex,
     ruma::{
@@ -13,11 +10,14 @@ use client_matrix::{
         api::client::receipt::create_receipt::v3::ReceiptType,
         events::room::message::RoomMessageEventContent,
     },
+    ui::{
+        Timeline,
+        timeline::{TimelineBuilder, TimelineFocus, TimelineItem, TimelineReadReceiptTracking},
+    },
 };
-use client_ui::{
-    Timeline,
-    timeline::{TimelineBuilder, TimelineFocus, TimelineItem, TimelineReadReceiptTracking},
-};
+use imbl::Vector;
+use input::MessageOrCommand;
+use invited_room::InvitedRoomView;
 use ratatui::{prelude::*, widgets::*};
 use tokio::{spawn, sync::OnceCell, task::JoinHandle};
 use tracing::info;

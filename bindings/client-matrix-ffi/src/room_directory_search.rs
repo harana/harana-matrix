@@ -16,8 +16,10 @@ use std::{fmt::Debug, sync::Arc};
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
-use client_matrix::room_directory_search::RoomDirectorySearch as SdkRoomDirectorySearch;
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
+use harana_matrix_client::{
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    room_directory_search::RoomDirectorySearch as SdkRoomDirectorySearch,
+};
 use harana_matrix_common::ServerName;
 use tokio::sync::RwLock;
 
@@ -59,8 +61,8 @@ pub struct RoomDescription {
     pub joined_members: u64,
 }
 
-impl From<client_matrix::room_directory_search::RoomDescription> for RoomDescription {
-    fn from(value: client_matrix::room_directory_search::RoomDescription) -> Self {
+impl From<harana_matrix_client::room_directory_search::RoomDescription> for RoomDescription {
+    fn from(value: harana_matrix_client::room_directory_search::RoomDescription) -> Self {
         Self {
             room_id: value.room_id.to_string(),
             name: value.name,
@@ -91,7 +93,7 @@ impl RoomDirectorySearch {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomDirectorySearch {
     /// Asks the server for the next page of the current search.
     pub async fn next_page(&self) -> Result<(), ClientError> {
@@ -169,10 +171,12 @@ pub enum RoomDirectorySearchEntryUpdate {
     Reset { values: Vec<RoomDescription> },
 }
 
-impl From<VectorDiff<client_matrix::room_directory_search::RoomDescription>>
+impl From<VectorDiff<harana_matrix_client::room_directory_search::RoomDescription>>
     for RoomDirectorySearchEntryUpdate
 {
-    fn from(diff: VectorDiff<client_matrix::room_directory_search::RoomDescription>) -> Self {
+    fn from(
+        diff: VectorDiff<harana_matrix_client::room_directory_search::RoomDescription>,
+    ) -> Self {
         match diff {
             VectorDiff::Append { values } => {
                 Self::Append { values: values.into_iter().map(|v| v.into()).collect() }
@@ -197,7 +201,7 @@ impl From<VectorDiff<client_matrix::room_directory_search::RoomDescription>>
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomDirectorySearchEntriesListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, room_entries_update: Vec<RoomDirectorySearchEntryUpdate>);
 }

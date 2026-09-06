@@ -4,9 +4,10 @@
 //!
 //! [MSC4495]: https://github.com/matrix-org/matrix-spec-proposals/pull/4495
 
-use crate::__ruma::{OwnedRoomId, OwnedUserId};
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
+
+use crate::__ruma::{OwnedRoomId, OwnedUserId};
 
 /// The content of the `m.presence.prompted` account data key.
 ///
@@ -17,17 +18,20 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "org.continuwuity.presence_v2.msc4495.presence.prompted", kind = GlobalAccountData)]
 pub struct PresencePromptedEventContent {
-    /// The list of users that have previously had the presence sharing prompt displayed.
+    /// The list of users that have previously had the presence sharing prompt
+    /// displayed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub users: Vec<OwnedUserId>,
 
-    /// The list of rooms that have previously had the presence sharing prompt displayed.
+    /// The list of rooms that have previously had the presence sharing prompt
+    /// displayed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rooms: Vec<OwnedRoomId>,
 }
 
 impl PresencePromptedEventContent {
-    /// Creates a new `PresencePromptedEventContent` with the given users and rooms.
+    /// Creates a new `PresencePromptedEventContent` with the given users and
+    /// rooms.
     pub fn new(users: Vec<OwnedUserId>, rooms: Vec<OwnedRoomId>) -> Self {
         Self { users, rooms }
     }
@@ -35,10 +39,12 @@ impl PresencePromptedEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::{canonical_json::assert_to_canonical_json_eq, owned_room_id, owned_user_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::PresencePromptedEventContent;
+    use crate::__ruma::{
+        canonical_json::assert_to_canonical_json_eq, owned_room_id, owned_user_id,
+    };
 
     #[test]
     fn serialization() {

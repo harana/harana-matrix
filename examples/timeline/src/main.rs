@@ -3,8 +3,9 @@
 use anyhow::Result;
 use clap::Parser;
 use futures_util::StreamExt;
-use client_matrix::{Client, config::SyncSettings, ruma::OwnedRoomId};
-use client_ui::timeline::RoomExt;
+use harana_matrix_client::{
+    Client, config::SyncSettings, ruma::OwnedRoomId, ui::timeline::RoomExt,
+};
 use url::Url;
 
 #[derive(Parser, Debug)]

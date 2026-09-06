@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use futures_util::{StreamExt, pin_mut};
-use client_matrix::{
+use harana_matrix_client::{
     Client,
     config::SyncSettings,
     encryption::{backups::BackupState, secret_storage::SecretStore},

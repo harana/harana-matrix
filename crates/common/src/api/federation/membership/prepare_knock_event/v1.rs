@@ -2,14 +2,16 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1make_knockroomiduserid
 
-use crate::__ruma::{
-    OwnedRoomId, OwnedUserId, RoomVersionId,
-    api::{request, response},
-    metadata,
-};
 use serde_json::value::RawValue as RawJsonValue;
 
-use crate::api::federation::authentication::ServerSignatures;
+use crate::{
+    __ruma::{
+        OwnedRoomId, OwnedUserId, RoomVersionId,
+        api::{request, response},
+        metadata,
+    },
+    api::federation::authentication::ServerSignatures,
+};
 
 metadata! {
     method: GET,

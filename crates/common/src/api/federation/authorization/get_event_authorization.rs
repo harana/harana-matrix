@@ -7,14 +7,16 @@ pub mod v1 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1event_authroomideventid
 
-    use crate::__ruma::{
-        OwnedEventId, OwnedRoomId,
-        api::{request, response},
-        metadata,
-    };
     use serde_json::value::RawValue as RawJsonValue;
 
-    use crate::api::federation::authentication::ServerSignatures;
+    use crate::{
+        __ruma::{
+            OwnedEventId, OwnedRoomId,
+            api::{request, response},
+            metadata,
+        },
+        api::federation::authentication::ServerSignatures,
+    };
 
     metadata! {
         method: GET,
@@ -38,8 +40,8 @@ pub mod v1 {
     /// Response type for the `get_event_authorization` endpoint.
     #[response]
     pub struct Response {
-        /// The full set of authorization events that make up the state of the room,
-        /// and their authorization events, recursively.
+        /// The full set of authorization events that make up the state of the
+        /// room, and their authorization events, recursively.
         pub auth_chain: Vec<Box<RawJsonValue>>,
     }
 

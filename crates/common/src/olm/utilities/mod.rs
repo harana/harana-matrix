@@ -15,13 +15,13 @@
 
 mod libolm_compat;
 
+pub(crate) use libolm_compat::get_version as get_pickle_version;
+#[cfg(feature = "libolm-compat")]
+pub(crate) use libolm_compat::{LibolmEd25519Keypair, pickle_libolm, unpickle_libolm};
 use olm_base64::{
     DecodeError, Engine, alphabet,
     engine::{GeneralPurpose, general_purpose},
 };
-pub(crate) use libolm_compat::get_version as get_pickle_version;
-#[cfg(feature = "libolm-compat")]
-pub(crate) use libolm_compat::{LibolmEd25519Keypair, pickle_libolm, unpickle_libolm};
 
 const STANDARD_NO_PAD: GeneralPurpose = GeneralPurpose::new(
     &alphabet::STANDARD,

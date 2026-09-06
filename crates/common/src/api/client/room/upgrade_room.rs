@@ -26,8 +26,9 @@ pub mod v3 {
     /// Request type for the `upgrade_room` endpoint.
     #[request]
     pub struct Request {
-        /// A list of user IDs to consider as additional creators, and hence grant an "infinite"
-        /// immutable power level, from room version 12 onwards.
+        /// A list of user IDs to consider as additional creators, and hence
+        /// grant an "infinite" immutable power level, from room version
+        /// 12 onwards.
         #[serde(default, skip_serializing_if = "<[_]>::is_empty")]
         pub additional_creators: Vec<OwnedUserId>,
 

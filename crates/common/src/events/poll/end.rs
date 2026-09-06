@@ -5,23 +5,26 @@ use std::{
     ops::Deref,
 };
 
-use js_int::UInt;
-use crate::__ruma::OwnedEventId;
 use harana_matrix_macros::EventContent;
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
 
-use crate::events::{message::TextContentBlock, relation::Reference};
+use crate::{
+    __ruma::OwnedEventId,
+    events::{message::TextContentBlock, relation::Reference},
+};
 
 /// The payload for a poll end event.
 ///
 /// This type can be generated from the poll start and poll response events with
 /// [`OriginalSyncPollStartEvent::compile_results()`].
 ///
-/// This is the event content that should be sent for room versions that support extensible events.
-/// As of Matrix 1.7, none of the stable room versions (1 through 10) support extensible events.
+/// This is the event content that should be sent for room versions that support
+/// extensible events. As of Matrix 1.7, none of the stable room versions (1
+/// through 10) support extensible events.
 ///
-/// To send a poll end event for a room version that does not support extensible events, use
-/// [`UnstablePollEndEventContent`].
+/// To send a poll end event for a room version that does not support extensible
+/// events, use [`UnstablePollEndEventContent`].
 ///
 /// [`OriginalSyncPollStartEvent::compile_results()`]: super::start::OriginalSyncPollStartEvent::compile_results
 /// [`UnstablePollEndEventContent`]: super::unstable_end::UnstablePollEndEventContent
@@ -52,8 +55,8 @@ pub struct PollEndEventContent {
 }
 
 impl PollEndEventContent {
-    /// Creates a new `PollEndEventContent` with the given fallback representation and
-    /// that responds to the given poll start event ID.
+    /// Creates a new `PollEndEventContent` with the given fallback
+    /// representation and that responds to the given poll start event ID.
     pub fn new(text: TextContentBlock, poll_start_id: OwnedEventId) -> Self {
         Self {
             text,
@@ -64,8 +67,8 @@ impl PollEndEventContent {
         }
     }
 
-    /// Creates a new `PollEndEventContent` with the given plain text fallback representation and
-    /// that responds to the given poll start event ID.
+    /// Creates a new `PollEndEventContent` with the given plain text fallback
+    /// representation and that responds to the given poll start event ID.
     pub fn with_plain_text(plain_text: impl Into<String>, poll_start_id: OwnedEventId) -> Self {
         Self {
             text: TextContentBlock::plain(plain_text),

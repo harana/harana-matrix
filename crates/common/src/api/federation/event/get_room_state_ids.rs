@@ -1,19 +1,21 @@
 //! `GET /_matrix/federation/*/state_ids/{roomId}`
 //!
-//! Retrieves a snapshot of a room's state at a given event, in the form of event IDs.
+//! Retrieves a snapshot of a room's state at a given event, in the form of
+//! event IDs.
 
 pub mod v1 {
     //! `/v1/` ([spec])
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1state_idsroomid
 
-    use crate::__ruma::{
-        OwnedEventId, OwnedRoomId,
-        api::{request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedEventId, OwnedRoomId,
+            api::{request, response},
+            metadata,
+        },
+        api::federation::authentication::ServerSignatures,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,
@@ -53,7 +55,8 @@ pub mod v1 {
     }
 
     impl Response {
-        /// Creates a new `Response` with the given auth chain IDs and room state IDs.
+        /// Creates a new `Response` with the given auth chain IDs and room
+        /// state IDs.
         pub fn new(auth_chain_ids: Vec<OwnedEventId>, pdu_ids: Vec<OwnedEventId>) -> Self {
             Self { auth_chain_ids, pdu_ids }
         }

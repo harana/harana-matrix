@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3account3pidbind
 
-    use crate::__ruma::{
-        OwnedClientSecret, OwnedSessionId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedClientSecret, OwnedSessionId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::account::IdentityServerInfo,
     };
-
-    use crate::api::client::account::IdentityServerInfo;
 
     metadata! {
         method: POST,
@@ -46,8 +47,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given client secret, identity server information and
-        /// session identifier.
+        /// Creates a new `Request` with the given client secret, identity
+        /// server information and session identifier.
         pub fn new(
             client_secret: OwnedClientSecret,
             identity_server_info: IdentityServerInfo,

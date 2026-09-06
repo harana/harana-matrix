@@ -5,10 +5,6 @@
 use std::{borrow::Cow, fmt};
 
 use as_variant::as_variant;
-use crate::__ruma::{
-    OwnedDeviceId, OwnedTransactionId,
-    serde::{Base64, JsonObject},
-};
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::{Value as JsonValue, from_value as from_json_value};
@@ -16,7 +12,13 @@ use serde_json::{Value as JsonValue, from_value as from_json_value};
 use super::{
     HashAlgorithm, KeyAgreementProtocol, MessageAuthenticationCode, ShortAuthenticationString,
 };
-use crate::events::relation::Reference;
+use crate::{
+    __ruma::{
+        OwnedDeviceId, OwnedTransactionId,
+        serde::{Base64, JsonObject},
+    },
+    events::relation::Reference,
+};
 
 /// The content of a to-device `m.key.verification.start` event.
 ///
@@ -30,9 +32,9 @@ pub struct ToDeviceKeyVerificationStartEventContent {
 
     /// An opaque identifier for the verification process.
     ///
-    /// Must be unique with respect to the devices involved. Must be the same as the
-    /// `transaction_id` given in the `m.key.verification.request` if this process is originating
-    /// from a request.
+    /// Must be unique with respect to the devices involved. Must be the same as
+    /// the `transaction_id` given in the `m.key.verification.request` if
+    /// this process is originating from a request.
     pub transaction_id: OwnedTransactionId,
 
     /// Method specific content.
@@ -41,8 +43,8 @@ pub struct ToDeviceKeyVerificationStartEventContent {
 }
 
 impl ToDeviceKeyVerificationStartEventContent {
-    /// Creates a new `ToDeviceKeyVerificationStartEventContent` with the given device ID,
-    /// transaction ID and method specific content.
+    /// Creates a new `ToDeviceKeyVerificationStartEventContent` with the given
+    /// device ID, transaction ID and method specific content.
     pub fn new(
         from_device: OwnedDeviceId,
         transaction_id: OwnedTransactionId,
@@ -72,14 +74,15 @@ pub struct KeyVerificationStartEventContent {
 }
 
 impl KeyVerificationStartEventContent {
-    /// Creates a new `KeyVerificationStartEventContent` with the given device ID, method and
-    /// reference.
+    /// Creates a new `KeyVerificationStartEventContent` with the given device
+    /// ID, method and reference.
     pub fn new(from_device: OwnedDeviceId, method: StartMethod, relates_to: Reference) -> Self {
         Self { from_device, method, relates_to }
     }
 }
 
-/// An enum representing the different method specific `m.key.verification.start` content.
+/// An enum representing the different method specific
+/// `m.key.verification.start` content.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(untagged)]
@@ -111,11 +114,11 @@ impl StartMethod {
 
     /// The data of this `StartMethod`.
     ///
-    /// The returned JSON object won't contain the `method` field, use [`.method()`][Self::method]
-    /// to access it.
+    /// The returned JSON object won't contain the `method` field, use
+    /// [`.method()`][Self::method] to access it.
     ///
-    /// Prefer to use the public variants of `StartMethod` where possible; this method is meant to
-    /// be used for custom methods only.
+    /// Prefer to use the public variants of `StartMethod` where possible; this
+    /// method is meant to be used for custom methods only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: T) -> JsonObject {
             match serde_json::to_value(obj).expect("start method serialization to succeed") {
@@ -177,7 +180,8 @@ pub struct _CustomStartMethodContent {
     data: JsonObject,
 }
 
-/// The payload of an `m.key.verification.start` event using the `m.sas.v1` method.
+/// The payload of an `m.key.verification.start` event using the `m.sas.v1`
+/// method.
 #[derive(Clone, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(rename = "m.reciprocate.v1", tag = "method")]
@@ -189,7 +193,8 @@ pub struct ReciprocateV1Content {
 impl ReciprocateV1Content {
     /// Create a new `ReciprocateV1Content` with the given shared secret.
     ///
-    /// The shared secret needs to come from the scanned QR code, encoded using unpadded base64.
+    /// The shared secret needs to come from the scanned QR code, encoded using
+    /// unpadded base64.
     pub fn new(secret: Base64) -> Self {
         Self { secret }
     }
@@ -201,10 +206,11 @@ impl fmt::Debug for ReciprocateV1Content {
     }
 }
 
-/// The payload of an `m.key.verification.start` event using the `m.sas.v1` method.
+/// The payload of an `m.key.verification.start` event using the `m.sas.v1`
+/// method.
 ///
-/// To create an instance of this type, first create a `SasV1ContentInit` and convert it via
-/// `SasV1Content::from` / `.into()`.
+/// To create an instance of this type, first create a `SasV1ContentInit` and
+/// convert it via `SasV1Content::from` / `.into()`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[serde(rename = "m.sas.v1", tag = "method")]
@@ -221,12 +227,14 @@ pub struct SasV1Content {
 
     /// The message authentication codes that the sending device understands.
     ///
-    /// Must include at least `hkdf-hmac-sha256.v2`. Should also include `hkdf-hmac-sha256` for
-    /// compatibility with older clients, though this MAC is deprecated and will be removed in a
-    /// future version of the spec.
+    /// Must include at least `hkdf-hmac-sha256.v2`. Should also include
+    /// `hkdf-hmac-sha256` for compatibility with older clients, though this
+    /// MAC is deprecated and will be removed in a future version of the
+    /// spec.
     pub message_authentication_codes: Vec<MessageAuthenticationCode>,
 
-    /// The SAS methods the sending device (and the sending device's user) understands.
+    /// The SAS methods the sending device (and the sending device's user)
+    /// understands.
     ///
     /// Must include at least `decimal`. Optionally can include `emoji`.
     pub short_authentication_string: Vec<ShortAuthenticationString>,
@@ -234,8 +242,8 @@ pub struct SasV1Content {
 
 /// Mandatory initial set of fields for creating an `SasV1Content`.
 ///
-/// This struct will not be updated even if additional fields are added to `SasV1Content` in a new
-/// (non-breaking) release of the Matrix specification.
+/// This struct will not be updated even if additional fields are added to
+/// `SasV1Content` in a new (non-breaking) release of the Matrix specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct SasV1ContentInit {
@@ -251,12 +259,14 @@ pub struct SasV1ContentInit {
 
     /// The message authentication codes that the sending device understands.
     ///
-    /// Must include at least `hkdf-hmac-sha256.v2`. Should also include `hkdf-hmac-sha256` for
-    /// compatibility with older clients, though this MAC is deprecated and will be removed in a
-    /// future version of the spec.
+    /// Must include at least `hkdf-hmac-sha256.v2`. Should also include
+    /// `hkdf-hmac-sha256` for compatibility with older clients, though this
+    /// MAC is deprecated and will be removed in a future version of the
+    /// spec.
     pub message_authentication_codes: Vec<MessageAuthenticationCode>,
 
-    /// The SAS methods the sending device (and the sending device's user) understands.
+    /// The SAS methods the sending device (and the sending device's user)
+    /// understands.
     ///
     /// Should include at least `decimal`.
     pub short_authentication_string: Vec<ShortAuthenticationString>,
@@ -277,7 +287,6 @@ impl From<SasV1ContentInit> for SasV1Content {
 #[cfg(test)]
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
-    use crate::__ruma::{canonical_json::assert_to_canonical_json_eq, event_id, serde::Base64};
     use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
     use super::{
@@ -285,7 +294,10 @@ mod tests {
         MessageAuthenticationCode, ReciprocateV1Content, SasV1ContentInit,
         ShortAuthenticationString, StartMethod, ToDeviceKeyVerificationStartEventContent,
     };
-    use crate::events::{ToDeviceEvent, relation::Reference};
+    use crate::{
+        __ruma::{canonical_json::assert_to_canonical_json_eq, event_id, serde::Base64},
+        events::{ToDeviceEvent, relation::Reference},
+    };
 
     #[test]
     fn to_device_serialization() {
@@ -403,7 +415,8 @@ mod tests {
             "short_authentication_string": ["decimal"]
         });
 
-        // Deserialize the content struct separately to verify `TryFromRaw` is implemented for it.
+        // Deserialize the content struct separately to verify `TryFromRaw` is
+        // implemented for it.
         let content = from_json_value::<ToDeviceKeyVerificationStartEventContent>(json).unwrap();
         assert_eq!(content.from_device, "123");
         assert_eq!(content.transaction_id, "456");
@@ -482,7 +495,8 @@ mod tests {
             }
         });
 
-        // Deserialize the content struct separately to verify `TryFromRaw` is implemented for it.
+        // Deserialize the content struct separately to verify `TryFromRaw` is
+        // implemented for it.
         let content = from_json_value::<KeyVerificationStartEventContent>(json).unwrap();
         assert_eq!(content.from_device, "123");
         assert_eq!(content.relates_to.event_id, "$1598361704261elfgc:localhost");

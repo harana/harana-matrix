@@ -19,7 +19,7 @@ use std::{
 };
 
 use extension_trait::extension_trait;
-use client_matrix::{
+use harana_matrix_client::{
     attachment::{BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo},
     utils::formatted_body_from_markdown,
 };
@@ -166,7 +166,9 @@ pub struct AuthDataPasswordDetails {
 impl TryFrom<AuthData> for harana_matrix_common::api::client::uiaa::AuthData {
     type Error = ClientError;
 
-    fn try_from(value: AuthData) -> Result<harana_matrix_common::api::client::uiaa::AuthData, Self::Error> {
+    fn try_from(
+        value: AuthData,
+    ) -> Result<harana_matrix_common::api::client::uiaa::AuthData, Self::Error> {
         use harana_matrix_common::api::client::uiaa;
 
         match value {
@@ -277,7 +279,7 @@ impl From<&harana_matrix_common::api::client::uiaa::UiaaInfo> for UiaaChallenge 
 
 /// Parse a matrix entity from a given URI, be it either
 /// a `matrix.to` link or a `matrix:` URI
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn parse_matrix_entity_from(uri: String) -> Option<MatrixEntity> {
     if let Ok(matrix_uri) = RumaMatrixUri::parse(&uri) {
         return Some(MatrixEntity {
@@ -414,14 +416,14 @@ impl From<UserCall> for CallProfileField {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn message_event_content_new(
     msgtype: MessageType,
 ) -> Result<Arc<RoomMessageEventContentWithoutRelation>, ClientError> {
     Ok(Arc::new(RoomMessageEventContentWithoutRelation::new(msgtype.try_into()?)))
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn message_event_content_from_markdown(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
@@ -433,7 +435,7 @@ pub fn message_event_content_from_markdown(
     )))
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn message_event_content_from_markdown_as_emote(
     md: String,
 ) -> Arc<RoomMessageEventContentWithoutRelation> {
@@ -445,7 +447,7 @@ pub fn message_event_content_from_markdown_as_emote(
     )))
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn message_event_content_from_html(
     body: String,
     html_body: String,
@@ -455,7 +457,7 @@ pub fn message_event_content_from_html(
     )))
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn message_event_content_from_html_as_emote(
     body: String,
     html_body: String,
@@ -470,7 +472,7 @@ pub struct MediaSource {
     pub(crate) media_source: RumaMediaSource,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl MediaSource {
     #[uniffi::constructor]
     pub fn from_url(url: String) -> Result<Arc<MediaSource>, ClientError> {
@@ -1214,7 +1216,9 @@ impl From<FormattedBody> for RumaFormattedBody {
     fn from(f: FormattedBody) -> Self {
         Self {
             format: match f.format {
-                MessageFormat::Html => client_matrix::ruma::events::room::message::MessageFormat::Html,
+                MessageFormat::Html => {
+                    harana_matrix_client::ruma::events::room::message::MessageFormat::Html
+                }
                 MessageFormat::Unknown { format } => format.into(),
             },
             body: f.body,
@@ -1226,7 +1230,9 @@ impl From<&RumaFormattedBody> for FormattedBody {
     fn from(f: &RumaFormattedBody) -> Self {
         Self {
             format: match &f.format {
-                client_matrix::ruma::events::room::message::MessageFormat::Html => MessageFormat::Html,
+                harana_matrix_client::ruma::events::room::message::MessageFormat::Html => {
+                    MessageFormat::Html
+                }
                 _ => MessageFormat::Unknown { format: f.format.to_string() },
             },
             body: f.body.clone(),
@@ -1240,10 +1246,12 @@ pub enum MessageFormat {
     Unknown { format: String },
 }
 
-impl TryFrom<&client_matrix::ruma::events::room::ImageInfo> for ImageInfo {
+impl TryFrom<&harana_matrix_client::ruma::events::room::ImageInfo> for ImageInfo {
     type Error = ClientError;
 
-    fn try_from(info: &client_matrix::ruma::events::room::ImageInfo) -> Result<Self, Self::Error> {
+    fn try_from(
+        info: &harana_matrix_client::ruma::events::room::ImageInfo,
+    ) -> Result<Self, Self::Error> {
         let thumbnail_info = info.thumbnail_info.as_ref().map(|info| ThumbnailInfo {
             height: info.height.map(Into::into),
             width: info.width.map(Into::into),
@@ -1363,7 +1371,7 @@ impl From<RumaPollKind> for PollKind {
 
 /// Creates a [`RoomMessageEventContentWithoutRelation`] given a
 /// [`MessageContent`] value.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn content_without_relation_from_message(
     message: MessageContent,
 ) -> Result<Arc<RoomMessageEventContentWithoutRelation>, ClientError> {

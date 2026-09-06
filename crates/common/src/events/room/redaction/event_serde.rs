@@ -1,6 +1,3 @@
-use crate::__ruma::{
-    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, serde::from_raw_json_value,
-};
 use serde::{Deserialize, Deserializer, de};
 use serde_json::value::RawValue as RawJsonValue;
 
@@ -8,7 +5,13 @@ use super::{
     OriginalRoomRedactionEvent, OriginalSyncRoomRedactionEvent, RoomRedactionEvent,
     RoomRedactionEventContent, RoomRedactionUnsigned, SyncRoomRedactionEvent,
 };
-use crate::events::RedactionDeHelper;
+use crate::{
+    __ruma::{
+        MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId,
+        serde::from_raw_json_value,
+    },
+    events::RedactionDeHelper,
+};
 
 impl<'de> Deserialize<'de> for RoomRedactionEvent {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

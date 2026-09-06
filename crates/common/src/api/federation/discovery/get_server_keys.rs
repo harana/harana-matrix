@@ -7,13 +7,14 @@ pub mod v2 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixkeyv2server
 
-    use crate::__ruma::{
-        api::{auth_scheme::NoAuthentication, request, response},
-        metadata,
-        serde::Raw,
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::NoAuthentication, request, response},
+            metadata,
+            serde::Raw,
+        },
+        api::federation::discovery::ServerSigningKeys,
     };
-
-    use crate::api::federation::discovery::ServerSigningKeys;
 
     metadata! {
         method: GET,

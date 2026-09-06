@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use futures_util::StreamExt;
-use client_matrix::{
+use harana_matrix_client::{
     Client,
     authentication::oauth::{
         qrcode::{LoginProgress, Msc4108IntentData, QrCodeData, QrCodeIntentData, QrProgress},

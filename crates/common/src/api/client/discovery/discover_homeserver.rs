@@ -6,12 +6,12 @@
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "unstable-msc4143")]
-use crate::api::client::rtc::RtcTransport;
 use crate::__ruma::{
     api::{auth_scheme::NoAccessToken, request, response},
     metadata,
 };
+#[cfg(feature = "unstable-msc4143")]
+use crate::api::client::rtc::RtcTransport;
 
 metadata! {
     method: GET,

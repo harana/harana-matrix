@@ -10,10 +10,10 @@ pub mod v3 {
     use crate::__ruma::{
         OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
+        events::{AnyGlobalAccountDataEventContent, GlobalAccountDataEventType},
         metadata,
         serde::Raw,
     };
-    use crate::__ruma::events::{AnyGlobalAccountDataEventContent, GlobalAccountDataEventType};
 
     metadata! {
         method: GET,
@@ -42,10 +42,11 @@ pub mod v3 {
     pub struct Response {
         /// Account data content for the given type.
         ///
-        /// Since the inner type of the `Raw` does not implement `Deserialize`, you need to use
-        /// `.deserialize_as_unchecked::<T>()` or
-        /// `.cast_ref_unchecked::<T>().deserialize_with_type()` for event types with a
-        /// variable suffix (like [`SecretStorageKeyEventContent`]) to deserialize it.
+        /// Since the inner type of the `Raw` does not implement `Deserialize`,
+        /// you need to use `.deserialize_as_unchecked::<T>()` or
+        /// `.cast_ref_unchecked::<T>().deserialize_with_type()` for event types
+        /// with a variable suffix (like
+        /// [`SecretStorageKeyEventContent`]) to deserialize it.
         ///
         /// [`SecretStorageKeyEventContent`]: crate::__ruma::events::secret_storage::key::SecretStorageKeyEventContent
         #[ruma_api(body)]

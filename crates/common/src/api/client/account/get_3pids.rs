@@ -31,11 +31,11 @@ pub mod v3 {
     /// Response type for the `get_3pids` endpoint.
     #[response]
     pub struct Response {
-        /// A list of third party identifiers the homeserver has associated with the user's
-        /// account.
+        /// A list of third party identifiers the homeserver has associated with
+        /// the user's account.
         ///
-        /// If the `compat-get-3pids` feature is enabled, this field will always be serialized,
-        /// even if its value is an empty list.
+        /// If the `compat-get-3pids` feature is enabled, this field will always
+        /// be serialized, even if its value is an empty list.
         #[serde(default)]
         #[cfg_attr(
             not(feature = "compat-get-3pids"),

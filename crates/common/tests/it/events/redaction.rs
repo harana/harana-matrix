@@ -1,13 +1,16 @@
 use assert_matches2::assert_matches;
-use js_int::uint;
 use harana_matrix_common::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
-    room_version_rules::RedactionRules, serde::CanBeEmpty,
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent,
+        room::redaction::{RoomRedactionEvent, RoomRedactionEventContent},
+    },
+    owned_event_id,
+    room_version_rules::RedactionRules,
+    serde::CanBeEmpty,
 };
-use harana_matrix_common::events::{
-    AnyMessageLikeEvent,
-    room::redaction::{RoomRedactionEvent, RoomRedactionEventContent},
-};
+use js_int::uint;
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

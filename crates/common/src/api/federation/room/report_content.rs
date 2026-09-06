@@ -7,13 +7,14 @@ pub mod msc3843 {
     //!
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/3843
 
-    use crate::__ruma::{
-        OwnedEventId, OwnedRoomId,
-        api::{request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedEventId, OwnedRoomId,
+            api::{request, response},
+            metadata,
+        },
+        api::federation::authentication::ServerSignatures,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: POST,

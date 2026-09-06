@@ -17,7 +17,9 @@
 
 //! One registration and the namespaces it claims.
 
-use harana_matrix_common::{OwnedUserId, RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration};
+use harana_matrix_common::{
+    OwnedUserId, RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration,
+};
 
 use crate::appservice::{Error, NamespaceRegex};
 

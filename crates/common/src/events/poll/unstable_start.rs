@@ -1,16 +1,15 @@
-//! Types for the `org.matrix.msc3381.poll.start` event, the unstable version of `m.poll.start`.
+//! Types for the `org.matrix.msc3381.poll.start` event, the unstable version of
+//! `m.poll.start`.
 
 use std::ops::Deref;
 
-use js_int::UInt;
 use harana_matrix_macros::EventContent;
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
 
 mod content_serde;
 mod unstable_poll_answers_serde;
 mod unstable_poll_kind_serde;
-
-use crate::__ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, room_version_rules::RedactionRules};
 
 use self::unstable_poll_answers_serde::UnstablePollAnswersDeHelper;
 use super::{
@@ -18,19 +17,23 @@ use super::{
     start::{PollAnswers, PollAnswersError, PollContentBlock, PollKind},
     unstable_end::UnstablePollEndEventContent,
 };
-use crate::events::{
-    MessageLikeEventContent, MessageLikeEventType, RedactContent, RedactedMessageLikeEventContent,
-    StaticEventContent, relation::Replacement, room::message::RelationWithoutReplacement,
+use crate::{
+    __ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId, room_version_rules::RedactionRules},
+    events::{
+        MessageLikeEventContent, MessageLikeEventType, RedactContent,
+        RedactedMessageLikeEventContent, StaticEventContent, relation::Replacement,
+        room::message::RelationWithoutReplacement,
+    },
 };
 
 /// The payload for an unstable poll start event.
 ///
-/// This is the event content that should be sent for room versions that don't support extensible
-/// events. As of Matrix 1.7, none of the stable room versions (1 through 10) support extensible
-/// events.
+/// This is the event content that should be sent for room versions that don't
+/// support extensible events. As of Matrix 1.7, none of the stable room
+/// versions (1 through 10) support extensible events.
 ///
-/// To send a poll start event for a room version that supports extensible events, use
-/// [`PollStartEventContent`].
+/// To send a poll start event for a room version that supports extensible
+/// events, use [`PollStartEventContent`].
 ///
 /// [`PollStartEventContent`]: super::start::PollStartEventContent
 #[derive(Clone, Debug, Serialize, EventContent)]
@@ -114,7 +117,8 @@ pub struct NewUnstablePollStartEventContent {
     #[serde(rename = "org.matrix.msc3381.poll.start")]
     pub poll_start: UnstablePollStartContentBlock,
 
-    /// Text representation of the message, for clients that don't support polls.
+    /// Text representation of the message, for clients that don't support
+    /// polls.
     #[serde(rename = "org.matrix.msc1767.text")]
     pub text: Option<String>,
 
@@ -124,13 +128,14 @@ pub struct NewUnstablePollStartEventContent {
 }
 
 impl NewUnstablePollStartEventContent {
-    /// Creates a `NewUnstablePollStartEventContent` with the given poll content.
+    /// Creates a `NewUnstablePollStartEventContent` with the given poll
+    /// content.
     pub fn new(poll_start: UnstablePollStartContentBlock) -> Self {
         Self { poll_start, text: None, relates_to: None }
     }
 
-    /// Creates a `NewUnstablePollStartEventContent` with the given plain text fallback
-    /// representation and poll content.
+    /// Creates a `NewUnstablePollStartEventContent` with the given plain text
+    /// fallback representation and poll content.
     pub fn plain_text(text: impl Into<String>, poll_start: UnstablePollStartContentBlock) -> Self {
         Self { poll_start, text: Some(text.into()), relates_to: None }
     }
@@ -149,8 +154,8 @@ impl MessageLikeEventContent for NewUnstablePollStartEventContent {
 
 /// Form of [`NewUnstablePollStartEventContent`] without relation.
 ///
-/// To construct this type, construct a [`NewUnstablePollStartEventContent`] and then use one of its
-/// `::from()` / `.into()` methods.
+/// To construct this type, construct a [`NewUnstablePollStartEventContent`] and
+/// then use one of its `::from()` / `.into()` methods.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct NewUnstablePollStartEventContentWithoutRelation {
@@ -158,7 +163,8 @@ pub struct NewUnstablePollStartEventContentWithoutRelation {
     #[serde(rename = "org.matrix.msc3381.poll.start")]
     pub poll_start: UnstablePollStartContentBlock,
 
-    /// Text representation of the message, for clients that don't support polls.
+    /// Text representation of the message, for clients that don't support
+    /// polls.
     #[serde(rename = "org.matrix.msc1767.text")]
     pub text: Option<String>,
 }
@@ -177,7 +183,8 @@ pub struct ReplacementUnstablePollStartEventContent {
     /// The poll content of the message.
     pub poll_start: Option<UnstablePollStartContentBlock>,
 
-    /// Text representation of the message, for clients that don't support polls.
+    /// Text representation of the message, for clients that don't support
+    /// polls.
     pub text: Option<String>,
 
     /// Information about related messages.
@@ -185,8 +192,8 @@ pub struct ReplacementUnstablePollStartEventContent {
 }
 
 impl ReplacementUnstablePollStartEventContent {
-    /// Creates a `ReplacementUnstablePollStartEventContent` with the given poll content that
-    /// replaces the event with the given ID.
+    /// Creates a `ReplacementUnstablePollStartEventContent` with the given poll
+    /// content that replaces the event with the given ID.
     ///
     /// The constructed content does not have a fallback by default.
     pub fn new(poll_start: UnstablePollStartContentBlock, replaces: OwnedEventId) -> Self {
@@ -200,8 +207,9 @@ impl ReplacementUnstablePollStartEventContent {
         }
     }
 
-    /// Creates a `ReplacementUnstablePollStartEventContent` with the given plain text fallback
-    /// representation and poll content that replaces the event with the given ID.
+    /// Creates a `ReplacementUnstablePollStartEventContent` with the given
+    /// plain text fallback representation and poll content that replaces
+    /// the event with the given ID.
     ///
     /// The constructed content does not have a fallback by default.
     pub fn plain_text(

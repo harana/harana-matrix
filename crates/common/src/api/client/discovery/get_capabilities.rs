@@ -1,7 +1,7 @@
 //! `GET /_matrix/client/*/capabilities`
 //!
-//! Get information about the server's supported feature set and other relevant capabilities
-//! ([spec]).
+//! Get information about the server's supported feature set and other relevant
+//! capabilities ([spec]).
 //!
 //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#capabilities-negotiation
 
@@ -13,19 +13,21 @@ pub mod v3 {
     use std::{borrow::Cow, collections::BTreeMap};
 
     use maplit::btreemap;
-    use crate::__ruma::{
-        RoomVersionId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-        profile::ProfileFieldName,
-        serde::StringEnum,
-    };
     use serde::{Deserialize, Serialize};
     use serde_json::{
         Value as JsonValue, from_value as from_json_value, to_value as to_json_value,
     };
 
-    use crate::api::client::PrivOwnedStr;
+    use crate::{
+        __ruma::{
+            RoomVersionId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+            profile::ProfileFieldName,
+            serde::StringEnum,
+        },
+        api::client::PrivOwnedStr,
+    };
 
     metadata! {
         method: GET,
@@ -69,7 +71,8 @@ pub mod v3 {
         }
     }
 
-    /// Contains information about all the capabilities that the server supports.
+    /// Contains information about all the capabilities that the server
+    /// supports.
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     #[allow(deprecated)]
@@ -108,8 +111,8 @@ pub mod v3 {
         #[deprecated = "Since Matrix 1.16, prefer profile_fields if it is set."]
         pub set_avatar_url: SetAvatarUrlCapability,
 
-        /// Capability to indicate if the user can change the third-party identifiers associated
-        /// with their account.
+        /// Capability to indicate if the user can change the third-party
+        /// identifiers associated with their account.
         #[serde(
             rename = "m.3pid_changes",
             default,
@@ -117,8 +120,8 @@ pub mod v3 {
         )]
         pub thirdparty_id_changes: ThirdPartyIdChangesCapability,
 
-        /// Capability to indicate if the user can generate tokens to log further clients into
-        /// their account.
+        /// Capability to indicate if the user can generate tokens to log
+        /// further clients into their account.
         #[serde(
             rename = "m.get_login_token",
             default,
@@ -134,7 +137,8 @@ pub mod v3 {
         )]
         pub profile_fields: Option<ProfileFieldsCapability>,
 
-        /// Capability to indicate if the server automatically forgets rooms that the user leaves.
+        /// Capability to indicate if the server automatically forgets rooms
+        /// that the user leaves.
         #[serde(
             rename = "m.forget_forced_upon_leave",
             default,
@@ -142,8 +146,8 @@ pub mod v3 {
         )]
         pub forget_forced_upon_leave: ForgetForcedUponLeaveCapability,
 
-        /// Capability to indicate if the user can perform account moderation actions via [server
-        /// administration] endpoints.
+        /// Capability to indicate if the user can perform account moderation
+        /// actions via [server administration] endpoints.
         ///
         /// [server administration]: https://spec.matrix.org/v1.19/client-server-api/#server-administration
         #[serde(
@@ -153,8 +157,9 @@ pub mod v3 {
         )]
         pub account_moderation: AccountModerationCapability,
 
-        /// Any other custom capabilities that the server supports outside of the specification,
-        /// labeled using the Java package naming convention and stored as arbitrary JSON values.
+        /// Any other custom capabilities that the server supports outside of
+        /// the specification, labeled using the Java package naming
+        /// convention and stored as arbitrary JSON values.
         #[serde(flatten)]
         custom_capabilities: BTreeMap<String, JsonValue>,
     }
@@ -167,8 +172,9 @@ pub mod v3 {
 
         /// Returns the value of the given capability.
         ///
-        /// Prefer to use the public fields of `Capabilities` where possible; this method is meant
-        /// to be used for unsupported capabilities only.
+        /// Prefer to use the public fields of `Capabilities` where possible;
+        /// this method is meant to be used for unsupported capabilities
+        /// only.
         pub fn get(&self, capability: &str) -> Option<Cow<'_, JsonValue>> {
             fn serialize<T: Serialize>(cap: &T) -> JsonValue {
                 to_json_value(cap).expect("capability serialization to succeed")
@@ -193,9 +199,10 @@ pub mod v3 {
 
         /// Sets a capability to the given value.
         ///
-        /// Prefer to use the public fields of `Capabilities` where possible; this method is meant
-        /// to be used for unsupported capabilities only and does not allow setting
-        /// arbitrary data for supported ones.
+        /// Prefer to use the public fields of `Capabilities` where possible;
+        /// this method is meant to be used for unsupported capabilities
+        /// only and does not allow setting arbitrary data for supported
+        /// ones.
         pub fn set(&mut self, capability: &str, value: JsonValue) -> serde_json::Result<()> {
             match capability {
                 "m.change_password" => self.change_password = from_json_value(value)?,
@@ -230,7 +237,8 @@ pub mod v3 {
     }
 
     impl ChangePasswordCapability {
-        /// Creates a new `ChangePasswordCapability` with the given enabled flag.
+        /// Creates a new `ChangePasswordCapability` with the given enabled
+        /// flag.
         pub fn new(enabled: bool) -> Self {
             Self { enabled }
         }
@@ -259,8 +267,8 @@ pub mod v3 {
     }
 
     impl RoomVersionsCapability {
-        /// Creates a new `RoomVersionsCapability` with the given default room version ID and room
-        /// version descriptions.
+        /// Creates a new `RoomVersionsCapability` with the given default room
+        /// version ID and room version descriptions.
         pub fn new(
             default: RoomVersionId,
             available: BTreeMap<RoomVersionId, RoomVersionStability>,
@@ -316,7 +324,8 @@ pub mod v3 {
 
     #[allow(deprecated)]
     impl SetDisplayNameCapability {
-        /// Creates a new `SetDisplayNameCapability` with the given enabled flag.
+        /// Creates a new `SetDisplayNameCapability` with the given enabled
+        /// flag.
         pub fn new(enabled: bool) -> Self {
             Self { enabled }
         }
@@ -367,13 +376,14 @@ pub mod v3 {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ThirdPartyIdChangesCapability {
-        /// `true` if the user can change the third-party identifiers associated with their
-        /// account, `false` otherwise.
+        /// `true` if the user can change the third-party identifiers associated
+        /// with their account, `false` otherwise.
         pub enabled: bool,
     }
 
     impl ThirdPartyIdChangesCapability {
-        /// Creates a new `ThirdPartyIdChangesCapability` with the given enabled flag.
+        /// Creates a new `ThirdPartyIdChangesCapability` with the given enabled
+        /// flag.
         pub fn new(enabled: bool) -> Self {
             Self { enabled }
         }
@@ -434,7 +444,8 @@ pub mod v3 {
             Self { enabled, allowed: None, disallowed: None }
         }
 
-        /// Whether the server advertises that the field with the given name can be set.
+        /// Whether the server advertises that the field with the given name can
+        /// be set.
         pub fn can_set_field(&self, field: &ProfileFieldName) -> bool {
             if !self.enabled {
                 return false;
@@ -457,15 +468,18 @@ pub mod v3 {
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ForgetForcedUponLeaveCapability {
-        /// Whether the server will automatically forget any room that the user leaves.
+        /// Whether the server will automatically forget any room that the user
+        /// leaves.
         ///
-        /// This behavior applies irrespective of whether the user has left the room on their own
-        /// or has been kicked or banned from the room by another user.
+        /// This behavior applies irrespective of whether the user has left the
+        /// room on their own or has been kicked or banned from the room
+        /// by another user.
         pub enabled: bool,
     }
 
     impl ForgetForcedUponLeaveCapability {
-        /// Creates a new `ForgetForcedUponLeaveCapability` with the given enabled flag.
+        /// Creates a new `ForgetForcedUponLeaveCapability` with the given
+        /// enabled flag.
         pub fn new(enabled: bool) -> Self {
             Self { enabled }
         }
@@ -480,7 +494,8 @@ pub mod v3 {
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct AccountModerationCapability {
-        /// Whether the user can suspend a user via `PUT /admin/suspend/{userId}`.
+        /// Whether the user can suspend a user via `PUT
+        /// /admin/suspend/{userId}`.
         #[serde(default, skip_serializing_if = "crate::__ruma::serde::is_default")]
         pub suspend: bool,
 
@@ -490,8 +505,8 @@ pub mod v3 {
     }
 
     impl AccountModerationCapability {
-        /// Creates a new `AccountModerationCapability` with the given suspend and lock
-        /// capabilities.
+        /// Creates a new `AccountModerationCapability` with the given suspend
+        /// and lock capabilities.
         pub fn new(suspend: bool, lock: bool) -> Self {
             Self { suspend, lock }
         }

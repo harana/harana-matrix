@@ -7,19 +7,20 @@ use std::{
     time::Duration,
 };
 
-use js_int::UInt;
-use client_common::deserialized_responses::AlgorithmInfo;
-use client_crypto::{
-    CollectStrategy, DecryptionSettings, LocalTrust, OlmMachine as InnerMachine, OlmMachineBuilder,
-    UserIdentity as SdkUserIdentity,
-    backups::{
-        MegolmV1BackupKey as RustBackupKey, SignatureState,
-        SignatureVerification as RustSignatureCheckResult,
+use harana_matrix_client::{
+    common::deserialized_responses::AlgorithmInfo,
+    crypto::{
+        CollectStrategy, DecryptionSettings, LocalTrust, OlmMachine as InnerMachine,
+        OlmMachineBuilder, UserIdentity as SdkUserIdentity,
+        backups::{
+            MegolmV1BackupKey as RustBackupKey, SignatureState,
+            SignatureVerification as RustSignatureCheckResult,
+        },
+        decrypt_room_key_export, encrypt_room_key_export,
+        olm::ExportedRoomKey,
+        store::types::{BackupDecryptionKey, Changes},
+        types::requests::ToDeviceRequest,
     },
-    decrypt_room_key_export, encrypt_room_key_export,
-    olm::ExportedRoomKey,
-    store::types::{BackupDecryptionKey, Changes},
-    types::requests::ToDeviceRequest,
 };
 use harana_matrix_common::{
     DeviceKeyAlgorithm, EventId, OneTimeKeyAlgorithm, OwnedTransactionId, OwnedUserId, RoomId,
@@ -46,6 +47,7 @@ use harana_matrix_common::{
     serde::Raw,
     to_device::DeviceIdOrAllDevices,
 };
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::RawValue};
 use tokio::runtime::Runtime;
@@ -100,8 +102,8 @@ pub struct RoomKeyInfo {
     pub session_id: String,
 }
 
-impl From<client_crypto::store::types::RoomKeyInfo> for RoomKeyInfo {
-    fn from(value: client_crypto::store::types::RoomKeyInfo) -> Self {
+impl From<harana_matrix_client::crypto::store::types::RoomKeyInfo> for RoomKeyInfo {
+    fn from(value: harana_matrix_client::crypto::store::types::RoomKeyInfo) -> Self {
         Self {
             algorithm: value.algorithm.to_string(),
             room_id: value.room_id.to_string(),
@@ -183,7 +185,7 @@ impl From<RustSignatureCheckResult> for SignatureVerification {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl OlmMachine {
     /// Create a new `OlmMachine`
     ///
@@ -209,8 +211,10 @@ impl OlmMachine {
         let device_id = device_id.as_str().into();
         let runtime = Runtime::new().expect("Couldn't create a tokio runtime");
 
-        let store = runtime
-            .block_on(client_sqlite::SqliteCryptoStore::open(path, passphrase.as_deref()))?;
+        let store = runtime.block_on(harana_matrix_client::sqlite::SqliteCryptoStore::open(
+            path,
+            passphrase.as_deref(),
+        ))?;
 
         passphrase.zeroize();
 
@@ -548,7 +552,7 @@ impl OlmMachine {
 
         let (to_device_events, room_key_infos) =
             self.runtime.block_on(self.inner.receive_sync_changes(
-                client_crypto::EncryptionSyncChanges {
+                harana_matrix_client::crypto::EncryptionSyncChanges {
                     to_device_events: to_device.events,
                     changed_devices: &device_changes,
                     one_time_keys_counts: &key_counts,

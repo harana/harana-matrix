@@ -1,14 +1,17 @@
 #![cfg(feature = "unstable-msc3489")]
 
 use assert_matches2::assert_matches;
-use js_int::uint;
 use harana_matrix_common::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
-    room_id, serde::CanBeEmpty, user_id,
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, MessageLikeEvent, beacon::BeaconEventContent, relation::Reference,
+    },
+    owned_event_id, room_id,
+    serde::CanBeEmpty,
+    user_id,
 };
-use harana_matrix_common::events::{
-    AnyMessageLikeEvent, MessageLikeEvent, beacon::BeaconEventContent, relation::Reference,
-};
+use js_int::uint;
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
 fn get_beacon_event_content() -> BeaconEventContent {

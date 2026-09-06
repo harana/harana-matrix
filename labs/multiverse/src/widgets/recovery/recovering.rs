@@ -1,13 +1,13 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures_util::FutureExt as _;
-use client_matrix::{
+use harana_matrix_client::{
     Client,
+    common::executor::spawn,
     encryption::{CrossSigningResetAuthType, recovery::RecoveryError},
     executor::JoinHandle,
     reqwest::Url,
     ruma::api::client::uiaa::{AuthData, Password},
 };
-use client_common::executor::spawn;
 use ratatui::{
     prelude::*,
     widgets::{Block, Paragraph, WidgetRef as _},

@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use client_matrix::{
+use harana_matrix_client::{
     Client, RoomInfo, RoomState, SessionTokens, StateChanges,
-    authentication::matrix::MatrixSession, config::StoreConfig,
+    authentication::matrix::MatrixSession,
+    base::{SessionMeta, StateStore as _, store::MemoryStore},
+    config::StoreConfig,
     cross_process_lock::CrossProcessLockConfig,
+    sqlite::SqliteStateStore,
+    test::base64_sha256_hash,
 };
-use client_base::{SessionMeta, StateStore as _, store::MemoryStore};
-use client_sqlite::SqliteStateStore;
-use common_test::base64_sha256_hash;
 use harana_matrix_common::{OwnedRoomId, RoomId, owned_device_id, owned_user_id};
 use tokio::runtime::Builder;
 

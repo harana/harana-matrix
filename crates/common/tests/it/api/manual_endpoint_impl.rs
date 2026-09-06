@@ -6,7 +6,6 @@
 use std::borrow::Cow;
 
 use bytes::BufMut;
-use http::{header::CONTENT_TYPE, method::Method};
 use harana_matrix_common::{
     OwnedRoomAliasId, OwnedRoomId,
     api::{
@@ -18,6 +17,7 @@ use harana_matrix_common::{
     },
     serde::json_to_buf,
 };
+use http::{header::CONTENT_TYPE, method::Method};
 use serde::{Deserialize, Serialize};
 
 /// A request to create a new room alias.

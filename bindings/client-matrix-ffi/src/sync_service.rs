@@ -14,14 +14,16 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use client_matrix::Client;
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use client_ui::{
-    sync_service::{
-        State as MatrixSyncServiceState, SyncService as MatrixSyncService,
-        SyncServiceBuilder as MatrixSyncServiceBuilder,
+use harana_matrix_client::{
+    Client,
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    ui::{
+        sync_service::{
+            State as MatrixSyncServiceState, SyncService as MatrixSyncService,
+            SyncServiceBuilder as MatrixSyncServiceBuilder,
+        },
+        unable_to_decrypt_hook::UtdHookManager,
     },
-    unable_to_decrypt_hook::UtdHookManager,
 };
 
 use crate::{
@@ -53,7 +55,7 @@ impl From<MatrixSyncServiceState> for SyncServiceState {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SyncServiceStateObserver: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, state: SyncServiceState);
 }
@@ -64,7 +66,7 @@ pub struct SyncService {
     utd_hook: Option<Arc<UtdHookManager>>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SyncService {
     pub fn room_list_service(&self) -> Arc<RoomListService> {
         Arc::new(RoomListService {
@@ -115,7 +117,7 @@ impl SyncServiceBuilder {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SyncServiceBuilder {
     /// Enable the "offline" mode for the [`SyncService`].
     pub fn with_offline_mode(self: Arc<Self>) -> Arc<Self> {
@@ -142,7 +144,8 @@ impl SyncServiceBuilder {
 
     /// Set a custom Sliding Sync connection ID for the room list service.
     ///
-    /// By default [`client_ui::room_list_service::DEFAULT_CONNECTION_ID`]
+    /// By default
+    /// [`harana_matrix_client::ui::room_list_service::DEFAULT_CONNECTION_ID`]
     /// is used. Set a different value for secondary processes such as iOS
     /// Share Extensions that are not meant to reuse the main app's
     /// connection.
@@ -155,7 +158,7 @@ impl SyncServiceBuilder {
     /// Set a custom timeline limit for the room list service.
     ///
     /// When set, overrides the default timeline limit of
-    /// [`client_ui::room_list_service::DEFAULT_LIST_TIMELINE_LIMIT`].
+    /// [`harana_matrix_client::ui::room_list_service::DEFAULT_LIST_TIMELINE_LIMIT`].
     pub fn with_room_list_timeline_limit(self: Arc<Self>, limit: u32) -> Arc<Self> {
         let this = unwrap_or_clone_arc(self);
         let builder = this.builder.with_room_list_timeline_limit(limit);

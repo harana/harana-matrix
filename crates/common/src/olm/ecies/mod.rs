@@ -49,15 +49,17 @@
 //! # Examples
 //!
 //! ```
-//! use harana_matrix_common::olm::ecies::{Ecies, InboundCreationResult, OutboundCreationResult};
+//! use harana_matrix_common::olm::ecies::{
+//!     Ecies, InboundCreationResult, OutboundCreationResult,
+//! };
 //!
 //! let plaintext = b"It's a secret to everybody";
 //!
 //! let alice = Ecies::new();
 //! let bob = Ecies::new();
 //!
-//! let OutboundCreationResult { ecies: mut alice, message } = alice
-//!     .establish_outbound_channel(bob.public_key(), plaintext)?;
+//! let OutboundCreationResult { ecies: mut alice, message } =
+//!     alice.establish_outbound_channel(bob.public_key(), plaintext)?;
 //!
 //! let InboundCreationResult { mut ecies, message } = bob
 //!     .establish_inbound_channel(&message)
@@ -70,7 +72,9 @@
 //!
 //! // We now exchange the check code out-of-band and compare it.
 //! if alice.check_code() != ecies.check_code() {
-//!     panic!("The check code must match; possible active MITM attack in progress");
+//!     panic!(
+//!         "The check code must match; possible active MITM attack in progress"
+//!     );
 //! }
 //!
 //! let message = ecies.encrypt(b"Another plaintext");

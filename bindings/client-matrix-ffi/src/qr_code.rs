@@ -14,16 +14,18 @@
 
 use std::sync::Arc;
 
-use client_matrix::authentication::oauth::{
-    OAuth,
-    qrcode::{
-        self, CheckCodeSender as SdkCheckCodeSender,
-        ContinuationMessageSender as SdkContinuationMessageSender, DeviceCodeErrorResponseType,
-        GeneratedQrProgress, LoginFailureReason, QrProgress, SenderError,
+use harana_matrix_client::{
+    authentication::oauth::{
+        OAuth,
+        qrcode::{
+            self, CheckCodeSender as SdkCheckCodeSender,
+            ContinuationMessageSender as SdkContinuationMessageSender, DeviceCodeErrorResponseType,
+            GeneratedQrProgress, LoginFailureReason, QrProgress, SenderError,
+        },
     },
+    base::crypto::types::qr_login::{self, QrCodeIntent},
+    common::{SendOutsideWasm, SyncOutsideWasm, stream::StreamExt},
 };
-use client_base::crypto::types::qr_login::{self, QrCodeIntent};
-use client_common::{SendOutsideWasm, SyncOutsideWasm, stream::StreamExt};
 
 use crate::{
     authentication::OAuthConfiguration, runtime::get_runtime_handle, task_handle::TaskHandle,
@@ -42,7 +44,7 @@ impl LoginWithQrCodeHandler {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl LoginWithQrCodeHandler {
     /// This method allows you to log in with a scanned QR code.
     ///
@@ -151,7 +153,7 @@ impl GrantLoginWithQrCodeHandler {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl GrantLoginWithQrCodeHandler {
     /// This method allows you to grant login with a scanned QR code.
     ///
@@ -242,7 +244,7 @@ pub struct QrCodeData {
     pub(crate) inner: qrcode::QrCodeData,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl QrCodeData {
     /// Attempt to decode a slice of bytes into a [`QrCodeData`] object.
     ///
@@ -515,7 +517,7 @@ pub enum QrLoginProgress {
     Done,
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait QrLoginProgressListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, state: QrLoginProgress);
 }
@@ -562,7 +564,7 @@ pub enum GeneratedQrLoginProgress {
     Done,
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait GeneratedQrLoginProgressListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, state: GeneratedQrLoginProgress);
 }
@@ -621,7 +623,7 @@ pub enum GrantQrLoginProgress {
     Done,
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait GrantQrLoginProgressListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, state: GrantQrLoginProgress);
 }
@@ -682,7 +684,7 @@ pub enum GrantGeneratedQrLoginProgress {
     Done,
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait GrantGeneratedQrLoginProgressListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, state: GrantGeneratedQrLoginProgress);
 }
@@ -718,7 +720,7 @@ pub struct CheckCodeSender {
     inner: SdkCheckCodeSender,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl CheckCodeSender {
     /// Send the [`CheckCode`].
     ///
@@ -740,7 +742,7 @@ pub struct ContinuationMessageSender {
     inner: SdkContinuationMessageSender,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ContinuationMessageSender {
     /// Confirm the continuation of the login granting process.
     pub async fn confirm(&self) -> Result<(), HumanQrLoginError> {

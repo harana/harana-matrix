@@ -2,13 +2,14 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1timestamp_to_eventroomid
 
-use crate::__ruma::{
-    MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
-    api::{Direction, request, response},
-    metadata,
+use crate::{
+    __ruma::{
+        MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId,
+        api::{Direction, request, response},
+        metadata,
+    },
+    api::federation::authentication::ServerSignatures,
 };
-
-use crate::api::federation::authentication::ServerSignatures;
 
 metadata! {
     method: GET,

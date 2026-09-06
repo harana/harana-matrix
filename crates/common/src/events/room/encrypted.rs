@@ -4,15 +4,17 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
-use js_int::UInt;
-use crate::__ruma::{OwnedDeviceId, OwnedEventId, serde::JsonObject};
 use harana_matrix_macros::EventContent;
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
 
 use super::message;
-use crate::events::{
-    relation::{Annotation, CustomRelation, InReplyTo, Reference, RelationType, Reply, Thread},
-    room::message::RelationWithoutReplacement,
+use crate::{
+    __ruma::{OwnedDeviceId, OwnedEventId, serde::JsonObject},
+    events::{
+        relation::{Annotation, CustomRelation, InReplyTo, Reference, RelationType, Reply, Thread},
+        room::message::RelationWithoutReplacement,
+    },
 };
 
 mod relation_serde;
@@ -34,7 +36,8 @@ pub struct RoomEncryptedEventContent {
 }
 
 impl RoomEncryptedEventContent {
-    /// Creates a new `RoomEncryptedEventContent` with the given scheme and relation.
+    /// Creates a new `RoomEncryptedEventContent` with the given scheme and
+    /// relation.
     pub fn new(scheme: EncryptedEventScheme, relates_to: Option<Relation>) -> Self {
         Self { scheme, relates_to }
     }
@@ -113,7 +116,8 @@ pub enum Relation {
 impl Relation {
     /// The type of this `Relation`.
     ///
-    /// Returns an `Option` because the `Reply` relation does not have a `rel_type` field.
+    /// Returns an `Option` because the `Reply` relation does not have a
+    /// `rel_type` field.
     pub fn rel_type(&self) -> Option<RelationType> {
         match self {
             Relation::Reply(_) => None,
@@ -127,12 +131,13 @@ impl Relation {
 
     /// The associated data.
     ///
-    /// The returned JSON object holds the contents of `m.relates_to`, including `rel_type` and
-    /// `event_id` if present, but not things like `m.new_content` for `m.replace` relations that
-    /// live next to `m.relates_to`.
+    /// The returned JSON object holds the contents of `m.relates_to`, including
+    /// `rel_type` and `event_id` if present, but not things like
+    /// `m.new_content` for `m.replace` relations that live next to
+    /// `m.relates_to`.
     ///
-    /// Prefer to use the public variants of `Relation` where possible; this method is meant to
-    /// be used for custom relations only.
+    /// Prefer to use the public variants of `Relation` where possible; this
+    /// method is meant to be used for custom relations only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         if let Relation::_Custom(CustomRelation(data)) = self {
             Cow::Borrowed(data)
@@ -171,9 +176,10 @@ impl From<RelationWithoutReplacement> for Relation {
 
 /// The event this relation belongs to [replaces another event].
 ///
-/// In contrast to [`relation::Replacement`](crate::events::relation::Replacement), this
-/// struct doesn't store the new content, since that is part of the encrypted content of an
-/// `m.room.encrypted` events.
+/// In contrast to
+/// [`relation::Replacement`](crate::events::relation::Replacement), this struct
+/// doesn't store the new content, since that is part of the encrypted content
+/// of an `m.room.encrypted` events.
 ///
 /// [replaces another event]: https://spec.matrix.org/v1.19/client-server-api/#event-replacements
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -191,11 +197,13 @@ impl Replacement {
     }
 }
 
-/// The content of an `m.room.encrypted` event using the `m.olm.v1.curve25519-aes-sha2` algorithm.
+/// The content of an `m.room.encrypted` event using the
+/// `m.olm.v1.curve25519-aes-sha2` algorithm.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct OlmV1Curve25519AesSha2Content {
-    /// A map from the recipient Curve25519 identity key to ciphertext information.
+    /// A map from the recipient Curve25519 identity key to ciphertext
+    /// information.
     pub ciphertext: BTreeMap<String, CiphertextInfo>,
 
     /// The Curve25519 key of the sender.
@@ -203,7 +211,8 @@ pub struct OlmV1Curve25519AesSha2Content {
 }
 
 impl OlmV1Curve25519AesSha2Content {
-    /// Creates a new `OlmV1Curve25519AesSha2Content` with the given ciphertext and sender key.
+    /// Creates a new `OlmV1Curve25519AesSha2Content` with the given ciphertext
+    /// and sender key.
     pub fn new(ciphertext: BTreeMap<String, CiphertextInfo>, sender_key: String) -> Self {
         Self { ciphertext, sender_key }
     }
@@ -211,7 +220,8 @@ impl OlmV1Curve25519AesSha2Content {
 
 /// Ciphertext information holding the ciphertext and message type.
 ///
-/// Used for messages encrypted with the `m.olm.v1.curve25519-aes-sha2` algorithm.
+/// Used for messages encrypted with the `m.olm.v1.curve25519-aes-sha2`
+/// algorithm.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct CiphertextInfo {
@@ -230,9 +240,11 @@ impl CiphertextInfo {
     }
 }
 
-/// The content of an `m.room.encrypted` event using the `m.megolm.v1.aes-sha2` algorithm.
+/// The content of an `m.room.encrypted` event using the `m.megolm.v1.aes-sha2`
+/// algorithm.
 ///
-/// To create an instance of this type, first create a `MegolmV1AesSha2ContentInit` and convert it
+/// To create an instance of this type, first create a
+/// `MegolmV1AesSha2ContentInit` and convert it
 /// via `MegolmV1AesSha2Content::from` / `.into()`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
@@ -256,8 +268,9 @@ pub struct MegolmV1AesSha2Content {
 
 /// Mandatory initial set of fields of `MegolmV1AesSha2Content`.
 ///
-/// This struct will not be updated even if additional fields are added to `MegolmV1AesSha2Content`
-/// in a new (non-breaking) release of the Matrix specification.
+/// This struct will not be updated even if additional fields are added to
+/// `MegolmV1AesSha2Content` in a new (non-breaking) release of the Matrix
+/// specification.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct MegolmV1AesSha2ContentInit {
@@ -287,14 +300,14 @@ impl From<MegolmV1AesSha2ContentInit> for MegolmV1AesSha2Content {
 mod tests {
     use assert_matches2::assert_matches;
     use js_int::uint;
-    use crate::__ruma::{
-        canonical_json::assert_to_canonical_json_eq, device_id, owned_event_id, serde::Raw,
-    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::{
         EncryptedEventScheme, MegolmV1AesSha2ContentInit, Relation, Reply,
         RoomEncryptedEventContent,
+    };
+    use crate::__ruma::{
+        canonical_json::assert_to_canonical_json_eq, device_id, owned_event_id, serde::Raw,
     };
 
     #[test]

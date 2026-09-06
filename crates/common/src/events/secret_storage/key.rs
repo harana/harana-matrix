@@ -5,12 +5,13 @@
 use std::borrow::Cow;
 
 use js_int::{UInt, uint};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
 use crate::__ruma::{
     KeyDerivationAlgorithm,
     serde::{Base64, JsonObject},
 };
-use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 
 mod secret_encryption_algorithm_serde;
 
@@ -55,9 +56,9 @@ fn is_default_bits(val: &UInt) -> bool {
 
 /// A key description encrypted using a specified algorithm.
 ///
-/// The only algorithm currently specified is `m.secret_storage.v1.aes-hmac-sha2`, so this
-/// essentially represents `AesHmacSha2KeyDescription` in the
-/// [spec](https://spec.matrix.org/v1.19/client-server-api/#msecret_storagev1aes-hmac-sha2).
+/// The only algorithm currently specified is
+/// `m.secret_storage.v1.aes-hmac-sha2`, so this essentially represents
+/// `AesHmacSha2KeyDescription` in the [spec](https://spec.matrix.org/v1.19/client-server-api/#msecret_storagev1aes-hmac-sha2).
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[derive(Clone, Debug, Serialize, EventContent)]
 #[ruma_event(type = "m.secret_storage.key.*", kind = GlobalAccountData)]
@@ -95,8 +96,8 @@ impl SecretStorageKeyEventContent {
 pub enum SecretStorageEncryptionAlgorithm {
     /// Encrypted using the `m.secret_storage.v1.aes-hmac-sha2` algorithm.
     ///
-    /// Secrets using this method are encrypted using AES-CTR-256 and authenticated using
-    /// HMAC-SHA-256.
+    /// Secrets using this method are encrypted using AES-CTR-256 and
+    /// authenticated using HMAC-SHA-256.
     V1AesHmacSha2(SecretStorageV1AesHmacSha2Properties),
 
     /// Encrypted using a custom algorithm.
@@ -115,11 +116,12 @@ impl SecretStorageEncryptionAlgorithm {
 
     /// The algorithm-specific properties.
     ///
-    /// The returned JSON object won't contain the `algorithm` field, use [`Self::algorithm()`] to
-    /// access it.
+    /// The returned JSON object won't contain the `algorithm` field, use
+    /// [`Self::algorithm()`] to access it.
     ///
-    /// Prefer to use the public variants of `SecretStorageEncryptionAlgorithm` where possible; this
-    /// method is meant to be used for custom algorithms only.
+    /// Prefer to use the public variants of `SecretStorageEncryptionAlgorithm`
+    /// where possible; this method is meant to be used for custom
+    /// algorithms only.
     pub fn properties(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("secret properties serialization to succeed") {
@@ -137,8 +139,8 @@ impl SecretStorageEncryptionAlgorithm {
 
 /// The key properties for the `m.secret_storage.v1.aes-hmac-sha2` algorithm.
 ///
-/// Corresponds to the AES-specific properties of `AesHmacSha2KeyDescription` in the
-/// [spec](https://spec.matrix.org/v1.19/client-server-api/#msecret_storagev1aes-hmac-sha2).
+/// Corresponds to the AES-specific properties of `AesHmacSha2KeyDescription` in
+/// the [spec](https://spec.matrix.org/v1.19/client-server-api/#msecret_storagev1aes-hmac-sha2).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct SecretStorageV1AesHmacSha2Properties {
@@ -173,9 +175,6 @@ pub struct CustomSecretEncryptionAlgorithm {
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
     use js_int::uint;
-    use crate::__ruma::{
-        KeyDerivationAlgorithm, canonical_json::assert_to_canonical_json_eq, serde::Base64,
-    };
     use serde_json::{
         from_value as from_json_value, json, value::to_raw_value as to_raw_json_value,
     };
@@ -184,7 +183,12 @@ mod tests {
         PassPhrase, SecretStorageEncryptionAlgorithm, SecretStorageKeyEventContent,
         SecretStorageV1AesHmacSha2Properties,
     };
-    use crate::events::{AnyGlobalAccountDataEvent, EventContentFromType, GlobalAccountDataEvent};
+    use crate::{
+        __ruma::{
+            KeyDerivationAlgorithm, canonical_json::assert_to_canonical_json_eq, serde::Base64,
+        },
+        events::{AnyGlobalAccountDataEvent, EventContentFromType, GlobalAccountDataEvent},
+    };
 
     #[test]
     fn key_description_serialization() {

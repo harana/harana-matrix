@@ -2,10 +2,12 @@
 
 use std::{collections::BTreeSet, ops::Deref};
 
-use crate::__ruma::{serde::from_raw_json_value, third_party_invite::IdentityServerBase64PublicKey};
 use serde::Deserialize;
 
 use super::Event;
+use crate::__ruma::{
+    serde::from_raw_json_value, third_party_invite::IdentityServerBase64PublicKey,
+};
 
 /// A helper type for an [`Event`] of type `m.room.third_party_invite`.
 ///
@@ -19,7 +21,8 @@ impl<E: Event> RoomThirdPartyInviteEvent<E> {
         Self(event)
     }
 
-    /// The public keys of the identity server that might be used to sign the third-party invite.
+    /// The public keys of the identity server that might be used to sign the
+    /// third-party invite.
     pub fn public_keys(&self) -> Result<BTreeSet<IdentityServerBase64PublicKey>, String> {
         #[derive(Deserialize)]
         struct RoomThirdPartyInviteContentPublicKeys {

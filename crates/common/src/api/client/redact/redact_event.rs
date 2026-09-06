@@ -1,6 +1,7 @@
 //! `PUT /_matrix/client/*/rooms/{roomId}/redact/{eventId}/{txnId}`
 //!
-//! Redact an event, stripping all information not critical to the event graph integrity.
+//! Redact an event, stripping all information not critical to the event graph
+//! integrity.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -59,7 +60,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given room ID, event ID and transaction ID.
+        /// Creates a new `Request` with the given room ID, event ID and
+        /// transaction ID.
         pub fn new(
             room_id: OwnedRoomId,
             event_id: OwnedEventId,

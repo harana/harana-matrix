@@ -14,8 +14,9 @@
 
 use std::sync::Arc;
 
-use client_matrix::{CallIntentConsensus, EncryptionState, RoomState};
-use client_base::RoomInfoNotableUpdateReasons;
+use harana_matrix_client::{
+    CallIntentConsensus, EncryptionState, RoomState, base::RoomInfoNotableUpdateReasons,
+};
 use tracing::warn;
 
 use crate::{
@@ -190,7 +191,7 @@ pub struct RoomInfo {
 }
 
 impl RoomInfo {
-    pub(crate) async fn new(room: &client_matrix::Room) -> Result<Self, ClientError> {
+    pub(crate) async fn new(room: &harana_matrix_client::Room) -> Result<Self, ClientError> {
         let unread_notification_counts = room.unread_notification_counts();
 
         let pinned_event_ids =
@@ -289,7 +290,7 @@ impl RoomInfo {
 
 #[cfg(test)]
 mod tests {
-    use client_base::RoomInfoNotableUpdateReasons;
+    use harana_matrix_client::base::RoomInfoNotableUpdateReasons;
 
     use super::RoomInfoUpdateReason;
 

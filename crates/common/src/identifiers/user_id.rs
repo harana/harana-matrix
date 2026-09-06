@@ -8,12 +8,15 @@ use super::{IdParseError, MatrixToUri, MatrixUri, ServerName, matrix_uri::UriAct
 
 /// A Matrix [user ID].
 ///
-/// A `UserId` is generated randomly or converted from a string slice, and can be converted back
-/// into a string as needed.
+/// A `UserId` is generated randomly or converted from a string slice, and can
+/// be converted back into a string as needed.
 ///
 /// ```
 /// # use harana_matrix_common::UserId;
-/// assert_eq!(<&UserId>::try_from("@carl:example.com").unwrap(), "@carl:example.com");
+/// assert_eq!(
+///     <&UserId>::try_from("@carl:example.com").unwrap(),
+///     "@carl:example.com"
+/// );
 /// ```
 ///
 /// [user ID]: https://spec.matrix.org/v1.19/appendices/#user-identifiers
@@ -23,10 +26,11 @@ use super::{IdParseError, MatrixToUri, MatrixUri, ServerName, matrix_uri::UriAct
 pub struct UserId(str);
 
 impl UserId {
-    /// Attempts to generate a `UserId` for the given origin server with a localpart consisting of
-    /// 12 random ASCII characters.
+    /// Attempts to generate a `UserId` for the given origin server with a
+    /// localpart consisting of 12 random ASCII characters.
     ///
-    /// The generated `OwnedUserId` is guaranteed to pass [`UserId::validate_strict()`].
+    /// The generated `OwnedUserId` is guaranteed to pass
+    /// [`UserId::validate_strict()`].
     #[cfg(feature = "rand")]
     #[allow(clippy::new_ret_no_self)]
     pub fn new(server_name: &ServerName) -> OwnedUserId {
@@ -37,12 +41,13 @@ impl UserId {
         ))
     }
 
-    /// Attempts to complete a user ID, by adding the colon + server name and `@` prefix, if not
-    /// present already.
+    /// Attempts to complete a user ID, by adding the colon + server name and
+    /// `@` prefix, if not present already.
     ///
-    /// This is a convenience function for the login API, where a user can supply either their full
-    /// user ID or just the localpart. It only supports a valid user ID or a valid user ID
-    /// localpart, not the localpart plus the `@` prefix, or the localpart plus server name without
+    /// This is a convenience function for the login API, where a user can
+    /// supply either their full user ID or just the localpart. It only
+    /// supports a valid user ID or a valid user ID localpart, not the
+    /// localpart plus the `@` prefix, or the localpart plus server name without
     /// the `@` prefix.
     pub fn parse_with_server_name(
         id: impl AsRef<str>,
@@ -70,11 +75,11 @@ impl UserId {
 
     /// Validate this user ID against the strict or historical grammar.
     ///
-    /// Returns an `Err` for invalid user IDs, `Ok(false)` for historical user IDs
-    /// and `Ok(true)` for fully conforming user IDs.
+    /// Returns an `Err` for invalid user IDs, `Ok(false)` for historical user
+    /// IDs and `Ok(true)` for fully conforming user IDs.
     fn validate_fully_conforming(&self) -> Result<bool, IdParseError> {
-        // Since the length check can be disabled with `compat-arbitrary-length-ids`, check it again
-        // here.
+        // Since the length check can be disabled with `compat-arbitrary-length-ids`,
+        // check it again here.
         if self.as_bytes().len() > ID_MAX_BYTES {
             return Err(IdParseError::MaximumLengthExceeded);
         }
@@ -84,8 +89,8 @@ impl UserId {
 
     /// Validate this user ID against the [strict grammar].
     ///
-    /// This should be used to validate newly created user IDs as historical user IDs are
-    /// deprecated.
+    /// This should be used to validate newly created user IDs as historical
+    /// user IDs are deprecated.
     ///
     /// [strict grammar]: https://spec.matrix.org/v1.19/appendices/#user-identifiers
     pub fn validate_strict(&self) -> Result<(), IdParseError> {
@@ -96,11 +101,12 @@ impl UserId {
 
     /// Validate this user ID against the [historical grammar].
     ///
-    /// According to the spec, servers should check events received over federation that contain
-    /// user IDs with this method, and those that fail should not be forwarded to their users.
+    /// According to the spec, servers should check events received over
+    /// federation that contain user IDs with this method, and those that
+    /// fail should not be forwarded to their users.
     ///
-    /// Contrary to [`UserId::is_historical()`] this method also includes user IDs that conform to
-    /// the latest grammar.
+    /// Contrary to [`UserId::is_historical()`] this method also includes user
+    /// IDs that conform to the latest grammar.
     ///
     /// [historical grammar]: https://spec.matrix.org/v1.19/appendices/#historical-user-ids
     pub fn validate_historical(&self) -> Result<(), IdParseError> {
@@ -110,8 +116,9 @@ impl UserId {
 
     /// Whether this user ID is a historical one.
     ///
-    /// A [historical user ID] is one that doesn't conform to the latest specification of the user
-    /// ID grammar but is still accepted because it was previously allowed.
+    /// A [historical user ID] is one that doesn't conform to the latest
+    /// specification of the user ID grammar but is still accepted because
+    /// it was previously allowed.
     ///
     /// [historical user ID]: https://spec.matrix.org/v1.19/appendices/#historical-user-ids
     pub fn is_historical(&self) -> bool {

@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 
 use harana_matrix_common::{
-    ServerSigningKeyId, SigningKeyAlgorithm, room_version_rules::RoomVersionRules, serde::Base64,
+    ServerSigningKeyId, SigningKeyAlgorithm,
+    room_version_rules::RoomVersionRules,
+    serde::Base64,
+    signatures::{Ed25519KeyPair, PublicKeyMap, Verified, sign_json, verify_event},
 };
-use harana_matrix_common::signatures::{Ed25519KeyPair, PublicKeyMap, Verified, sign_json, verify_event};
 
 static PKCS8_ED25519_DER: &[u8] = include_bytes!("./keys/ed25519.der");
 

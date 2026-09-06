@@ -67,7 +67,8 @@ struct EventContent {
     /// The event kind.
     kind: EventContentKind,
 
-    /// Whether this macro should generate an `*EventContentWithoutRelation` type.
+    /// Whether this macro should generate an `*EventContentWithoutRelation`
+    /// type.
     has_without_relation: bool,
 
     /// The path for imports from the ruma-events crate.
@@ -75,7 +76,8 @@ struct EventContent {
 }
 
 impl EventContent {
-    /// The name of the field that contains the type fragment of the struct, if any.
+    /// The name of the field that contains the type fragment of the struct, if
+    /// any.
     fn type_fragment_field(&self) -> Option<&syn::Ident> {
         self.fields
             .as_ref()?
@@ -84,7 +86,8 @@ impl EventContent {
             .and_then(|field| field.inner.ident.as_ref())
     }
 
-    /// Generate the `Redacted*EventContent` variation of this struct, if it needs one.
+    /// Generate the `Redacted*EventContent` variation of this struct, if it
+    /// needs one.
     fn expand_redacted_event_content(&self) -> Option<TokenStream> {
         if !self.kind.should_generate_redacted() {
             return None;
@@ -151,7 +154,8 @@ impl EventContent {
         })
     }
 
-    /// Generate the `PossiblyRedacted*EventContent` variation of this struct, if it needs one.
+    /// Generate the `PossiblyRedacted*EventContent` variation of this struct,
+    /// if it needs one.
     fn expand_possibly_redacted_event_content(&self) -> Option<TokenStream> {
         if !self.kind.should_generate_possibly_redacted() {
             return None;
@@ -244,7 +248,8 @@ impl EventContent {
             }
         });
 
-        // If at least one field needs to change, generate a new struct, else use a type alias.
+        // If at least one field needs to change, generate a new struct, else use a type
+        // alias.
         if field_changed {
             let possibly_redacted_event_content = self.expand_event_content_impl(
                 EventContentVariation::PossiblyRedacted,
@@ -410,8 +415,9 @@ impl EventContent {
         })
     }
 
-    /// Generate the `ruma_events::*EventContent` trait implementations for this kind and the given
-    /// event content variation with the given ident and fields.
+    /// Generate the `ruma_events::*EventContent` trait implementations for this
+    /// kind and the given event content variation with the given ident and
+    /// fields.
     fn expand_event_content_impl<'a>(
         &self,
         variation: EventContentVariation,
@@ -431,8 +437,8 @@ impl EventContent {
         }
     }
 
-    /// Generate the `ruma_events::*EventContent` trait implementations for this kind and the given
-    /// variation with the given ident.
+    /// Generate the `ruma_events::*EventContent` trait implementations for this
+    /// kind and the given variation with the given ident.
     fn expand_event_content_kind_trait_impl(
         &self,
         variation: EventContentTraitVariation,
@@ -476,8 +482,9 @@ impl EventContent {
             .collect()
     }
 
-    /// Generate the `ruma_events::StaticStateEventContent` trait implementation for this kind and
-    /// the given variation with the given ident, if it needs one.
+    /// Generate the `ruma_events::StaticStateEventContent` trait implementation
+    /// for this kind and the given variation with the given ident, if it
+    /// needs one.
     fn expand_static_state_event_content_impl(
         &self,
         variation: EventContentVariation,
@@ -506,7 +513,8 @@ impl EventContent {
         })
     }
 
-    /// Generate the `StaticEventContent` trait implementation for the given ident.
+    /// Generate the `StaticEventContent` trait implementation for the given
+    /// ident.
     fn expand_static_event_content_impl(&self, ident: &syn::Ident) -> TokenStream {
         let ruma_events = &self.ruma_events;
         let static_event_type = self.types.ev_type.without_wildcard();
@@ -525,8 +533,9 @@ impl EventContent {
         }
     }
 
-    /// Generate the `ruma_events::EventContentFromType` trait implementation for the given ident
-    /// with the given fields, if this event type has a type fragment.
+    /// Generate the `ruma_events::EventContentFromType` trait implementation
+    /// for the given ident with the given fields, if this event type has a
+    /// type fragment.
     fn expand_event_content_from_type_impl<'a>(
         &self,
         ident: &syn::Ident,
@@ -675,11 +684,12 @@ struct EventContentField {
 }
 
 impl EventContentField {
-    /// Whether to keep this field as-is when generating the `PossiblyRedacted*EventContent`
-    /// variation.
+    /// Whether to keep this field as-is when generating the
+    /// `PossiblyRedacted*EventContent` variation.
     ///
-    /// Returns `true` if the field has the `skip_redaction` attribute, if its type is wrapped in an
-    /// `Option`, or if it has the serde `default` attribute.
+    /// Returns `true` if the field has the `skip_redaction` attribute, if its
+    /// type is wrapped in an `Option`, or if it has the serde `default`
+    /// attribute.
     fn keep_in_possibly_redacted(&self) -> bool {
         self.skip_redaction
             || self.inner.ty.option_inner_type().is_some()
@@ -719,16 +729,18 @@ enum EventContentKind {
 
     /// Message-like event.
     ///
-    /// This is an event that can occur in the timeline and that doesn't have a state key.
+    /// This is an event that can occur in the timeline and that doesn't have a
+    /// state key.
     MessageLike {
-        /// Whether the `Redacted*EventContent` type is implemented manually rather than generated
-        /// by this macro.
+        /// Whether the `Redacted*EventContent` type is implemented manually
+        /// rather than generated by this macro.
         has_custom_redacted: bool,
     },
 
     /// State event.
     ///
-    /// This is an event that can occur in the timeline and that has a state key.
+    /// This is an event that can occur in the timeline and that has a state
+    /// key.
     State {
         /// The type of the state key.
         state_key_type: syn::Type,
@@ -736,12 +748,12 @@ enum EventContentKind {
         /// The type of the unsigned data.
         unsigned_type: syn::Type,
 
-        /// Whether the `Redacted*EventContent` type is implemented manually rather than generated
-        /// by this macro.
+        /// Whether the `Redacted*EventContent` type is implemented manually
+        /// rather than generated by this macro.
         has_custom_redacted: bool,
 
-        /// Whether the `PossiblyRedacted*EventContent` type is implemented manually rather than
-        /// generated by this macro.
+        /// Whether the `PossiblyRedacted*EventContent` type is implemented
+        /// manually rather than generated by this macro.
         has_custom_possibly_redacted: bool,
     },
 
@@ -752,7 +764,8 @@ enum EventContentKind {
 }
 
 impl EventContentKind {
-    /// The [`CommonEventKind`] matching this event content kind, if there is a single one.
+    /// The [`CommonEventKind`] matching this event content kind, if there is a
+    /// single one.
     ///
     /// Returns `None` for [`EventContentKind::BothAccountData`].
     fn event_kind(&self) -> Option<CommonEventKind> {
@@ -778,19 +791,22 @@ impl EventContentKind {
             })
     }
 
-    /// Whether we should generate a `Redacted*EventContent` variation for this kind.
+    /// Whether we should generate a `Redacted*EventContent` variation for this
+    /// kind.
     fn should_generate_redacted(&self) -> bool {
         // We only generate redacted content structs for state and message-like events.
         matches!(self, Self::MessageLike { has_custom_redacted, .. } | Self::State { has_custom_redacted, .. } if !*has_custom_redacted)
     }
 
-    /// Whether we should generate a `Redacted*EventContent` variation for this kind.
+    /// Whether we should generate a `Redacted*EventContent` variation for this
+    /// kind.
     fn should_generate_possibly_redacted(&self) -> bool {
         // We only generate possibly redacted content structs for state events.
         matches!(self, Self::State { has_custom_possibly_redacted, .. } if !*has_custom_possibly_redacted)
     }
 
-    /// Get the list of variations for an event type (struct or enum) for this kind.
+    /// Get the list of variations for an event type (struct or enum) for this
+    /// kind.
     fn event_variations(&self) -> &'static [EventVariation] {
         if let Some(event_kind) = self.event_kind() {
             event_kind.event_variations()
@@ -800,10 +816,11 @@ impl EventContentKind {
         }
     }
 
-    /// Get the idents of the event struct for these kinds and the given variation.
+    /// Get the idents of the event struct for these kinds and the given
+    /// variation.
     ///
-    /// Returns a list of `(type_prefix, event_ident)` if the variation is supported for these
-    /// kinds.
+    /// Returns a list of `(type_prefix, event_ident)` if the variation is
+    /// supported for these kinds.
     fn as_event_idents(
         &self,
         variation: EventVariation,
@@ -826,8 +843,8 @@ impl EventContentKind {
         }
     }
 
-    /// Get the idents of the `*EventType` enums and `*EventContent` traits for this kind and the
-    /// given variation.
+    /// Get the idents of the `*EventType` enums and `*EventContent` traits for
+    /// this kind and the given variation.
     ///
     /// Returns a list of `(event_type_enum, event_content_trait)`.
     fn as_event_type_enums_and_content_kind_traits(
@@ -847,7 +864,8 @@ impl EventContentKind {
     }
 }
 
-/// Implement `JsonCastable<JsonObject> for {ident}` and `JsonCastable<{ident}> for {other}`.
+/// Implement `JsonCastable<JsonObject> for {ident}` and `JsonCastable<{ident}>
+/// for {other}`.
 fn generate_json_castable_impl(ident: &syn::Ident, others: &[&syn::Ident]) -> TokenStream {
     let ruma_common = RumaCommon::new();
 
@@ -901,8 +919,8 @@ impl From<EventContentVariation> for EventContentTraitVariation {
 }
 
 impl CommonEventKind {
-    /// Get the name of the event type (struct or enum) for this kind and the given variation, if
-    /// any is supported.
+    /// Get the name of the event type (struct or enum) for this kind and the
+    /// given variation, if any is supported.
     fn to_event_ident(self, variation: EventVariation) -> Option<syn::Ident> {
         if !self.event_variations().contains(&variation) {
             return None;
@@ -911,7 +929,8 @@ impl CommonEventKind {
         Some(format_ident!("{variation}{self}"))
     }
 
-    /// Get the name of the `[variation][kind]Content` trait for this kind and the given variation.
+    /// Get the name of the `[variation][kind]Content` trait for this kind and
+    /// the given variation.
     fn to_content_kind_trait(self, variation: EventContentTraitVariation) -> syn::Ident {
         format_ident!("{variation}{self}Content")
     }

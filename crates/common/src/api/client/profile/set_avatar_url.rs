@@ -12,7 +12,6 @@ pub mod v3 {
         api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
-
     #[cfg(feature = "unstable-msc4466")]
     use crate::api::client::profile::PropagateTo;
 
@@ -37,12 +36,13 @@ pub mod v3 {
         ///
         /// `None` is used to unset the avatar.
         ///
-        /// If you activate the `compat-empty-string-null` feature, this field being an empty
-        /// string in JSON will result in `None` here during deserialization.
+        /// If you activate the `compat-empty-string-null` feature, this field
+        /// being an empty string in JSON will result in `None` here
+        /// during deserialization.
         ///
-        /// If you active the `compat-unset-avatar` feature, this field being `None` will result
-        /// in an empty string in serialization, which is the same thing Element Web does (c.f.
-        /// <https://github.com/matrix-org/matrix-spec/issues/378#issuecomment-1055831264>).
+        /// If you active the `compat-unset-avatar` feature, this field being
+        /// `None` will result in an empty string in serialization,
+        /// which is the same thing Element Web does (c.f. <https://github.com/matrix-org/matrix-spec/issues/378#issuecomment-1055831264>).
         #[cfg_attr(
             feature = "compat-empty-string-null",
             serde(default, deserialize_with = "crate::__ruma::serde::empty_string_as_none")
@@ -102,9 +102,8 @@ pub mod v3 {
 
     #[cfg(all(test, feature = "server"))]
     mod tests {
-        use crate::__ruma::api::IncomingRequest as _;
-
         use super::Request;
+        use crate::__ruma::api::IncomingRequest as _;
 
         #[test]
         fn deserialize_unset_request() {

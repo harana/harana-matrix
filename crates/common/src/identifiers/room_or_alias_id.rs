@@ -1,4 +1,5 @@
-//! Matrix identifiers for places where a room ID or room alias ID are used interchangeably.
+//! Matrix identifiers for places where a room ID or room alias ID are used
+//! interchangeably.
 
 use std::hint::unreachable_unchecked;
 
@@ -9,13 +10,17 @@ use super::{OwnedRoomAliasId, OwnedRoomId, RoomAliasId, RoomId, server_name::Ser
 
 /// A Matrix [room ID] or a Matrix [room alias ID].
 ///
-/// `RoomOrAliasId` is useful for APIs that accept either kind of room identifier. It is converted
-/// from a string slice, and can be converted back into a string as needed. When converted from a
-/// string slice, the variant is determined by the leading sigil character.
+/// `RoomOrAliasId` is useful for APIs that accept either kind of room
+/// identifier. It is converted from a string slice, and can be converted back
+/// into a string as needed. When converted from a string slice, the variant is
+/// determined by the leading sigil character.
 ///
 /// ```
 /// # use harana_matrix_common::RoomOrAliasId;
-/// assert_eq!(<&RoomOrAliasId>::try_from("#ruma:example.com").unwrap(), "#ruma:example.com");
+/// assert_eq!(
+///     <&RoomOrAliasId>::try_from("#ruma:example.com").unwrap(),
+///     "#ruma:example.com"
+/// );
 ///
 /// assert_eq!(
 ///     <&RoomOrAliasId>::try_from("!n8f893n9:example.com").unwrap(),
@@ -23,9 +28,9 @@ use super::{OwnedRoomAliasId, OwnedRoomId, RoomAliasId, RoomId, server_name::Ser
 /// );
 /// ```
 ///
-/// It can be converted to a `RoomId` or a `RoomAliasId` using `::try_from()` / `.try_into()`.
-/// For example, `<&RoomId>::try_from(room_or_alias_id)` returns either `Ok(room_id)` or
-/// `Err(room_alias_id)`.
+/// It can be converted to a `RoomId` or a `RoomAliasId` using `::try_from()` /
+/// `.try_into()`. For example, `<&RoomId>::try_from(room_or_alias_id)` returns
+/// either `Ok(room_id)` or `Err(room_alias_id)`.
 ///
 /// [room ID]: https://spec.matrix.org/v1.19/appendices/#room-ids
 /// [room alias ID]: https://spec.matrix.org/v1.19/appendices/#room-aliases

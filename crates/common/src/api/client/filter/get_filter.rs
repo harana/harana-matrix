@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3useruseridfilterfilterid
 
-    use crate::__ruma::{
-        OwnedUserId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedUserId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::filter::FilterDefinition,
     };
-
-    use crate::api::client::filter::FilterDefinition;
 
     metadata! {
         method: GET,
@@ -76,9 +77,9 @@ pub mod v3 {
         #[cfg(feature = "server")]
         #[test]
         fn serialize_response() {
-            use crate::__ruma::api::OutgoingResponseExt as _;
-
-            use crate::api::client::filter::FilterDefinition;
+            use crate::{
+                __ruma::api::OutgoingResponseExt as _, api::client::filter::FilterDefinition,
+            };
 
             let res = super::Response::new(FilterDefinition::default())
                 .try_into_http_response::<Vec<u8>>()

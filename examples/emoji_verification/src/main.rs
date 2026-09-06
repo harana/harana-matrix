@@ -5,7 +5,7 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use clap::Parser;
 use futures_util::stream::StreamExt;
-use client_matrix::{
+use harana_matrix_client::{
     Client,
     config::SyncSettings,
     encryption::verification::{

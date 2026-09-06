@@ -16,7 +16,8 @@ use std::time::Duration;
 
 use assert_matches2::assert_matches;
 use assign::assign;
-use client_matrix::{
+use harana_matrix_client::{
+    base::ruma::events::room::canonical_alias::SyncRoomCanonicalAliasEvent,
     config::SyncSettings,
     ruma::{
         RoomAliasId,
@@ -35,7 +36,6 @@ use client_matrix::{
         serde::Raw,
     },
 };
-use client_base::ruma::events::room::canonical_alias::SyncRoomCanonicalAliasEvent;
 use rand::random;
 use tokio::sync::mpsc::unbounded_channel;
 

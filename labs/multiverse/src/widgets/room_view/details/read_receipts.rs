@@ -1,6 +1,6 @@
-use client_matrix::Room;
-use client_base::read_receipts::ReadReceipts as RoomReadReceipts;
-use client_ui::timeline::TimelineItem;
+use harana_matrix_client::{
+    Room, base::read_receipts::ReadReceipts as RoomReadReceipts, ui::timeline::TimelineItem,
+};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph, Wrap},

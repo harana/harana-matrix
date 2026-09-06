@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use client_ui::timeline::{
+use harana_matrix_client::ui::timeline::{
     TimelineEventFocusThreadMode, TimelineReadReceiptTracking,
     event_filter::{
         MembershipChangeFilter, TimelineEventCondition,
@@ -36,7 +36,7 @@ pub struct TimelineEventFilter {
     inner: InnerTimelineEventFilter,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl TimelineEventFilter {
     #[uniffi::constructor]
     pub fn include(conditions: Vec<FilterTimelineEventCondition>) -> Arc<Self> {
@@ -142,12 +142,12 @@ pub enum TimelineFocus {
     PinnedEvents,
 }
 
-impl TryFrom<TimelineFocus> for client_ui::timeline::TimelineFocus {
+impl TryFrom<TimelineFocus> for harana_matrix_client::ui::timeline::TimelineFocus {
     type Error = ClientError;
 
     fn try_from(
         value: TimelineFocus,
-    ) -> Result<client_ui::timeline::TimelineFocus, Self::Error> {
+    ) -> Result<harana_matrix_client::ui::timeline::TimelineFocus, Self::Error> {
         match value {
             TimelineFocus::Live { hide_threaded_events } => Ok(Self::Live { hide_threaded_events }),
             TimelineFocus::Event { event_id, num_context_events, thread_mode } => {
@@ -185,7 +185,7 @@ pub enum DateDividerMode {
     None,
 }
 
-impl From<DateDividerMode> for client_ui::timeline::DateDividerMode {
+impl From<DateDividerMode> for harana_matrix_client::ui::timeline::DateDividerMode {
     fn from(value: DateDividerMode) -> Self {
         match value {
             DateDividerMode::Daily => Self::Daily,

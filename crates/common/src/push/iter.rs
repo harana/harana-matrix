@@ -59,19 +59,21 @@ impl AnyPushRule {
         self.as_ref().triggers_highlight()
     }
 
-    /// Whether an event that matches the push rule should trigger a notification (either in-app or
-    /// remote / push).
+    /// Whether an event that matches the push rule should trigger a
+    /// notification (either in-app or remote / push).
     pub fn triggers_notification(&self) -> bool {
         self.as_ref().triggers_notification()
     }
 
-    /// Whether an event that matches the push rule should trigger a remote notification.
+    /// Whether an event that matches the push rule should trigger a remote
+    /// notification.
     #[cfg(feature = "unstable-msc3768")]
     pub fn triggers_remote_notification(&self) -> bool {
         self.as_ref().triggers_remote_notification()
     }
 
-    /// The sound that should be played when an event matches the push rule, if any.
+    /// The sound that should be played when an event matches the push rule, if
+    /// any.
     pub fn triggers_sound(&self) -> Option<&SoundTweakValue> {
         self.as_ref().triggers_sound()
     }
@@ -214,19 +216,21 @@ impl<'a> AnyPushRuleRef<'a> {
         self.actions().iter().any(|a| a.is_highlight())
     }
 
-    /// Whether an event that matches the push rule should trigger a notification (either in-app or
-    /// remote / push).
+    /// Whether an event that matches the push rule should trigger a
+    /// notification (either in-app or remote / push).
     pub fn triggers_notification(self) -> bool {
         self.actions().iter().any(|a| a.should_notify())
     }
 
-    /// Whether an event that matches the push rule should trigger a remote notification.
+    /// Whether an event that matches the push rule should trigger a remote
+    /// notification.
     #[cfg(feature = "unstable-msc3768")]
     pub fn triggers_remote_notification(self) -> bool {
         self.actions().iter().any(|a| a.should_notify_remote())
     }
 
-    /// The sound that should be played when an event matches the push rule, if any.
+    /// The sound that should be played when an event matches the push rule, if
+    /// any.
     pub fn triggers_sound(self) -> Option<&'a SoundTweakValue> {
         self.actions().iter().find_map(|a| a.sound())
     }

@@ -858,7 +858,10 @@ mod tests {
         let full = build_path_for_target(target, "release", &FULL_SDK).unwrap();
         let crypto = build_path_for_target(target, "release", &CRYPTO_SDK).unwrap();
 
-        assert!(full.as_str().ends_with("aarch64-apple-ios/release/libclient_matrix_ffi.a"), "{full}");
+        assert!(
+            full.as_str().ends_with("aarch64-apple-ios/release/libclient_matrix_ffi.a"),
+            "{full}"
+        );
         assert!(
             crypto.as_str().ends_with("aarch64-apple-ios/release/libclient_crypto_ffi.a"),
             "{crypto}"

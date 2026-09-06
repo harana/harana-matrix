@@ -1,18 +1,19 @@
 use assert_matches2::{assert_let, assert_matches};
 use harana_matrix_common::{
-    canonical_json::assert_to_canonical_json_eq, room_version_rules::RedactionRules,
-};
-use harana_matrix_common::events::{
-    AnyMessageLikeEvent, AnyPossiblyRedactedStateEventContent, AnyStateEvent,
-    AnySyncMessageLikeEvent, AnySyncStateEvent, AnySyncTimelineEvent, AnyTimelineEvent,
-    EmptyStateKey, EventContentFromType, MessageLikeEvent, RedactContent, RedactedStateEvent,
-    RedactedSyncStateEvent, StateEvent, StateEventType, SyncMessageLikeEvent, SyncStateEvent,
-    room::{
-        create::{RedactedRoomCreateEventContent, RoomCreateEventContent},
-        message::{RedactedRoomMessageEventContent, RoomMessageEventContent},
-        name::RedactedRoomNameEventContent,
-        redaction::RoomRedactionEventContent,
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, AnyPossiblyRedactedStateEventContent, AnyStateEvent,
+        AnySyncMessageLikeEvent, AnySyncStateEvent, AnySyncTimelineEvent, AnyTimelineEvent,
+        EmptyStateKey, EventContentFromType, MessageLikeEvent, RedactContent, RedactedStateEvent,
+        RedactedSyncStateEvent, StateEvent, StateEventType, SyncMessageLikeEvent, SyncStateEvent,
+        room::{
+            create::{RedactedRoomCreateEventContent, RoomCreateEventContent},
+            message::{RedactedRoomMessageEventContent, RoomMessageEventContent},
+            name::RedactedRoomNameEventContent,
+            redaction::RoomRedactionEventContent,
+        },
     },
+    room_version_rules::RedactionRules,
 };
 use serde_json::{
     Value as JsonValue, from_value as from_json_value, json,

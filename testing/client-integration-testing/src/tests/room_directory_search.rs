@@ -19,7 +19,7 @@ use anyhow::Result;
 use assert_matches::assert_matches;
 use eyeball_im::VectorDiff;
 use futures::StreamExt;
-use client_matrix::{
+use harana_matrix_client::{
     room_directory_search::RoomDirectorySearch,
     ruma::api::client::room::{Visibility, create_room::v3::Request as CreateRoomRequest},
 };
@@ -47,8 +47,9 @@ async fn test_room_directory_search_filter() -> Result<()> {
     let (values, mut stream) = room_directory_search.results();
     assert!(values.is_empty());
     room_directory_search.search(Some(search_string), 10, None).await?;
-    let results_batch: Vec<VectorDiff<client_matrix::room_directory_search::RoomDescription>> =
-        stream.next().await.unwrap();
+    let results_batch: Vec<
+        VectorDiff<harana_matrix_client::room_directory_search::RoomDescription>,
+    > = stream.next().await.unwrap();
     assert_eq!(results_batch.len(), 1);
     assert_matches!(&results_batch[0], VectorDiff::Append { values } => { assert_eq!(values.len(), 10); });
 

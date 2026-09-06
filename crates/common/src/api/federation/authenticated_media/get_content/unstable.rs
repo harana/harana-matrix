@@ -4,9 +4,10 @@
 
 use std::time::Duration;
 
-use crate::__ruma::api::{Metadata, path_builder::SinglePath, request};
-
-use crate::api::federation::authenticated_media::{ContentMetadata, FileOrLocation, ResponseBody};
+use crate::{
+    __ruma::api::{Metadata, path_builder::SinglePath, request},
+    api::federation::authenticated_media::{ContentMetadata, FileOrLocation, ResponseBody},
+};
 
 /// Request type for the `get_content` endpoint.
 #[request]
@@ -15,8 +16,9 @@ pub struct Request {
     #[ruma_api(path)]
     pub media_id: String,
 
-    /// The maximum duration that the client is willing to wait to start receiving data, in the
-    /// case that the content has not yet been uploaded.
+    /// The maximum duration that the client is willing to wait to start
+    /// receiving data, in the case that the content has not yet been
+    /// uploaded.
     ///
     /// The default value is 20 seconds.
     #[ruma_api(query)]
@@ -79,7 +81,8 @@ impl Response {
 
 #[cfg(feature = "client")]
 impl crate::__ruma::api::IncomingResponse for Response {
-    type EndpointError = <super::v1::Response as crate::__ruma::api::IncomingResponse>::EndpointError;
+    type EndpointError =
+        <super::v1::Response as crate::__ruma::api::IncomingResponse>::EndpointError;
 
     fn try_from_http_response_inner(
         http_response: http::Response<&[u8]>,

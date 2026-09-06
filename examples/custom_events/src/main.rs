@@ -18,7 +18,7 @@ use std::{
     },
 };
 
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, RoomState,
     config::SyncSettings,
     event_handler::Ctx,

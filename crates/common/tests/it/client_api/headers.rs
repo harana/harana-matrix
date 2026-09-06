@@ -1,8 +1,9 @@
 #![cfg(feature = "client")]
 
+use harana_matrix_common::api::{
+    OutgoingRequestExt as _, auth_scheme::SendAccessToken, client::discovery::discover_homeserver,
+};
 use http::HeaderMap;
-use harana_matrix_common::api::client::discovery::discover_homeserver;
-use harana_matrix_common::api::{OutgoingRequestExt as _, auth_scheme::SendAccessToken};
 
 #[test]
 fn get_request_headers() {

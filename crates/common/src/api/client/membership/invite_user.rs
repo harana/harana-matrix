@@ -12,14 +12,16 @@ pub mod v3 {
     //! [spec-mxid]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3roomsroomidinvite
     //! [spec-3pid]: https://spec.matrix.org/v1.19/client-server-api/#thirdparty_post_matrixclientv3roomsroomidinvite
 
-    use crate::__ruma::{
-        OwnedRoomId, OwnedUserId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-    };
     use serde::{Deserialize, Serialize};
 
-    use crate::api::client::membership::Invite3pid;
+    use crate::{
+        __ruma::{
+            OwnedRoomId, OwnedUserId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::membership::Invite3pid,
+    };
 
     metadata! {
         method: POST,
@@ -49,7 +51,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given room ID and invitation recipient.
+        /// Creates a new `Request` with the given room ID and invitation
+        /// recipient.
         pub fn new(room_id: OwnedRoomId, recipient: InvitationRecipient) -> Self {
             Self { room_id, recipient }
         }
@@ -62,7 +65,8 @@ pub mod v3 {
         }
     }
 
-    /// Distinguishes between invititations by Matrix or third party identifiers.
+    /// Distinguishes between invititations by Matrix or third party
+    /// identifiers.
     #[derive(Clone, Debug, Deserialize, Serialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     #[serde(untagged)]
@@ -108,10 +112,10 @@ pub mod v3 {
     #[cfg(test)]
     mod tests {
         use assert_matches2::assert_let;
-        use crate::__ruma::thirdparty::Medium;
         use serde_json::{from_value as from_json_value, json};
 
         use super::{InvitationRecipient, InviteUserId};
+        use crate::__ruma::thirdparty::Medium;
 
         #[test]
         fn deserialize_invite_by_user_id() {

@@ -63,8 +63,9 @@ impl Headers {
         })
     }
 
-    /// Generate code to parse the header with the given name, to assign it to a variable for the
-    /// given field, by extracting it from a `http::header::HeaderMap` named `headers`.
+    /// Generate code to parse the header with the given name, to assign it to a
+    /// variable for the given field, by extracting it from a
+    /// `http::header::HeaderMap` named `headers`.
     pub(super) fn expand_parse_header(
         header_name: &syn::Ident,
         field: &syn::Field,
@@ -75,7 +76,8 @@ impl Headers {
         let header_name_string = header_name.to_string();
         let field_type = &field.ty;
 
-        // We need to handle optional fields manually, because we need to parse the inner type.
+        // We need to handle optional fields manually, because we need to parse the
+        // inner type.
         let option_inner_type = field_type.option_inner_type();
 
         let some_case = if let Some(field_type) = option_inner_type {
@@ -184,8 +186,8 @@ pub(super) struct Body {
     /// The fields containing the data of the body.
     fields: BodyFields,
 
-    /// Whether the body serde type `Serialize` and `Deserialize` implementations are done
-    /// manually.
+    /// Whether the body serde type `Serialize` and `Deserialize`
+    /// implementations are done manually.
     manual_serde: bool,
 }
 
@@ -211,8 +213,8 @@ impl Body {
         self.fields.set_raw(field)
     }
 
-    /// Set whether the body serde type `Serialize` and `Deserialize` implementations are done
-    /// manually.
+    /// Set whether the body serde type `Serialize` and `Deserialize`
+    /// implementations are done manually.
     pub(super) fn set_manual_serde(&mut self, manual_serde: bool) {
         self.manual_serde = manual_serde;
     }
@@ -289,11 +291,12 @@ impl Body {
     fn content_type(&self, kind: MacroKind) -> Option<syn::Ident> {
         match &self.fields {
             BodyFields::Empty if matches!(kind, MacroKind::Request) => {
-                // If there are no body fields, the request body might be empty (not `{}`), so the
-                // `application/json` content-type would be wrong. It may also cause problems with
-                // CORS policies that don't allow the `Content-Type` header (for things such as
-                // `.well-known` that are commonly handled by something else than a
-                // homeserver). However, a server should always return a JSON body.
+                // If there are no body fields, the request body might be empty (not `{}`), so
+                // the `application/json` content-type would be wrong. It may
+                // also cause problems with CORS policies that don't allow the
+                // `Content-Type` header (for things such as `.well-known` that
+                // are commonly handled by something else than a homeserver).
+                // However, a server should always return a JSON body.
                 None
             }
             BodyFields::Empty | BodyFields::JsonFields(_) | BodyFields::JsonAll(_) => {
@@ -312,8 +315,8 @@ impl Body {
         self.fields.expand_fields()
     }
 
-    /// Generate code to define a `struct {ident_prefix}Body` used for (de)serializing the JSON body
-    /// of request or response.
+    /// Generate code to define a `struct {ident_prefix}Body` used for
+    /// (de)serializing the JSON body of request or response.
     pub(super) fn expand_serde_struct_definition(
         &self,
         kind: MacroKind,
@@ -391,8 +394,8 @@ impl Body {
         }
     }
 
-    /// Generate code to parse a JSON body with the given fields, to assign it to a variable
-    /// for the given fields.
+    /// Generate code to parse a JSON body with the given fields, to assign it
+    /// to a variable for the given fields.
     fn expand_parse_json_body(
         fields: &[syn::Field],
         kind: MacroKind,
@@ -449,8 +452,8 @@ impl Body {
 enum BodyFields {
     /// The response has an empty body.
     ///
-    /// An empty body might contain no data at all or an empty JSON object, depending on the
-    /// expected content type of the response.
+    /// An empty body might contain no data at all or an empty JSON object,
+    /// depending on the expected content type of the response.
     #[default]
     Empty,
 
@@ -467,7 +470,8 @@ enum BodyFields {
 impl BodyFields {
     /// Add the given field to the list of [`BodyFields::JsonFields`].
     ///
-    /// Returns an error if this is not a [`BodyFields::Empty`] or [`BodyFields::JsonFields`].
+    /// Returns an error if this is not a [`BodyFields::Empty`] or
+    /// [`BodyFields::JsonFields`].
     fn push_json_field(&mut self, field: syn::Field) -> syn::Result<()> {
         let error_msg = match self {
             Self::Empty => {

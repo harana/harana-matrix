@@ -39,7 +39,7 @@ impl From<&Level> for LogLevel {
 
 /// Trait that can be used to forward Rust logs over FFI to a language specific
 /// logger.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait Logger: Send + Sync {
     /// Called every time the Rust side wants to post a log line.
     ///
@@ -51,7 +51,7 @@ pub trait Logger: Send + Sync {
     ///
     /// * `level` - How severe this log line is.
     /// * `target` - The module path the log line came from, e.g.
-    ///   `client_crypto::machine`.
+    ///   `harana_matrix_client::crypto::machine`.
     /// * `message` - The log message itself.
     /// * `fields` - The structured fields attached to the log line and to the
     ///   spans it was emitted in, formatted as strings.
@@ -188,15 +188,11 @@ impl Visit for FieldVisitor {
 }
 
 /// Set the logger that should be used to forward Rust logs over FFI.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn set_logger(logger: Box<dyn Logger>) {
     let filter = EnvFilter::from_default_env()
-        .add_directive(
-            "crypto=trace".parse().expect("Can't parse logging filter directive"),
-        )
-        .add_directive(
-            "sqlite=debug".parse().expect("Can't parse logging filter directive"),
-        );
+        .add_directive("crypto=trace".parse().expect("Can't parse logging filter directive"))
+        .add_directive("sqlite=debug".parse().expect("Can't parse logging filter directive"));
 
     let layer = LoggerLayer { inner: Arc::from(logger) };
 

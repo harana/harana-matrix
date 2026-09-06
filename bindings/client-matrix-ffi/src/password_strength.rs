@@ -219,7 +219,7 @@ pub struct PasswordStrengthEstimator {
     thresholds: PasswordStrengthThresholds,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl PasswordStrengthEstimator {
     #[uniffi::constructor]
     pub fn new(thresholds: PasswordStrengthThresholds) -> Self {

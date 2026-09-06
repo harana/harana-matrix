@@ -7,14 +7,15 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv3room_keyskeysroomidsessionid
 
-    use crate::__ruma::{
-        OwnedRoomId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-        serde::Raw,
+    use crate::{
+        __ruma::{
+            OwnedRoomId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+            serde::Raw,
+        },
+        api::client::backup::KeyBackupData,
     };
-
-    use crate::api::client::backup::KeyBackupData;
 
     metadata! {
         method: GET,
@@ -52,7 +53,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given version, room_id and session_id.
+        /// Creates a new `Request` with the given version, room_id and
+        /// session_id.
         pub fn new(version: String, room_id: OwnedRoomId, session_id: String) -> Self {
             Self { version, room_id, session_id }
         }

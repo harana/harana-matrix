@@ -57,6 +57,10 @@ enum CiCommand {
     /// Check documentation
     Docs,
 
+    /// Check that the vendored copy of the identifier validation logic that
+    /// `harana-matrix-macros` carries still matches `harana-matrix-common`'s
+    ValidationSync,
+
     /// Run tests with a specific feature set
     TestFeatures {
         #[clap(subcommand)]
@@ -136,26 +140,25 @@ enum FeatureSet {
 #[derive(Subcommand, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(clippy::enum_variant_names)]
 enum WasmFeatureSet {
-    /// Check `client-qrcode` crate
+    /// Check the `qrcode` module
     Qrcode,
-    /// Check `client-base` crate
+    /// Check the `base` module
     Base,
-    /// Check `client-common` crate
+    /// Check the `common` module
     SdkCommon,
-    /// Check `client-matrix` crate with no default features
+    /// Check the SDK with no default features
     MatrixNoDefault,
-    /// Check `client-ui` crate
+    /// Check the `ui` module
     Ui,
-    /// Check `client-matrix` crate with `indexeddb` feature (but not
-    /// `e2e-encryption`)
+    /// Check the SDK with the `indexeddb` feature (but not `e2e-encryption`)
     IndexeddbStoresNoCrypto,
-    /// Check `client-matrix` crate with `indexeddb` and `e2e-encryption` features
+    /// Check the SDK with the `indexeddb` and `e2e-encryption` features
     IndexeddbStores,
-    /// Check `client-indexeddb` crate with all features
+    /// Check the `indexeddb` module with all of its features
     IndexeddbAllFeatures,
-    /// Check `client-indexeddb` crate with `e2e-encryption` feature
+    /// Check the `indexeddb` module with the `e2e-encryption` feature
     IndexeddbCrypto,
-    /// Check `client-indexeddb` crate with `state-store` feature
+    /// Check the `indexeddb` module with the `state-store` feature
     IndexeddbState,
     /// Equivalent to `indexeddb-all-features`, `indexeddb-crypto` and
     /// `indexeddb-state`
@@ -173,6 +176,7 @@ impl CiArgs {
                 CiCommand::Typos => check_typos(),
                 CiCommand::Clippy => check_clippy(),
                 CiCommand::Docs => check_docs(),
+                CiCommand::ValidationSync => check_validation_sync(),
                 CiCommand::TestFeatures { cmd } => run_feature_tests(cmd),
                 CiCommand::Wasm { cmd } => run_wasm_checks(cmd),
                 CiCommand::WasmPack { cmd, runner } => run_wasm_pack_tests(cmd, runner),
@@ -186,6 +190,7 @@ impl CiArgs {
                 check_clippy()?;
                 check_typos()?;
                 check_docs()?;
+                check_validation_sync()?;
                 run_feature_tests(None)?;
                 run_wasm_checks(None)?;
                 run_crypto_tests()?;
@@ -253,14 +258,14 @@ fn check_clippy() -> Result<()> {
     cmd!(
         sh,
         "rustup run {NIGHTLY} cargo clippy --all-targets
-            --features testing,client-matrix/sqlite -- -D warnings"
+            --features testing,harana-matrix-client/sqlite -- -D warnings"
     )
     .run()?;
 
     cmd!(
         sh,
         "rustup run {NIGHTLY} cargo clippy --workspace --all-targets
-            --exclude client-crypto --exclude xtask
+            --exclude xtask
             --no-default-features
             --features sso-login,sqlite,testing,experimental-element-recent-emojis
             -- -D warnings"
@@ -269,8 +274,16 @@ fn check_clippy() -> Result<()> {
 
     cmd!(
         sh,
-        "rustup run {NIGHTLY} cargo clippy --all-targets -p client-crypto
+        "rustup run {NIGHTLY} cargo clippy --all-targets -p harana-matrix-client
             --no-default-features -- -D warnings"
+    )
+    .run()?;
+
+    // The vendored ruma test suite only compiles with the whole feature set.
+    cmd!(
+        sh,
+        "rustup run {NIGHTLY} cargo clippy --all-targets -p harana-matrix-common
+            --features full -- -D warnings"
     )
     .run()?;
 
@@ -279,6 +292,52 @@ fn check_clippy() -> Result<()> {
 
 fn check_docs() -> Result<()> {
     build_docs([], DenyWarnings::Yes)
+}
+
+/// `harana-matrix-macros` validates identifier literals at expansion time, so
+/// it needs the same validation logic as `harana-matrix-common`. It cannot
+/// depend on that crate, since that crate depends on it, so it carries its own
+/// copy. The two live at the same module path and must stay byte-identical.
+fn check_validation_sync() -> Result<()> {
+    let root = workspace::root_path()?;
+    let common = root.join("crates/common/src/validation");
+    let macros = root.join("crates/macros/src/validation");
+
+    let read_dir = |dir: &camino::Utf8Path| -> Result<BTreeMap<String, Vec<u8>>> {
+        let mut files = BTreeMap::new();
+        for entry in std::fs::read_dir(dir)? {
+            let path = entry?.path();
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("a validation source file has a UTF-8 name")
+                .to_owned();
+            files.insert(name, std::fs::read(&path)?);
+        }
+        Ok(files)
+    };
+
+    let (a, b) = (read_dir(&common)?, read_dir(&macros)?);
+    if a == b {
+        return Ok(());
+    }
+
+    let mut differing: Vec<&str> = a
+        .keys()
+        .chain(b.keys())
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .filter(|name| a.get(*name) != b.get(*name))
+        .collect();
+    differing.dedup();
+
+    Err(format!(
+        "{common} and {macros} have drifted apart; they must stay byte-identical.\n\
+         Differing files: {}",
+        differing.join(", ")
+    )
+    .into())
 }
 
 fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
@@ -305,10 +364,10 @@ fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
 
     let sh = sh();
     let run = |arg_set: &str| {
-        cmd!(sh, "rustup run stable cargo nextest run -p client-matrix")
+        cmd!(sh, "rustup run stable cargo nextest run -p harana-matrix-client")
             .args(arg_set.split_whitespace())
             .run()?;
-        cmd!(sh, "rustup run stable cargo test --doc -p client-matrix")
+        cmd!(sh, "rustup run stable cargo test --doc -p harana-matrix-client")
             .args(arg_set.split_whitespace())
             .run()
     };
@@ -328,33 +387,37 @@ fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
 }
 
 fn run_crypto_tests() -> Result<()> {
+    // `crypto` is a module of `harana-matrix-client` now, so these run the
+    // whole crate with the feature sets that switch it on.
+    const CRYPTO: &str = "e2e-encryption,testing";
     let sh = sh();
-    cmd!(sh, "rustup run stable cargo clippy -p client-crypto -- -D warnings").run()?;
-    cmd!(sh, "rustup run stable cargo nextest run -p client-crypto --no-default-features --features testing").run()?;
-    cmd!(sh, "rustup run stable cargo nextest run -p client-crypto --features=testing")
+    cmd!(sh, "rustup run stable cargo clippy -p harana-matrix-client --no-default-features --features {CRYPTO} -- -D warnings").run()?;
+    cmd!(sh, "rustup run stable cargo nextest run -p harana-matrix-client --no-default-features --features {CRYPTO}").run()?;
+    cmd!(sh, "rustup run stable cargo nextest run -p harana-matrix-client --features {CRYPTO}")
         .run()?;
-    cmd!(sh, "rustup run stable cargo test --doc -p client-crypto --features=testing").run()?;
+    cmd!(sh, "rustup run stable cargo test --doc -p harana-matrix-client --features {CRYPTO}")
+        .run()?;
     cmd!(
         sh,
-        "rustup run stable cargo clippy -p client-crypto --features=experimental-algorithms -- -D warnings"
+        "rustup run stable cargo clippy -p harana-matrix-client --features experimental-algorithms,{CRYPTO} -- -D warnings"
     )
     .run()?;
     cmd!(
         sh,
-        "rustup run stable cargo nextest run -p client-crypto --features=experimental-algorithms,testing"
+        "rustup run stable cargo nextest run -p harana-matrix-client --features experimental-algorithms,{CRYPTO}"
     ).run()?;
     cmd!(
         sh,
-        "rustup run stable cargo test --doc -p client-crypto --features=experimental-algorithms,testing"
+        "rustup run stable cargo test --doc -p harana-matrix-client --features experimental-algorithms,{CRYPTO}"
     )
     .run()?;
-    cmd!(sh, "rustup run stable cargo nextest run -p client-crypto --features=experimental-encrypted-state-events").run()?;
+    cmd!(sh, "rustup run stable cargo nextest run -p harana-matrix-client --features experimental-encrypted-state-events,{CRYPTO}").run()?;
 
     cmd!(sh, "rustup run stable cargo nextest run -p client-crypto-ffi").run()?;
 
     cmd!(
         sh,
-        "rustup run stable cargo nextest run -p client-sqlite --features crypto-store,testing"
+        "rustup run stable cargo nextest run -p harana-matrix-client --features sqlite,crypto-store,{CRYPTO}"
     )
     .run()?;
 
@@ -370,31 +433,40 @@ fn run_wasm_checks(cmd: Option<WasmFeatureSet>) -> Result<()> {
     }
 
     let args = BTreeMap::from([
-        (WasmFeatureSet::Qrcode, "-p client-qrcode --features js"),
+        (
+            WasmFeatureSet::Qrcode,
+            "-p harana-matrix-client --no-default-features --features js,qrcode",
+        ),
         (
             WasmFeatureSet::MatrixNoDefault,
-            "-p client-matrix --no-default-features --features js,reqwest-transport",
+            "-p harana-matrix-client --no-default-features --features js,reqwest-transport",
         ),
-        (WasmFeatureSet::Base, "-p client-base --features js,test-send-sync"),
-        (WasmFeatureSet::SdkCommon, "-p client-common --features js"),
-        (WasmFeatureSet::Ui, "-p client-ui --features js"),
+        (
+            WasmFeatureSet::Base,
+            "-p harana-matrix-client --no-default-features --features js,test-send-sync",
+        ),
+        (WasmFeatureSet::SdkCommon, "-p harana-matrix-client --no-default-features --features js"),
+        (WasmFeatureSet::Ui, "-p harana-matrix-client --no-default-features --features js,ui"),
         (
             WasmFeatureSet::IndexeddbStoresNoCrypto,
-            "-p client-matrix --no-default-features --features js,indexeddb,reqwest-transport",
+            "-p harana-matrix-client --no-default-features --features js,indexeddb,reqwest-transport",
         ),
         (
             WasmFeatureSet::IndexeddbStores,
-            "-p client-matrix --no-default-features --features \
+            "-p harana-matrix-client --no-default-features --features \
              js,indexeddb,e2e-encryption,reqwest-transport",
         ),
-        (WasmFeatureSet::IndexeddbAllFeatures, "-p client-indexeddb"),
+        (
+            WasmFeatureSet::IndexeddbAllFeatures,
+            "-p harana-matrix-client --no-default-features --features js,indexeddb,e2e-encryption",
+        ),
         (
             WasmFeatureSet::IndexeddbCrypto,
-            "-p client-indexeddb --no-default-features --features e2e-encryption",
+            "-p harana-matrix-client --no-default-features --features js,indexeddb,e2e-encryption",
         ),
         (
             WasmFeatureSet::IndexeddbState,
-            "-p client-indexeddb --no-default-features --features state-store",
+            "-p harana-matrix-client --no-default-features --features js,indexeddb,state-store",
         ),
     ]);
 
@@ -430,32 +502,38 @@ fn run_wasm_pack_tests(cmd: Option<WasmFeatureSet>, runner: WasmTestRunner) -> R
     }
 
     let args = BTreeMap::from([
-        (WasmFeatureSet::Qrcode, ("crates/client-qrcode", "--features js")),
+        (
+            WasmFeatureSet::Qrcode,
+            ("crates/client", "--no-default-features --features js,qrcode --lib"),
+        ),
         (
             WasmFeatureSet::MatrixNoDefault,
-            ("crates/client-matrix", "--no-default-features --features js --lib"),
+            ("crates/client", "--no-default-features --features js --lib"),
         ),
-        (WasmFeatureSet::Base, ("crates/client-base", "--features js")),
-        (WasmFeatureSet::SdkCommon, ("crates/client-common", "--features js")),
+        (WasmFeatureSet::Base, ("crates/client", "--no-default-features --features js --lib")),
+        (WasmFeatureSet::SdkCommon, ("crates/client", "--no-default-features --features js --lib")),
         (
             WasmFeatureSet::IndexeddbStoresNoCrypto,
-            ("crates/client-matrix", "--no-default-features --features js,indexeddb --lib"),
+            ("crates/client", "--no-default-features --features js,indexeddb --lib"),
         ),
         (
             WasmFeatureSet::IndexeddbStores,
             (
-                "crates/client-matrix",
+                "crates/client",
                 "--no-default-features --features js,indexeddb,e2e-encryption,testing --lib",
             ),
         ),
-        (WasmFeatureSet::IndexeddbAllFeatures, ("crates/client-indexeddb", "")),
+        (
+            WasmFeatureSet::IndexeddbAllFeatures,
+            ("crates/client", "--no-default-features --features js,indexeddb,e2e-encryption --lib"),
+        ),
         (
             WasmFeatureSet::IndexeddbCrypto,
-            ("crates/client-indexeddb", "--no-default-features --features e2e-encryption"),
+            ("crates/client", "--no-default-features --features js,indexeddb,e2e-encryption --lib"),
         ),
         (
             WasmFeatureSet::IndexeddbState,
-            ("crates/client-indexeddb", "--no-default-features --features state-store"),
+            ("crates/client", "--no-default-features --features js,indexeddb,state-store --lib"),
         ),
     ]);
 

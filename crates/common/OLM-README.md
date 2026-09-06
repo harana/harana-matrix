@@ -1,13 +1,13 @@
-# common-olm (vendored)
+# `harana_matrix_common::olm` (vendored)
 
 The Olm and Megolm implementation used by this workspace, vendored from
 [harana/harana-olm](https://github.com/harana/harana-olm), a fork of
 [vodozemac](https://github.com/matrix-org/vodozemac) that carries a number of
 security fixes.
 
-The package is named `common-olm`, following the workspace's tier prefixes, and
-consumers write `use common_olm::...`. Upstream `matrix-rust-sdk` merges that
-touch `common_olm::` paths need those paths rewritten.
+It is the `olm` module of `harana-matrix-common`, behind the feature of the same
+name, so consumers write `use harana_matrix_common::olm::...`. Upstream `matrix-rust-sdk` merges that
+touch `harana_matrix_common::olm::` paths need those paths rewritten.
 
 ## Provenance
 

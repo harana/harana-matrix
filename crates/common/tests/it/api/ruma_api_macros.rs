@@ -2,13 +2,13 @@
 #![allow(dead_code)]
 
 pub mod some_endpoint {
-    use http::header::CONTENT_TYPE;
     use harana_matrix_common::{
         OwnedUserId,
         api::{auth_scheme::NoAuthentication, request, response},
         metadata,
         serde::Raw,
     };
+    use http::header::CONTENT_TYPE;
 
     metadata! {
         method: POST, // An `http::Method` constant. No imports required.

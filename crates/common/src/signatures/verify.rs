@@ -8,12 +8,12 @@ use crate::__ruma::{
     canonical_json::{
         CanonicalJsonFieldError, CanonicalJsonObjectExt, CanonicalJsonType, RedactingSerializer,
     },
+    events::{
+        StaticEventContent,
+        room::policy::{POLICY_SERVER_ED25519_SIGNING_KEY_ID, RoomPolicyEventContent},
+    },
     room_version_rules::{RoomVersionRules, SignaturesRules},
     serde::{Base64, base64::Standard},
-};
-use crate::__ruma::events::{
-    StaticEventContent,
-    room::policy::{POLICY_SERVER_ED25519_SIGNING_KEY_ID, RoomPolicyEventContent},
 };
 
 #[cfg(test)]
@@ -26,20 +26,23 @@ use crate::signatures::{
 
 /// Verifies that the signed event contains all the required valid signatures.
 ///
-/// Some room versions may require signatures from multiple homeservers, so this function takes a
-/// map from servers to sets of public keys. Signatures are verified for each required homeserver.
-/// All known public keys for a homeserver should be provided. The first one found on the given
-/// event will be used.
+/// Some room versions may require signatures from multiple homeservers, so this
+/// function takes a map from servers to sets of public keys. Signatures are
+/// verified for each required homeserver. All known public keys for a
+/// homeserver should be provided. The first one found on the given event will
+/// be used.
 ///
-/// If the `Ok` variant is returned by this function, it will contain a [`Verified`] value which
-/// distinguishes an event with valid signatures and a matching content hash with an event with
-/// only valid signatures. See the documentation for [`Verified`] for details.
+/// If the `Ok` variant is returned by this function, it will contain a
+/// [`Verified`] value which distinguishes an event with valid signatures and a
+/// matching content hash with an event with only valid signatures. See the
+/// documentation for [`Verified`] for details.
 ///
 /// # Parameters
 ///
-/// * `public_key_map`: A map from server name to a map from key identifier to public signing key.
-///   [`required_server_signatures_to_verify_event()`] can be called to get the list of servers that
-///   must appear in this map. If any of those servers is missing, this function will return a
+/// * `public_key_map`: A map from server name to a map from key identifier to
+///   public signing key. [`required_server_signatures_to_verify_event()`] can
+///   be called to get the list of servers that must appear in this map. If any
+///   of those servers is missing, this function will return a
 ///   [`VerificationError::NoPublicKeysForEntity`] error.
 /// * `object`: The JSON object of the event that was signed.
 /// * `room_version`: The version of the event's room.
@@ -130,19 +133,22 @@ pub fn verify_event(
     Ok(Verified::Signatures)
 }
 
-/// Verify that the given event has a valid signature from the given policy server.
+/// Verify that the given event has a valid signature from the given policy
+/// server.
 ///
-/// If the event is an `m.room.policy` event with an empty `state_key` string, this function
-/// succeeds without checking the signature.
+/// If the event is an `m.room.policy` event with an empty `state_key` string,
+/// this function succeeds without checking the signature.
 ///
-/// For other cases, this returns an error if the signature is missing or invalid.
+/// For other cases, this returns an error if the signature is missing or
+/// invalid.
 ///
 /// # Parameters
 ///
-/// * `room_policy`: The `content` of the `m.room.policy` event in the current state of the room. If
-///   there is no `m.room.policy` event in the state of the room or it is invalid, it is assumed
-///   that the room has no policy server so this function should not be called to check for the
-///   policy server signature.
+/// * `room_policy`: The `content` of the `m.room.policy` event in the current
+///   state of the room. If there is no `m.room.policy` event in the state of
+///   the room or it is invalid, it is assumed that the room has no policy
+///   server so this function should not be called to check for the policy
+///   server signature.
 /// * `object`: The JSON object of the event that was signed.
 /// * `rules`: The rules of the version of the event's room.
 pub fn verify_policy_server_signature(
@@ -177,18 +183,19 @@ pub fn verify_policy_server_signature(
 
 /// Uses a set of public keys to verify a signed JSON object.
 ///
-/// Signatures using an unsupported algorithm are ignored, but each entity must have at least one
-/// signature from a supported algorithm.
+/// Signatures using an unsupported algorithm are ignored, but each entity must
+/// have at least one signature from a supported algorithm.
 ///
-/// Unlike `content_hash` and `reference_hash`, this function does not report an error if the
-/// canonical JSON is larger than 65535 bytes; this function may be used for requests that are
-/// larger than just one PDU's maximum size.
+/// Unlike `content_hash` and `reference_hash`, this function does not report an
+/// error if the canonical JSON is larger than 65535 bytes; this function may be
+/// used for requests that are larger than just one PDU's maximum size.
 ///
 /// # Parameters
 ///
-/// * `public_key_map`: A map from entity identifiers to a map from key identifiers to public keys.
-///   Generally, entity identifiers are server names — the host/IP/port of a homeserver (e.g.
-///   `example.com`) for which a signature must be verified. Key identifiers for each server (e.g.
+/// * `public_key_map`: A map from entity identifiers to a map from key
+///   identifiers to public keys. Generally, entity identifiers are server names
+///   — the host/IP/port of a homeserver (e.g. `example.com`) for which a
+///   signature must be verified. Key identifiers for each server (e.g.
 ///   `ed25519:1`) then map to their respective public keys.
 /// * `object`: The JSON object that was signed.
 ///
@@ -244,19 +251,20 @@ pub fn verify_json(
     Ok(())
 }
 
-/// Check a signed JSON object using the given public key and signature, all provided as bytes.
+/// Check a signed JSON object using the given public key and signature, all
+/// provided as bytes.
 ///
-/// This is a low-level function. In general you will want to use [`verify_event()`] or
-/// [`verify_json()`].
+/// This is a low-level function. In general you will want to use
+/// [`verify_event()`] or [`verify_json()`].
 ///
 /// # Parameters
 ///
-/// * `algorithm`: The algorithm used for the signature. Currently this method only supports the
-///   ed25519 algorithm.
+/// * `algorithm`: The algorithm used for the signature. Currently this method
+///   only supports the ed25519 algorithm.
 /// * `public_key`: The raw bytes of the public key used to sign the JSON.
 /// * `signature`: The raw bytes of the signature.
-/// * `canonical_json`: The signed canonical JSON bytes. Can be obtained by calling
-///   [`to_canonical_json_string_for_signing()`].
+/// * `canonical_json`: The signed canonical JSON bytes. Can be obtained by
+///   calling [`to_canonical_json_string_for_signing()`].
 ///
 /// # Errors
 ///
@@ -275,8 +283,8 @@ pub fn verify_canonical_json_bytes(
 
 /// Serialize the given JSON object to prepare it for [signing].
 ///
-/// This serializes the object to [canonical JSON] form without the `signatures` and `unsigned`
-/// fields.
+/// This serializes the object to [canonical JSON] form without the `signatures`
+/// and `unsigned` fields.
 ///
 /// # Parameters
 ///
@@ -309,17 +317,19 @@ pub fn to_canonical_json_string_for_signing(
         .serialize(object)?)
 }
 
-/// Uses a set of public keys to verify signed canonical JSON bytes for a given entity.
+/// Uses a set of public keys to verify signed canonical JSON bytes for a given
+/// entity.
 ///
 /// Implements the algorithm described in the spec for [checking signatures].
 ///
 /// # Parameters
 ///
 /// * `entity_id`: The entity to check the signatures for.
-/// * `fetch_public_keys`: A type to get the public signing keys of servers by key ID.
+/// * `fetch_public_keys`: A type to get the public signing keys of servers by
+///   key ID.
 /// * `signature_map`: The map of signatures from the signed JSON object.
-/// * `canonical_json`: The signed canonical JSON bytes. Can be obtained by calling
-///   [`to_canonical_json_string_for_signing()`].
+/// * `canonical_json`: The signed canonical JSON bytes. Can be obtained by
+///   calling [`to_canonical_json_string_for_signing()`].
 ///
 /// # Errors
 ///
@@ -384,11 +394,12 @@ fn verify_canonical_json_for_entity(
 ///
 /// # Parameters
 ///
-/// * `verifier`: A [`Verifier`] appropriate for the digital signature algorithm that was used.
+/// * `verifier`: A [`Verifier`] appropriate for the digital signature algorithm
+///   that was used.
 /// * `public_key`: The raw bytes of the public key used to sign the JSON.
 /// * `signature`: The raw bytes of the signature.
-/// * `canonical_json`: The signed canonical JSON bytes. Can be obtained by calling
-///   [`to_canonical_json_string_for_signing()`].
+/// * `canonical_json`: The signed canonical JSON bytes. Can be obtained by
+///   calling [`to_canonical_json_string_for_signing()`].
 ///
 /// # Errors
 ///
@@ -405,15 +416,17 @@ where
     verifier.verify_json(public_key, signature, canonical_json).map_err(Into::into)
 }
 
-/// Get the list of servers whose signature must be checked to verify the given event.
+/// Get the list of servers whose signature must be checked to verify the given
+/// event.
 ///
-/// Applies the rules for [validating signatures on received events] for populating the list:
+/// Applies the rules for [validating signatures on received events] for
+/// populating the list:
 ///
-/// - Add the server of the `sender`, except if it's an invite event that results from a third-party
-///   invite.
+/// - Add the server of the `sender`, except if it's an invite event that
+///   results from a third-party invite.
 /// - For room versions 1 and 2, add the server of the `event_id`.
-/// - For room versions that support restricted join rules, if it's a join event with a
-///   `join_authorised_via_users_server`, add the server of that user.
+/// - For room versions that support restricted join rules, if it's a join event
+///   with a `join_authorised_via_users_server`, add the server of that user.
 ///
 /// [validating signatures on received events]: https://spec.matrix.org/v1.19/server-server-api/#validating-hashes-and-signatures-on-received-events
 pub fn required_server_signatures_to_verify_event(
@@ -470,10 +483,11 @@ pub fn required_server_signatures_to_verify_event(
     Ok(servers_to_check)
 }
 
-/// Whether the given event is an `m.room.member` invite that was created as the result of a
-/// third-party invite.
+/// Whether the given event is an `m.room.member` invite that was created as the
+/// result of a third-party invite.
 ///
-/// Returns an error if the object has not the expected format of an `m.room.member` event.
+/// Returns an error if the object has not the expected format of an
+/// `m.room.member` event.
 fn is_invite_via_third_party_id(object: &CanonicalJsonObject) -> Result<bool, JsonError> {
     let event_type = object.get_as_required_string("type", "type")?;
 
@@ -496,11 +510,13 @@ pub(crate) trait Verifier {
     /// The error type returned by the verifier.
     type Error: std::error::Error + Into<VerificationError>;
 
-    /// Use a public key to verify a signature against the JSON object that was signed.
+    /// Use a public key to verify a signature against the JSON object that was
+    /// signed.
     ///
     /// # Parameters
     ///
-    /// * `public_key`: The raw bytes of the public key of the key pair used to sign the message.
+    /// * `public_key`: The raw bytes of the public key of the key pair used to
+    ///   sign the message.
     /// * `signature`: The raw bytes of the signature to verify.
     /// * `message`: The raw bytes of the message that was signed.
     ///
@@ -525,10 +541,11 @@ fn verifier_from_algorithm(algorithm: &SigningKeyAlgorithm) -> Option<impl Verif
 
 /// A value returned when an event is successfully verified.
 ///
-/// Event verification involves verifying both signatures and a content hash. It is possible for
-/// the signatures on an event to be valid, but for the hash to be different than the one
-/// calculated during verification. This is not necessarily an error condition, as it may indicate
-/// that the event has been redacted. In this case, receiving homeservers should store a redacted
+/// Event verification involves verifying both signatures and a content hash. It
+/// is possible for the signatures on an event to be valid, but for the hash to
+/// be different than the one calculated during verification. This is not
+/// necessarily an error condition, as it may indicate that the event has been
+/// redacted. In this case, receiving homeservers should store a redacted
 /// version of the event.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[allow(clippy::exhaustive_enums)]
@@ -552,9 +569,11 @@ pub type PublicKeyMap = BTreeMap<String, PublicKeySet>;
 /// This is represented as a map from key ID to base64-encoded signature.
 pub type PublicKeySet = BTreeMap<String, Base64>;
 
-/// A trait implemented by types that allow to get the public signing keys for a given entity.
+/// A trait implemented by types that allow to get the public signing keys for a
+/// given entity.
 trait FetchEntityPublicSigningKey {
-    /// Get the bytes of the public signing key with the given ID for the given entity.
+    /// Get the bytes of the public signing key with the given ID for the given
+    /// entity.
     fn public_signing_key(
         &self,
         entity: &str,

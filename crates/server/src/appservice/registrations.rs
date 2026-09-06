@@ -21,7 +21,9 @@
 
 use std::collections::{BTreeMap, btree_map::Values};
 
-use harana_matrix_common::{RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration};
+use harana_matrix_common::{
+    RoomAliasId, RoomId, ServerName, UserId, api::appservice::Registration,
+};
 
 use crate::appservice::{Error, RegistrationInfo};
 

@@ -21,8 +21,9 @@ use assign::assign;
 use eyeball_im::{Vector, VectorDiff};
 use futures::pin_mut;
 use futures_util::{FutureExt, StreamExt};
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, RoomState, ThreadingSupport, assert_let_timeout, assert_next_with_timeout,
+    common::cross_process_lock::CrossProcessLockConfig,
     config::SyncSettings,
     deserialized_responses::{VerificationLevel, VerificationState},
     encryption::{
@@ -46,18 +47,17 @@ use client_matrix::{
             },
         },
     },
-};
-use client_common::cross_process_lock::CrossProcessLockConfig;
-use common_test::{TestError, TestResult};
-use client_ui::{
-    Timeline,
-    notification_client::NotificationClient,
-    room_list_service::RoomListLoadingState,
-    sync_service::SyncService,
-    timeline::{
-        EventSendState, EventTimelineItem, ReactionStatus, RoomExt, TimelineBuilder,
-        TimelineDetails, TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
-        TimelineItem,
+    test::{TestError, TestResult},
+    ui::{
+        Timeline,
+        notification_client::NotificationClient,
+        room_list_service::RoomListLoadingState,
+        sync_service::SyncService,
+        timeline::{
+            EventSendState, EventTimelineItem, ReactionStatus, RoomExt, TimelineBuilder,
+            TimelineDetails, TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
+            TimelineItem,
+        },
     },
 };
 use similar_asserts::assert_eq;
@@ -693,7 +693,7 @@ async fn test_room_keys_received_on_notification_client_trigger_redecryption() {
     debug!("The notification client syncs");
     let notification_client = NotificationClient::new(
         notification_client,
-        client_ui::notification_client::NotificationProcessSetup::SingleProcess {
+        harana_matrix_client::ui::notification_client::NotificationProcessSetup::SingleProcess {
             sync_service: sync_service.into(),
         },
     )

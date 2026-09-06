@@ -545,14 +545,9 @@ name = "benchmarks"
 version = "1.0.0"
 dependencies = [
  "assert_matches",
- "client-base",
- "client-crypto",
- "client-matrix",
- "client-sqlite",
- "client-ui",
  "codspeed-criterion-compat",
- "common-test",
  "futures-util",
+ "harana-matrix-client",
  "harana-matrix-common",
  "rand 0.10.2",
  "serde",
@@ -967,163 +962,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
-name = "client-base"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "as_variant",
- "assert_matches",
- "assert_matches2",
- "assign",
- "async-trait",
- "bitflags 2.13.1",
- "client-common",
- "client-crypto",
- "client-store-encryption",
- "common-test",
- "decancer",
- "eyeball",
- "eyeball-im",
- "futures-executor",
- "futures-util",
- "getrandom 0.3.4",
- "gloo-timers",
- "growable-bloom-filter",
- "harana-matrix-common",
- "http",
- "proptest",
- "regex",
- "serde",
- "serde_json",
- "similar-asserts",
- "stream_assert",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "unicode-normalization",
- "uniffi",
- "wasm-bindgen-test",
-]
-
-[[package]]
-name = "client-common"
-version = "0.18.0"
-dependencies = [
- "assert_matches",
- "assert_matches2",
- "eyeball-im",
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-util",
- "getrandom 0.3.4",
- "getrandom 0.4.3",
- "gloo-timers",
- "harana-matrix-common",
- "harana-matrix-macros",
- "imbl",
- "insta",
- "js-sys",
- "proptest",
- "sanitize-filename",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uniffi",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
-]
-
-[[package]]
-name = "client-contentscanner"
-version = "0.18.0"
-dependencies = [
- "assert_matches2",
- "client-crypto",
- "client-matrix",
- "common-test",
- "harana-matrix-common",
- "serde",
- "tokio",
- "tracing",
- "uniffi",
- "wiremock",
-]
-
-[[package]]
-name = "client-crypto"
-version = "0.18.0"
-dependencies = [
- "aes",
- "anyhow",
- "as_variant",
- "assert_matches",
- "assert_matches2",
- "async-trait",
- "bs58",
- "byteorder",
- "cfg-if",
- "client-common",
- "client-qrcode",
- "cms",
- "common-test",
- "ctr",
- "eyeball",
- "futures-core",
- "futures-executor",
- "futures-util",
- "harana-matrix-common",
- "hkdf",
- "hmac",
- "http",
- "insta",
- "itertools 0.15.0",
- "js_option",
- "pbkdf2",
- "pkcs1",
- "proptest",
- "rand 0.10.2",
- "rcgen",
- "ring",
- "rmp-serde",
- "rustls",
- "rustls-pki-types",
- "rustls-webpki",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sha2 0.11.0",
- "similar-asserts",
- "stream_assert",
- "subtle",
- "thiserror 2.0.19",
- "time",
- "tokio",
- "tokio-stream",
- "tracing",
- "ulid",
- "uniffi",
- "url",
- "zeroize",
-]
-
-[[package]]
 name = "client-crypto-ffi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_matches2",
- "client-common",
- "client-crypto",
- "client-matrix-ffi-macros",
- "client-sqlite",
  "futures-util",
+ "harana-matrix-client",
  "harana-matrix-common",
+ "harana-matrix-macros",
  "hmac",
  "http",
  "js_int",
@@ -1143,46 +990,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "client-indexeddb"
-version = "0.18.0"
-dependencies = [
- "assert_matches",
- "assert_matches2",
- "async-trait",
- "base64 0.23.0",
- "client-base",
- "client-common",
- "client-crypto",
- "client-store-encryption",
- "common-test",
- "futures-util",
- "getrandom 0.4.3",
- "gloo-timers",
- "gloo-utils",
- "growable-bloom-filter",
- "harana-matrix-common",
- "hkdf",
- "js-sys",
- "matrix_indexed_db_futures",
- "rand 0.10.2",
- "rmp-serde",
- "serde",
- "serde-wasm-bindgen",
- "serde_bytes",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-test",
- "web-sys",
- "zeroize",
-]
-
-[[package]]
 name = "client-integration-testing"
 version = "0.1.0"
 dependencies = [
@@ -1191,17 +998,12 @@ dependencies = [
  "assert_matches",
  "assert_matches2",
  "assign",
- "client-base",
- "client-common",
- "client-crypto",
- "client-matrix",
- "client-ui",
- "common-test",
  "eyeball",
  "eyeball-im",
  "futures",
  "futures-core",
  "futures-util",
+ "harana-matrix-client",
  "harana-matrix-common",
  "http",
  "json-structural-diff",
@@ -1220,87 +1022,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "client-matrix"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "anymap2",
- "as_variant",
- "assert-json-diff",
- "assert_matches",
- "assert_matches2",
- "async-channel",
- "async-stream",
- "async-trait",
- "axum",
- "backon",
- "blurhash",
- "bytes",
- "bytesize",
- "cfg-if",
- "client-base",
- "client-common",
- "client-indexeddb",
- "client-matrix-ffi-macros",
- "client-search",
- "client-sqlite",
- "common-test",
- "ctor 1.0.12",
- "dirs",
- "event-listener",
- "eyeball",
- "eyeball-im",
- "eyre",
- "futures-core",
- "futures-executor",
- "futures-util",
- "gloo-timers",
- "harana-matrix-common",
- "hex",
- "http",
- "image",
- "imbl",
- "indexmap",
- "insta",
- "itertools 0.15.0",
- "js_int",
- "language-tags",
- "mime",
- "mime2ext",
- "oauth2",
- "percent-encoding",
- "pin-project-lite",
- "proptest",
- "pulldown-cmark",
- "rand 0.10.2",
- "reqwest",
- "rustls",
- "serde",
- "serde_html_form",
- "serde_json",
- "serde_urlencoded",
- "sha2 0.11.0",
- "similar-asserts",
- "stream_assert",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tokio-stream",
- "tokio-test",
- "tokio-util",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uniffi",
- "url",
- "urlencoding",
- "uuid",
- "wasm-bindgen-test",
- "wiremock",
- "zeroize",
-]
-
-[[package]]
 name = "client-matrix-ffi"
 version = "0.18.0"
 dependencies = [
@@ -1309,20 +1030,14 @@ dependencies = [
  "async-compat",
  "async-trait",
  "chrono",
- "client-base",
- "client-common",
- "client-contentscanner",
- "client-crypto",
- "client-matrix",
- "client-matrix-ffi-macros",
- "client-ui",
- "common-test",
  "console_error_panic_hook",
  "extension-trait",
  "eyeball-im",
  "futures-executor",
  "futures-util",
+ "harana-matrix-client",
  "harana-matrix-common",
+ "harana-matrix-macros",
  "http",
  "jni",
  "jvm-getter",
@@ -1352,166 +1067,6 @@ dependencies = [
  "wiremock",
  "zeroize",
  "zxcvbn",
-]
-
-[[package]]
-name = "client-matrix-ffi-macros"
-version = "0.7.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.3",
-]
-
-[[package]]
-name = "client-qrcode"
-version = "0.18.0"
-dependencies = [
- "byteorder",
- "harana-matrix-common",
- "image",
- "qrcode",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "client-ruma"
-version = "0.20.0"
-dependencies = [
- "as_variant",
- "assign",
- "async-stream",
- "bytes",
- "futures-core",
- "harana-matrix-common",
- "http",
- "reqwest",
- "tokio-stream",
- "tracing",
-]
-
-[[package]]
-name = "client-search"
-version = "0.18.0"
-dependencies = [
- "aes",
- "byteorder",
- "common-test",
- "ctr",
- "harana-matrix-common",
- "hkdf",
- "hmac",
- "once_cell",
- "pbkdf2",
- "rand 0.10.2",
- "sha2 0.11.0",
- "tantivy",
- "tempfile",
- "thiserror 2.0.19",
- "tracing",
- "zeroize",
-]
-
-[[package]]
-name = "client-sqlite"
-version = "0.18.0"
-dependencies = [
- "as_variant",
- "assert_matches",
- "async-trait",
- "client-base",
- "client-common",
- "client-crypto",
- "client-store-encryption",
- "common-test",
- "deadpool 0.13.0",
- "erased-serde",
- "glob",
- "harana-matrix-common",
- "itertools 0.15.0",
- "num_cpus",
- "rmp-serde",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_path_to_error",
- "similar-asserts",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "zeroize",
-]
-
-[[package]]
-name = "client-store-encryption"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "base64 0.23.0",
- "blake3",
- "chacha20poly1305",
- "erased-serde",
- "getrandom 0.4.3",
- "hkdf",
- "hmac",
- "pbkdf2",
- "rand 0.10.2",
- "rmp-serde",
- "serde",
- "serde_bytes",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.19",
- "zeroize",
-]
-
-[[package]]
-name = "client-ui"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "as_variant",
- "assert-json-diff",
- "assert_matches",
- "assert_matches2",
- "async-rx",
- "async-stream",
- "async_cell",
- "bitflags 2.13.1",
- "chrono",
- "client-base",
- "client-common",
- "client-matrix",
- "common-test",
- "emojis",
- "eyeball",
- "eyeball-im",
- "eyeball-im-util",
- "futures-core",
- "futures-util",
- "fuzzy-matcher",
- "growable-bloom-filter",
- "harana-matrix-common",
- "imbl",
- "indexmap",
- "itertools 0.15.0",
- "mime",
- "pin-project-lite",
- "proptest",
- "serde",
- "serde_json",
- "stream_assert",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tokio-stream",
- "tracing",
- "unicode-normalization",
- "unicode-segmentation",
- "uniffi",
- "url",
- "wiremock",
 ]
 
 [[package]]
@@ -1654,27 +1209,6 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
-]
-
-[[package]]
-name = "common-test"
-version = "0.18.0"
-dependencies = [
- "as_variant",
- "client-common",
- "ctor 0.2.9",
- "getrandom 0.4.3",
- "harana-matrix-common",
- "harana-matrix-macros",
- "http",
- "insta",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tokio",
- "tracing-subscriber",
- "wasm-bindgen-test",
- "wiremock",
 ]
 
 [[package]]
@@ -1931,16 +1465,6 @@ checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
 dependencies = [
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "ctor"
-version = "1.0.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d83cb7e7a873830708d6b02a78cd36a592c6fa14bf267b68725103b85c0d77f"
-dependencies = [
- "link-section",
- "linktime-proc-macro",
 ]
 
 [[package]]
@@ -2482,7 +2006,7 @@ name = "example-autojoin"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
 ]
@@ -2493,8 +2017,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "client-matrix",
  "futures-util",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2505,7 +2029,7 @@ name = "example-command-bot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
 ]
@@ -2515,7 +2039,7 @@ name = "example-cross-signing-bootstrap"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2526,7 +2050,7 @@ name = "example-custom-events"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "serde",
  "tokio",
  "tracing-subscriber",
@@ -2538,8 +2062,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "client-matrix",
  "futures-util",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2550,7 +2074,7 @@ name = "example-get-profiles"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2561,7 +2085,7 @@ name = "example-getting-started"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
 ]
@@ -2571,7 +2095,7 @@ name = "example-image-bot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "mime",
  "tokio",
  "tracing-subscriber",
@@ -2583,7 +2107,7 @@ name = "example-login"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2594,10 +2118,9 @@ name = "example-oauth-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
- "client-ui",
  "dirs",
  "futures-util",
+ "harana-matrix-client",
  "rand 0.10.2",
  "serde",
  "serde_json",
@@ -2611,8 +2134,8 @@ name = "example-persist-session"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client-matrix",
  "dirs",
+ "harana-matrix-client",
  "rand 0.10.2",
  "serde",
  "serde_json",
@@ -2626,8 +2149,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "client-matrix",
  "futures-util",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2639,7 +2162,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "client-matrix",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2651,9 +2174,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "client-matrix",
- "client-ui",
  "futures-util",
+ "harana-matrix-client",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -3196,6 +2718,137 @@ dependencies = [
 ]
 
 [[package]]
+name = "harana-matrix-client"
+version = "0.18.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "anymap2",
+ "as_variant",
+ "assert-json-diff",
+ "assert_matches",
+ "assert_matches2",
+ "assign",
+ "async-channel",
+ "async-rx",
+ "async-stream",
+ "async-trait",
+ "async_cell",
+ "axum",
+ "backon",
+ "base64 0.23.0",
+ "bitflags 2.13.1",
+ "blake3",
+ "blurhash",
+ "bs58",
+ "byteorder",
+ "bytes",
+ "bytesize",
+ "cfg-if",
+ "chacha20poly1305",
+ "chrono",
+ "cms",
+ "ctor",
+ "ctr",
+ "deadpool 0.13.0",
+ "decancer",
+ "dirs",
+ "emojis",
+ "erased-serde",
+ "event-listener",
+ "eyeball",
+ "eyeball-im",
+ "eyeball-im-util",
+ "eyre",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-util",
+ "fuzzy-matcher",
+ "getrandom 0.3.4",
+ "getrandom 0.4.3",
+ "glob",
+ "gloo-timers",
+ "gloo-utils",
+ "growable-bloom-filter",
+ "harana-matrix-common",
+ "harana-matrix-macros",
+ "hex",
+ "hkdf",
+ "hmac",
+ "http",
+ "image",
+ "imbl",
+ "indexmap",
+ "insta",
+ "itertools 0.15.0",
+ "js-sys",
+ "js_int",
+ "js_option",
+ "language-tags",
+ "matrix_indexed_db_futures",
+ "mime",
+ "mime2ext",
+ "num_cpus",
+ "oauth2",
+ "once_cell",
+ "pbkdf2",
+ "percent-encoding",
+ "pin-project-lite",
+ "pkcs1",
+ "proptest",
+ "pulldown-cmark",
+ "qrcode",
+ "rand 0.10.2",
+ "rcgen",
+ "regex",
+ "reqwest",
+ "ring",
+ "rmp-serde",
+ "rusqlite",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "sanitize-filename",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_bytes",
+ "serde_html_form",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
+ "sha2 0.10.9",
+ "sha2 0.11.0",
+ "similar-asserts",
+ "stream_assert",
+ "subtle",
+ "tantivy",
+ "tempfile",
+ "thiserror 2.0.19",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-test",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+ "unicode-normalization",
+ "unicode-segmentation",
+ "uniffi",
+ "url",
+ "urlencoding",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+ "wiremock",
+ "zeroize",
+]
+
+[[package]]
 name = "harana-matrix-common"
 version = "0.18.0"
 dependencies = [
@@ -3212,7 +2865,7 @@ dependencies = [
  "cbc",
  "chacha20poly1305",
  "cipher",
- "ctor 0.2.9",
+ "ctor",
  "curve25519-dalek",
  "date_header",
  "ed25519-dalek",
@@ -4119,18 +3772,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "link-section"
-version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ee1a0d6e252afe82e7bc2db42fba60e02ddf3b1accaf8cb21d96e34ba61f3d4"
-
-[[package]]
-name = "linktime-proc-macro"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "348d0075b1fc163b26d72a7f75fc5141daf2fd1bdf128d873cbaf6785d495bdf"
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4479,13 +4120,10 @@ name = "multiverse"
 version = "0.1.0"
 dependencies = [
  "clap",
- "client-base",
- "client-common",
- "client-matrix",
- "client-ui",
  "color-eyre",
  "crossterm",
  "futures-util",
+ "harana-matrix-client",
  "imbl",
  "indexmap",
  "itertools 0.15.0",

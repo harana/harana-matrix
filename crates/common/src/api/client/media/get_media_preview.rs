@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixmediav3preview_url
 
+    use serde::Serialize;
+    use serde_json::value::{RawValue as RawJsonValue, to_raw_value as to_raw_json_value};
+
     use crate::__ruma::{
         MilliSecondsSinceUnixEpoch,
         api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
-    use serde::Serialize;
-    use serde_json::value::{RawValue as RawJsonValue, to_raw_value as to_raw_json_value};
 
     metadata! {
         method: GET,
@@ -49,8 +50,9 @@ pub mod v3 {
     pub struct Response {
         /// OpenGraph-like data for the URL.
         ///
-        /// Differences from OpenGraph: the image size in bytes is added to the `matrix:image:size`
-        /// field, and `og:image` returns the MXC URI to the image, if any.
+        /// Differences from OpenGraph: the image size in bytes is added to the
+        /// `matrix:image:size` field, and `og:image` returns the MXC
+        /// URI to the image, if any.
         #[ruma_api(body)]
         pub data: Option<Box<RawJsonValue>>,
     }
@@ -75,8 +77,8 @@ pub mod v3 {
             Self { data: Some(data) }
         }
 
-        /// Creates a new `Response` with the given OpenGraph data (in any kind of serializable
-        /// object).
+        /// Creates a new `Response` with the given OpenGraph data (in any kind
+        /// of serializable object).
         pub fn from_serialize<T: Serialize>(data: &T) -> serde_json::Result<Self> {
             Ok(Self { data: Some(to_raw_json_value(data)?) })
         }

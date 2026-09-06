@@ -2,19 +2,21 @@
 
 use assert_matches2::assert_matches;
 use assign::assign;
-use js_int::uint;
-use harana_matrix_common::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
-    serde::CanBeEmpty,
-};
 #[cfg(feature = "unstable-msc3954")]
 use harana_matrix_common::events::emote::EmoteEventContent;
-use harana_matrix_common::events::{
-    AnyMessageLikeEvent, MessageLikeEvent,
-    message::{MessageEventContent, TextContentBlock, TextRepresentation},
-    relation::Reply,
-    room::message::Relation,
+use harana_matrix_common::{
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, MessageLikeEvent,
+        message::{MessageEventContent, TextContentBlock, TextRepresentation},
+        relation::Reply,
+        room::message::Relation,
+    },
+    owned_event_id,
+    serde::CanBeEmpty,
 };
+use js_int::uint;
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

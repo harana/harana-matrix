@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use anyhow::{Context, bail};
-use client_matrix::IdParseError;
-use client_ui::timeline::TimelineEventItemId;
+use harana_matrix_client::{IdParseError, ui::timeline::TimelineEventItemId};
 use harana_matrix_common::{
     EventId,
     events::{
@@ -40,7 +39,7 @@ use crate::{
 #[derive(uniffi::Object)]
 pub struct TimelineEvent(pub(crate) Box<AnySyncTimelineEvent>);
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl TimelineEvent {
     pub fn event_id(&self) -> String {
         self.0.event_id().to_string()
@@ -509,7 +508,8 @@ where
 fn get_message_like_event_original_content<C>(event: SyncMessageLikeEvent<C>) -> anyhow::Result<C>
 where
     C: RumaMessageLikeEventContent + RedactContent + Clone,
-    <C as harana_matrix_common::events::RedactContent>::Redacted: harana_matrix_common::events::RedactedMessageLikeEventContent,
+    <C as harana_matrix_common::events::RedactContent>::Redacted:
+        harana_matrix_common::events::RedactedMessageLikeEventContent,
 {
     let original_content =
         event.as_original().context("Failed to get original content")?.content.clone();

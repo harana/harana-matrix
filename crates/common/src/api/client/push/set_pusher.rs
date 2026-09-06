@@ -1,6 +1,7 @@
 //! `POST /_matrix/client/*/pushers/set`
 //!
-//! This endpoint allows the creation, modification and deletion of pushers for this user ID.
+//! This endpoint allows the creation, modification and deletion of pushers for
+//! this user ID.
 
 mod set_pusher_serde;
 
@@ -9,13 +10,15 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3pushersset
 
-    use crate::__ruma::{
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-    };
     use serde::Serialize;
 
-    use crate::api::client::push::{Pusher, PusherIds};
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::push::{Pusher, PusherIds},
+    };
 
     metadata! {
         method: POST,
@@ -51,7 +54,8 @@ pub mod v3 {
             Self::new(PusherAction::Post(PusherPostData { pusher, append: false }))
         }
 
-        /// Creates a new `Request` to delete the pusher identified by the given IDs.
+        /// Creates a new `Request` to delete the pusher identified by the given
+        /// IDs.
         pub fn delete(ids: PusherIds) -> Self {
             Self::new(PusherAction::Delete(ids))
         }
@@ -83,8 +87,8 @@ pub mod v3 {
         #[serde(flatten)]
         pub pusher: Pusher,
 
-        /// Controls if another pusher with the same pushkey and app id should be created, if there
-        /// are already others for other users.
+        /// Controls if another pusher with the same pushkey and app id should
+        /// be created, if there are already others for other users.
         ///
         /// Defaults to `false`. See the spec for more details.
         #[serde(skip_serializing_if = "crate::__ruma::serde::is_default")]

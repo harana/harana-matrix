@@ -1,5 +1,4 @@
-use client_matrix::Room;
-use client_common::executor::Handle;
+use harana_matrix_client::{Room, common::executor::Handle};
 use ratatui::{
     prelude::*,
     widgets::{Paragraph, Wrap},

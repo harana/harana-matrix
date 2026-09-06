@@ -2,15 +2,14 @@
 //!
 //! [`m.room.avatar`]: https://spec.matrix.org/v1.19/client-server-api/#mroomavatar
 
-use js_int::UInt;
-use crate::__ruma::OwnedMxcUri;
-#[cfg(feature = "unstable-msc2448")]
-use crate::__ruma::serde::Base64;
 use harana_matrix_macros::EventContent;
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
 
 use super::ThumbnailInfo;
-use crate::events::EmptyStateKey;
+#[cfg(feature = "unstable-msc2448")]
+use crate::__ruma::serde::Base64;
+use crate::{__ruma::OwnedMxcUri, events::EmptyStateKey};
 
 /// The content of an `m.room.avatar` event.
 ///

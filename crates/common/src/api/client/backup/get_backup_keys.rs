@@ -9,13 +9,14 @@ pub mod v3 {
 
     use std::collections::BTreeMap;
 
-    use crate::__ruma::{
-        OwnedRoomId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedRoomId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::backup::RoomKeyBackup,
     };
-
-    use crate::api::client::backup::RoomKeyBackup;
 
     metadata! {
         method: GET,

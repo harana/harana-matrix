@@ -9,8 +9,9 @@ pub mod get_content_thumbnail;
 pub mod get_media_config;
 pub mod get_media_preview;
 
-/// Checks whether a given `Content-Type` is considered "safe" for having a `Content-Disposition` of
-/// `inline` returned on `/download`, as recommended by the [spec].
+/// Checks whether a given `Content-Type` is considered "safe" for having a
+/// `Content-Disposition` of `inline` returned on `/download`, as recommended by
+/// the [spec].
 ///
 /// [spec]: https://spec.matrix.org/v1.19/client-server-api/#serving-inline-content
 pub fn is_safe_inline_content_type(content_type: &str) -> bool {

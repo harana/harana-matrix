@@ -8,13 +8,14 @@ pub mod v1 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#get_matrixclientv1roomsroomidrelationseventid
 
     use js_int::UInt;
+
     use crate::__ruma::{
         OwnedEventId, OwnedRoomId,
         api::{Direction, auth_scheme::AccessToken, request, response},
+        events::AnyMessageLikeEvent,
         metadata,
         serde::Raw,
     };
-    use crate::__ruma::events::AnyMessageLikeEvent;
 
     metadata! {
         method: GET,
@@ -39,14 +40,17 @@ pub mod v1 {
 
         /// The pagination token to start returning results from.
         ///
-        /// If `None`, results start at the most recent topological event known to the server.
+        /// If `None`, results start at the most recent topological event known
+        /// to the server.
         ///
-        /// Can be a `next_batch` or `prev_batch` token from a previous call, or a returned
-        /// `start` token from `/messages` or a `next_batch` token from `/sync`.
+        /// Can be a `next_batch` or `prev_batch` token from a previous call, or
+        /// a returned `start` token from `/messages` or a `next_batch`
+        /// token from `/sync`.
         ///
-        /// Note that when paginating the `from` token should be "after" the `to` token in
-        /// terms of topological ordering, because it is only possible to paginate "backwards"
-        /// through events, starting at `from`.
+        /// Note that when paginating the `from` token should be "after" the
+        /// `to` token in terms of topological ordering, because it is
+        /// only possible to paginate "backwards" through events,
+        /// starting at `from`.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub from: Option<String>,
@@ -60,30 +64,35 @@ pub mod v1 {
 
         /// The pagination token to stop returning results at.
         ///
-        /// If `None`, results continue up to `limit` or until there are no more events.
+        /// If `None`, results continue up to `limit` or until there are no more
+        /// events.
         ///
-        /// Like `from`, this can be a previous token from a prior call to this endpoint
-        /// or from `/messages` or `/sync`.
+        /// Like `from`, this can be a previous token from a prior call to this
+        /// endpoint or from `/messages` or `/sync`.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub to: Option<String>,
 
         /// The maximum number of results to return in a single `chunk`.
         ///
-        /// The server can and should apply a maximum value to this parameter to avoid large
-        /// responses.
+        /// The server can and should apply a maximum value to this parameter to
+        /// avoid large responses.
         ///
-        /// Similarly, the server should apply a default value when not supplied.
+        /// Similarly, the server should apply a default value when not
+        /// supplied.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ruma_api(query)]
         pub limit: Option<UInt>,
 
-        /// Whether to include events which relate indirectly to the given event.
+        /// Whether to include events which relate indirectly to the given
+        /// event.
         ///
-        /// These are events related to the given event via two or more direct relationships.
+        /// These are events related to the given event via two or more direct
+        /// relationships.
         ///
-        /// It is recommended that homeservers traverse at least 3 levels of relationships.
-        /// Implementations may perform more but should be careful to not infinitely recurse.
+        /// It is recommended that homeservers traverse at least 3 levels of
+        /// relationships. Implementations may perform more but should
+        /// be careful to not infinitely recurse.
         ///
         /// Default to `false`.
         #[serde(default, skip_serializing_if = "crate::__ruma::serde::is_default")]
@@ -98,25 +107,26 @@ pub mod v1 {
         ///
         /// The events returned are ordered topologically, most-recent first.
         ///
-        /// If no events are related to the parent or the pagination yields no results, an
-        /// empty `chunk` is returned.
+        /// If no events are related to the parent or the pagination yields no
+        /// results, an empty `chunk` is returned.
         pub chunk: Vec<Raw<AnyMessageLikeEvent>>,
 
         /// An opaque string representing a pagination token.
         ///
-        /// If this is `None`, there are no more results to fetch and the client should stop
-        /// paginating.
+        /// If this is `None`, there are no more results to fetch and the client
+        /// should stop paginating.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub next_batch: Option<String>,
 
         /// An opaque string representing a pagination token.
         ///
-        /// If this is `None`, this is the start of the result set, i.e. this is the first
-        /// batch/page.
+        /// If this is `None`, this is the start of the result set, i.e. this is
+        /// the first batch/page.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub prev_batch: Option<String>,
 
-        /// If `recurse` was set on the request, the depth to which the server recursed.
+        /// If `recurse` was set on the request, the depth to which the server
+        /// recursed.
         ///
         /// If `recurse` was not set, this field must be absent.
         #[serde(skip_serializing_if = "Option::is_none")]

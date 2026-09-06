@@ -6,17 +6,19 @@ use super::{
 
 /// A Matrix ID that can be either a [`DeviceId`] or a [`Base64PublicKey`].
 ///
-/// Device identifiers in Matrix are completely opaque character sequences and cross-signing keys
-/// are identified by their base64-encoded public key. This type is provided simply for its semantic
-/// value.
+/// Device identifiers in Matrix are completely opaque character sequences and
+/// cross-signing keys are identified by their base64-encoded public key. This
+/// type is provided simply for its semantic value.
 ///
-/// It is not recommended to construct this type directly, it should instead be converted from a
-/// [`DeviceId`] or a [`Base64PublicKey`].
+/// It is not recommended to construct this type directly, it should instead be
+/// converted from a [`DeviceId`] or a [`Base64PublicKey`].
 ///
 /// # Example
 ///
 /// ```
-/// use harana_matrix_common::{Base64PublicKeyOrDeviceId, OwnedBase64PublicKeyOrDeviceId};
+/// use harana_matrix_common::{
+///     Base64PublicKeyOrDeviceId, OwnedBase64PublicKeyOrDeviceId,
+/// };
 ///
 /// let ref_id: &Base64PublicKeyOrDeviceId = "abcdefghi".into();
 /// assert_eq!(ref_id.as_str(), "abcdefghi");

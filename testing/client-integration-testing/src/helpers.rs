@@ -8,8 +8,13 @@ use std::{
 
 use anyhow::Result;
 use assign::assign;
-use client_matrix::{
+use harana_matrix_client::{
     Client, ClientBuilder, Room, ThreadingSupport,
+    base::crypto::{
+        CollectStrategy, DecryptionSettings, TrustRequirement,
+        x509::{RawX509Signer, RawX509Verifier},
+    },
+    common::cross_process_lock::CrossProcessLockConfig,
     config::{RequestConfig, SyncSettings},
     encryption::EncryptionSettings,
     ruma::{
@@ -21,11 +26,6 @@ use client_matrix::{
     sync::SyncResponse,
     timeout::ElapsedError,
 };
-use client_base::crypto::{
-    CollectStrategy, DecryptionSettings, TrustRequirement,
-    x509::{RawX509Signer, RawX509Verifier},
-};
-use client_common::cross_process_lock::CrossProcessLockConfig;
 use rand::RngExt;
 use tempfile::{TempDir, tempdir};
 use tokio::{sync::Mutex, time::sleep};

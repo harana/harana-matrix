@@ -14,7 +14,9 @@
 
 #[cfg(doc)]
 use super::EstablishedHpkeChannel;
-use crate::olm::{Curve25519PublicKey, base64_decode, base64_encode, hpke::error::MessageDecodeError};
+use crate::olm::{
+    Curve25519PublicKey, base64_decode, base64_encode, hpke::error::MessageDecodeError,
+};
 
 /// The initial message, sent by the HPKE channel sender.
 ///

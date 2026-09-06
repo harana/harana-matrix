@@ -7,7 +7,6 @@ use crate::__ruma::api::{
 };
 #[cfg(feature = "unstable-msc4466")]
 use crate::__ruma::serde::StringEnum;
-
 #[cfg(feature = "unstable-msc4466")]
 use crate::api::client::PrivOwnedStr;
 
@@ -24,7 +23,8 @@ pub mod set_profile_field;
 
 pub use crate::__ruma::profile::*;
 
-/// Endpoint version history valid only for profile fields that didn't exist before Matrix 1.16.
+/// Endpoint version history valid only for profile fields that didn't exist
+/// before Matrix 1.16.
 #[cfg(feature = "client")]
 const EXTENDED_PROFILE_FIELD_HISTORY: VersionHistory = VersionHistory::new(
     &[(
@@ -42,15 +42,16 @@ const EXTENDED_PROFILE_FIELD_HISTORY: VersionHistory = VersionHistory::new(
     None,
 );
 
-/// Whether the given field name existed already before custom fields were officially supported in
-/// profiles.
+/// Whether the given field name existed already before custom fields were
+/// officially supported in profiles.
 #[cfg(feature = "client")]
 fn field_existed_before_extended_profiles(field_name: &ProfileFieldName) -> bool {
     matches!(field_name, ProfileFieldName::AvatarUrl | ProfileFieldName::DisplayName)
 }
 
-/// Controls which rooms the server should send an updated `m.room.member` event in
-/// when changing `displayname` or `avatar_url` in a user's profile. Defined by [MSC4466][1].
+/// Controls which rooms the server should send an updated `m.room.member` event
+/// in when changing `displayname` or `avatar_url` in a user's profile. Defined
+/// by [MSC4466][1].
 ///
 /// [1]: https://github.com/matrix-org/matrix-spec-proposals/pull/4466
 #[cfg(feature = "unstable-msc4466")]
@@ -64,8 +65,9 @@ pub enum PropagateTo {
     #[default]
     All,
 
-    /// The server must only send a `m.room.member` event in rooms where the profile
-    /// field being updated does _not_ differ from its value in the user's global profile data.
+    /// The server must only send a `m.room.member` event in rooms where the
+    /// profile field being updated does _not_ differ from its value in the
+    /// user's global profile data.
     Unchanged,
 
     /// The server must not send a `m.room.member` event to any rooms.

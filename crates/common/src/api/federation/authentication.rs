@@ -2,21 +2,23 @@
 
 use std::{fmt, str::FromStr};
 
+use harana_matrix_common::signatures::{Ed25519KeyPair, KeyPair, PublicKeyMap};
 use headers::authorization::Credentials;
 use http::HeaderValue;
 use http_auth::ChallengeParser;
+use thiserror::Error;
+use tracing::debug;
+
 use crate::__ruma::{
     CanonicalJsonObject, IdParseError, OwnedServerName, OwnedServerSigningKeyId, ServerName,
     api::auth_scheme::AuthScheme,
     http_headers::quote_ascii_string_if_required,
     serde::{Base64, Base64DecodeError},
 };
-use harana_matrix_common::signatures::{Ed25519KeyPair, KeyPair, PublicKeyMap};
-use thiserror::Error;
-use tracing::debug;
 
-/// Authentication is performed by adding an `X-Matrix` header including a signature in the request
-/// headers, as defined in the [Matrix Server-Server API][spec].
+/// Authentication is performed by adding an `X-Matrix` header including a
+/// signature in the request headers, as defined in the [Matrix Server-Server
+/// API][spec].
 ///
 /// [spec]: https://spec.matrix.org/v1.19/server-server-api/#request-authentication
 #[derive(Debug, Clone, Copy, Default)]
@@ -50,7 +52,8 @@ impl AuthScheme for ServerSignatures {
     }
 }
 
-/// The input necessary to generate the [`ServerSignatures`] authentication scheme.
+/// The input necessary to generate the [`ServerSignatures`] authentication
+/// scheme.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct ServerSignaturesInput<'a> {
@@ -65,7 +68,8 @@ pub struct ServerSignaturesInput<'a> {
 }
 
 impl<'a> ServerSignaturesInput<'a> {
-    /// Construct a new `ServerSignaturesInput` with the given origin and key pair.
+    /// Construct a new `ServerSignaturesInput` with the given origin and key
+    /// pair.
     pub fn new(
         origin: OwnedServerName,
         destination: OwnedServerName,
@@ -75,8 +79,8 @@ impl<'a> ServerSignaturesInput<'a> {
     }
 }
 
-/// Typed representation of an `Authorization` header of scheme `X-Matrix`, as defined in the
-/// [Matrix Server-Server API][spec].
+/// Typed representation of an `Authorization` header of scheme `X-Matrix`, as
+/// defined in the [Matrix Server-Server API][spec].
 ///
 /// [spec]: https://spec.matrix.org/v1.19/server-server-api/#request-authentication
 #[derive(Clone)]
@@ -86,13 +90,14 @@ pub struct XMatrix {
     pub origin: OwnedServerName,
     /// The server name of the receiving sender.
     ///
-    /// For compatibility with older servers, recipients should accept requests without this
-    /// parameter, but MUST always send it. If this property is included, but the value does
-    /// not match the receiving server's name, the receiving server must deny the request with
-    /// an HTTP status code 401 Unauthorized.
+    /// For compatibility with older servers, recipients should accept requests
+    /// without this parameter, but MUST always send it. If this property is
+    /// included, but the value does not match the receiving server's name,
+    /// the receiving server must deny the request with an HTTP status code
+    /// 401 Unauthorized.
     pub destination: Option<OwnedServerName>,
-    /// The ID - including the algorithm name - of the sending server's key that was used to sign
-    /// the request.
+    /// The ID - including the algorithm name - of the sending server's key that
+    /// was used to sign the request.
     pub key: OwnedServerSigningKeyId,
     /// The signature of the JSON.
     pub sig: Base64,
@@ -171,8 +176,8 @@ impl XMatrix {
         })
     }
 
-    /// Construct the canonical JSON object representation of the request to sign for the `XMatrix`
-    /// scheme.
+    /// Construct the canonical JSON object representation of the request to
+    /// sign for the `XMatrix` scheme.
     pub fn request_object<T: AsRef<[u8]>>(
         request: &http::Request<T>,
         origin: &ServerName,
@@ -206,8 +211,9 @@ impl XMatrix {
         let request_object = Self::request_object(request, &origin, &destination)?;
 
         // The spec says to use the algorithm to sign JSON, so we could use
-        // harana_matrix_common::signatures::sign_json, however since we would need to extract the signature from the
-        // JSON afterwards let's be a bit more efficient about it.
+        // harana_matrix_common::signatures::sign_json, however since we would need to
+        // extract the signature from the JSON afterwards let's be a bit more
+        // efficient about it.
         let serialized_request_object = serde_json::to_vec(&request_object)?;
         let (key_id, signature) = key_pair.sign(&serialized_request_object).into_parts();
 
@@ -218,8 +224,9 @@ impl XMatrix {
         Ok(Self { origin, destination: Some(destination), key, sig })
     }
 
-    /// Verify that the signature in the `sig` field is valid for the given incoming HTTP request,
-    /// with the given public keys map from the origin.
+    /// Verify that the signature in the `sig` field is valid for the given
+    /// incoming HTTP request, with the given public keys map from the
+    /// origin.
     pub fn verify_request<T: AsRef<[u8]>>(
         &self,
         request: &http::Request<T>,
@@ -234,8 +241,10 @@ impl XMatrix {
             return Err(XMatrixVerificationError::DestinationMismatch);
         }
 
-        let mut request_object = Self::request_object(request, &self.origin, destination)
-            .map_err(|error| harana_matrix_common::signatures::VerificationError::Json(error.into()))?;
+        let mut request_object =
+            Self::request_object(request, &self.origin, destination).map_err(|error| {
+                harana_matrix_common::signatures::VerificationError::Json(error.into())
+            })?;
         let entity_signature =
             CanonicalJsonObject::from([(self.key.to_string(), self.sig.encode().into())]);
         let signatures =
@@ -366,7 +375,8 @@ impl<'a> From<http_auth::parser::Error<'a>> for XMatrixParseError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum XMatrixExtractError {
-    /// No Authorization HTTP header was found, but the endpoint requires a server signature.
+    /// No Authorization HTTP header was found, but the endpoint requires a
+    /// server signature.
     #[error("no Authorization HTTP header found, but this endpoint requires a server signature")]
     MissingAuthorizationHeader,
 
@@ -375,7 +385,8 @@ pub enum XMatrixExtractError {
     Parse(#[from] XMatrixParseError),
 }
 
-/// An error when trying to verify the signature in an [`XMatrix`] for an HTTP request.
+/// An error when trying to verify the signature in an [`XMatrix`] for an HTTP
+/// request.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum XMatrixVerificationError {
@@ -391,9 +402,9 @@ pub enum XMatrixVerificationError {
 #[cfg(test)]
 mod tests {
     use headers::{HeaderValue, authorization::Credentials};
-    use crate::__ruma::{OwnedServerName, serde::Base64};
 
     use super::XMatrix;
+    use crate::__ruma::{OwnedServerName, serde::Base64};
 
     #[test]
     fn xmatrix_auth_pre_1_3() {

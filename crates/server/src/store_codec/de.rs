@@ -18,10 +18,10 @@
 
 //! Deserialization for the database's compact record codec.
 //!
-//! Compound values are divided into records by [`crate::store_codec::SEP`]. A trailing type
-//! that accepts empty input can decode a missing final field from an older,
-//! shorter tuple, while writing the extended tuple emits an additional
-//! separator before that appended field.
+//! Compound values are divided into records by [`crate::store_codec::SEP`]. A
+//! trailing type that accepts empty input can decode a missing final field from
+//! an older, shorter tuple, while writing the extended tuple emits an
+//! additional separator before that appended field.
 
 use arrayvec::ArrayVec;
 use serde::{

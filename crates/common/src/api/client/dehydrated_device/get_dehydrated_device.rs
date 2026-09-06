@@ -7,14 +7,15 @@ pub mod unstable {
     //!
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/3814
 
-    use crate::__ruma::{
-        OwnedDeviceId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-        serde::Raw,
+    use crate::{
+        __ruma::{
+            OwnedDeviceId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+            serde::Raw,
+        },
+        api::client::dehydrated_device::DehydratedDeviceData,
     };
-
-    use crate::api::client::dehydrated_device::DehydratedDeviceData;
 
     metadata! {
         method: GET,

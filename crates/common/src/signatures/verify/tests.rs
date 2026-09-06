@@ -1,22 +1,25 @@
 use std::collections::BTreeMap;
 
 use assert_matches2::{assert_let, assert_matches};
-use crate::__ruma::{
-    CanonicalJsonValue, ServerSigningKeyId, SigningKeyAlgorithm, owned_server_name,
-    room_version_rules::{RoomVersionRules, SignaturesRules},
-    serde::Base64,
-    server_name,
-};
-use crate::__ruma::events::room::policy::RoomPolicyEventContent;
 use serde_json::json;
 
 use super::{
     required_server_signatures_to_verify_event, to_canonical_json_string_for_signing,
     verify_canonical_json_bytes, verify_event,
 };
-use crate::signatures::{
-    Ed25519KeyPair, Ed25519VerificationError, KeyPair, PublicKeyMap, PublicKeySet,
-    VerificationError, Verified, sign_json, verify_policy_server_signature,
+use crate::{
+    __ruma::{
+        CanonicalJsonValue, ServerSigningKeyId, SigningKeyAlgorithm,
+        events::room::policy::RoomPolicyEventContent,
+        owned_server_name,
+        room_version_rules::{RoomVersionRules, SignaturesRules},
+        serde::Base64,
+        server_name,
+    },
+    signatures::{
+        Ed25519KeyPair, Ed25519VerificationError, KeyPair, PublicKeyMap, PublicKeySet,
+        VerificationError, Verified, sign_json, verify_policy_server_signature,
+    },
 };
 
 fn generate_key_pair(name: &str) -> Ed25519KeyPair {

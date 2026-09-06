@@ -48,7 +48,9 @@ mod string {
 }
 
 mod user {
-    use harana_matrix_common::{OwnedUserId, canonical_json::assert_to_canonical_json_eq, owned_user_id};
+    use harana_matrix_common::{
+        OwnedUserId, canonical_json::assert_to_canonical_json_eq, owned_user_id,
+    };
     use serde::{Deserialize, Serialize};
     use serde_json::{from_value as from_json_value, json};
 

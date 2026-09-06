@@ -5,10 +5,11 @@
 //!
 //! [MSC4471]: https://github.com/matrix-org/matrix-spec-proposals/pull/4471
 
-use js_int::UInt;
-use crate::__ruma::{OwnedEventId, OwnedRoomId};
 use harana_matrix_macros::EventContent;
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
+
+use crate::__ruma::{OwnedEventId, OwnedRoomId};
 
 /// The content of a to-device `m.stream.update` event.
 ///
@@ -83,13 +84,15 @@ impl StreamUpdateContent {
 mod tests {
     use assert_matches2::assert_matches;
     use js_int::uint;
-    use crate::__ruma::{
-        canonical_json::assert_to_canonical_json_eq, owned_event_id, owned_room_id, serde::Raw,
-    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::{StreamUpdateContent, StreamUpdateOperation, ToDeviceStreamUpdateEventContent};
-    use crate::events::{AnyToDeviceEvent, ToDeviceEvent};
+    use crate::{
+        __ruma::{
+            canonical_json::assert_to_canonical_json_eq, owned_event_id, owned_room_id, serde::Raw,
+        },
+        events::{AnyToDeviceEvent, ToDeviceEvent},
+    };
 
     #[test]
     fn replace_update_round_trip() {

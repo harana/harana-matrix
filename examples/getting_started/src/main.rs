@@ -12,7 +12,7 @@
 // The imports we need
 use std::{env, process::exit};
 
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, RoomState,
     config::SyncSettings,
     ruma::events::room::{

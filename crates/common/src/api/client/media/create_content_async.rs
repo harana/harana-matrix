@@ -8,6 +8,7 @@ pub mod v3 {
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#put_matrixmediav3uploadservernamemediaid
 
     use http::header::CONTENT_TYPE;
+
     use crate::__ruma::{
         IdParseError, MxcUri, OwnedServerName,
         api::{auth_scheme::AccessToken, request, response},

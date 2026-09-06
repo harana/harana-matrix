@@ -5,9 +5,10 @@
 pub mod v3 {
     //! `/v3/` ([spec])
     //!
-    //! Although this endpoint has a similar format to [`set_avatar_url`] and [`set_display_name`],
-    //! it will only work with homeservers advertising support for the proper unstable feature or
-    //! a version compatible with Matrix 1.16.
+    //! Although this endpoint has a similar format to [`set_avatar_url`] and
+    //! [`set_display_name`], it will only work with homeservers advertising
+    //! support for the proper unstable feature or a version compatible with
+    //! Matrix 1.16.
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#put_matrixclientv3profileuseridkeyname
     //! [`set_avatar_url`]: crate::api::client::profile::set_avatar_url
@@ -19,7 +20,6 @@ pub mod v3 {
         metadata,
         profile::ProfileFieldValue,
     };
-
     #[cfg(feature = "unstable-msc4466")]
     use crate::api::client::profile::PropagateTo;
 
@@ -45,8 +45,8 @@ pub mod v3 {
         /// The value of the profile field to set.
         pub value: ProfileFieldValue,
 
-        /// The propagation mode to use for this profile update. Only applicable if the field
-        /// being set is `displayname` or `avatar_url`.
+        /// The propagation mode to use for this profile update. Only applicable
+        /// if the field being set is `displayname` or `avatar_url`.
         #[cfg(feature = "unstable-msc4466")]
         pub propagate_to: PropagateTo,
     }
@@ -83,9 +83,10 @@ pub mod v3 {
             base_url: &str,
             considering: std::borrow::Cow<'_, crate::__ruma::api::SupportedVersions>,
         ) -> Result<http::Request<RequestBody>, crate::__ruma::api::error::IntoHttpError> {
-            use crate::__ruma::api::{Metadata, path_builder::PathBuilder};
-
-            use crate::api::client::profile::field_existed_before_extended_profiles;
+            use crate::{
+                __ruma::api::{Metadata, path_builder::PathBuilder},
+                api::client::profile::field_existed_before_extended_profiles,
+            };
 
             let field = self.value.field_name();
 
@@ -133,8 +134,9 @@ pub mod v3 {
             B: AsRef<[u8]>,
             S: AsRef<str>,
         {
-            use crate::__ruma::profile::{ProfileFieldName, ProfileFieldValueVisitor};
             use serde::de::{Deserializer, Error as _};
+
+            use crate::__ruma::profile::{ProfileFieldName, ProfileFieldValueVisitor};
 
             Self::check_request_method(request.method())?;
 
@@ -192,14 +194,14 @@ mod tests_client {
     use std::borrow::Cow;
 
     use http::header;
+    use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
+
+    use super::v3::Request;
     use crate::__ruma::{
         api::{OutgoingRequestExt as _, SupportedVersions, auth_scheme::SendAccessToken},
         owned_mxc_uri, owned_user_id,
         profile::ProfileFieldValue,
     };
-    use serde_json::{Value as JsonValue, from_slice as from_json_slice, json};
-
-    use super::v3::Request;
 
     #[test]
     fn serialize_request() {
@@ -326,10 +328,10 @@ mod tests_client {
 #[cfg(all(test, feature = "server"))]
 mod tests_server {
     use assert_matches2::assert_let;
-    use crate::__ruma::{api::IncomingRequest, profile::ProfileFieldValue};
     use serde_json::{json, to_vec as to_json_vec};
 
     use super::v3::Request;
+    use crate::__ruma::{api::IncomingRequest, profile::ProfileFieldValue};
 
     #[test]
     fn deserialize_request_valid_field() {

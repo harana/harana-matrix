@@ -1,9 +1,11 @@
 #![recursion_limit = "256"]
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use client_matrix::test_utils::mocks::MatrixMockServer;
-use common_test::{JoinedRoomBuilder, event_factory::EventFactory};
-use client_ui::timeline::{TimelineBuilder, TimelineReadReceiptTracking};
+use harana_matrix_client::{
+    test::{JoinedRoomBuilder, event_factory::EventFactory},
+    test_utils::mocks::MatrixMockServer,
+    ui::timeline::{TimelineBuilder, TimelineReadReceiptTracking},
+};
 use harana_matrix_common::{
     OwnedEventId, events::room::message::RoomMessageEventContentWithoutRelation, owned_room_id,
     owned_user_id,

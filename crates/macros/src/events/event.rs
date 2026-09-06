@@ -98,8 +98,8 @@ impl Event {
                 quote! { ::std::boxed::Box<#serde_json::value::RawValue> }
             } else if *field_ident == "state_key" && self.variation == EventVariation::Initial {
                 // Because the state key is allowed to be missing if it is empty when sending an
-                // initial state event during creation, we default to deserializing a string first
-                // so we can default to an empty string if it is missing.
+                // initial state event during creation, we default to deserializing a string
+                // first so we can default to an empty string if it is missing.
                 quote! { ::std::string::String }
             } else {
                 let field_type = &field.inner.ty;
@@ -157,7 +157,8 @@ impl Event {
         // Handle deserialization errors for the fields.
         let field_deserialize_error_handlers = self.fields.iter().map(|field| {
             if field.default_on_error {
-                // Just log the deserialization error and use the `Default` implementation instead.
+                // Just log the deserialization error and use the `Default` implementation
+                // instead.
                 quote! {
                     .map_err(|error| {
                         tracing::debug!("deserialization error, using default value: {error}");
@@ -286,8 +287,8 @@ impl Event {
         }
     }
 
-    /// Generate `From<{full_event}>` and `.into_full_event()` implementations if this is a "sync"
-    /// event struct.
+    /// Generate `From<{full_event}>` and `.into_full_event()` implementations
+    /// if this is a "sync" event struct.
     fn expand_sync_from_and_into_full(&self) -> Option<TokenStream> {
         let full_ident = self.kind.to_event_ident(self.variation.to_full()?);
 
@@ -324,8 +325,9 @@ impl Event {
         })
     }
 
-    /// Implement `std::cmp::PartialEq`, `std::cmp::Eq`, `std::cmp::PartialOrd`, `std::cmp::Ord` for
-    /// this event struct by comparing the `event_id`, if this field is present.
+    /// Implement `std::cmp::PartialEq`, `std::cmp::Eq`, `std::cmp::PartialOrd`,
+    /// `std::cmp::Ord` for this event struct by comparing the `event_id`,
+    /// if this field is present.
     fn expand_eq_and_ord_impl(&self) -> Option<TokenStream> {
         if !self.kind.is_event_id_present(self.variation) {
             return None;
@@ -385,12 +387,14 @@ enum EventKind {
 
     /// Message-like event.
     ///
-    /// This is an event that can occur in the timeline and that doesn't have a state key.
+    /// This is an event that can occur in the timeline and that doesn't have a
+    /// state key.
     MessageLike,
 
     /// State event.
     ///
-    /// This is an event that can occur in the timeline and that has a state key.
+    /// This is an event that can occur in the timeline and that has a state
+    /// key.
     State,
 
     /// A to-device event.
@@ -401,7 +405,8 @@ enum EventKind {
     /// `m.room.redaction` event.
     RoomRedaction,
 
-    /// `m.space.child` event in the format returned at the space hierarchy endpoint.
+    /// `m.space.child` event in the format returned at the space hierarchy
+    /// endpoint.
     HierarchySpaceChild,
 
     /// Decrypted event.
@@ -429,12 +434,14 @@ impl EventKind {
         })
     }
 
-    /// Get the name of the event type (struct or enum) for this kind and the given variation.
+    /// Get the name of the event type (struct or enum) for this kind and the
+    /// given variation.
     fn to_event_ident(self, variation: EventVariation) -> syn::Ident {
         format_ident!("{variation}{self}")
     }
 
-    /// Whether the `event_id` field is present with this kind and the given variation.
+    /// Whether the `event_id` field is present with this kind and the given
+    /// variation.
     fn is_event_id_present(self, variation: EventVariation) -> bool {
         self.is_timeline()
             && matches!(
@@ -468,11 +475,12 @@ struct EventField {
     /// The parsed field, without the `ruma_event` attributes.
     inner: syn::Field,
 
-    /// Whether this field should deserialize to the default value if it is missing.
+    /// Whether this field should deserialize to the default value if it is
+    /// missing.
     default: bool,
 
-    /// Whether this field should deserialize to the default value if an error occurs during
-    /// deserialization.
+    /// Whether this field should deserialize to the default value if an error
+    /// occurs during deserialization.
     default_on_error: bool,
 
     /// The name to use when (de)serializing this field.

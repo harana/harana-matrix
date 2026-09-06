@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use crossterm::event::KeyEvent;
-use client_matrix::Room;
+use harana_matrix_client::Room;
 use ratatui::{prelude::*, widgets::*};
 use ratatui_textarea::TextArea;
 use style::palette::tailwind;

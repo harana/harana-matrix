@@ -21,15 +21,15 @@
 mod sys {
     use std::future::Future;
 
-    use client_common::executor::{JoinHandle, spawn, spawn_blocking};
+    use harana_matrix_client::common::executor::{JoinHandle, spawn, spawn_blocking};
     pub use tokio::runtime::EnterGuard as RuntimeGuard;
 
     /// A handle to the Tokio runtime the bindings run their tasks on.
     ///
-    /// Tasks are spawned through [`client_common::executor`], so they end
-    /// up on whichever runtime the SDK was configured with; entering this
-    /// handle's context first is what lets that happen from a foreign thread
-    /// that isn't inside a runtime yet.
+    /// Tasks are spawned through [`harana_matrix_client::common::executor`], so
+    /// they end up on whichever runtime the SDK was configured with;
+    /// entering this handle's context first is what lets that happen from a
+    /// foreign thread that isn't inside a runtime yet.
     #[derive(Clone, Debug)]
     pub struct Handle(tokio::runtime::Handle);
 
@@ -86,7 +86,7 @@ mod sys {
 mod sys {
     use std::future::Future;
 
-    use client_common::executor::{JoinHandle, spawn};
+    use harana_matrix_client::common::executor::{JoinHandle, spawn};
 
     /// A dummy guard that does nothing when dropped.
     /// This is used for the Wasm implementation to match

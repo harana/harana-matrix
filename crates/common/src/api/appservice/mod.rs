@@ -5,7 +5,6 @@
 //!
 //! [appservice API]: https://spec.matrix.org/latest/application-service-api/
 
-
 use serde::{Deserialize, Serialize};
 
 /// A namespace defined by an application service.
@@ -224,4 +223,3 @@ mod tests {
         assert_eq!(registration.url, None);
     }
 }
-

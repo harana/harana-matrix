@@ -1,7 +1,7 @@
 //! `GET /_matrix/federation/*/query/{queryType}`
 //!
-//! Performs a single query request on the receiving homeserver. The query arguments are dependent
-//! on which type of query is being made.
+//! Performs a single query request on the receiving homeserver. The query
+//! arguments are dependent on which type of query is being made.
 
 pub mod v1 {
     //! `/v1/` ([spec])
@@ -10,13 +10,15 @@ pub mod v1 {
 
     use std::collections::BTreeMap;
 
-    use crate::__ruma::{
-        api::{request, response},
-        metadata,
-    };
     use serde_json::Value as JsonValue;
 
-    use crate::api::federation::authentication::ServerSignatures;
+    use crate::{
+        __ruma::{
+            api::{request, response},
+            metadata,
+        },
+        api::federation::authentication::ServerSignatures,
+    };
 
     metadata! {
         method: GET,

@@ -16,16 +16,18 @@ pub mod v3 {
 
     use as_variant::as_variant;
     use js_int::{UInt, uint};
-    use crate::__ruma::{
-        OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
-        serde::{Raw, StringEnum},
-    };
-    use crate::__ruma::events::{AnyStateEvent, AnyTimelineEvent};
     use serde::{Deserialize, Serialize};
 
-    use crate::api::client::{PrivOwnedStr, filter::RoomEventFilter};
+    use crate::{
+        __ruma::{
+            OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedUserId,
+            api::{auth_scheme::AccessToken, request, response},
+            events::{AnyStateEvent, AnyTimelineEvent},
+            metadata,
+            serde::{Raw, StringEnum},
+        },
+        api::client::{PrivOwnedStr, filter::RoomEventFilter},
+    };
 
     metadata! {
         method: POST,
@@ -42,7 +44,8 @@ pub mod v3 {
     pub struct Request {
         /// The point to return events from.
         ///
-        /// If given, this should be a `next_batch` result from a previous call to this endpoint.
+        /// If given, this should be a `next_batch` result from a previous call
+        /// to this endpoint.
         #[ruma_api(query)]
         pub next_batch: Option<String>,
 
@@ -108,7 +111,8 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub order_by: Option<OrderBy>,
 
-        /// Configures whether any context for the events returned are included in the response.
+        /// Configures whether any context for the events returned are included
+        /// in the response.
         #[serde(default, skip_serializing_if = "EventContext::is_default")]
         pub event_context: EventContext,
 
@@ -116,7 +120,8 @@ pub mod v3 {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub include_state: Option<bool>,
 
-        /// Requests that the server partitions the result set based on the provided list of keys.
+        /// Requests that the server partitions the result set based on the
+        /// provided list of keys.
         #[serde(default, skip_serializing_if = "Groupings::is_empty")]
         pub groupings: Groupings,
     }
@@ -136,7 +141,8 @@ pub mod v3 {
         }
     }
 
-    /// Configures whether any context for the events returned are included in the response.
+    /// Configures whether any context for the events returned are included in
+    /// the response.
     #[derive(Clone, Debug, Deserialize, Serialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct EventContext {
@@ -154,8 +160,8 @@ pub mod v3 {
         )]
         pub after_limit: UInt,
 
-        /// Requests that the server returns the historic profile information for the users that
-        /// sent the events that were returned.
+        /// Requests that the server returns the historic profile information
+        /// for the users that sent the events that were returned.
         #[serde(default, skip_serializing_if = "crate::__ruma::serde::is_default")]
         pub include_profile: bool,
     }
@@ -209,7 +215,8 @@ pub mod v3 {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         pub events_before: Vec<Raw<AnyTimelineEvent>>,
 
-        /// The historic profile information of the users that sent the events returned.
+        /// The historic profile information of the users that sent the events
+        /// returned.
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub profile_info: BTreeMap<OwnedUserId, UserProfile>,
 
@@ -272,7 +279,8 @@ pub mod v3 {
         _Custom(PrivOwnedStr),
     }
 
-    /// Requests that the server partitions the result set based on the provided list of keys.
+    /// Requests that the server partitions the result set based on the provided
+    /// list of keys.
     #[derive(Clone, Default, Debug, Deserialize, Serialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct Groupings {
@@ -324,8 +332,8 @@ pub mod v3 {
         /// Prioritize recent events.
         Recent,
 
-        /// Prioritize events by a numerical ranking of how closely they matched the search
-        /// criteria.
+        /// Prioritize events by a numerical ranking of how closely they matched
+        /// the search criteria.
         Rank,
 
         #[doc(hidden)]
@@ -360,8 +368,8 @@ pub mod v3 {
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub groups: ResultGroupMapsByGroupingKey,
 
-        /// Token that can be used to get the next batch of results, by passing as the `next_batch`
-        /// parameter to the next call.
+        /// Token that can be used to get the next batch of results, by passing
+        /// as the `next_batch` parameter to the next call.
         ///
         /// If this field is absent, there are no more results.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -373,12 +381,13 @@ pub mod v3 {
 
         /// The current state for every room in the results.
         ///
-        /// This is included if the request had the `include_state` key set with a value of `true`.
+        /// This is included if the request had the `include_state` key set with
+        /// a value of `true`.
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub state: BTreeMap<OwnedRoomId, Vec<Raw<AnyStateEvent>>>,
 
-        /// List of words which should be highlighted, useful for stemming which may
-        /// change the query terms.
+        /// List of words which should be highlighted, useful for stemming which
+        /// may change the query terms.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         pub highlights: Vec<String>,
     }
@@ -403,8 +412,8 @@ pub mod v3 {
 
     /// A map of [`GroupingKey`] to the associated [`ResultGroupMap`].
     ///
-    /// This type is used to ensure that a supported [`ResultGroupMap`] always uses the appropriate
-    /// [`GroupingKey`].
+    /// This type is used to ensure that a supported [`ResultGroupMap`] always
+    /// uses the appropriate [`GroupingKey`].
     #[derive(Clone, Debug, Default)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ResultGroupMapsByGroupingKey(BTreeMap<GroupingKey, ResultGroupMap>);
@@ -417,7 +426,8 @@ pub mod v3 {
 
         /// Insert the given [`ResultGroupMap`].
         ///
-        /// If a map with the same [`GroupingKey`] was already present, it is returned.
+        /// If a map with the same [`GroupingKey`] was already present, it is
+        /// returned.
         pub fn insert(&mut self, map: ResultGroupMap) -> Option<ResultGroupMap> {
             self.0.insert(map.grouping_key(), map)
         }
@@ -481,7 +491,8 @@ pub mod v3 {
             as_variant!(self, Self::_Custom).map(|custom| &custom.map)
         }
 
-        /// Convert this into the map of grouped results, if this uses a custom key.
+        /// Convert this into the map of grouped results, if this uses a custom
+        /// key.
         pub fn into_custom_map(self) -> Option<BTreeMap<String, ResultGroup>> {
             as_variant!(self, Self::_Custom).map(|custom| custom.map)
         }
@@ -502,8 +513,9 @@ pub mod v3 {
     #[derive(Clone, Debug, Default, Deserialize, Serialize)]
     #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
     pub struct ResultGroup {
-        /// Token that can be used to get the next batch of results in the group, by passing as the
-        /// `next_batch` parameter to the next call.
+        /// Token that can be used to get the next batch of results in the
+        /// group, by passing as the `next_batch` parameter to the next
+        /// call.
         ///
         /// If this field is absent, there are no more results in this group.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -569,8 +581,9 @@ pub mod v3 {
     pub struct UserProfile {
         /// The user's avatar URL, if set.
         ///
-        /// If you activate the `compat-empty-string-null` feature, this field being an empty
-        /// string in JSON will result in `None` here during deserialization.
+        /// If you activate the `compat-empty-string-null` feature, this field
+        /// being an empty string in JSON will result in `None` here
+        /// during deserialization.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(
             feature = "compat-empty-string-null",
@@ -603,6 +616,11 @@ mod tests {
 
     use assert_matches2::assert_matches;
     use js_int::uint;
+    use serde_json::{
+        Value as JsonValue, from_slice as from_json_slice, json, to_vec as to_json_vec,
+    };
+
+    use super::v3::{GroupingKey, OrderBy, Request, Response, ResultGroupMap, SearchKeys};
     use crate::__ruma::{
         api::{
             IncomingRequest, IncomingResponseExt as _, OutgoingRequestExt as _,
@@ -610,11 +628,6 @@ mod tests {
         },
         event_id, room_id,
     };
-    use serde_json::{
-        Value as JsonValue, from_slice as from_json_slice, json, to_vec as to_json_vec,
-    };
-
-    use super::v3::{GroupingKey, OrderBy, Request, Response, ResultGroupMap, SearchKeys};
 
     #[test]
     fn request_roundtrip() {

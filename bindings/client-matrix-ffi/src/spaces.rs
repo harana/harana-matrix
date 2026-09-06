@@ -16,12 +16,14 @@ use std::{fmt::Debug, sync::Arc};
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use client_ui::spaces::{
-    SpaceFilter as UISpaceFilter, SpaceRoom as UISpaceRoom, SpaceRoomList as UISpaceRoomList,
-    SpaceService as UISpaceService,
-    leave::{LeaveSpaceHandle as UILeaveSpaceHandle, LeaveSpaceRoom as UILeaveSpaceRoom},
-    room_list::SpaceRoomListPaginationState,
+use harana_matrix_client::{
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    ui::spaces::{
+        SpaceFilter as UISpaceFilter, SpaceRoom as UISpaceRoom, SpaceRoomList as UISpaceRoomList,
+        SpaceService as UISpaceService,
+        leave::{LeaveSpaceHandle as UILeaveSpaceHandle, LeaveSpaceRoom as UILeaveSpaceRoom},
+        room_list::SpaceRoomListPaginationState,
+    },
 };
 use harana_matrix_common::RoomId;
 
@@ -51,7 +53,7 @@ impl SpaceService {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SpaceService {
     /// Returns a list of all the top-level joined spaces. It will eagerly
     /// compute the latest version and also notify subscribers if there were
@@ -207,7 +209,7 @@ impl SpaceRoomList {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SpaceRoomList {
     /// Returns the space of the room list if known.
     pub fn space(&self) -> Option<SpaceRoom> {
@@ -293,27 +295,27 @@ impl SpaceRoomList {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SpaceRoomListSpaceListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, space: Option<SpaceRoom>);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SpaceRoomListPaginationStateListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, pagination_state: SpaceRoomListPaginationState);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SpaceRoomListEntriesListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, rooms: Vec<SpaceListUpdate>);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SpaceServiceJoinedSpacesListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, room_updates: Vec<SpaceListUpdate>);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SpaceServiceSpaceFiltersListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, filter_updates: Vec<SpaceFilterUpdate>);
 }
@@ -482,7 +484,7 @@ pub struct LeaveSpaceHandle {
     inner: UILeaveSpaceHandle,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl LeaveSpaceHandle {
     /// A list of rooms to be left which next to normal [`SpaceRoom`] data also
     /// include leave specific information.

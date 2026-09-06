@@ -17,8 +17,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[cfg(feature = "sqlite")]
-use client_matrix::SqliteStoreConfig;
-use client_matrix::StoreProvider;
+use harana_matrix_client::SqliteStoreConfig;
+use harana_matrix_client::StoreProvider;
 
 #[cfg(doc)]
 use crate::client_builder::ClientBuilder;
@@ -45,7 +45,7 @@ pub enum StoreBuilderOutcome {
 mod sqlite {
     use std::{fs, path::Path, sync::Arc};
 
-    use client_matrix::SqliteStoreConfig;
+    use harana_matrix_client::SqliteStoreConfig;
     use tracing::debug;
     use zeroize::Zeroizing;
 
@@ -90,7 +90,7 @@ mod sqlite {
         }
     }
 
-    #[client_matrix_ffi_macros::export]
+    #[harana_matrix_macros::uniffi_export]
     impl SqliteStoreBuilder {
         /// Construct a [`SqliteStoreBuilder`] and set the paths that the client
         /// will use to store its data and caches.
@@ -243,7 +243,7 @@ mod indexeddb {
         passphrase: Option<String>,
     }
 
-    #[client_matrix_ffi_macros::export]
+    #[harana_matrix_macros::uniffi_export]
     impl IndexedDbStoreBuilder {
         #[uniffi::constructor]
         pub fn new(name: String) -> Arc<Self> {
@@ -292,8 +292,8 @@ pub enum StoreBuilder {
     /// A store backend supplied by the embedder.
     ///
     /// The bindings only ever hand this straight to
-    /// [`client_matrix::ClientBuilder::store_provider`]; the SDK never assumes
-    /// anything about what is behind it. Set it with
+    /// [`harana_matrix_client::ClientBuilder::store_provider`]; the SDK never
+    /// assumes anything about what is behind it. Set it with
     /// [`ClientBuilder::custom_store`](crate::ClientBuilder::custom_store),
     /// which is a Rust-only entry point: `uniffi` cannot carry a Rust trait
     /// object across the FFI boundary, so foreign callers keep using the

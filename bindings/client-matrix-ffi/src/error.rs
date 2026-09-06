@@ -14,18 +14,18 @@
 
 use std::{collections::HashMap, error::Error, fmt, fmt::Display};
 
-use client_matrix::{
+use harana_matrix_client::{
     HttpError, IdParseError, NotificationSettingsError as SdkNotificationSettingsError,
     QueueWedgeError as SdkQueueWedgeError, StoreError,
     authentication::oauth::OAuthError,
+    contentscanner::ContentScannerError,
     encryption::{CryptoStoreError, identities::RequestVerificationError},
     event_cache::EventCacheError,
     reqwest,
     room::{calls::CallError, edit::EditError},
     send_queue::RoomSendQueueError,
+    ui::{encryption_sync_service, notification_client, spaces, sync_service, timeline},
 };
-use client_contentscanner::ContentScannerError;
-use client_ui::{encryption_sync_service, notification_client, spaces, sync_service, timeline};
 use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch,
     api::error::{ErrorBody, ErrorKind as RumaApiErrorKind, RetryAfter, StandardErrorBody},
@@ -41,7 +41,7 @@ pub enum ClientError {
     #[error("api error {code}: {msg}")]
     MatrixApi { kind: ErrorKind, code: String, msg: String, details: Option<String> },
     #[error("content scanner error {reason:?}: {info}")]
-    ContentScanner { reason: client_contentscanner::ErrorReason, info: String },
+    ContentScanner { reason: harana_matrix_client::contentscanner::ErrorReason, info: String },
 }
 
 impl ClientError {
@@ -74,10 +74,10 @@ impl From<UnexpectedUniFFICallbackError> for ClientError {
     }
 }
 
-impl From<client_matrix::Error> for ClientError {
-    fn from(e: client_matrix::Error) -> Self {
+impl From<harana_matrix_client::Error> for ClientError {
+    fn from(e: harana_matrix_client::Error) -> Self {
         match e {
-            client_matrix::Error::Http(http_error) => {
+            harana_matrix_client::Error::Http(http_error) => {
                 if let Some(api_error) = http_error.as_client_api_error() {
                     match &api_error.body {
                         ErrorBody::Standard(StandardErrorBody { kind, message, .. }) => {
@@ -383,16 +383,16 @@ pub enum LiveLocationError {
     Other { msg: String },
 }
 
-impl From<client_matrix::BeaconError> for LiveLocationError {
-    fn from(value: client_matrix::BeaconError) -> Self {
+impl From<harana_matrix_client::BeaconError> for LiveLocationError {
+    fn from(value: harana_matrix_client::BeaconError) -> Self {
         match value {
-            client_matrix::BeaconError::Network(_) => Self::Network,
-            client_matrix::BeaconError::NotFound => Self::NotFound,
-            client_matrix::BeaconError::Redacted => Self::Redacted,
-            client_matrix::BeaconError::Stripped => Self::Stripped,
-            client_matrix::BeaconError::Deserialization(_) => Self::Deserialization,
-            client_matrix::BeaconError::NotLive => Self::NotLive,
-            client_matrix::BeaconError::Other(err) => Self::Other { msg: err.to_string() },
+            harana_matrix_client::BeaconError::Network(_) => Self::Network,
+            harana_matrix_client::BeaconError::NotFound => Self::NotFound,
+            harana_matrix_client::BeaconError::Redacted => Self::Redacted,
+            harana_matrix_client::BeaconError::Stripped => Self::Stripped,
+            harana_matrix_client::BeaconError::Deserialization(_) => Self::Deserialization,
+            harana_matrix_client::BeaconError::NotLive => Self::NotLive,
+            harana_matrix_client::BeaconError::Other(err) => Self::Other { msg: err.to_string() },
         }
     }
 }
@@ -446,8 +446,8 @@ impl From<SdkNotificationSettingsError> for NotificationSettingsError {
     }
 }
 
-impl From<client_matrix::Error> for NotificationSettingsError {
-    fn from(e: client_matrix::Error) -> Self {
+impl From<harana_matrix_client::Error> for NotificationSettingsError {
+    fn from(e: harana_matrix_client::Error) -> Self {
         Self::Generic { msg: e.to_string() }
     }
 }

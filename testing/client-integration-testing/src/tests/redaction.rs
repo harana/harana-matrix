@@ -1,7 +1,7 @@
 use anyhow::Result;
 use assert_matches::assert_matches;
 use assign::assign;
-use client_matrix::{
+use harana_matrix_client::{
     Client,
     config::SyncSettings,
     ruma::{

@@ -15,12 +15,14 @@
 use std::{str::FromStr, sync::Arc};
 
 use futures_util::StreamExt;
-use client_matrix::encryption::{self, backups, dehydrated_devices, recovery, vodozemac};
-use client_base::crypto::{
-    store::types::DehydratedDeviceKey,
-    types::{BackupSecrets, RoomKeyBackupInfo},
+use harana_matrix_client::{
+    base::crypto::{
+        store::types::DehydratedDeviceKey,
+        types::{BackupSecrets, RoomKeyBackupInfo},
+    },
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    encryption::{self, backups, dehydrated_devices, recovery, vodozemac},
 };
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
 use harana_matrix_common::OwnedUserId;
 use serde::de::Error;
 use thiserror::Error;
@@ -28,16 +30,13 @@ use tracing::{error, info};
 use zeroize::Zeroize;
 
 use crate::{
-    client::Client,
-    error::ClientError,
-    ruma::AuthData,
-    runtime::get_runtime_handle,
+    client::Client, error::ClientError, ruma::AuthData, runtime::get_runtime_handle,
     task_handle::TaskHandle,
 };
 
 #[derive(uniffi::Object)]
 pub struct Encryption {
-    pub(crate) inner: client_matrix::encryption::Encryption,
+    pub(crate) inner: harana_matrix_client::encryption::Encryption,
 
     /// A reference to the FFI client.
     ///
@@ -47,22 +46,22 @@ pub struct Encryption {
     pub(crate) _client: Arc<Client>,
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait BackupStateListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, status: BackupState);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait BackupSteadyStateListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, status: BackupUploadState);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RecoveryStateListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, status: RecoveryState);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait VerificationStateListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, status: VerificationState);
 }
@@ -109,13 +108,15 @@ pub enum RecoveryError {
     Import { error_message: String },
 }
 
-impl From<client_matrix::encryption::recovery::RecoveryError> for RecoveryError {
-    fn from(value: client_matrix::encryption::recovery::RecoveryError) -> Self {
+impl From<harana_matrix_client::encryption::recovery::RecoveryError> for RecoveryError {
+    fn from(value: harana_matrix_client::encryption::recovery::RecoveryError) -> Self {
         match value {
             recovery::RecoveryError::BackupExistsOnServer => Self::BackupExistsOnServer,
             recovery::RecoveryError::Sdk(e) => Self::Client { source: ClientError::from(e) },
             recovery::RecoveryError::SecretStorage(
-                client_matrix::encryption::secret_storage::SecretStorageError::ImportError { .. },
+                harana_matrix_client::encryption::secret_storage::SecretStorageError::ImportError {
+                    ..
+                },
             ) => Self::Import { error_message: value.to_string() },
             recovery::RecoveryError::SecretStorage(e) => {
                 Self::SecretStorage { error_message: e.to_string() }
@@ -126,8 +127,10 @@ impl From<client_matrix::encryption::recovery::RecoveryError> for RecoveryError 
 
 pub type Result<A, E = RecoveryError> = std::result::Result<A, E>;
 
-impl From<client_matrix::encryption::backups::futures::SteadyStateError> for SteadyStateError {
-    fn from(value: client_matrix::encryption::backups::futures::SteadyStateError) -> Self {
+impl From<harana_matrix_client::encryption::backups::futures::SteadyStateError>
+    for SteadyStateError
+{
+    fn from(value: harana_matrix_client::encryption::backups::futures::SteadyStateError) -> Self {
         match value {
             backups::futures::SteadyStateError::BackupDisabled => Self::BackupDisabled,
             backups::futures::SteadyStateError::Connection => Self::Connection,
@@ -194,7 +197,7 @@ impl From<recovery::RecoveryState> for RecoveryState {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait EnableRecoveryProgressListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, status: EnableRecoveryProgress);
 }
@@ -249,7 +252,7 @@ impl From<encryption::VerificationState> for VerificationState {
 #[derive(uniffi::Object)]
 pub struct SecretsBundleWithUserId {
     user_id: OwnedUserId,
-    inner: client_base::crypto::types::SecretsBundle,
+    inner: harana_matrix_client::base::crypto::types::SecretsBundle,
 }
 
 /// Result for the check if a store has a valid secrets bundle.
@@ -297,16 +300,16 @@ pub enum BundleExportError {
 }
 
 #[cfg(feature = "sqlite")]
-impl From<client_matrix::encryption::BundleExportError> for BundleExportError {
-    fn from(value: client_matrix::encryption::BundleExportError) -> Self {
+impl From<harana_matrix_client::encryption::BundleExportError> for BundleExportError {
+    fn from(value: harana_matrix_client::encryption::BundleExportError) -> Self {
         match value {
-            client_matrix::encryption::BundleExportError::OpenStoreError(e) => {
+            harana_matrix_client::encryption::BundleExportError::OpenStoreError(e) => {
                 BundleExportError::OpenStoreError { msg: e.to_string() }
             }
-            client_matrix::encryption::BundleExportError::StoreError(e) => {
+            harana_matrix_client::encryption::BundleExportError::StoreError(e) => {
                 BundleExportError::StoreError { msg: e.to_string() }
             }
-            client_matrix::encryption::BundleExportError::SecretExport(e) => {
+            harana_matrix_client::encryption::BundleExportError::SecretExport(e) => {
                 BundleExportError::SecretError { msg: e.to_string() }
             }
         }
@@ -320,7 +323,7 @@ impl From<serde_json::Error> for BundleExportError {
 }
 
 #[cfg(feature = "sqlite")]
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SecretsBundleWithUserId {
     /// Attempt to export a [`SecretsBundle`] from a crypto store.
     ///
@@ -339,7 +342,7 @@ impl SecretsBundleWithUserId {
         let backup_info = serde_json::from_str(backup_info)?;
 
         let ret = if let Some((user_id, bundle)) =
-            client_matrix::encryption::export_secrets_bundle_from_store(
+            harana_matrix_client::encryption::export_secrets_bundle_from_store(
                 database_path,
                 passphrase.as_deref(),
             )
@@ -363,7 +366,7 @@ impl SecretsBundleWithUserId {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SecretsBundleWithUserId {
     /// Attempt to create a [`SecretsBundle`] from a previously JSON serialized
     /// bundle.
@@ -375,7 +378,8 @@ impl SecretsBundleWithUserId {
     ) -> Result<Arc<Self>, BundleExportError> {
         let user_id =
             OwnedUserId::from_str(user_id).map_err(|e| serde_json::Error::custom(e.to_string()))?;
-        let bundle: client_base::crypto::types::SecretsBundle = serde_json::from_str(bundle)?;
+        let bundle: harana_matrix_client::base::crypto::types::SecretsBundle =
+            serde_json::from_str(bundle)?;
         let backup_info = serde_json::from_str(backup_info)?;
 
         let is_backup_ok =
@@ -407,7 +411,7 @@ fn is_valid_backup(secrets: &BackupSecrets, info: &RoomKeyBackupInfo) -> bool {
 }
 
 fn check_bundle_and_info(
-    bundle: &client_base::crypto::types::SecretsBundle,
+    bundle: &harana_matrix_client::base::crypto::types::SecretsBundle,
     info: Option<&RoomKeyBackupInfo>,
 ) -> DetectedSecretsBundle {
     match (&bundle.backup, info) {
@@ -433,14 +437,15 @@ pub fn json_string_contains_secrets_bundle(
     let info: Option<RoomKeyBackupInfo> =
         backup_info.map(|info| serde_json::from_str(&info)).transpose()?;
 
-    let bundle: client_base::crypto::types::SecretsBundle = serde_json::from_str(bundle)?;
+    let bundle: harana_matrix_client::base::crypto::types::SecretsBundle =
+        serde_json::from_str(bundle)?;
 
     Ok(check_bundle_and_info(&bundle, info.as_ref()))
 }
 
 /// Check if a crypto store contains a valid [`SecretsBundle`].
 #[cfg(feature = "sqlite")]
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub async fn database_contains_secrets_bundle(
     database_path: &str,
     mut passphrase: Option<String>,
@@ -449,7 +454,7 @@ pub async fn database_contains_secrets_bundle(
     let info: Option<RoomKeyBackupInfo> =
         backup_info.map(|info| serde_json::from_str(&info)).transpose()?;
 
-    let maybe_bundle = client_matrix::encryption::export_secrets_bundle_from_store(
+    let maybe_bundle = harana_matrix_client::encryption::export_secrets_bundle_from_store(
         database_path,
         passphrase.as_deref(),
     )
@@ -530,7 +535,7 @@ impl From<dehydrated_devices::DehydratedDeviceEvent> for DehydratedDeviceEvent {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait DehydratedDeviceEventListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_event(&self, event: DehydratedDeviceEvent);
 }
@@ -585,7 +590,7 @@ fn decode_pickle_key(base64: &str) -> Result<DehydratedDeviceKey, DehydratedDevi
     DehydratedDeviceKey::from_slice(&bytes).map_err(|_| DehydratedDeviceError::InvalidPickleKey)
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Encryption {
     /// Get the public ed25519 key of our own device. This is usually what is
     /// called the fingerprint of the device.
@@ -1049,10 +1054,10 @@ impl Encryption {
 /// The E2EE identity of a user.
 #[derive(uniffi::Object)]
 pub struct UserIdentity {
-    inner: client_matrix::encryption::identities::UserIdentity,
+    inner: harana_matrix_client::encryption::identities::UserIdentity,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl UserIdentity {
     /// Remember this identity, ensuring it does not result in a pin violation.
     ///
@@ -1115,10 +1120,10 @@ impl UserIdentity {
 
 #[derive(uniffi::Object)]
 pub struct IdentityResetHandle {
-    pub(crate) inner: client_matrix::encryption::recovery::IdentityResetHandle,
+    pub(crate) inner: harana_matrix_client::encryption::recovery::IdentityResetHandle,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl IdentityResetHandle {
     /// Get the underlying [`CrossSigningResetAuthType`] this identity reset
     /// process is using.
@@ -1165,8 +1170,10 @@ pub enum CrossSigningResetAuthType {
     OAuth { info: OAuthCrossSigningResetInfo },
 }
 
-impl From<&client_matrix::encryption::CrossSigningResetAuthType> for CrossSigningResetAuthType {
-    fn from(value: &client_matrix::encryption::CrossSigningResetAuthType) -> Self {
+impl From<&harana_matrix_client::encryption::CrossSigningResetAuthType>
+    for CrossSigningResetAuthType
+{
+    fn from(value: &harana_matrix_client::encryption::CrossSigningResetAuthType) -> Self {
         match value {
             encryption::CrossSigningResetAuthType::Uiaa(_) => Self::Uiaa,
             encryption::CrossSigningResetAuthType::OAuth(info) => Self::OAuth { info: info.into() },
@@ -1180,8 +1187,10 @@ pub struct OAuthCrossSigningResetInfo {
     pub approval_url: String,
 }
 
-impl From<&client_matrix::encryption::OAuthCrossSigningResetInfo> for OAuthCrossSigningResetInfo {
-    fn from(value: &client_matrix::encryption::OAuthCrossSigningResetInfo) -> Self {
+impl From<&harana_matrix_client::encryption::OAuthCrossSigningResetInfo>
+    for OAuthCrossSigningResetInfo
+{
+    fn from(value: &harana_matrix_client::encryption::OAuthCrossSigningResetInfo) -> Self {
         Self { approval_url: value.approval_url.to_string() }
     }
 }

@@ -13,7 +13,6 @@ pub mod v3 {
         metadata,
         profile::ProfileFieldName,
     };
-
     #[cfg(feature = "unstable-msc4466")]
     use crate::api::client::profile::PropagateTo;
 

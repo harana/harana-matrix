@@ -16,17 +16,19 @@ use std::{fmt::Debug, sync::Arc};
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
-use client_matrix::room::{
-    ListThreadsOptions as SdkListThreadsOptions, ThreadSubscription as SdkThreadSubscription,
-};
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use client_ui::timeline::{
-    RoomExt,
-    thread_list_service::{
-        ThreadListItem as UIThreadListItem, ThreadListItemEvent as UIThreadListItemEvent,
-        ThreadListPaginationState as UIThreadListPaginationState,
-        ThreadListService as UIThreadListService,
-        ThreadListServiceError as UIThreadListServiceError,
+use harana_matrix_client::{
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    room::{
+        ListThreadsOptions as SdkListThreadsOptions, ThreadSubscription as SdkThreadSubscription,
+    },
+    ui::timeline::{
+        RoomExt,
+        thread_list_service::{
+            ThreadListItem as UIThreadListItem, ThreadListItemEvent as UIThreadListItemEvent,
+            ThreadListPaginationState as UIThreadListPaginationState,
+            ThreadListService as UIThreadListService,
+            ThreadListServiceError as UIThreadListServiceError,
+        },
     },
 };
 use harana_matrix_common::api::client::threads::get_threads::v1::IncludeThreads as SdkIncludeThreads;
@@ -186,13 +188,13 @@ impl From<UIThreadListItemEvent> for ThreadListItemEvent {
 }
 
 /// Listener for changes to the [`ThreadListService`] pagination state.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait ThreadListPaginationStateListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, state: UIThreadListPaginationState);
 }
 
 /// Listener for changes to the [`ThreadListService`] item list.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait ThreadListEntriesListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     fn on_update(&self, diff: Vec<ThreadListUpdate>);
 }
@@ -255,7 +257,7 @@ impl From<VectorDiff<UIThreadListItem>> for ThreadListUpdate {
 /// A high-level, reactive, paginated list of threads for a room.
 ///
 /// `ThreadListService` is the FFI-facing wrapper around
-/// [`client_ui::timeline::thread_list_service::ThreadListService`]. It
+/// [`harana_matrix_client::ui::timeline::thread_list_service::ThreadListService`]. It
 /// maintains an observable list of [`ThreadListItem`]s and exposes a
 /// pagination state publisher, making it straightforward to build reactive UIs
 /// on top of the thread list.
@@ -267,12 +269,12 @@ pub struct ThreadListService {
 }
 
 impl ThreadListService {
-    pub(crate) fn new(room: &client_matrix::Room) -> Self {
+    pub(crate) fn new(room: &harana_matrix_client::Room) -> Self {
         Self { inner: room.thread_list_service() }
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl ThreadListService {
     /// Returns a snapshot of the current pagination state.
     pub fn pagination_state(&self) -> UIThreadListPaginationState {

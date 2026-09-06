@@ -23,13 +23,19 @@ use std::{
 use anyhow::{Context as _, anyhow};
 use futures_util::pin_mut;
 #[cfg(feature = "sqlite")]
-use client_matrix::STATE_STORE_DATABASE_NAME;
+use harana_matrix_client::STATE_STORE_DATABASE_NAME;
+#[cfg(feature = "experimental-x509-identity-verification")]
+use harana_matrix_client::base::crypto::x509::RawX509Signature;
 #[cfg(not(target_family = "wasm"))]
-use client_matrix::media::MediaFileHandle as SdkMediaFileHandle;
-use client_matrix::{
+use harana_matrix_client::media::MediaFileHandle as SdkMediaFileHandle;
+use harana_matrix_client::{
     Account, AuthApi, AuthSession, Client as MatrixClient, Error, SessionChange, SessionTokens,
     authentication::oauth::{
         ClientId, OAuthAuthorizationData, OAuthError as SdkOAuthError, OAuthSession,
+    },
+    common::{
+        SendOutsideWasm, SyncOutsideWasm, cross_process_lock::CrossProcessLockConfig,
+        stream::StreamExt,
     },
     deserialized_responses::RawAnySyncOrStrippedTimelineEvent,
     executor::AbortOnDrop,
@@ -61,22 +67,15 @@ use client_matrix::{
     store::RoomLoadSettings as SdkRoomLoadSettings,
     sync::Notification,
     task_monitor::BackgroundTaskFailureReason,
-};
-#[cfg(feature = "experimental-x509-identity-verification")]
-use client_base::crypto::x509::RawX509Signature;
-use client_common::{
-    SendOutsideWasm, SyncOutsideWasm, cross_process_lock::CrossProcessLockConfig, stream::StreamExt,
-};
-use client_ui::{
-    notification_client::{
-        NotificationClient as MatrixNotificationClient,
-        NotificationProcessSetup as MatrixNotificationProcessSetup,
+    ui::{
+        notification_client::{
+            NotificationClient as MatrixNotificationClient,
+            NotificationProcessSetup as MatrixNotificationProcessSetup,
+        },
+        spaces::SpaceService as UISpaceService,
+        unable_to_decrypt_hook::UtdHookManager,
     },
-    spaces::SpaceService as UISpaceService,
-    unable_to_decrypt_hook::UtdHookManager,
 };
-use mime::Mime;
-use oauth2::Scope;
 use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedMxcUri, OwnedServerName, RoomAliasId,
     RoomOrAliasId, ServerName,
@@ -120,6 +119,8 @@ use harana_matrix_common::{
     push::{HttpPusherData as RumaHttpPusherData, PushFormat as RumaPushFormat},
     room::RoomType,
 };
+use mime::Mime;
+use oauth2::Scope;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{RwLock, broadcast::error::RecvError};
@@ -226,7 +227,7 @@ impl From<PushFormat> for RumaPushFormat {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait ClientDelegate: SyncOutsideWasm + SendOutsideWasm {
     /// A callback invoked whenever the SDK runs into an unknown token error.
     fn did_receive_auth_error(&self, is_soft_logout: bool);
@@ -243,7 +244,7 @@ pub trait ClientDelegate: SyncOutsideWasm + SendOutsideWasm {
     );
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 #[async_trait::async_trait]
 pub trait ClientSessionDelegate: SyncOutsideWasm + SendOutsideWasm {
     /// Reads the session of `user_id` back from the host's storage.
@@ -259,20 +260,20 @@ pub trait ClientSessionDelegate: SyncOutsideWasm + SendOutsideWasm {
     async fn save_session_in_keychain(&self, session: Session);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait ProgressWatcher: SyncOutsideWasm + SendOutsideWasm {
     fn transmission_progress(&self, progress: TransmissionProgress);
 }
 
 /// A listener to the global (client-wide) update reporter of the send queue.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SendQueueRoomUpdateListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called every time the send queue emits an update for a given room.
     fn on_update(&self, room_id: String, update: RoomSendQueueUpdate);
 }
 
 /// A listener to the global (client-wide) error reporter of the send queue.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SendQueueRoomErrorListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called every time the send queue has ran into an error for a given room,
     /// which will disable the send queue for that particular room.
@@ -280,7 +281,7 @@ pub trait SendQueueRoomErrorListener: SyncOutsideWasm + SendOutsideWasm {
 }
 
 /// A listener for changes of global account data events.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait AccountDataListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called when a global account data event has changed.
     fn on_change(&self, event: AccountDataEvent);
@@ -288,21 +289,21 @@ pub trait AccountDataListener: SyncOutsideWasm + SendOutsideWasm {
 
 /// A listener for duplicate key upload errors triggered by requests to
 /// /keys/upload.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait DuplicateKeyUploadErrorListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called once when uploading keys fails.
     fn on_duplicate_key_upload_error(&self, message: Option<DuplicateOneTimeKeyErrorMessage>);
 }
 
 /// A listener for the current user's client-wide beacon_info updates.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait BeaconInfoListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called whenever the current user's beacon_info changes in any room.
     fn on_update(&self, update: BeaconInfoUpdate);
 }
 
 /// A listener for the current user's global profile.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait ProfileListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called whenever the current user's global profile changes.
     fn on_update(&self, profile: UserProfile);
@@ -318,16 +319,16 @@ pub struct DuplicateOneTimeKeyErrorMessage {
     pub new_key: String,
 }
 
-impl From<client_matrix::encryption::DuplicateOneTimeKeyErrorMessage>
+impl From<harana_matrix_client::encryption::DuplicateOneTimeKeyErrorMessage>
     for DuplicateOneTimeKeyErrorMessage
 {
-    fn from(value: client_matrix::encryption::DuplicateOneTimeKeyErrorMessage) -> Self {
+    fn from(value: harana_matrix_client::encryption::DuplicateOneTimeKeyErrorMessage) -> Self {
         Self { old_key: value.old_key.to_base64(), new_key: value.new_key.to_base64() }
     }
 }
 
 /// A listener for changes of room account data events.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait RoomAccountDataListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called when a room account data event was changed.
     fn on_change(&self, event: RoomAccountDataEvent, room_id: String);
@@ -337,7 +338,7 @@ pub trait RoomAccountDataListener: SyncOutsideWasm + SendOutsideWasm {
 ///
 /// This is called during sync for each event that triggers a notification
 /// based on the user's push rules.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait SyncNotificationListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called when a notifying event is received during sync.
     fn on_notification(&self, notification: NotificationItem, room_id: String);
@@ -346,7 +347,7 @@ pub trait SyncNotificationListener: SyncOutsideWasm + SendOutsideWasm {
 /// A foreign trait for low-level types which can sign messages using an
 /// X.509-certified key pair.
 #[cfg(feature = "experimental-x509-identity-verification")]
-#[client_matrix_ffi_macros::export(with_foreign)]
+#[harana_matrix_macros::uniffi_export(with_foreign)]
 pub trait RawX509Signer: SyncOutsideWasm + SendOutsideWasm + Debug {
     /// Create a signature for the given message using our private key
     ///
@@ -362,7 +363,7 @@ pub trait RawX509Signer: SyncOutsideWasm + SendOutsideWasm + Debug {
 /// A foreign trait for low-level types which can verify messages which were
 /// signed using an X.509-certified key pair.
 #[cfg(feature = "experimental-x509-identity-verification")]
-#[client_matrix_ffi_macros::export(with_foreign)]
+#[harana_matrix_macros::uniffi_export(with_foreign)]
 pub trait RawX509Verifier: SyncOutsideWasm + SendOutsideWasm + Debug {
     /// Check if the given signature is a valid X.509 signature for the given
     /// message.
@@ -378,8 +379,8 @@ pub struct TransmissionProgress {
     pub total: u64,
 }
 
-impl From<client_matrix::TransmissionProgress> for TransmissionProgress {
-    fn from(value: client_matrix::TransmissionProgress) -> Self {
+impl From<harana_matrix_client::TransmissionProgress> for TransmissionProgress {
+    fn from(value: harana_matrix_client::TransmissionProgress) -> Self {
         Self {
             current: value.current.try_into().unwrap_or(u64::MAX),
             total: value.total.try_into().unwrap_or(u64::MAX),
@@ -524,7 +525,7 @@ impl Client {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Client {
     /// Perform database optimizations if any are available, i.e. vacuuming in
     /// SQLite.
@@ -547,7 +548,7 @@ impl Client {
     /// Typically called from
     /// [`applicationDidEnterBackground`](https://developer.apple.com/documentation/uikit/uiapplicationdelegate/applicationdidenterbackground(_:))
     /// or an equivalent SwiftUI lifecycle event, *after* stopping the
-    /// `client_ui::sync_service::SyncService`.
+    /// `harana_matrix_client::ui::sync_service::SyncService`.
     pub async fn pause(&self) -> Result<(), ClientError> {
         Ok(self.inner.pause().await?)
     }
@@ -556,7 +557,8 @@ impl Client {
     ///
     /// Re-acquires store resources and re-enables send queues.
     ///
-    /// If your app stopped the `client_ui::sync_service::SyncService`
+    /// If your app stopped the
+    /// `harana_matrix_client::ui::sync_service::SyncService`
     /// before pausing, restart it separately as appropriate for your app
     /// lifecycle.
     pub async fn resume(&self) -> Result<(), ClientError> {
@@ -1149,7 +1151,7 @@ impl Client {
         let request = http::Request::builder()
             .method(http::Method::GET)
             .uri(url)
-            .body(client_matrix::bytes::Bytes::new())
+            .body(harana_matrix_client::bytes::Bytes::new())
             .map_err(|error| ClientError::Generic { msg: error.to_string(), details: None })?;
 
         let response =
@@ -1765,9 +1767,11 @@ impl Client {
     /// This is useful to mitigate backend led wrong iOS app badges and work
     /// around https://github.com/element-hq/element-x-ios/issues/3151
     pub async fn mark_all_rooms_as_read(&self) -> Result<(), ClientError> {
-        use client_matrix::room::Receipts;
-        use client_base::RoomStateFilter;
-        use client_ui::timeline::{TimelineBuilder, TimelineFocus};
+        use harana_matrix_client::{
+            base::RoomStateFilter,
+            room::Receipts,
+            ui::timeline::{TimelineBuilder, TimelineFocus},
+        };
 
         for sdk_room in self.inner.rooms_filtered(RoomStateFilter::JOINED) {
             let timeline = match TimelineBuilder::new(&sdk_room)
@@ -1891,7 +1895,7 @@ impl Client {
         listener: Box<dyn SyncListenerV2>,
     ) -> Arc<TaskHandle> {
         let client = (*self.inner).clone();
-        let sdk_settings: client_matrix::config::SyncSettings = settings.into();
+        let sdk_settings: harana_matrix_client::config::SyncSettings = settings.into();
         let listener: Arc<dyn SyncListenerV2> = Arc::from(listener);
 
         Arc::new(TaskHandle::new(get_runtime_handle().spawn(async move {
@@ -1902,7 +1906,7 @@ impl Client {
                         let response = result?;
                         let ffi_response: SyncResponseV2 = response.into();
                         listener.on_update(ffi_response);
-                        Ok(client_matrix::LoopCtrl::Continue)
+                        Ok(harana_matrix_client::LoopCtrl::Continue)
                     }
                 })
                 .await;
@@ -1921,7 +1925,7 @@ impl Client {
         &self,
         settings: SyncSettingsV2,
     ) -> Result<SyncResponseV2, ClientError> {
-        let sdk_settings: client_matrix::config::SyncSettings = settings.into();
+        let sdk_settings: harana_matrix_client::config::SyncSettings = settings.into();
         let response = self.inner.sync_once(sdk_settings).await?;
         Ok(response.into())
     }
@@ -1986,7 +1990,9 @@ impl Client {
 
     pub fn room_directory_search(&self) -> Arc<RoomDirectorySearch> {
         Arc::new(RoomDirectorySearch::new(
-            client_matrix::room_directory_search::RoomDirectorySearch::new((*self.inner).clone()),
+            harana_matrix_client::room_directory_search::RoomDirectorySearch::new(
+                (*self.inner).clone(),
+            ),
         ))
     }
 
@@ -2452,7 +2458,11 @@ impl Client {
 
     /// Checks if the server supports the report room API.
     pub async fn is_report_room_api_supported(&self) -> Result<bool, ClientError> {
-        Ok(self.inner.server_versions().await?.contains(&harana_matrix_common::api::MatrixVersion::V1_13))
+        Ok(self
+            .inner
+            .server_versions()
+            .await?
+            .contains(&harana_matrix_common::api::MatrixVersion::V1_13))
     }
 
     /// Checks if the server supports the LiveKit RTC focus for placing calls.
@@ -2494,21 +2504,27 @@ impl Client {
     /// Reads the `tile_server` field of the matrix client well-known (MSC3488).
     /// Uses the cached well-known when available, otherwise fetches it from the
     /// homeserver.
-    pub async fn tile_server(&self) -> Option<client_matrix::TileServerInfo> {
+    pub async fn tile_server(&self) -> Option<harana_matrix_client::TileServerInfo> {
         self.inner.tile_server().await
     }
 
     /// Checks if the server supports login using a QR code.
     pub async fn is_login_with_qr_code_supported(&self) -> Result<bool, ClientError> {
         Ok(matches!(self.inner.auth_api(), Some(AuthApi::OAuth(_)))
-            && self.inner.unstable_features().await?.contains(&harana_matrix_common::api::FeatureFlag::Msc4108))
+            && self
+                .inner
+                .unstable_features()
+                .await?
+                .contains(&harana_matrix_common::api::FeatureFlag::Msc4108))
     }
 
     /// Get server vendor information from the federation API.
     ///
     /// This method retrieves information about the server's name and version
     /// by calling the `/_matrix/federation/v1/version` endpoint.
-    pub async fn server_vendor_info(&self) -> Result<client_matrix::ServerVendorInfo, ClientError> {
+    pub async fn server_vendor_info(
+        &self,
+    ) -> Result<harana_matrix_client::ServerVendorInfo, ClientError> {
         Ok(self.inner.server_vendor_info(None).await?)
     }
 
@@ -2659,7 +2675,7 @@ impl Client {
 
 async fn notification_handler(
     notification: Notification,
-    room: client_matrix::Room,
+    room: harana_matrix_client::Room,
     listener: Arc<Box<dyn SyncNotificationListener>>,
 ) {
     let room_id = room.room_id().to_string();
@@ -2801,7 +2817,7 @@ mod recent_emoji {
         pub count: u64,
     }
 
-    #[client_matrix_ffi_macros::export]
+    #[harana_matrix_macros::uniffi_export]
     impl Client {
         /// Adds a recently used emoji to the list and uploads the updated
         /// `io.element.recent_emoji` content to the global account data.
@@ -2824,12 +2840,12 @@ mod recent_emoji {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait MediaPreviewConfigListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_change(&self, media_preview_config: Option<MediaPreviewConfig>);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait IgnoredUsersListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, ignored_user_ids: Vec<String>);
 }
@@ -2919,7 +2935,8 @@ impl UserProfile {
         Self::from_profile(user_id, &response.data)
     }
 
-    /// Build a [`UserProfile`] from a [`harana_matrix_common::profile::UserProfile`].
+    /// Build a [`UserProfile`] from a
+    /// [`harana_matrix_common::profile::UserProfile`].
     fn from_profile(
         user_id: &UserId,
         profile: &harana_matrix_common::profile::UserProfile,
@@ -2956,7 +2973,7 @@ impl From<&search_users::v3::User> for UserProfile {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Client {
     /// Set the current user's status (MSC4426 `m.status` profile field).
     ///
@@ -3015,7 +3032,7 @@ impl Client {
             .into_tokens())
     }
 
-    fn session_inner(client: client_matrix::Client) -> Result<Session, ClientError> {
+    fn session_inner(client: harana_matrix_client::Client) -> Result<Session, ClientError> {
         let auth_api = client.auth_api().context("Missing authentication API")?;
 
         let homeserver_url = client.homeserver().into();
@@ -3026,7 +3043,7 @@ impl Client {
 
     async fn save_session(
         session_delegate: Arc<dyn ClientSessionDelegate>,
-        client: client_matrix::Client,
+        client: harana_matrix_client::Client,
     ) -> anyhow::Result<()> {
         let session = Self::session_inner(client)?;
         session_delegate.save_session_in_keychain(session).await;
@@ -3037,8 +3054,8 @@ impl Client {
 /// Configure how many rooms will be restored when restoring the session with
 /// [`Client::restore_session_with`].
 ///
-/// Please, see the documentation of [`client_matrix::store::RoomLoadSettings`] to
-/// learn more.
+/// Please, see the documentation of
+/// [`harana_matrix_client::store::RoomLoadSettings`] to learn more.
 #[derive(uniffi::Enum)]
 pub enum RoomLoadSettings {
     /// Load all rooms from the `StateStore` into the in-memory state store
@@ -3119,7 +3136,8 @@ impl From<PowerLevels> for RoomPowerLevelsContentOverride {
             .events
             .iter()
             .map(|(event_type, power_level)| {
-                let event_type: harana_matrix_common::events::TimelineEventType = event_type.as_str().into();
+                let event_type: harana_matrix_common::events::TimelineEventType =
+                    event_type.as_str().into();
                 (event_type, (*power_level).into())
             })
             .collect();
@@ -3375,9 +3393,9 @@ impl Session {
         match auth_api {
             // Build the session from the regular Matrix Auth Session.
             AuthApi::Matrix(a) => {
-                let client_matrix::authentication::matrix::MatrixSession {
-                    meta: client_matrix::SessionMeta { user_id, device_id },
-                    tokens: client_matrix::SessionTokens { access_token, refresh_token },
+                let harana_matrix_client::authentication::matrix::MatrixSession {
+                    meta: harana_matrix_client::SessionMeta { user_id, device_id },
+                    tokens: harana_matrix_client::SessionTokens { access_token, refresh_token },
                     // This type has carried the homeserver of its own since before the
                     // SDK's session did, and it is the one the caller passed in.
                     homeserver: _,
@@ -3395,9 +3413,9 @@ impl Session {
             }
             // Build the session from the OAuth UserSession.
             AuthApi::OAuth(api) => {
-                let client_matrix::authentication::oauth::UserSession {
-                    meta: client_matrix::SessionMeta { user_id, device_id },
-                    tokens: client_matrix::SessionTokens { access_token, refresh_token },
+                let harana_matrix_client::authentication::oauth::UserSession {
+                    meta: harana_matrix_client::SessionMeta { user_id, device_id },
+                    tokens: harana_matrix_client::SessionTokens { access_token, refresh_token },
                     homeserver: _,
                 } = api.user_session().context("Missing session")?;
                 let client_id = api.client_id().context("OAuth client ID is missing.")?.clone();
@@ -3418,7 +3436,7 @@ impl Session {
         }
     }
 
-    fn into_tokens(self) -> client_matrix::SessionTokens {
+    fn into_tokens(self) -> harana_matrix_client::SessionTokens {
         SessionTokens { access_token: self.access_token, refresh_token: self.refresh_token }
     }
 }
@@ -3440,12 +3458,12 @@ impl TryFrom<Session> for AuthSession {
             // Create an OAuth Session.
             let oauth_data = serde_json::from_str::<OAuthSessionData>(&oauth_data_string)?;
 
-            let user_session = client_matrix::authentication::oauth::UserSession {
-                meta: client_matrix::SessionMeta {
+            let user_session = harana_matrix_client::authentication::oauth::UserSession {
+                meta: harana_matrix_client::SessionMeta {
                     user_id: user_id.try_into()?,
                     device_id: device_id.into(),
                 },
-                tokens: client_matrix::SessionTokens { access_token, refresh_token },
+                tokens: harana_matrix_client::SessionTokens { access_token, refresh_token },
                 homeserver: Url::parse(&homeserver_url).ok(),
             };
 
@@ -3454,12 +3472,12 @@ impl TryFrom<Session> for AuthSession {
             Ok(AuthSession::OAuth(session.into()))
         } else {
             // Create a regular Matrix Session.
-            let session = client_matrix::authentication::matrix::MatrixSession {
-                meta: client_matrix::SessionMeta {
+            let session = harana_matrix_client::authentication::matrix::MatrixSession {
+                meta: harana_matrix_client::SessionMeta {
                     user_id: user_id.try_into()?,
                     device_id: device_id.into(),
                 },
-                tokens: client_matrix::SessionTokens { access_token, refresh_token },
+                tokens: harana_matrix_client::SessionTokens { access_token, refresh_token },
                 homeserver: Url::parse(&homeserver_url).ok(),
             };
 
@@ -3501,7 +3519,7 @@ impl<'a> From<&'a AccountManagementAction> for AccountManagementActionData<'a> {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 fn gen_transaction_id() -> String {
     TransactionId::new().to_string()
 }
@@ -3521,7 +3539,7 @@ impl MediaFileHandle {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl MediaFileHandle {
     /// Get the media file's path.
     pub fn path(&self) -> Result<String, ClientError> {
@@ -3697,11 +3715,15 @@ impl TryFrom<JoinRule> for RumaJoinRule {
             JoinRule::Private => Ok(Self::Private),
             JoinRule::Restricted { rules } => {
                 let rules = ruma_allow_rules_from_ffi(rules)?;
-                Ok(Self::Restricted(harana_matrix_common::events::room::join_rules::Restricted::new(rules)))
+                Ok(Self::Restricted(
+                    harana_matrix_common::events::room::join_rules::Restricted::new(rules),
+                ))
             }
             JoinRule::KnockRestricted { rules } => {
                 let rules = ruma_allow_rules_from_ffi(rules)?;
-                Ok(Self::KnockRestricted(harana_matrix_common::events::room::join_rules::Restricted::new(rules)))
+                Ok(Self::KnockRestricted(
+                    harana_matrix_common::events::room::join_rules::Restricted::new(rules),
+                ))
             }
             JoinRule::Custom { repr } => Ok(serde_json::from_str(&repr)?),
         }
@@ -3787,8 +3809,8 @@ pub struct StoreSizes {
     media_store: Option<u64>,
 }
 
-impl From<client_matrix::StoreSizes> for StoreSizes {
-    fn from(value: client_matrix::StoreSizes) -> Self {
+impl From<harana_matrix_client::StoreSizes> for StoreSizes {
+    fn from(value: harana_matrix_client::StoreSizes) -> Self {
         Self {
             crypto_store: value.crypto_store.map(|v| v as u64),
             state_store: value.state_store.map(|v| v as u64),
@@ -3800,16 +3822,16 @@ impl From<client_matrix::StoreSizes> for StoreSizes {
 
 #[derive(uniffi::Object)]
 pub struct HomeserverCapabilities {
-    inner: client_matrix::HomeserverCapabilities,
+    inner: harana_matrix_client::HomeserverCapabilities,
 }
 
 impl HomeserverCapabilities {
-    pub(crate) fn new(capabilities: client_matrix::HomeserverCapabilities) -> Self {
+    pub(crate) fn new(capabilities: harana_matrix_client::HomeserverCapabilities) -> Self {
         Self { inner: capabilities }
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl HomeserverCapabilities {
     pub async fn refresh(&self) -> Result<(), ClientError> {
         Ok(self.inner.refresh().await?)
@@ -4014,12 +4036,13 @@ mod tests {
 
     #[test]
     fn test_openid_token_mapping() {
-        let response = harana_matrix_common::api::client::account::request_openid_token::v3::Response::new(
-            "open-id-token".to_owned(),
-            TokenType::Bearer,
-            ServerName::parse("example.com").expect("valid server name"),
-            Duration::from_secs(3_600),
-        );
+        let response =
+            harana_matrix_common::api::client::account::request_openid_token::v3::Response::new(
+                "open-id-token".to_owned(),
+                TokenType::Bearer,
+                ServerName::parse("example.com").expect("valid server name"),
+                Duration::from_secs(3_600),
+            );
 
         let token: OpenIdToken = response.into();
 
@@ -4041,8 +4064,9 @@ mod tests {
     async fn client_drop_on_non_tokio_thread_does_not_panic() {
         use std::time::Duration;
 
-        use client_matrix::{Client, config::RequestConfig};
-        use client_common::cross_process_lock::CrossProcessLockConfig;
+        use harana_matrix_client::{
+            Client, common::cross_process_lock::CrossProcessLockConfig, config::RequestConfig,
+        };
         use tempfile::tempdir;
 
         let dir = tempdir().unwrap();
@@ -4144,8 +4168,9 @@ mod tests {
     mod uiaa_flows {
         use std::sync::Arc;
 
-        use client_matrix::test_utils::mocks::MatrixMockServer;
-        use client_common::cross_process_lock::CrossProcessLockConfig;
+        use harana_matrix_client::{
+            common::cross_process_lock::CrossProcessLockConfig, test_utils::mocks::MatrixMockServer,
+        };
         use serde_json::json;
         use wiremock::{
             Mock, ResponseTemplate,

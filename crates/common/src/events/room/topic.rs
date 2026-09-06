@@ -9,21 +9,22 @@ use crate::events::{EmptyStateKey, message::TextContentBlock};
 
 /// The content of an `m.room.topic` event.
 ///
-/// A topic is a short message detailing what is currently being discussed in the room.
+/// A topic is a short message detailing what is currently being discussed in
+/// the room.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.room.topic", kind = State, state_key_type = EmptyStateKey)]
 pub struct RoomTopicEventContent {
     /// The topic as plain text.
     ///
-    /// This SHOULD duplicate the content of the `text/plain` representation in `topic_block` if
-    /// any exists.
+    /// This SHOULD duplicate the content of the `text/plain` representation in
+    /// `topic_block` if any exists.
     pub topic: String,
 
     /// Textual representation of the room topic in different mimetypes.
     ///
-    /// With the `compat-lax-room-topic-deser` cargo feature, this field is ignored if its
-    /// deserialization fails.
+    /// With the `compat-lax-room-topic-deser` cargo feature, this field is
+    /// ignored if its deserialization fails.
     #[serde(rename = "m.topic", default, skip_serializing_if = "TopicContentBlock::is_empty")]
     #[cfg_attr(
         feature = "compat-lax-room-topic-deser",
@@ -38,7 +39,8 @@ impl RoomTopicEventContent {
         Self { topic_block: TopicContentBlock::plain(topic.clone()), topic }
     }
 
-    /// Convenience constructor to create a new HTML topic with a plain text fallback.
+    /// Convenience constructor to create a new HTML topic with a plain text
+    /// fallback.
     pub fn html(plain: impl Into<String>, html: impl Into<String>) -> Self {
         let plain = plain.into();
         Self { topic: plain.clone(), topic_block: TopicContentBlock::html(plain, html) }
@@ -46,8 +48,8 @@ impl RoomTopicEventContent {
 
     /// Convenience constructor to create a topic from Markdown.
     ///
-    /// The content includes an HTML topic if some Markdown formatting was detected, otherwise
-    /// only a plain text topic is included.
+    /// The content includes an HTML topic if some Markdown formatting was
+    /// detected, otherwise only a plain text topic is included.
     #[cfg(feature = "markdown")]
     pub fn markdown(topic: impl AsRef<str> + Into<String>) -> Self {
         let plain = topic.as_ref().to_owned();
@@ -57,8 +59,8 @@ impl RoomTopicEventContent {
 
 /// A block for topic content.
 ///
-/// To construct a `TopicContentBlock` with a custom [`TextContentBlock`], convert it with
-/// `TopicContentBlock::from()` / `.into()`.
+/// To construct a `TopicContentBlock` with a custom [`TextContentBlock`],
+/// convert it with `TopicContentBlock::from()` / `.into()`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct TopicContentBlock {
@@ -80,8 +82,8 @@ impl TopicContentBlock {
 
     /// A convenience constructor to create a `TopicContentBlock` from Markdown.
     ///
-    /// The content includes an HTML topic if some Markdown formatting was detected, otherwise
-    /// only a plain text topic is included.
+    /// The content includes an HTML topic if some Markdown formatting was
+    /// detected, otherwise only a plain text topic is included.
     #[cfg(feature = "markdown")]
     pub fn markdown(body: impl AsRef<str> + Into<String>) -> Self {
         Self { text: TextContentBlock::markdown(body) }
@@ -101,11 +103,12 @@ impl From<TextContentBlock> for TopicContentBlock {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::RoomTopicEventContent;
-    use crate::events::message::TextContentBlock;
+    use crate::{
+        __ruma::canonical_json::assert_to_canonical_json_eq, events::message::TextContentBlock,
+    };
 
     #[test]
     fn serialize_content() {

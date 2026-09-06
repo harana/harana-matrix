@@ -1,4 +1,4 @@
-use client_matrix::room::{RoomMember as SdkRoomMember, RoomMemberRole};
+use harana_matrix_client::room::{RoomMember as SdkRoomMember, RoomMemberRole};
 use harana_matrix_common::{UserId, events::room::power_levels::UserPowerLevel};
 
 use crate::{
@@ -27,29 +27,31 @@ pub enum MembershipState {
     Custom { value: String },
 }
 
-impl TryFrom<client_matrix::ruma::events::room::member::MembershipState> for MembershipState {
+impl TryFrom<harana_matrix_client::ruma::events::room::member::MembershipState>
+    for MembershipState
+{
     type Error = NotYetImplemented;
 
     fn try_from(
-        m: client_matrix::ruma::events::room::member::MembershipState,
+        m: harana_matrix_client::ruma::events::room::member::MembershipState,
     ) -> Result<Self, Self::Error> {
         match m {
-            client_matrix::ruma::events::room::member::MembershipState::Ban => {
+            harana_matrix_client::ruma::events::room::member::MembershipState::Ban => {
                 Ok(MembershipState::Ban)
             }
-            client_matrix::ruma::events::room::member::MembershipState::Invite => {
+            harana_matrix_client::ruma::events::room::member::MembershipState::Invite => {
                 Ok(MembershipState::Invite)
             }
-            client_matrix::ruma::events::room::member::MembershipState::Join => {
+            harana_matrix_client::ruma::events::room::member::MembershipState::Join => {
                 Ok(MembershipState::Join)
             }
-            client_matrix::ruma::events::room::member::MembershipState::Knock => {
+            harana_matrix_client::ruma::events::room::member::MembershipState::Knock => {
                 Ok(MembershipState::Knock)
             }
-            client_matrix::ruma::events::room::member::MembershipState::Leave => {
+            harana_matrix_client::ruma::events::room::member::MembershipState::Leave => {
                 Ok(MembershipState::Leave)
             }
-            client_matrix::ruma::events::room::member::MembershipState::_Custom(_) => {
+            harana_matrix_client::ruma::events::room::member::MembershipState::_Custom(_) => {
                 Ok(MembershipState::Custom { value: m.to_string() })
             }
             _ => {
@@ -64,7 +66,7 @@ impl TryFrom<client_matrix::ruma::events::room::member::MembershipState> for Mem
 ///
 /// Returns an error if the value of the power level is out of range for numbers
 /// accepted in canonical JSON.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn suggested_role_for_power_level(
     power_level: PowerLevel,
 ) -> Result<RoomMemberRole, ClientError> {
@@ -75,14 +77,14 @@ pub fn suggested_role_for_power_level(
 /// Get the suggested power level for the given role.
 ///
 /// Returns an error if the value of the power level is unsupported.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn suggested_power_level_for_role(role: RoomMemberRole) -> Result<PowerLevel, ClientError> {
     // It's not possible to expose methods on an Enum through Uniffi ☹️
     Ok(role.suggested_power_level().try_into()?)
 }
 
 /// Generates a `matrix.to` permalink to the given userID.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn matrix_to_user_permalink(user_id: String) -> Result<String, ClientError> {
     let user_id = UserId::parse(user_id)?;
     Ok(user_id.matrix_to_uri().to_string())
@@ -136,10 +138,12 @@ pub struct RoomMemberWithSenderInfo {
     sender_info: Option<RoomMember>,
 }
 
-impl TryFrom<client_matrix::room::RoomMemberWithSenderInfo> for RoomMemberWithSenderInfo {
+impl TryFrom<harana_matrix_client::room::RoomMemberWithSenderInfo> for RoomMemberWithSenderInfo {
     type Error = ClientError;
 
-    fn try_from(value: client_matrix::room::RoomMemberWithSenderInfo) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: harana_matrix_client::room::RoomMemberWithSenderInfo,
+    ) -> Result<Self, Self::Error> {
         Ok(Self {
             room_member: value.room_member.try_into()?,
             sender_info: value.sender_info.map(|member| member.try_into()).transpose()?,

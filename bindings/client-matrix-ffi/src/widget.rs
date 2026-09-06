@@ -14,10 +14,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use language_tags::LanguageTag;
-use client_matrix::widget::{MessageLikeEventFilter, StateEventFilter, ToDeviceEventFilter};
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
+use harana_matrix_client::{
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    widget::{MessageLikeEventFilter, StateEventFilter, ToDeviceEventFilter},
+};
 use harana_matrix_common::UserId;
+use language_tags::LanguageTag;
 use tracing::error;
 
 use crate::{error::ClientError, room::Room, runtime::get_runtime_handle};
@@ -28,9 +30,9 @@ pub struct WidgetDriverAndHandle {
     pub handle: Arc<WidgetDriverHandle>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn make_widget_driver(settings: WidgetSettings) -> Result<WidgetDriverAndHandle, ParseError> {
-    let (driver, handle) = client_matrix::widget::WidgetDriver::new(settings.try_into()?);
+    let (driver, handle) = harana_matrix_client::widget::WidgetDriver::new(settings.try_into()?);
     Ok(WidgetDriverAndHandle {
         driver: Arc::new(WidgetDriver(Mutex::new(Some(driver)))),
         handle: Arc::new(WidgetDriverHandle(handle)),
@@ -40,9 +42,9 @@ pub fn make_widget_driver(settings: WidgetSettings) -> Result<WidgetDriverAndHan
 /// An object that handles all interactions of a widget living inside a webview
 /// or IFrame with the Matrix world.
 #[derive(uniffi::Object)]
-pub struct WidgetDriver(Mutex<Option<client_matrix::widget::WidgetDriver>>);
+pub struct WidgetDriver(Mutex<Option<harana_matrix_client::widget::WidgetDriver>>);
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl WidgetDriver {
     pub async fn run(
         &self,
@@ -82,17 +84,21 @@ pub struct WidgetSettings {
     raw_url: String,
 }
 
-impl TryFrom<WidgetSettings> for client_matrix::widget::WidgetSettings {
+impl TryFrom<WidgetSettings> for harana_matrix_client::widget::WidgetSettings {
     type Error = ParseError;
 
     fn try_from(value: WidgetSettings) -> Result<Self, Self::Error> {
         let WidgetSettings { widget_id, init_after_content_load, raw_url } = value;
-        Ok(client_matrix::widget::WidgetSettings::new(widget_id, init_after_content_load, &raw_url)?)
+        Ok(harana_matrix_client::widget::WidgetSettings::new(
+            widget_id,
+            init_after_content_load,
+            &raw_url,
+        )?)
     }
 }
 
-impl From<client_matrix::widget::WidgetSettings> for WidgetSettings {
-    fn from(value: client_matrix::widget::WidgetSettings) -> Self {
+impl From<harana_matrix_client::widget::WidgetSettings> for WidgetSettings {
+    fn from(value: harana_matrix_client::widget::WidgetSettings) -> Self {
         WidgetSettings {
             widget_id: value.widget_id().to_owned(),
             init_after_content_load: value.init_on_content_load(),
@@ -109,13 +115,13 @@ impl From<client_matrix::widget::WidgetSettings> for WidgetSettings {
 /// * `room` - A Matrix room which is used to query the logged in username
 /// * `props` - Properties from the client that can be used by a widget to adapt
 ///   to the client. e.g. language, font-scale...
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub async fn generate_webview_url(
     widget_settings: WidgetSettings,
     room: Arc<Room>,
     props: ClientProperties,
 ) -> Result<String, ParseError> {
-    Ok(client_matrix::widget::WidgetSettings::generate_webview_url(
+    Ok(harana_matrix_client::widget::WidgetSettings::generate_webview_url(
         &widget_settings.clone().try_into()?,
         &room.inner,
         props.into(),
@@ -137,12 +143,12 @@ pub async fn generate_webview_url(
 ///
 /// * `props` - A struct containing the configuration parameters for a element
 ///   call widget.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn new_virtual_element_call_widget(
-    props: client_matrix::widget::VirtualElementCallWidgetProperties,
-    config: client_matrix::widget::VirtualElementCallWidgetConfig,
+    props: harana_matrix_client::widget::VirtualElementCallWidgetProperties,
+    config: harana_matrix_client::widget::VirtualElementCallWidgetConfig,
 ) -> Result<WidgetSettings, ParseError> {
-    Ok(client_matrix::widget::WidgetSettings::new_virtual_element_call_widget(props, config)
+    Ok(harana_matrix_client::widget::WidgetSettings::new_virtual_element_call_widget(props, config)
         .map(|w| w.into())?)
 }
 
@@ -160,16 +166,16 @@ pub fn new_virtual_element_call_widget(
 /// adjusted
 ///
 /// The list itself lives in the SDK, as
-/// [`client_matrix::widget::Capabilities::element_call_required`], so it can be
-/// shared with consumers that do not go through the bindings.
-#[client_matrix_ffi_macros::export]
+/// [`harana_matrix_client::widget::Capabilities::element_call_required`], so it
+/// can be shared with consumers that do not go through the bindings.
+#[harana_matrix_macros::uniffi_export]
 pub fn get_element_call_required_permissions(
     own_user_id: String,
     own_device_id: String,
 ) -> Result<WidgetCapabilities, ClientError> {
     let own_user_id = UserId::parse(own_user_id)?;
 
-    Ok(client_matrix::widget::Capabilities::element_call_required(
+    Ok(harana_matrix_client::widget::Capabilities::element_call_required(
         &own_user_id,
         own_device_id.as_str().into(),
     )
@@ -189,7 +195,7 @@ pub struct ClientProperties {
     theme: Option<String>,
 }
 
-impl From<ClientProperties> for client_matrix::widget::ClientProperties {
+impl From<ClientProperties> for harana_matrix_client::widget::ClientProperties {
     fn from(value: ClientProperties) -> Self {
         let ClientProperties { client_id, language_tag, theme } = value;
         let language_tag = language_tag.and_then(|l| LanguageTag::parse(&l).ok());
@@ -200,9 +206,9 @@ impl From<ClientProperties> for client_matrix::widget::ClientProperties {
 /// A handle that encapsulates the communication between a widget driver and the
 /// corresponding widget (inside a webview or IFrame).
 #[derive(uniffi::Object)]
-pub struct WidgetDriverHandle(client_matrix::widget::WidgetDriverHandle);
+pub struct WidgetDriverHandle(harana_matrix_client::widget::WidgetDriverHandle);
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl WidgetDriverHandle {
     /// Receive a message from the widget driver.
     ///
@@ -245,7 +251,7 @@ pub struct WidgetCapabilities {
     pub rtc_transports: bool,
 }
 
-impl From<WidgetCapabilities> for client_matrix::widget::Capabilities {
+impl From<WidgetCapabilities> for harana_matrix_client::widget::Capabilities {
     fn from(value: WidgetCapabilities) -> Self {
         Self {
             read: value.read.into_iter().map(Into::into).collect(),
@@ -259,8 +265,8 @@ impl From<WidgetCapabilities> for client_matrix::widget::Capabilities {
     }
 }
 
-impl From<client_matrix::widget::Capabilities> for WidgetCapabilities {
-    fn from(value: client_matrix::widget::Capabilities) -> Self {
+impl From<harana_matrix_client::widget::Capabilities> for WidgetCapabilities {
+    fn from(value: harana_matrix_client::widget::Capabilities) -> Self {
         Self {
             read: value.read.into_iter().map(Into::into).collect(),
             send: value.send.into_iter().map(Into::into).collect(),
@@ -288,7 +294,7 @@ pub enum WidgetEventFilter {
     ToDevice { event_type: String },
 }
 
-impl From<WidgetEventFilter> for client_matrix::widget::Filter {
+impl From<WidgetEventFilter> for harana_matrix_client::widget::Filter {
     fn from(value: WidgetEventFilter) -> Self {
         match value {
             WidgetEventFilter::MessageLikeWithType { event_type } => {
@@ -310,9 +316,9 @@ impl From<WidgetEventFilter> for client_matrix::widget::Filter {
     }
 }
 
-impl From<client_matrix::widget::Filter> for WidgetEventFilter {
-    fn from(value: client_matrix::widget::Filter) -> Self {
-        use client_matrix::widget::Filter as F;
+impl From<harana_matrix_client::widget::Filter> for WidgetEventFilter {
+    fn from(value: harana_matrix_client::widget::Filter) -> Self {
+        use harana_matrix_client::widget::Filter as F;
 
         match value {
             F::MessageLike(MessageLikeEventFilter::WithType(event_type)) => {
@@ -334,18 +340,18 @@ impl From<client_matrix::widget::Filter> for WidgetEventFilter {
     }
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait WidgetCapabilitiesProvider: SendOutsideWasm + SyncOutsideWasm {
     fn acquire_capabilities(&self, capabilities: WidgetCapabilities) -> WidgetCapabilities;
 }
 
 struct CapabilitiesProviderWrap(Arc<dyn WidgetCapabilitiesProvider>);
 
-impl client_matrix::widget::CapabilitiesProvider for CapabilitiesProviderWrap {
+impl harana_matrix_client::widget::CapabilitiesProvider for CapabilitiesProviderWrap {
     async fn acquire_capabilities(
         &self,
-        capabilities: client_matrix::widget::Capabilities,
-    ) -> client_matrix::widget::Capabilities {
+        capabilities: harana_matrix_client::widget::Capabilities,
+    ) -> harana_matrix_client::widget::Capabilities {
         let this = self.0.clone();
         // This could require a prompt to the user. Ideally the callback
         // interface would just be async, but that's not supported yet so use
@@ -407,7 +413,7 @@ impl From<url::ParseError> for ParseError {
 
 #[cfg(test)]
 mod tests {
-    use client_matrix::widget::Capabilities;
+    use harana_matrix_client::widget::Capabilities;
 
     use super::get_element_call_required_permissions;
 

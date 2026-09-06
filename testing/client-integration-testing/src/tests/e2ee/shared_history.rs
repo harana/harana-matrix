@@ -5,8 +5,13 @@ use assert_matches2::{assert_let, assert_matches};
 use assign::assign;
 use eyeball_im::VectorDiff;
 use futures::{FutureExt, StreamExt, future, pin_mut};
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, assert_decrypted_message_eq, assert_next_with_timeout,
+    base::crypto::types::events::UtdCause,
+    common::deserialized_responses::{
+        DeviceLinkProblem, ProcessedToDeviceEvent, UnableToDecryptReason::MissingMegolmSession,
+        VerificationLevel, VerificationState, WithheldCode,
+    },
     deserialized_responses::TimelineEventKind,
     encryption::{BackupDownloadStrategy, EncryptionSettings},
     room::power_levels::RoomPowerLevelChanges,
@@ -22,18 +27,13 @@ use client_matrix::{
         },
     },
     timeout::timeout,
-};
-use client_base::crypto::types::events::UtdCause;
-use client_common::deserialized_responses::{
-    DeviceLinkProblem, ProcessedToDeviceEvent, UnableToDecryptReason::MissingMegolmSession,
-    VerificationLevel, VerificationState, WithheldCode,
-};
-use client_ui::{
-    Timeline,
-    sync_service::SyncService,
-    timeline::{
-        EncryptedMessage, MsgLikeContent, MsgLikeKind, RoomExt, TimelineDetails, TimelineItem,
-        TimelineItemContent,
+    ui::{
+        Timeline,
+        sync_service::SyncService,
+        timeline::{
+            EncryptedMessage, MsgLikeContent, MsgLikeKind, RoomExt, TimelineDetails, TimelineItem,
+            TimelineItemContent,
+        },
     },
 };
 use similar_asserts::assert_eq;
@@ -1640,7 +1640,7 @@ async fn assert_utd_history_not_shared(timeline: &Timeline, event_id: &EventId) 
 
 /// Asserts that the given `sync_response` contains exactly one to-device event
 /// and that the event is a decrypted room key bundle.
-fn assert_received_room_key_bundle(sync_response: client_matrix::sync::SyncResponse) {
+fn assert_received_room_key_bundle(sync_response: harana_matrix_client::sync::SyncResponse) {
     assert_eq!(1, sync_response.to_device.len(), "Expected exactly one to-device event");
     let to_device_event = &sync_response.to_device[0];
     assert_let!(

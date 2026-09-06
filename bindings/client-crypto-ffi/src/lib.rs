@@ -30,33 +30,37 @@ pub use device::Device;
 pub use error::{
     CryptoStoreError, DecryptionError, KeyImportError, SecretImportError, SignatureError,
 };
-use js_int::UInt;
-pub use logger::{Logger, set_logger};
-pub use machine::{KeyRequestPair, OlmMachine, SignatureVerification};
-use client_common::deserialized_responses::{ShieldState as RustShieldState, ShieldStateCode};
-use client_crypto::{
-    CollectStrategy, EncryptionSettings as RustEncryptionSettings,
-    olm::{IdentityKeys, InboundGroupSession, SenderData, Session},
-    store::{
-        CryptoStore,
+use harana_matrix_client::{
+    common::deserialized_responses::{ShieldState as RustShieldState, ShieldStateCode},
+    crypto::{
+        CollectStrategy, EncryptionSettings as RustEncryptionSettings,
+        olm::{IdentityKeys, InboundGroupSession, SenderData, Session},
+        store::{
+            CryptoStore,
+            types::{
+                Changes, DehydratedDeviceKey as InnerDehydratedDeviceKey, PendingChanges,
+                RoomSettings as RustRoomSettings,
+            },
+        },
         types::{
-            Changes, DehydratedDeviceKey as InnerDehydratedDeviceKey, PendingChanges,
-            RoomSettings as RustRoomSettings,
+            DeviceKey, DeviceKeys, EventEncryptionAlgorithm as RustEventEncryptionAlgorithm,
+            SigningKey,
         },
     },
-    types::{
-        DeviceKey, DeviceKeys, EventEncryptionAlgorithm as RustEventEncryptionAlgorithm, SigningKey,
-    },
-};
-use client_sqlite::SqliteCryptoStore;
-pub use responses::{
-    BootstrapCrossSigningResult, DeviceLists, KeysImportResult, OutgoingVerificationRequest,
-    Request, RequestType, SignatureUploadRequest, UploadSigningKeysRequest,
+    sqlite::SqliteCryptoStore,
 };
 use harana_matrix_common::{
     DeviceKeyAlgorithm, DeviceKeyId, MilliSecondsSinceUnixEpoch, OwnedDeviceId, OwnedUserId,
     RoomId, SecondsSinceUnixEpoch, UserId,
     events::room::history_visibility::HistoryVisibility as RustHistoryVisibility,
+    olm::{Curve25519PublicKey, Ed25519PublicKey},
+};
+use js_int::UInt;
+pub use logger::{Logger, set_logger};
+pub use machine::{KeyRequestPair, OlmMachine, SignatureVerification};
+pub use responses::{
+    BootstrapCrossSigningResult, DeviceLists, KeysImportResult, OutgoingVerificationRequest,
+    Request, RequestType, SignatureUploadRequest, UploadSigningKeysRequest,
 };
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
@@ -66,7 +70,6 @@ pub use verification::{
     RequestVerificationResult, Sas, SasListener, SasState, ScanResult, StartSasResult,
     Verification, VerificationRequest, VerificationRequestListener, VerificationRequestState,
 };
-use harana_matrix_common::olm::{Curve25519PublicKey, Ed25519PublicKey};
 
 use crate::dehydrated_devices::DehydrationError;
 
@@ -204,7 +207,7 @@ impl From<anyhow::Error> for MigrationError {
 ///
 /// * `progress_listener` - A callback that can be used to introspect the
 ///   progress of the migration.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn migrate(
     data: MigrationData,
     path: String,
@@ -224,7 +227,9 @@ async fn migrate_data(
     passphrase: Option<String>,
     progress_listener: Box<dyn ProgressListener>,
 ) -> anyhow::Result<()> {
-    use client_crypto::{olm::PrivateCrossSigningIdentity, store::types::BackupDecryptionKey};
+    use harana_matrix_client::crypto::{
+        olm::PrivateCrossSigningIdentity, store::types::BackupDecryptionKey,
+    };
     use harana_matrix_common::olm::olm::Account;
     use zeroize::Zeroize;
 
@@ -253,7 +258,7 @@ async fn migrate_data(
     let account = Account::from_libolm_pickle(&data.account.pickle, &data.pickle_key)?;
     let pickle = account.pickle();
     let identity_keys = Arc::new(account.identity_keys());
-    let pickled_account = client_crypto::olm::PickledAccount {
+    let pickled_account = harana_matrix_client::crypto::olm::PickledAccount {
         user_id: parse_user_id(&data.account.user_id)?,
         device_id: device_id.clone(),
         pickle,
@@ -263,7 +268,7 @@ async fn migrate_data(
         creation_local_time: MilliSecondsSinceUnixEpoch::now(),
         fallback_key_creation_timestamp: Some(MilliSecondsSinceUnixEpoch::now()),
     };
-    let account = client_crypto::olm::Account::from_pickle(pickled_account)?;
+    let account = harana_matrix_client::crypto::olm::Account::from_pickle(pickled_account)?;
 
     processed_steps += 1;
     listener(processed_steps, total_steps);
@@ -367,7 +372,7 @@ async fn save_changes(
 ///
 /// * `progress_listener` - A callback that can be used to introspect the
 ///   progress of the migration.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn migrate_sessions(
     data: SessionMigrationData,
     path: String,
@@ -455,9 +460,11 @@ fn collect_sessions(
     );
 
     for session_pickle in session_pickles {
-        let pickle =
-            harana_matrix_common::olm::olm::Session::from_libolm_pickle(&session_pickle.pickle, pickle_key)?
-                .pickle();
+        let pickle = harana_matrix_common::olm::olm::Session::from_libolm_pickle(
+            &session_pickle.pickle,
+            pickle_key,
+        )?
+        .pickle();
 
         let creation_time = SecondsSinceUnixEpoch(
             UInt::new(session_pickle.creation_time).context("invalid creation timestamp")?,
@@ -466,7 +473,7 @@ fn collect_sessions(
             UInt::new(session_pickle.last_use_time).context("invalid last use timestamp")?,
         );
 
-        let pickle = client_crypto::olm::PickledSession {
+        let pickle = harana_matrix_client::crypto::olm::PickledSession {
             pickle,
             sender_key: Curve25519PublicKey::from_base64(&session_pickle.sender_key)?,
             created_using_fallback_key: session_pickle.created_using_fallback_key,
@@ -495,7 +502,7 @@ fn collect_sessions(
 
         let sender_key = Curve25519PublicKey::from_base64(&session.sender_key)?;
 
-        let pickle = client_crypto::olm::PickledInboundGroupSession {
+        let pickle = harana_matrix_client::crypto::olm::PickledInboundGroupSession {
             pickle,
             sender_key,
             signing_key: session
@@ -521,7 +528,7 @@ fn collect_sessions(
             algorithm: RustEventEncryptionAlgorithm::MegolmV1AesSha2,
         };
 
-        let session = client_crypto::olm::InboundGroupSession::from_pickle(pickle)?;
+        let session = harana_matrix_client::crypto::olm::InboundGroupSession::from_pickle(pickle)?;
 
         inbound_group_sessions.push(session);
         processed_steps += 1;
@@ -548,7 +555,7 @@ fn collect_sessions(
 /// * `passphrase` - The passphrase that should be used to encrypt the data at
 ///   rest in the Sqlite store. **Warning**, if no passphrase is given, the
 ///   store and all its data will remain unencrypted.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn migrate_room_settings(
     room_settings: HashMap<String, RoomSettings>,
     path: String,
@@ -574,7 +581,7 @@ pub fn migrate_room_settings(
 }
 
 /// Callback that will be passed over the FFI to report progress
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait ProgressListener {
     /// The callback that should be called on the Rust side
     ///
@@ -738,7 +745,8 @@ pub struct DecryptedEvent {
     pub shield_state: ShieldState,
 }
 
-/// Take a look at [`client_common::deserialized_responses::ShieldState`]
+/// Take a look at
+/// [`harana_matrix_client::common::deserialized_responses::ShieldState`]
 /// for more info.
 #[allow(missing_docs)]
 #[derive(uniffi::Enum)]
@@ -748,7 +756,8 @@ pub enum ShieldColor {
     None,
 }
 
-/// Take a look at [`client_common::deserialized_responses::ShieldState`]
+/// Take a look at
+/// [`harana_matrix_client::common::deserialized_responses::ShieldState`]
 /// for more info.
 #[derive(uniffi::Record)]
 #[allow(missing_docs)]
@@ -827,7 +836,7 @@ pub struct BackupKeys {
     backup_version: String,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl BackupKeys {
     /// Get the recovery key that we're holding on to.
     pub fn recovery_key(&self) -> Arc<BackupRecoveryKey> {
@@ -840,10 +849,12 @@ impl BackupKeys {
     }
 }
 
-impl TryFrom<client_crypto::store::types::BackupKeys> for BackupKeys {
+impl TryFrom<harana_matrix_client::crypto::store::types::BackupKeys> for BackupKeys {
     type Error = ();
 
-    fn try_from(keys: client_crypto::store::types::BackupKeys) -> Result<Self, Self::Error> {
+    fn try_from(
+        keys: harana_matrix_client::crypto::store::types::BackupKeys,
+    ) -> Result<Self, Self::Error> {
         Ok(Self {
             recovery_key: BackupRecoveryKey {
                 inner: keys.decryption_key.ok_or(())?,
@@ -888,14 +899,14 @@ impl From<InnerDehydratedDeviceKey> for DehydratedDeviceKey {
     }
 }
 
-impl From<client_crypto::store::types::RoomKeyCounts> for RoomKeyCounts {
-    fn from(count: client_crypto::store::types::RoomKeyCounts) -> Self {
+impl From<harana_matrix_client::crypto::store::types::RoomKeyCounts> for RoomKeyCounts {
+    fn from(count: harana_matrix_client::crypto::store::types::RoomKeyCounts) -> Self {
         Self { total: count.total as i64, backed_up: count.backed_up as i64 }
     }
 }
 
-impl From<client_crypto::CrossSigningKeyExport> for CrossSigningKeyExport {
-    fn from(e: client_crypto::CrossSigningKeyExport) -> Self {
+impl From<harana_matrix_client::crypto::CrossSigningKeyExport> for CrossSigningKeyExport {
+    fn from(e: harana_matrix_client::crypto::CrossSigningKeyExport) -> Self {
         Self {
             master_key: e.master_key.clone(),
             self_signing_key: e.self_signing_key.clone(),
@@ -904,9 +915,9 @@ impl From<client_crypto::CrossSigningKeyExport> for CrossSigningKeyExport {
     }
 }
 
-impl From<CrossSigningKeyExport> for client_crypto::CrossSigningKeyExport {
+impl From<CrossSigningKeyExport> for harana_matrix_client::crypto::CrossSigningKeyExport {
     fn from(e: CrossSigningKeyExport) -> Self {
-        client_crypto::CrossSigningKeyExport {
+        harana_matrix_client::crypto::CrossSigningKeyExport {
             master_key: e.master_key,
             self_signing_key: e.self_signing_key,
             user_signing_key: e.user_signing_key,
@@ -914,8 +925,8 @@ impl From<CrossSigningKeyExport> for client_crypto::CrossSigningKeyExport {
     }
 }
 
-impl From<client_crypto::CrossSigningStatus> for CrossSigningStatus {
-    fn from(s: client_crypto::CrossSigningStatus) -> Self {
+impl From<harana_matrix_client::crypto::CrossSigningStatus> for CrossSigningStatus {
+    fn from(s: harana_matrix_client::crypto::CrossSigningStatus) -> Self {
         Self {
             has_master: s.has_master,
             has_self_signing: s.has_self_signing,
@@ -964,14 +975,15 @@ impl From<RoomSettings> for RustRoomSettings {
 }
 
 fn parse_user_id(user_id: &str) -> Result<OwnedUserId, CryptoStoreError> {
-    harana_matrix_common::UserId::parse(user_id).map_err(|e| CryptoStoreError::InvalidUserId(user_id.to_owned(), e))
+    harana_matrix_common::UserId::parse(user_id)
+        .map_err(|e| CryptoStoreError::InvalidUserId(user_id.to_owned(), e))
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 fn version_info() -> VersionInfo {
     VersionInfo {
-        version: client_crypto::VERSION.to_owned(),
-        vodozemac_version: client_crypto::vodozemac::VERSION.to_owned(),
+        version: harana_matrix_client::crypto::VERSION.to_owned(),
+        vodozemac_version: harana_matrix_client::crypto::vodozemac::VERSION.to_owned(),
         git_description: env!("VERGEN_GIT_DESCRIBE").to_owned(),
         git_sha: env!("VERGEN_GIT_SHA").to_owned(),
     }
@@ -991,12 +1003,12 @@ pub struct VersionInfo {
     pub git_description: String,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 fn version() -> String {
-    client_crypto::VERSION.to_owned()
+    harana_matrix_client::crypto::VERSION.to_owned()
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 fn vodozemac_version() -> String {
     harana_matrix_common::olm::VERSION.to_owned()
 }
@@ -1008,10 +1020,10 @@ fn vodozemac_version() -> String {
 /// associated decryption object.
 #[derive(uniffi::Object)]
 pub struct PkEncryption {
-    inner: client_crypto::vodozemac::pk_encryption::PkEncryption,
+    inner: harana_matrix_client::crypto::vodozemac::pk_encryption::PkEncryption,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl PkEncryption {
     /// Create a new [`PkEncryption`] object from a `Curve25519PublicKey`
     /// encoded as Base64.
@@ -1022,7 +1034,7 @@ impl PkEncryption {
     #[uniffi::constructor]
     pub fn from_base64(key: &str) -> Result<Arc<Self>, DecodeError> {
         let key = harana_matrix_common::olm::Curve25519PublicKey::from_base64(key)
-            .map_err(client_crypto::backups::DecodeError::PublicKey)?;
+            .map_err(harana_matrix_client::crypto::backups::DecodeError::PublicKey)?;
         let inner = harana_matrix_common::olm::pk_encryption::PkEncryption::from_key(key);
 
         Ok(Self { inner }.into())
@@ -1034,7 +1046,8 @@ impl PkEncryption {
 
         let message = self.inner.encrypt(plaintext.as_ref()).ok()?;
 
-        let harana_matrix_common::olm::pk_encryption::Message { ciphertext, mac, ephemeral_key } = message;
+        let harana_matrix_common::olm::pk_encryption::Message { ciphertext, mac, ephemeral_key } =
+            message;
 
         Some(PkMessage {
             ciphertext: base64_encode(ciphertext),

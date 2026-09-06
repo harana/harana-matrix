@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3delete_devices
 
-    use crate::__ruma::{
-        OwnedDeviceId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedDeviceId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::uiaa::{AuthData, UiaaResponse},
     };
-
-    use crate::api::client::uiaa::{AuthData, UiaaResponse};
 
     metadata! {
         method: POST,
@@ -31,7 +32,8 @@ pub mod v3 {
         /// List of devices to delete.
         pub devices: Vec<OwnedDeviceId>,
 
-        /// Additional authentication information for the user-interactive authentication API.
+        /// Additional authentication information for the user-interactive
+        /// authentication API.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub auth: Option<AuthData>,
     }

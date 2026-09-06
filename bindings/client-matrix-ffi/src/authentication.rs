@@ -18,7 +18,7 @@ use std::{
     sync::Arc,
 };
 
-use client_matrix::{
+use harana_matrix_client::{
     Error,
     authentication::oauth::{
         ClientId, ClientRegistrationData, OAuthError as SdkOAuthError,
@@ -41,7 +41,7 @@ pub struct HomeserverLoginDetails {
     pub(crate) supports_password_login: bool,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl HomeserverLoginDetails {
     /// The URL of the currently configured homeserver.
     pub fn url(&self) -> String {
@@ -85,7 +85,7 @@ pub struct SsoHandler {
     pub(crate) url: String,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SsoHandler {
     /// Returns the URL for starting SSO authentication. The URL should be
     /// opened in a web view. Once the web view succeeds, call `finish` with

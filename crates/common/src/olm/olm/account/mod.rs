@@ -455,7 +455,7 @@ impl Account {
     /// # Examples
     /// ```
     /// use harana_matrix_common::olm::olm::Account;
-    /// use olm_rs::{account::OlmAccount, PicklingMode};
+    /// use olm_rs::{PicklingMode, account::OlmAccount};
     /// let account = Account::new();
     ///
     /// let export = account
@@ -465,10 +465,14 @@ impl Account {
     /// let unpickled = OlmAccount::unpickle(
     ///     export,
     ///     PicklingMode::Encrypted { key: [0u8; 32].to_vec() },
-    /// ).expect("We should be able to unpickle our exported Account");
+    /// )
+    /// .expect("We should be able to unpickle our exported Account");
     /// ```
     #[cfg(feature = "libolm-compat")]
-    pub fn to_libolm_pickle(&self, pickle_key: &[u8]) -> Result<String, crate::olm::LibolmPickleError> {
+    pub fn to_libolm_pickle(
+        &self,
+        pickle_key: &[u8],
+    ) -> Result<String, crate::olm::LibolmPickleError> {
         use self::libolm::Pickle;
         use crate::olm::utilities::pickle_libolm;
         pickle_libolm::<Pickle>(self.into(), pickle_key)
@@ -476,7 +480,9 @@ impl Account {
 
     #[cfg(all(any(fuzzing, test), feature = "libolm-compat"))]
     #[doc(hidden)]
-    pub fn from_decrypted_libolm_pickle(pickle: &[u8]) -> Result<Self, crate::olm::LibolmPickleError> {
+    pub fn from_decrypted_libolm_pickle(
+        pickle: &[u8],
+    ) -> Result<Self, crate::olm::LibolmPickleError> {
         use std::io::Cursor;
 
         use matrix_pickle::Decode;

@@ -27,7 +27,9 @@
 //!
 //! ```
 //! use anyhow::Result;
-//! use harana_matrix_common::olm::pk_encryption::{PkDecryption, PkEncryption};
+//! use harana_matrix_common::olm::pk_encryption::{
+//!     PkDecryption, PkEncryption,
+//! };
 //!
 //! fn main() -> Result<()> {
 //!     let plaintext = b"It's a secret to everybody";
@@ -209,7 +211,7 @@ impl PkDecryption {
     /// # Examples
     /// ```
     /// use harana_matrix_common::olm::pk_encryption::PkDecryption;
-    /// use olm_rs::{pk::OlmPkDecryption, PicklingMode};
+    /// use olm_rs::{PicklingMode, pk::OlmPkDecryption};
     ///
     /// let decrypt = PkDecryption::new();
     ///
@@ -220,9 +222,13 @@ impl PkDecryption {
     /// let unpickled = OlmPkDecryption::unpickle(
     ///     pickle,
     ///     PicklingMode::Encrypted { key: [0u8; 32].to_vec() },
-    /// ).expect("We should be able to unpickle our exported PkDecryption");
+    /// )
+    /// .expect("We should be able to unpickle our exported PkDecryption");
     /// ```
-    pub fn to_libolm_pickle(&self, pickle_key: &[u8]) -> Result<String, crate::olm::LibolmPickleError> {
+    pub fn to_libolm_pickle(
+        &self,
+        pickle_key: &[u8],
+    ) -> Result<String, crate::olm::LibolmPickleError> {
         use crate::olm::utilities::pickle_libolm;
         pickle_libolm::<PkDecryptionPickle>(self.into(), pickle_key)
     }

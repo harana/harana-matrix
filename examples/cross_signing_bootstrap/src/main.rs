@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
-use client_matrix::{
+use harana_matrix_client::{
     Client, LoopCtrl,
     config::SyncSettings,
     encryption::CrossSigningResetAuthType,
@@ -44,7 +44,11 @@ async fn bootstrap(client: Client, user_id: OwnedUserId, password: String) -> Re
     Ok(())
 }
 
-async fn login(homeserver_url: String, username: &str, password: &str) -> client_matrix::Result<()> {
+async fn login(
+    homeserver_url: String,
+    username: &str,
+    password: &str,
+) -> harana_matrix_client::Result<()> {
     let homeserver_url = Url::parse(&homeserver_url).expect("Couldn't parse the homeserver URL");
     let client = Client::new(homeserver_url).await.unwrap();
 

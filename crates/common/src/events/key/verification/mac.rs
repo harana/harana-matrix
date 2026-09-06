@@ -4,11 +4,13 @@
 
 use std::collections::BTreeMap;
 
-use crate::__ruma::{OwnedTransactionId, serde::Base64};
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::relation::Reference;
+use crate::{
+    __ruma::{OwnedTransactionId, serde::Base64},
+    events::relation::Reference,
+};
 
 /// The content of a to-device `m.key.verification.` event.
 ///
@@ -19,22 +21,24 @@ use crate::events::relation::Reference;
 pub struct ToDeviceKeyVerificationMacEventContent {
     /// An opaque identifier for the verification process.
     ///
-    /// Must be the same as the one used for the `m.key.verification.start` message.
+    /// Must be the same as the one used for the `m.key.verification.start`
+    /// message.
     pub transaction_id: OwnedTransactionId,
 
-    /// A map of the key ID to the MAC of the key, using the algorithm in the verification process.
+    /// A map of the key ID to the MAC of the key, using the algorithm in the
+    /// verification process.
     ///
     /// The MAC is encoded as unpadded base64.
     pub mac: BTreeMap<String, Base64>,
 
-    /// The MAC of the comma-separated, sorted, list of key IDs given in the `mac` property,
-    /// encoded as unpadded base64.
+    /// The MAC of the comma-separated, sorted, list of key IDs given in the
+    /// `mac` property, encoded as unpadded base64.
     pub keys: Base64,
 }
 
 impl ToDeviceKeyVerificationMacEventContent {
-    /// Creates a new `ToDeviceKeyVerificationMacEventContent` with the given transaction ID, key ID
-    /// to MAC map and key MAC.
+    /// Creates a new `ToDeviceKeyVerificationMacEventContent` with the given
+    /// transaction ID, key ID to MAC map and key MAC.
     pub fn new(
         transaction_id: OwnedTransactionId,
         mac: BTreeMap<String, Base64>,
@@ -51,13 +55,14 @@ impl ToDeviceKeyVerificationMacEventContent {
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.key.verification.mac", kind = MessageLike)]
 pub struct KeyVerificationMacEventContent {
-    /// A map of the key ID to the MAC of the key, using the algorithm in the verification process.
+    /// A map of the key ID to the MAC of the key, using the algorithm in the
+    /// verification process.
     ///
     /// The MAC is encoded as unpadded base64.
     pub mac: BTreeMap<String, Base64>,
 
-    /// The MAC of the comma-separated, sorted, list of key IDs given in the `mac` property,
-    /// encoded as unpadded base64.
+    /// The MAC of the comma-separated, sorted, list of key IDs given in the
+    /// `mac` property, encoded as unpadded base64.
     pub keys: Base64,
 
     /// Information about the related event.
@@ -66,8 +71,8 @@ pub struct KeyVerificationMacEventContent {
 }
 
 impl KeyVerificationMacEventContent {
-    /// Creates a new `KeyVerificationMacEventContent` with the given key ID to MAC map, key MAC and
-    /// reference.
+    /// Creates a new `KeyVerificationMacEventContent` with the given key ID to
+    /// MAC map, key MAC and reference.
     pub fn new(mac: BTreeMap<String, Base64>, keys: Base64, relates_to: Reference) -> Self {
         Self { mac, keys, relates_to }
     }

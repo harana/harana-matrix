@@ -9,6 +9,8 @@ pub mod v3 {
 
     use std::{collections::BTreeMap, time::Duration};
 
+    use serde_json::Value as JsonValue;
+
     use crate::__ruma::{
         OwnedDeviceId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
@@ -16,7 +18,6 @@ pub mod v3 {
         metadata,
         serde::Raw,
     };
-    use serde_json::Value as JsonValue;
 
     metadata! {
         method: POST,
@@ -32,7 +33,8 @@ pub mod v3 {
     #[request]
     #[derive(Default)]
     pub struct Request {
-        /// The time (in milliseconds) to wait when downloading keys from remote servers.
+        /// The time (in milliseconds) to wait when downloading keys from remote
+        /// servers.
         ///
         /// 10 seconds is the recommended default.
         #[serde(
@@ -52,9 +54,11 @@ pub mod v3 {
     #[response]
     #[derive(Default)]
     pub struct Response {
-        /// If any remote homeservers could not be reached, they are recorded here.
+        /// If any remote homeservers could not be reached, they are recorded
+        /// here.
         ///
-        /// The names of the properties are the names of the unreachable servers.
+        /// The names of the properties are the names of the unreachable
+        /// servers.
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         pub failures: BTreeMap<String, JsonValue>,
 

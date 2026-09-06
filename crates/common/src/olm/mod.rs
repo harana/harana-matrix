@@ -155,7 +155,7 @@
 //!
 //! const PICKLE_KEY: [u8; 32] = [0u8; 32];
 //!
-//! fn main() -> Result<()>{
+//! fn main() -> Result<()> {
 //!     let mut account = Account::new();
 //!
 //!     account.generate_one_time_keys(10);
@@ -163,7 +163,8 @@
 //!
 //!     let pickle = account.pickle().encrypt(&PICKLE_KEY);
 //!
-//!     let account2: Account = AccountPickle::from_encrypted(&pickle, &PICKLE_KEY)?.into();
+//!     let account2: Account =
+//!         AccountPickle::from_encrypted(&pickle, &PICKLE_KEY)?.into();
 //!
 //!     assert_eq!(account.identity_keys(), account2.identity_keys());
 //!
@@ -180,11 +181,12 @@
 //! #
 //! # fn main() -> Result<()> {
 //! #   let some_account = Account::new();
-//!     let mut json_str = serde_json::to_string(&some_account.pickle())?;
-//!     // This will produce an account which is identical to `some_account`.
-//!     let account: Account = serde_json::from_str::<AccountPickle>(&json_str)?.into();
+//! let mut json_str = serde_json::to_string(&some_account.pickle())?;
+//! // This will produce an account which is identical to `some_account`.
+//! let account: Account =
+//!     serde_json::from_str::<AccountPickle>(&json_str)?.into();
 //!
-//!     json_str.zeroize();
+//! json_str.zeroize();
 //! #
 //! #    Ok(())
 //! # }
@@ -203,12 +205,11 @@
 //!
 //! fn main() -> Result<()> {
 //!     let account = Account::new();
-//!     let account: Account = account.pickle().into();  // this is identity
+//!     let account: Account = account.pickle().into(); // this is identity
 //!
 //!     Ok(())
 //! }
 //! ```
-
 
 mod cipher;
 mod types;

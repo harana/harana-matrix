@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use client_ui::timeline::{EmbeddedEvent, TimelineDetails};
+use harana_matrix_client::ui::timeline::{EmbeddedEvent, TimelineDetails};
 
 use super::{ProfileDetails, content::TimelineItemContent};
 use crate::{event::EventOrTransactionId, utils::Timestamp};
@@ -29,7 +29,7 @@ impl InReplyToDetails {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl InReplyToDetails {
     pub fn event_id(&self) -> String {
         self.event_id.clone()
@@ -40,8 +40,8 @@ impl InReplyToDetails {
     }
 }
 
-impl From<client_ui::timeline::InReplyToDetails> for InReplyToDetails {
-    fn from(inner: client_ui::timeline::InReplyToDetails) -> Self {
+impl From<harana_matrix_client::ui::timeline::InReplyToDetails> for InReplyToDetails {
+    fn from(inner: harana_matrix_client::ui::timeline::InReplyToDetails) -> Self {
         Self { event_id: inner.event_id.to_string(), event: inner.event.into() }
     }
 }

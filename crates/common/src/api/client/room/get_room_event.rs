@@ -10,10 +10,10 @@ pub mod v3 {
     use crate::__ruma::{
         OwnedEventId, OwnedRoomId,
         api::{auth_scheme::AccessToken, request, response},
+        events::AnyTimelineEvent,
         metadata,
         serde::Raw,
     };
-    use crate::__ruma::events::AnyTimelineEvent;
 
     metadata! {
         method: GET,

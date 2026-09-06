@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use client_matrix::{
+use harana_matrix_client::{
     Client, Error, LoopCtrl, Room, RoomState,
     authentication::matrix::MatrixSession,
     config::SyncSettings,
@@ -196,9 +196,9 @@ async fn build_client(data_dir: &Path) -> anyhow::Result<(Client, ClientSession)
         {
             Ok(client) => return Ok((client, ClientSession { homeserver, db_path, passphrase })),
             Err(error) => match &error {
-                client_matrix::ClientBuildError::AutoDiscovery(_)
-                | client_matrix::ClientBuildError::Url(_)
-                | client_matrix::ClientBuildError::Http(_) => {
+                harana_matrix_client::ClientBuildError::AutoDiscovery(_)
+                | harana_matrix_client::ClientBuildError::Url(_)
+                | harana_matrix_client::ClientBuildError::Http(_) => {
                     println!("Error checking the homeserver: {error}");
                     println!("Please try again\n");
                 }

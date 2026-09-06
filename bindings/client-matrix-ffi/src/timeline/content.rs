@@ -14,9 +14,10 @@
 
 use std::collections::HashMap;
 
-use client_matrix::room::power_levels::power_level_user_changes;
-use client_base::CallIntentConsensus;
-use client_ui::timeline::RoomPinnedEventsChange;
+use harana_matrix_client::{
+    base::CallIntentConsensus, room::power_levels::power_level_user_changes,
+    ui::timeline::RoomPinnedEventsChange,
+};
 use harana_matrix_common::events::{
     StateEventContentChange, room::history_visibility::HistoryVisibility as RumaHistoryVisibility,
 };
@@ -26,9 +27,9 @@ use crate::{
     timeline::msg_like::MsgLikeContent, utils::Timestamp,
 };
 
-impl From<client_ui::timeline::TimelineItemContent> for TimelineItemContent {
-    fn from(value: client_ui::timeline::TimelineItemContent) -> Self {
-        use client_ui::timeline::TimelineItemContent as Content;
+impl From<harana_matrix_client::ui::timeline::TimelineItemContent> for TimelineItemContent {
+    fn from(value: harana_matrix_client::ui::timeline::TimelineItemContent) -> Self {
+        use harana_matrix_client::ui::timeline::TimelineItemContent as Content;
 
         match value {
             Content::MsgLike(msg_like) => match msg_like.try_into() {
@@ -250,9 +251,9 @@ pub enum MembershipChange {
     NotImplemented,
 }
 
-impl From<client_ui::timeline::MembershipChange> for MembershipChange {
-    fn from(membership_change: client_ui::timeline::MembershipChange) -> Self {
-        use client_ui::timeline::MembershipChange as Change;
+impl From<harana_matrix_client::ui::timeline::MembershipChange> for MembershipChange {
+    fn from(membership_change: harana_matrix_client::ui::timeline::MembershipChange) -> Self {
+        use harana_matrix_client::ui::timeline::MembershipChange as Change;
         match membership_change {
             Change::None => Self::None,
             Change::Error => Self::Error,
@@ -384,10 +385,12 @@ pub struct LiveLocationContent {
     pub locations: Vec<BeaconInfo>,
 }
 
-impl From<&client_ui::timeline::AnyOtherStateEventContentChange> for OtherState {
-    fn from(content: &client_ui::timeline::AnyOtherStateEventContentChange) -> Self {
-        use client_matrix::ruma::events::StateEventContentChange as FullContent;
-        use client_ui::timeline::AnyOtherStateEventContentChange as Content;
+impl From<&harana_matrix_client::ui::timeline::AnyOtherStateEventContentChange> for OtherState {
+    fn from(content: &harana_matrix_client::ui::timeline::AnyOtherStateEventContentChange) -> Self {
+        use harana_matrix_client::{
+            ruma::events::StateEventContentChange as FullContent,
+            ui::timeline::AnyOtherStateEventContentChange as Content,
+        };
         match content {
             Content::PolicyRuleRoom(_) => Self::PolicyRuleRoom,
             Content::PolicyRuleServer(_) => Self::PolicyRuleServer,

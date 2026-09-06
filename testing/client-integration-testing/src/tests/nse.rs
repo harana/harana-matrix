@@ -7,8 +7,9 @@ use std::{
 use anyhow::Result;
 use assign::assign;
 use futures::Future;
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room,
+    common::cross_process_lock::CrossProcessLockConfig,
     encryption::EncryptionSettings,
     ruma::{
         EventEncryptionAlgorithm, OwnedEventId, OwnedRoomId, RoomId,
@@ -24,13 +25,12 @@ use client_matrix::{
         },
         serde::Raw,
     },
-};
-use client_common::cross_process_lock::CrossProcessLockConfig;
-use client_ui::{
-    notification_client::{
-        NotificationClient, NotificationEvent, NotificationProcessSetup, NotificationStatus,
+    ui::{
+        notification_client::{
+            NotificationClient, NotificationEvent, NotificationProcessSetup, NotificationStatus,
+        },
+        sync_service::SyncService,
     },
-    sync_service::SyncService,
 };
 use serde_json::json;
 use tempfile::tempdir;

@@ -11,10 +11,11 @@ use super::request::SecretName;
 
 /// The content of an `m.secret.push` event.
 ///
-/// An event sent by a client to push a secret with another device, without needing an
-/// `m.secret.request` event.
+/// An event sent by a client to push a secret with another device, without
+/// needing an `m.secret.request` event.
 ///
-/// It must be encrypted as an `m.room.encrypted` event, then sent as a to-device event.
+/// It must be encrypted as an `m.room.encrypted` event, then sent as a
+/// to-device event.
 #[derive(Clone, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "io.element.msc4385.secret.push", kind = ToDevice)]

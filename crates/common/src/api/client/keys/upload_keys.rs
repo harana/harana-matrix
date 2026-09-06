@@ -10,6 +10,7 @@ pub mod v3 {
     use std::collections::BTreeMap;
 
     use js_int::UInt;
+
     use crate::__ruma::{
         OneTimeKeyAlgorithm, OwnedOneTimeKeyId,
         api::{auth_scheme::AccessToken, request, response},
@@ -50,8 +51,8 @@ pub mod v3 {
     /// Response type for the `upload_keys` endpoint.
     #[response]
     pub struct Response {
-        /// For each key algorithm, the number of unclaimed one-time keys of that
-        /// type currently held on the server for this device.
+        /// For each key algorithm, the number of unclaimed one-time keys of
+        /// that type currently held on the server for this device.
         pub one_time_key_counts: BTreeMap<OneTimeKeyAlgorithm, UInt>,
     }
 

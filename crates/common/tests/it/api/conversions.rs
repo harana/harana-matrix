@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 
-use http::header::CONTENT_TYPE;
 use harana_matrix_common::{
     OwnedUserId,
     api::{
@@ -13,6 +12,7 @@ use harana_matrix_common::{
     },
     metadata, owned_user_id, user_id,
 };
+use http::header::CONTENT_TYPE;
 
 metadata! {
     method: POST,
@@ -142,7 +142,6 @@ fn request_with_user_id_serde() {
 mod without_query {
     use std::borrow::Cow;
 
-    use http::header::CONTENT_TYPE;
     use harana_matrix_common::{
         OwnedUserId,
         api::{
@@ -152,6 +151,7 @@ mod without_query {
         },
         metadata, owned_user_id, user_id,
     };
+    use http::header::CONTENT_TYPE;
 
     metadata! {
         method: POST,

@@ -12,7 +12,6 @@ pub mod v3 {
         api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
-
     #[cfg(feature = "unstable-msc4466")]
     use crate::api::client::profile::PropagateTo;
 

@@ -9,25 +9,29 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::__ruma::{
-    EventId, IdParseError, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, UserId,
-};
 use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::events::PrivOwnedStr;
+use crate::{
+    __ruma::{
+        EventId, IdParseError, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId, UserId,
+    },
+    events::PrivOwnedStr,
+};
 
 /// The content of an `m.receipt` event.
 ///
-/// A mapping of event ID to a collection of receipts for this event ID. The event ID is the ID of
-/// the event being acknowledged and *not* an ID for the receipt itself.
+/// A mapping of event ID to a collection of receipts for this event ID. The
+/// event ID is the ID of the event being acknowledged and *not* an ID for the
+/// receipt itself.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[allow(clippy::exhaustive_structs)]
 #[ruma_event(type = "m.receipt", kind = EphemeralRoom)]
 pub struct ReceiptEventContent(pub BTreeMap<OwnedEventId, Receipts>);
 
 impl ReceiptEventContent {
-    /// Get the receipt for the given user ID with the given receipt type, if it exists.
+    /// Get the receipt for the given user ID with the given receipt type, if it
+    /// exists.
     pub fn user_receipt(
         &self,
         user_id: &UserId,
@@ -127,7 +131,11 @@ pub struct Receipt {
     pub ts: Option<MilliSecondsSinceUnixEpoch>,
 
     /// The thread this receipt applies to.
-    #[serde(rename = "thread_id", default, skip_serializing_if = "crate::__ruma::serde::is_default")]
+    #[serde(
+        rename = "thread_id",
+        default,
+        skip_serializing_if = "crate::__ruma::serde::is_default"
+    )]
     pub thread: ReceiptThread,
 }
 
@@ -142,12 +150,12 @@ impl Receipt {
 
 /// The [thread a receipt applies to].
 ///
-/// This type can hold an arbitrary string. To build this with a custom value, convert it from an
-/// `Option<String>` with `::from()` / `.into()`. [`ReceiptThread::Unthreaded`] can be constructed
-/// from `None`.
+/// This type can hold an arbitrary string. To build this with a custom value,
+/// convert it from an `Option<String>` with `::from()` / `.into()`.
+/// [`ReceiptThread::Unthreaded`] can be constructed from `None`.
 ///
-/// To check for values that are not available as a documented variant here, use its string
-/// representation, obtained through [`.as_str()`](Self::as_str()).
+/// To check for values that are not available as a documented variant here, use
+/// its string representation, obtained through [`.as_str()`](Self::as_str()).
 ///
 /// [thread a receipt applies to]: https://spec.matrix.org/v1.19/client-server-api/#threaded-read-receipts
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -212,12 +220,12 @@ where
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::__ruma::{
-        MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
-    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::{Receipt, ReceiptThread};
+    use crate::__ruma::{
+        MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
+    };
 
     #[test]
     fn serialize_receipt() {

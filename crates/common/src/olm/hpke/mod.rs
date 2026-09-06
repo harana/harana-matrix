@@ -26,10 +26,11 @@
 //! let alice = HpkeSenderChannel::new();
 //! let bob = HpkeRecipientChannel::new();
 //!
-//! let SenderCreationResult { channel: mut alice, message } = alice
-//!     .establish_channel(bob.public_key(), plaintext, &[])?;
+//! let SenderCreationResult { channel: mut alice, message } =
+//!     alice.establish_channel(bob.public_key(), plaintext, &[])?;
 //!
-//! let RecipientCreationResult { channel: mut bob, message } = bob.establish_channel(&message, &[])?;
+//! let RecipientCreationResult { channel: mut bob, message } =
+//!     bob.establish_channel(&message, &[])?;
 //!
 //! assert_eq!(
 //!     message, plaintext,
@@ -41,14 +42,18 @@
 //!
 //! let plaintext = b"Not a secret to me!";
 //!
-//! let BidirectionalCreationResult { channel: mut bob, message } = bob.establish_bidirectional_channel(plaintext, &[]);
-//! let BidirectionalCreationResult { channel: mut alice, message } = alice.establish_bidirectional_channel(&message, &[])?;
+//! let BidirectionalCreationResult { channel: mut bob, message } =
+//!     bob.establish_bidirectional_channel(plaintext, &[]);
+//! let BidirectionalCreationResult { channel: mut alice, message } =
+//!     alice.establish_bidirectional_channel(&message, &[])?;
 //!
 //! assert_eq!(message, plaintext);
 //!
 //! // We now exchange the check code out-of-band and compare it.
 //! if alice.check_code() != bob.check_code() {
-//!     panic!("The check code must match; possible active MITM attack in progress");
+//!     panic!(
+//!         "The check code must match; possible active MITM attack in progress"
+//!     );
 //! }
 //!
 //! let message = bob.seal(b"Another plaintext", &[]);

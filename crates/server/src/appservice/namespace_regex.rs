@@ -17,8 +17,8 @@
 
 //! The compiled regular expressions of one registration namespace.
 
-use regex::{RegexSet, RegexSetBuilder};
 use harana_matrix_common::api::appservice::Namespace;
+use regex::{RegexSet, RegexSetBuilder};
 
 use crate::appservice::Error;
 

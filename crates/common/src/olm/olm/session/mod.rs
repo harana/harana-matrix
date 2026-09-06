@@ -308,7 +308,9 @@ impl Session {
         let sending_ratchet = DoubleRatchet::active_from_root_key_material(
             root_key::RootKey::new(Box::new(root_key)),
             chain_key::ChainKey::new(Box::new(chain_key)),
-            ratchet::RatchetKey::from(crate::olm::Curve25519SecretKey::from_slice(&ratchet_key_secret)),
+            ratchet::RatchetKey::from(crate::olm::Curve25519SecretKey::from_slice(
+                &ratchet_key_secret,
+            )),
         );
         Self { session_keys, sending_ratchet, receiving_chains: ChainStore::new(), config }
     }

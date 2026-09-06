@@ -1,11 +1,13 @@
 #![allow(missing_docs)]
 
-use client_crypto::{
-    KeyExportError, MegolmError, OlmError, SecretImportError as RustSecretImportError,
-    SignatureError as InnerSignatureError,
-    store::{CryptoStoreError as InnerStoreError, DehydrationError as InnerDehydrationError},
+use harana_matrix_client::{
+    crypto::{
+        KeyExportError, MegolmError, OlmError, SecretImportError as RustSecretImportError,
+        SignatureError as InnerSignatureError,
+        store::{CryptoStoreError as InnerStoreError, DehydrationError as InnerDehydrationError},
+    },
+    sqlite::OpenStoreError,
 };
-use client_sqlite::OpenStoreError;
 use harana_matrix_common::{IdParseError, OwnedUserId};
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
@@ -104,17 +106,19 @@ pub enum SecretsBundleExportError {
     Serialization { error: String },
 }
 
-impl From<client_crypto::store::SecretsBundleExportError> for SecretsBundleExportError {
-    fn from(value: client_crypto::store::SecretsBundleExportError) -> Self {
+impl From<harana_matrix_client::crypto::store::SecretsBundleExportError>
+    for SecretsBundleExportError
+{
+    fn from(value: harana_matrix_client::crypto::store::SecretsBundleExportError) -> Self {
         match value {
-            client_crypto::store::SecretsBundleExportError::Store(e) => {
+            harana_matrix_client::crypto::store::SecretsBundleExportError::Store(e) => {
                 Self::CryptoStore(e.into())
             }
-            client_crypto::store::SecretsBundleExportError::MissingCrossSigningKey(_)
-            | client_crypto::store::SecretsBundleExportError::MissingCrossSigningKeys => {
+            harana_matrix_client::crypto::store::SecretsBundleExportError::MissingCrossSigningKey(_)
+            | harana_matrix_client::crypto::store::SecretsBundleExportError::MissingCrossSigningKeys => {
                 Self::MissingCrossSigningKeys
             }
-            client_crypto::store::SecretsBundleExportError::MissingBackupVersion => {
+            harana_matrix_client::crypto::store::SecretsBundleExportError::MissingBackupVersion => {
                 Self::MissingBackupVersion
             }
         }
@@ -157,9 +161,9 @@ impl From<InnerStoreError> for DecryptionError {
     }
 }
 
-impl From<client_crypto::BootstrapCrossSigningError> for BootstrapCrossSigningError {
-    fn from(err: client_crypto::BootstrapCrossSigningError) -> Self {
-        use client_crypto::BootstrapCrossSigningError as BCSE;
+impl From<harana_matrix_client::crypto::BootstrapCrossSigningError> for BootstrapCrossSigningError {
+    fn from(err: harana_matrix_client::crypto::BootstrapCrossSigningError) -> Self {
+        use harana_matrix_client::crypto::BootstrapCrossSigningError as BCSE;
         match err {
             BCSE::CryptoStore(e) => Self::CryptoStore(e.into()),
             BCSE::Signature(e) => Self::Signature(e.into()),
@@ -170,13 +174,13 @@ impl From<client_crypto::BootstrapCrossSigningError> for BootstrapCrossSigningEr
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_let;
-    use client_crypto::MegolmError;
+    use harana_matrix_client::crypto::MegolmError;
 
     use super::DecryptionError;
 
     #[test]
     fn test_withheld_error_mapping() {
-        use client_common::deserialized_responses::WithheldCode;
+        use harana_matrix_client::common::deserialized_responses::WithheldCode;
 
         let inner_error = MegolmError::MissingRoomKey(Some(WithheldCode::Unverified));
 

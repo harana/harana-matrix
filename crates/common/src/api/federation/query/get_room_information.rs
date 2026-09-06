@@ -7,13 +7,14 @@ pub mod v1 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1querydirectory
 
-    use crate::__ruma::{
-        OwnedRoomAliasId, OwnedRoomId, OwnedServerName,
-        api::{request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedRoomAliasId, OwnedRoomId, OwnedServerName,
+            api::{request, response},
+            metadata,
+        },
+        api::federation::authentication::ServerSignatures,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: GET,

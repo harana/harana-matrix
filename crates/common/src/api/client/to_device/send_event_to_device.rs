@@ -12,11 +12,11 @@ pub mod v3 {
     use crate::__ruma::{
         OwnedTransactionId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
+        events::{AnyToDeviceEventContent, ToDeviceEventType},
         metadata,
         serde::Raw,
         to_device::DeviceIdOrAllDevices,
     };
-    use crate::__ruma::events::{AnyToDeviceEventContent, ToDeviceEventType};
 
     metadata! {
         method: PUT,
@@ -49,8 +49,9 @@ pub mod v3 {
 
         /// Messages to send.
         ///
-        /// Different message events can be sent to different devices in the same request, but all
-        /// events within one request must be of the same type.
+        /// Different message events can be sent to different devices in the
+        /// same request, but all events within one request must be of
+        /// the same type.
         pub messages: Messages,
     }
 
@@ -60,7 +61,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given event type, transaction ID and raw messages.
+        /// Creates a new `Request` with the given event type, transaction ID
+        /// and raw messages.
         pub fn new_raw(
             event_type: ToDeviceEventType,
             txn_id: OwnedTransactionId,
@@ -79,7 +81,8 @@ pub mod v3 {
 
     /// Messages to send in a send-to-device request.
     ///
-    /// Represented as a map of `{ user-ids => { device-ids => message-content } }`.
+    /// Represented as a map of `{ user-ids => { device-ids => message-content }
+    /// }`.
     pub type Messages =
         BTreeMap<OwnedUserId, BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>>;
 }

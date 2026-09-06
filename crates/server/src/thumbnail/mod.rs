@@ -168,8 +168,8 @@ fn reader(bytes: &[u8]) -> Result<ImageReader<Cursor<&[u8]>>, Error> {
 
 #[cfg(test)]
 mod tests {
-    use image::{DynamicImage, ImageFormat, RgbaImage};
     use harana_matrix_common::media::Method;
+    use image::{DynamicImage, ImageFormat, RgbaImage};
 
     use super::{DEFAULT_MAX_PIXELS, Dim, Error, decode, generate, thumbnail};
 

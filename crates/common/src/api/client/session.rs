@@ -1,8 +1,6 @@
 //! Endpoints for user session management.
 
-use crate::__ruma::serde::StringEnum;
-
-use crate::api::client::PrivOwnedStr;
+use crate::{__ruma::serde::StringEnum, api::client::PrivOwnedStr};
 
 pub mod get_login_token;
 pub mod get_login_types;

@@ -1,10 +1,13 @@
 use assert_matches2::assert_matches;
 use assign::assign;
-use harana_matrix_common::api::client::uiaa::{
-    self, AuthData, AuthFlow, AuthType, UiaaInfo, UiaaResponse, UserIdentifier,
-};
 use harana_matrix_common::{
-    api::{EndpointError, OutgoingResponseExt as _, error::ErrorKind},
+    api::{
+        EndpointError, OutgoingResponseExt as _,
+        client::uiaa::{
+            self, AuthData, AuthFlow, AuthType, UiaaInfo, UiaaResponse, UserIdentifier,
+        },
+        error::ErrorKind,
+    },
     canonical_json::assert_to_canonical_json_eq,
 };
 use serde_json::{

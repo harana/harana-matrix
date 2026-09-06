@@ -1,8 +1,11 @@
 use assert_matches2::{assert_let, assert_matches};
-use harana_matrix_common::{canonical_json::assert_to_canonical_json_eq, owned_event_id};
-use harana_matrix_common::events::{
-    relation::Reply,
-    room::message::{MessageType, Relation, RoomMessageEventContent},
+use harana_matrix_common::{
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        relation::Reply,
+        room::message::{MessageType, Relation, RoomMessageEventContent},
+    },
+    owned_event_id,
 };
 use serde_json::{from_value as from_json_value, json};
 

@@ -1,15 +1,19 @@
 use std::{mem::ManuallyDrop, sync::Arc};
 
-use client_common::executor::Handle;
-use client_crypto::{
-    DecryptionSettings,
-    dehydrated_devices::{
-        DehydratedDevice as InnerDehydratedDevice, DehydratedDevices as InnerDehydratedDevices,
-        RehydratedDevice as InnerRehydratedDevice,
+use harana_matrix_client::{
+    common::executor::Handle,
+    crypto::{
+        DecryptionSettings,
+        dehydrated_devices::{
+            DehydratedDevice as InnerDehydratedDevice, DehydratedDevices as InnerDehydratedDevices,
+            RehydratedDevice as InnerRehydratedDevice,
+        },
+        store::types::DehydratedDeviceKey as InnerDehydratedDeviceKey,
     },
-    store::types::DehydratedDeviceKey as InnerDehydratedDeviceKey,
 };
-use harana_matrix_common::{OwnedDeviceId, api::client::dehydrated_device, events::AnyToDeviceEvent, serde::Raw};
+use harana_matrix_common::{
+    OwnedDeviceId, api::client::dehydrated_device, events::AnyToDeviceEvent, serde::Raw,
+};
 use serde_json::json;
 
 use crate::{CryptoStoreError, DehydratedDeviceKey};
@@ -18,32 +22,32 @@ use crate::{CryptoStoreError, DehydratedDeviceKey};
 #[uniffi(flat_error)]
 pub enum DehydrationError {
     #[error(transparent)]
-    Pickle(#[from] client_crypto::vodozemac::DehydratedDeviceError),
+    Pickle(#[from] harana_matrix_client::crypto::vodozemac::DehydratedDeviceError),
     #[error(transparent)]
-    LegacyPickle(#[from] client_crypto::vodozemac::LibolmPickleError),
+    LegacyPickle(#[from] harana_matrix_client::crypto::vodozemac::LibolmPickleError),
     #[error(transparent)]
-    MissingSigningKey(#[from] client_crypto::SignatureError),
+    MissingSigningKey(#[from] harana_matrix_client::crypto::SignatureError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
-    Store(#[from] client_crypto::CryptoStoreError),
+    Store(#[from] harana_matrix_client::crypto::CryptoStoreError),
     #[error("The pickle key has an invalid length, expected 32 bytes, got {0}")]
     PickleKeyLength(usize),
 }
 
-impl From<client_crypto::dehydrated_devices::DehydrationError> for DehydrationError {
-    fn from(value: client_crypto::dehydrated_devices::DehydrationError) -> Self {
+impl From<harana_matrix_client::crypto::dehydrated_devices::DehydrationError> for DehydrationError {
+    fn from(value: harana_matrix_client::crypto::dehydrated_devices::DehydrationError) -> Self {
         match value {
-            client_crypto::dehydrated_devices::DehydrationError::Json(e) => Self::Json(e),
-            client_crypto::dehydrated_devices::DehydrationError::Pickle(e) => Self::Pickle(e),
-            client_crypto::dehydrated_devices::DehydrationError::LegacyPickle(e) => {
+            harana_matrix_client::crypto::dehydrated_devices::DehydrationError::Json(e) => Self::Json(e),
+            harana_matrix_client::crypto::dehydrated_devices::DehydrationError::Pickle(e) => Self::Pickle(e),
+            harana_matrix_client::crypto::dehydrated_devices::DehydrationError::LegacyPickle(e) => {
                 Self::LegacyPickle(e)
             }
-            client_crypto::dehydrated_devices::DehydrationError::MissingSigningKey(e) => {
+            harana_matrix_client::crypto::dehydrated_devices::DehydrationError::MissingSigningKey(e) => {
                 Self::MissingSigningKey(e)
             }
-            client_crypto::dehydrated_devices::DehydrationError::Store(e) => Self::Store(e),
-            client_crypto::dehydrated_devices::DehydrationError::PickleKeyLength(l) => {
+            harana_matrix_client::crypto::dehydrated_devices::DehydrationError::Store(e) => Self::Store(e),
+            harana_matrix_client::crypto::dehydrated_devices::DehydrationError::PickleKeyLength(l) => {
                 Self::PickleKeyLength(l)
             }
         }
@@ -66,7 +70,7 @@ impl Drop for DehydratedDevices {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl DehydratedDevices {
     pub fn create(&self) -> Result<Arc<DehydratedDevice>, DehydrationError> {
         let inner = self.runtime.block_on(self.inner.create())?;
@@ -151,7 +155,7 @@ impl Drop for RehydratedDevice {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RehydratedDevice {
     pub fn receive_events(
         &self,
@@ -181,7 +185,7 @@ impl Drop for DehydratedDevice {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl DehydratedDevice {
     pub fn keys_for_upload(
         &self,

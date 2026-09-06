@@ -1,19 +1,22 @@
 use assert_matches2::{assert_let, assert_matches};
-use js_int::int;
-use harana_matrix_common::serde::test::serde_json_eq;
-use harana_matrix_common::events::{
-    AnyMessageLikeEvent, AnyPossiblyRedactedStateEventContent, AnyStateEvent,
-    AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent, AnySyncStateEvent, AnySyncTimelineEvent,
-    AnyTimelineEvent, EmptyStateKey, EphemeralRoomEventType, GlobalAccountDataEventType,
-    MessageLikeEvent, MessageLikeEventType, OriginalMessageLikeEvent, OriginalStateEvent,
-    OriginalSyncMessageLikeEvent, OriginalSyncStateEvent, RoomAccountDataEventType, StateEvent,
-    StateEventType, SyncMessageLikeEvent, SyncStateEvent, ToDeviceEventType,
-    room::{
-        message::{MessageType, RoomMessageEventContent},
-        name::RoomNameEventContent,
-        power_levels::RoomPowerLevelsEventContent,
+use harana_matrix_common::{
+    events::{
+        AnyMessageLikeEvent, AnyPossiblyRedactedStateEventContent, AnyStateEvent,
+        AnySyncEphemeralRoomEvent, AnySyncMessageLikeEvent, AnySyncStateEvent,
+        AnySyncTimelineEvent, AnyTimelineEvent, EmptyStateKey, EphemeralRoomEventType,
+        GlobalAccountDataEventType, MessageLikeEvent, MessageLikeEventType,
+        OriginalMessageLikeEvent, OriginalStateEvent, OriginalSyncMessageLikeEvent,
+        OriginalSyncStateEvent, RoomAccountDataEventType, StateEvent, StateEventType,
+        SyncMessageLikeEvent, SyncStateEvent, ToDeviceEventType,
+        room::{
+            message::{MessageType, RoomMessageEventContent},
+            name::RoomNameEventContent,
+            power_levels::RoomPowerLevelsEventContent,
+        },
     },
+    serde::test::serde_json_eq,
 };
+use js_int::int;
 use serde_json::{Value as JsonValue, from_value as from_json_value, json};
 
 fn message_event() -> JsonValue {

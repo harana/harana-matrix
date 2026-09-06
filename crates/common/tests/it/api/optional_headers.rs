@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use assert_matches2::assert_matches;
-use http::header::{CONTENT_DISPOSITION, LOCATION};
 use harana_matrix_common::{
     api::{
         IncomingRequest, IncomingResponseExt as _, MatrixVersion, OutgoingRequestExt as _,
@@ -11,6 +10,7 @@ use harana_matrix_common::{
     http_headers::{ContentDisposition, ContentDispositionType},
     metadata,
 };
+use http::header::{CONTENT_DISPOSITION, LOCATION};
 
 metadata! {
     method: GET,
@@ -46,7 +46,6 @@ fn request_serde_no_header() {
         SupportedVersions { versions: [MatrixVersion::V1_1].into(), features: Default::default() };
 
     let http_req = req
-        
         .try_into_http_request::<Vec<u8>>("https://homeserver.tld", (), Cow::Owned(supported))
         .unwrap();
     assert_matches!(http_req.headers().get(LOCATION), None);
@@ -70,7 +69,6 @@ fn request_serde_with_header() {
         SupportedVersions { versions: [MatrixVersion::V1_1].into(), features: Default::default() };
 
     let mut http_req = req
-        
         .try_into_http_request::<Vec<u8>>("https://homeserver.tld", (), Cow::Owned(supported))
         .unwrap();
     assert_matches!(http_req.headers().get(LOCATION), Some(_));

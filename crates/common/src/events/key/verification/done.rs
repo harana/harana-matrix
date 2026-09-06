@@ -2,27 +2,29 @@
 //!
 //! [`m.key.verification.done`]: https://spec.matrix.org/v1.19/client-server-api/#mkeyverificationdone
 
-use crate::__ruma::OwnedTransactionId;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::relation::Reference;
+use crate::{__ruma::OwnedTransactionId, events::relation::Reference};
 
 /// The content of a to-device `m.m.key.verification.done` event.
 ///
-/// Event signaling that the interactive key verification has successfully concluded.
+/// Event signaling that the interactive key verification has successfully
+/// concluded.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.key.verification.done", kind = ToDevice)]
 pub struct ToDeviceKeyVerificationDoneEventContent {
     /// An opaque identifier for the verification process.
     ///
-    /// Must be the same as the one used for the `m.key.verification.start` message.
+    /// Must be the same as the one used for the `m.key.verification.start`
+    /// message.
     pub transaction_id: OwnedTransactionId,
 }
 
 impl ToDeviceKeyVerificationDoneEventContent {
-    /// Creates a new `ToDeviceKeyVerificationDoneEventContent` with the given transaction ID.
+    /// Creates a new `ToDeviceKeyVerificationDoneEventContent` with the given
+    /// transaction ID.
     pub fn new(transaction_id: OwnedTransactionId) -> Self {
         Self { transaction_id }
     }
@@ -30,18 +32,21 @@ impl ToDeviceKeyVerificationDoneEventContent {
 
 /// The payload for a in-room `m.key.verification.done` event.
 ///
-/// Event signaling that the interactive key verification has successfully concluded.
+/// Event signaling that the interactive key verification has successfully
+/// concluded.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(type = "m.key.verification.done", kind = MessageLike)]
 pub struct KeyVerificationDoneEventContent {
-    /// Relation signaling which verification request this event is responding to.
+    /// Relation signaling which verification request this event is responding
+    /// to.
     #[serde(rename = "m.relates_to")]
     pub relates_to: Reference,
 }
 
 impl KeyVerificationDoneEventContent {
-    /// Creates a new `KeyVerificationDoneEventContent` with the given reference.
+    /// Creates a new `KeyVerificationDoneEventContent` with the given
+    /// reference.
     pub fn new(relates_to: Reference) -> Self {
         Self { relates_to }
     }
@@ -49,11 +54,13 @@ impl KeyVerificationDoneEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::{canonical_json::assert_to_canonical_json_eq, owned_event_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::KeyVerificationDoneEventContent;
-    use crate::events::relation::Reference;
+    use crate::{
+        __ruma::{canonical_json::assert_to_canonical_json_eq, owned_event_id},
+        events::relation::Reference,
+    };
 
     #[test]
     fn serialization() {

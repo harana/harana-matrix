@@ -1,4 +1,4 @@
-use client_crypto::{UserIdentity as SdkUserIdentity, types::CrossSigningKey};
+use harana_matrix_client::crypto::{UserIdentity as SdkUserIdentity, types::CrossSigningKey};
 
 use crate::CryptoStoreError;
 

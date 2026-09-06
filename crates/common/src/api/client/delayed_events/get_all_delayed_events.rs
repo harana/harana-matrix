@@ -7,12 +7,13 @@ pub mod unstable {
     //!
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/4140
 
-    use crate::__ruma::{
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::delayed_events::DelayedEventData,
     };
-
-    use crate::api::client::delayed_events::DelayedEventData;
 
     metadata! {
         method: GET,
@@ -32,7 +33,8 @@ pub mod unstable {
     /// [`get_all_delayed_events`](crate::api::client::delayed_events::get_all_delayed_events) endpoint
     #[response]
     pub struct Response {
-        /// An array of objects describing scheduled delayed events owned by the requesting user
+        /// An array of objects describing scheduled delayed events owned by the
+        /// requesting user
         pub delayed_events: Vec<DelayedEventData>,
     }
 
@@ -62,15 +64,16 @@ pub mod unstable {
         use std::time::Duration;
 
         use js_int::UInt;
-        use crate::__ruma::{
-            MilliSecondsSinceUnixEpoch, api::OutgoingResponseExt as _, owned_event_id,
-            owned_room_id, serde::Raw,
-        };
-        use crate::__ruma::events::TimelineEventType;
         use serde_json::{Value as JsonValue, json};
 
         use super::Response;
-        use crate::api::client::delayed_events::DelayedEventData;
+        use crate::{
+            __ruma::{
+                MilliSecondsSinceUnixEpoch, api::OutgoingResponseExt as _,
+                events::TimelineEventType, owned_event_id, owned_room_id, serde::Raw,
+            },
+            api::client::delayed_events::DelayedEventData,
+        };
 
         #[test]
         fn serialize_get_all_delayed_events_response() {

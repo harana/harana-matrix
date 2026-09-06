@@ -10,6 +10,7 @@ pub mod v3 {
     //! This deletes keys from a backup version, but not the version itself.
 
     use js_int::UInt;
+
     use crate::__ruma::{
         api::{auth_scheme::AccessToken, request, response},
         metadata,
@@ -39,8 +40,8 @@ pub mod v3 {
     pub struct Response {
         /// An opaque string representing stored keys in the backup.
         ///
-        /// Clients can compare it with the etag value they received in the request of their last
-        /// key storage request.
+        /// Clients can compare it with the etag value they received in the
+        /// request of their last key storage request.
         pub etag: String,
 
         /// The number of keys stored in the backup.

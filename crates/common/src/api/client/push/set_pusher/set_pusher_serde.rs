@@ -1,9 +1,9 @@
 use js_option::JsOption;
-use crate::__ruma::serde::from_raw_json_value;
 use serde::{Deserialize, Serialize, de, ser::SerializeStruct};
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::v3::{PusherAction, PusherPostData};
+use crate::__ruma::serde::from_raw_json_value;
 
 #[derive(Debug, Deserialize)]
 struct PusherPostDataDeHelper {
@@ -68,12 +68,14 @@ impl<'de> Deserialize<'de> for PusherAction {
 #[cfg(test)]
 mod tests {
     use assert_matches2::{assert_let, assert_matches};
-    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::PusherAction;
-    use crate::api::client::push::{
-        EmailPusherData, Pusher, PusherIds, PusherKind, set_pusher::v3::PusherPostData,
+    use crate::{
+        __ruma::canonical_json::assert_to_canonical_json_eq,
+        api::client::push::{
+            EmailPusherData, Pusher, PusherIds, PusherKind, set_pusher::v3::PusherPostData,
+        },
     };
 
     #[test]

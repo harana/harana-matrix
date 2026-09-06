@@ -2,12 +2,14 @@
 
 use std::ops::Deref;
 
-use js_int::{UInt, uint};
-use crate::__ruma::{MilliSecondsSinceUnixEpoch, serde::StringEnum};
 use harana_matrix_macros::EventContent;
+use js_int::{UInt, uint};
 use serde::{Deserialize, Serialize};
 
-use crate::events::PrivOwnedStr;
+use crate::{
+    __ruma::{MilliSecondsSinceUnixEpoch, serde::StringEnum},
+    events::PrivOwnedStr,
+};
 
 mod poll_answers_serde;
 
@@ -22,11 +24,12 @@ use crate::events::{message::TextContentBlock, room::message::Relation};
 
 /// The payload for a poll start event.
 ///
-/// This is the event content that should be sent for room versions that support extensible events.
-/// As of Matrix 1.7, none of the stable room versions (1 through 10) support extensible events.
+/// This is the event content that should be sent for room versions that support
+/// extensible events. As of Matrix 1.7, none of the stable room versions (1
+/// through 10) support extensible events.
 ///
-/// To send a poll start event for a room version that does not support extensible events, use
-/// [`UnstablePollStartEventContent`].
+/// To send a poll start event for a room version that does not support
+/// extensible events, use [`UnstablePollStartEventContent`].
 ///
 /// [`UnstablePollStartEventContent`]: super::unstable_start::UnstablePollStartEventContent
 #[derive(Clone, Debug, Serialize, Deserialize, EventContent)]
@@ -37,7 +40,8 @@ pub struct PollStartEventContent {
     #[serde(rename = "m.poll")]
     pub poll: PollContentBlock,
 
-    /// Text representation of the message, for clients that don't support polls.
+    /// Text representation of the message, for clients that don't support
+    /// polls.
     #[serde(rename = "m.text")]
     pub text: TextContentBlock,
 
@@ -60,8 +64,8 @@ pub struct PollStartEventContent {
 }
 
 impl PollStartEventContent {
-    /// Creates a new `PollStartEventContent` with the given fallback representation and poll
-    /// content.
+    /// Creates a new `PollStartEventContent` with the given fallback
+    /// representation and poll content.
     pub fn new(text: TextContentBlock, poll: PollContentBlock) -> Self {
         Self {
             poll,
@@ -80,7 +84,8 @@ impl PollStartEventContent {
 }
 
 impl OriginalSyncPollStartEvent {
-    /// Compile the results for this poll with the given response into a `PollEndEventContent`.
+    /// Compile the results for this poll with the given response into a
+    /// `PollEndEventContent`.
     ///
     /// It generates a default text representation of the results in English.
     ///

@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
 use developer::DeveloperSettingsView;
-use client_matrix::Client;
-use client_ui::sync_service::SyncService;
+use harana_matrix_client::{Client, ui::sync_service::SyncService};
 use ratatui::{prelude::*, widgets::*};
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 use style::palette::tailwind;

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use client_matrix::{
+use harana_matrix_client::{
     AuthSession, Client, SessionMeta, SessionTokens,
     authentication::matrix::MatrixSession,
     encryption::secret_storage::SecretStore,

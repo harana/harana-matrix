@@ -363,29 +363,33 @@ impl LogTarget {
         match self {
             LogTarget::Hyper => "hyper",
             LogTarget::MatrixFfi => "client_matrix_ffi",
-            LogTarget::BaseEventCache => "client_base::event_cache",
-            LogTarget::BaseSlidingSync => "client_base::sliding_sync",
-            LogTarget::BaseStoreAmbiguityMap => "client_base::store::ambiguity_map",
-            LogTarget::BaseResponseProcessors => "client_base::response_processors",
-            LogTarget::SdkCommonCrossProcessLock => "client_common::cross_process_lock",
-            LogTarget::SdkCommonDeserializedResponses => {
-                "client_common::deserialized_responses"
+            LogTarget::BaseEventCache => "harana_matrix_client::base::event_cache",
+            LogTarget::BaseSlidingSync => "harana_matrix_client::base::sliding_sync",
+            LogTarget::BaseStoreAmbiguityMap => "harana_matrix_client::base::store::ambiguity_map",
+            LogTarget::BaseResponseProcessors => "harana_matrix_client::base::response_processors",
+            LogTarget::SdkCommonCrossProcessLock => {
+                "harana_matrix_client::common::cross_process_lock"
             }
-            LogTarget::Matrix => "client_matrix",
-            LogTarget::MatrixClient => "client_matrix::client",
-            LogTarget::Crypto => "client_crypto",
-            LogTarget::CryptoIdentitiesManager => "client_crypto::identities::manager",
-            LogTarget::CryptoAccount => "client_crypto::olm::account",
-            LogTarget::MatrixOauth => "client_matrix::authentication::oauth",
-            LogTarget::MatrixHttpClient => "client_matrix::http_client",
-            LogTarget::MatrixSlidingSync => "client_matrix::sliding_sync",
-            LogTarget::MatrixEventCache => "client_matrix::event_cache",
-            LogTarget::MatrixLatestEvents => "client_matrix::latest_events",
-            LogTarget::MatrixSendQueue => "client_matrix::send_queue",
+            LogTarget::SdkCommonDeserializedResponses => {
+                "harana_matrix_client::common::deserialized_responses"
+            }
+            LogTarget::Matrix => "harana_matrix_client",
+            LogTarget::MatrixClient => "harana_matrix_client::client",
+            LogTarget::Crypto => "harana_matrix_client::crypto",
+            LogTarget::CryptoIdentitiesManager => {
+                "harana_matrix_client::crypto::identities::manager"
+            }
+            LogTarget::CryptoAccount => "harana_matrix_client::crypto::olm::account",
+            LogTarget::MatrixOauth => "harana_matrix_client::authentication::oauth",
+            LogTarget::MatrixHttpClient => "harana_matrix_client::http_client",
+            LogTarget::MatrixSlidingSync => "harana_matrix_client::sliding_sync",
+            LogTarget::MatrixEventCache => "harana_matrix_client::event_cache",
+            LogTarget::MatrixLatestEvents => "harana_matrix_client::latest_events",
+            LogTarget::MatrixSendQueue => "harana_matrix_client::send_queue",
             LogTarget::MatrixEventCacheStore => EVENT_CACHE_STORE_LOG_TARGET,
-            LogTarget::UiTimeline => "client_ui::timeline",
-            LogTarget::UiNotificationClient => "client_ui::notification_client",
-            LogTarget::Search => "client_search",
+            LogTarget::UiTimeline => "harana_matrix_client::ui::timeline",
+            LogTarget::UiNotificationClient => "harana_matrix_client::ui::notification_client",
+            LogTarget::Search => "harana_matrix_client::search",
         }
     }
 }
@@ -397,10 +401,11 @@ impl LogTarget {
 /// application running a store backend of its own instead names its target in
 /// [`TracingConfiguration::extra_targets`].
 #[cfg(feature = "sqlite")]
-const EVENT_CACHE_STORE_LOG_TARGET: &str = client_matrix::sqlite_log_targets::EVENT_CACHE_STORE;
+const EVENT_CACHE_STORE_LOG_TARGET: &str =
+    harana_matrix_client::sqlite_log_targets::EVENT_CACHE_STORE;
 
 #[cfg(not(feature = "sqlite"))]
-const EVENT_CACHE_STORE_LOG_TARGET: &str = "client_base::event_cache::store";
+const EVENT_CACHE_STORE_LOG_TARGET: &str = "harana_matrix_client::base::event_cache::store";
 
 const DEFAULT_TARGET_LOG_LEVELS: &[(LogTarget, LogLevel)] = &[
     (LogTarget::Hyper, LogLevel::Warn),
@@ -429,11 +434,11 @@ const DEFAULT_TARGET_LOG_LEVELS: &[(LogTarget, LogLevel)] = &[
 ];
 
 const IMMUTABLE_LOG_TARGETS: &[LogTarget] = &[
-    LogTarget::Hyper,                           // Too verbose
-    LogTarget::Matrix,                       // Too generic
-    LogTarget::MatrixFfi,                    // Too verbose
+    LogTarget::Hyper,                     // Too verbose
+    LogTarget::Matrix,                    // Too generic
+    LogTarget::MatrixFfi,                 // Too verbose
     LogTarget::SdkCommonCrossProcessLock, // Too verbose
-    LogTarget::BaseStoreAmbiguityMap,  // Too verbose
+    LogTarget::BaseStoreAmbiguityMap,     // Too verbose
 ];
 
 /// A log pack can be used to set the trace log level for a group of multiple
@@ -703,7 +708,7 @@ fn build_tracing_filter(config: &TracingConfiguration) -> String {
 /// lightweight tokio runtime, for processes that have memory limitations (like
 /// the NSE process on iOS). Otherwise, this can remain false, in which case a
 /// multithreaded tokio runtime will be set up.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn init_platform(
     config: TracingConfiguration,
     use_lightweight_tokio_runtime: bool,
@@ -738,7 +743,7 @@ pub fn init_platform(
 
 /// Set the global enablement level for the Sentry layer (after the logs have
 /// been set up).
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 #[cfg(feature = "sentry")]
 pub fn enable_sentry_logging(enabled: bool) {
     if let Some(ctx) = LOGGING.get() {
@@ -759,7 +764,7 @@ pub fn enable_sentry_logging(enabled: bool) {
 ///
 /// This method will throw if `init_platform` hasn't been called, or if it was
 /// called with `write_to_files` set to `None`.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn reload_tracing_file_writer(
     configuration: TracingFileConfiguration,
 ) -> Result<(), ClientError> {
@@ -856,27 +861,27 @@ mod tests {
             r#"panic=error,
             hyper=warn,
             client_matrix_ffi=info,
-            client_matrix=info,
-            client_matrix::client=trace,
-            client_crypto=debug,
-            client_crypto::identities::manager=info,
-            client_crypto::olm::account=trace,
-            client_matrix::authentication::oauth=trace,
-            client_matrix::http_client=debug,
-            client_matrix::sliding_sync=info,
-            client_base::sliding_sync=info,
-            client_ui::timeline=info,
-            client_matrix::send_queue=info,
-            client_matrix::event_cache=info,
-            client_matrix::latest_events=info,
-            client_base::event_cache=info,
-            client_sqlite::event_cache_store=info,
-            client_common::cross_process_lock=warn,
-            client_common::deserialized_responses=warn,
-            client_base::store::ambiguity_map=warn,
-            client_ui::notification_client=info,
-            client_base::response_processors=info,
-            client_search=info,
+            harana_matrix_client=info,
+            harana_matrix_client::client=trace,
+            harana_matrix_client::crypto=debug,
+            harana_matrix_client::crypto::identities::manager=info,
+            harana_matrix_client::crypto::olm::account=trace,
+            harana_matrix_client::authentication::oauth=trace,
+            harana_matrix_client::http_client=debug,
+            harana_matrix_client::sliding_sync=info,
+            harana_matrix_client::base::sliding_sync=info,
+            harana_matrix_client::ui::timeline=info,
+            harana_matrix_client::send_queue=info,
+            harana_matrix_client::event_cache=info,
+            harana_matrix_client::latest_events=info,
+            harana_matrix_client::base::event_cache=info,
+            harana_matrix_client::sqlite::event_cache_store=info,
+            harana_matrix_client::common::cross_process_lock=warn,
+            harana_matrix_client::common::deserialized_responses=warn,
+            harana_matrix_client::base::store::ambiguity_map=warn,
+            harana_matrix_client::ui::notification_client=info,
+            harana_matrix_client::base::response_processors=info,
+            harana_matrix_client::search=info,
             super_duper_app=error"#
                 .split('\n')
                 .map(|s| s.trim())
@@ -904,27 +909,27 @@ mod tests {
             r#"panic=error,
             hyper=warn,
             client_matrix_ffi=info,
-            client_matrix=info,
-            client_matrix::client=trace,
-            client_crypto=trace,
-            client_crypto::identities::manager=trace,
-            client_crypto::olm::account=trace,
-            client_matrix::authentication::oauth=trace,
-            client_matrix::http_client=trace,
-            client_matrix::sliding_sync=trace,
-            client_base::sliding_sync=trace,
-            client_ui::timeline=trace,
-            client_matrix::send_queue=trace,
-            client_matrix::event_cache=trace,
-            client_matrix::latest_events=trace,
-            client_base::event_cache=trace,
-            client_sqlite::event_cache_store=trace,
-            client_common::cross_process_lock=warn,
-            client_common::deserialized_responses=trace,
-            client_base::store::ambiguity_map=warn,
-            client_ui::notification_client=trace,
-            client_base::response_processors=trace,
-            client_search=trace,
+            harana_matrix_client=info,
+            harana_matrix_client::client=trace,
+            harana_matrix_client::crypto=trace,
+            harana_matrix_client::crypto::identities::manager=trace,
+            harana_matrix_client::crypto::olm::account=trace,
+            harana_matrix_client::authentication::oauth=trace,
+            harana_matrix_client::http_client=trace,
+            harana_matrix_client::sliding_sync=trace,
+            harana_matrix_client::base::sliding_sync=trace,
+            harana_matrix_client::ui::timeline=trace,
+            harana_matrix_client::send_queue=trace,
+            harana_matrix_client::event_cache=trace,
+            harana_matrix_client::latest_events=trace,
+            harana_matrix_client::base::event_cache=trace,
+            harana_matrix_client::sqlite::event_cache_store=trace,
+            harana_matrix_client::common::cross_process_lock=warn,
+            harana_matrix_client::common::deserialized_responses=trace,
+            harana_matrix_client::base::store::ambiguity_map=warn,
+            harana_matrix_client::ui::notification_client=trace,
+            harana_matrix_client::base::response_processors=trace,
+            harana_matrix_client::search=trace,
             super_duper_app=trace,
             some_other_span=trace"#
                 .split('\n')
@@ -953,27 +958,27 @@ mod tests {
             r#"panic=error,
             hyper=warn,
             client_matrix_ffi=info,
-            client_matrix=info,
-            client_matrix::client=trace,
-            client_crypto=debug,
-            client_crypto::identities::manager=info,
-            client_crypto::olm::account=trace,
-            client_matrix::authentication::oauth=trace,
-            client_matrix::http_client=debug,
-            client_matrix::sliding_sync=info,
-            client_base::sliding_sync=info,
-            client_ui::timeline=info,
-            client_matrix::send_queue=trace,
-            client_matrix::event_cache=trace,
-            client_matrix::latest_events=info,
-            client_base::event_cache=trace,
-            client_sqlite::event_cache_store=trace,
-            client_common::cross_process_lock=warn,
-            client_common::deserialized_responses=trace,
-            client_base::store::ambiguity_map=warn,
-            client_ui::notification_client=info,
-            client_base::response_processors=info,
-            client_search=info,
+            harana_matrix_client=info,
+            harana_matrix_client::client=trace,
+            harana_matrix_client::crypto=debug,
+            harana_matrix_client::crypto::identities::manager=info,
+            harana_matrix_client::crypto::olm::account=trace,
+            harana_matrix_client::authentication::oauth=trace,
+            harana_matrix_client::http_client=debug,
+            harana_matrix_client::sliding_sync=info,
+            harana_matrix_client::base::sliding_sync=info,
+            harana_matrix_client::ui::timeline=info,
+            harana_matrix_client::send_queue=trace,
+            harana_matrix_client::event_cache=trace,
+            harana_matrix_client::latest_events=info,
+            harana_matrix_client::base::event_cache=trace,
+            harana_matrix_client::sqlite::event_cache_store=trace,
+            harana_matrix_client::common::cross_process_lock=warn,
+            harana_matrix_client::common::deserialized_responses=trace,
+            harana_matrix_client::base::store::ambiguity_map=warn,
+            harana_matrix_client::ui::notification_client=info,
+            harana_matrix_client::base::response_processors=info,
+            harana_matrix_client::search=info,
             super_duper_app=info"#
                 .split('\n')
                 .map(|s| s.trim())

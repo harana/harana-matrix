@@ -2,12 +2,14 @@
 //!
 //! [`m.key.verification.ready`]: https://spec.matrix.org/v1.19/client-server-api/#mkeyverificationready
 
-use crate::__ruma::{OwnedDeviceId, OwnedTransactionId};
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::VerificationMethod;
-use crate::events::relation::Reference;
+use crate::{
+    __ruma::{OwnedDeviceId, OwnedTransactionId},
+    events::relation::Reference,
+};
 
 /// The content of a to-device `m.m.key.verification.ready` event.
 ///
@@ -24,15 +26,15 @@ pub struct ToDeviceKeyVerificationReadyEventContent {
 
     /// An opaque identifier for the verification process.
     ///
-    /// Must be unique with respect to the devices involved. Must be the same as the
-    /// `transaction_id` given in the `m.key.verification.request` from a
-    /// request.
+    /// Must be unique with respect to the devices involved. Must be the same as
+    /// the `transaction_id` given in the `m.key.verification.request` from
+    /// a request.
     pub transaction_id: OwnedTransactionId,
 }
 
 impl ToDeviceKeyVerificationReadyEventContent {
-    /// Creates a new `ToDeviceKeyVerificationReadyEventContent` with the given device ID,
-    /// verification methods and transaction ID.
+    /// Creates a new `ToDeviceKeyVerificationReadyEventContent` with the given
+    /// device ID, verification methods and transaction ID.
     pub fn new(
         from_device: OwnedDeviceId,
         methods: Vec<VerificationMethod>,
@@ -62,8 +64,8 @@ pub struct KeyVerificationReadyEventContent {
 }
 
 impl KeyVerificationReadyEventContent {
-    /// Creates a new `KeyVerificationReadyEventContent` with the given device ID, methods and
-    /// reference.
+    /// Creates a new `KeyVerificationReadyEventContent` with the given device
+    /// ID, methods and reference.
     pub fn new(
         from_device: OwnedDeviceId,
         methods: Vec<VerificationMethod>,
@@ -75,11 +77,13 @@ impl KeyVerificationReadyEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::{OwnedDeviceId, canonical_json::assert_to_canonical_json_eq, owned_event_id};
     use serde_json::{from_value as from_json_value, json};
 
     use super::{KeyVerificationReadyEventContent, ToDeviceKeyVerificationReadyEventContent};
-    use crate::events::{key::verification::VerificationMethod, relation::Reference};
+    use crate::{
+        __ruma::{OwnedDeviceId, canonical_json::assert_to_canonical_json_eq, owned_event_id},
+        events::{key::verification::VerificationMethod, relation::Reference},
+    };
 
     #[test]
     fn serialization() {

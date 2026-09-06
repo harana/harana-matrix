@@ -40,10 +40,10 @@ impl<'de> Deserialize<'de> for UrlFilter {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
     use serde_json::{from_value as from_json_value, json};
 
     use super::UrlFilter;
+    use crate::__ruma::canonical_json::assert_to_canonical_json_eq;
 
     #[test]
     fn serialize_filter_events_with_url() {

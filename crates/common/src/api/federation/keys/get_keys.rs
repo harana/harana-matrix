@@ -9,15 +9,16 @@ pub mod v1 {
 
     use std::collections::BTreeMap;
 
-    use crate::__ruma::{
-        OwnedDeviceId, OwnedUserId,
-        api::{request, response},
-        encryption::{CrossSigningKey, DeviceKeys},
-        metadata,
-        serde::Raw,
+    use crate::{
+        __ruma::{
+            OwnedDeviceId, OwnedUserId,
+            api::{request, response},
+            encryption::{CrossSigningKey, DeviceKeys},
+            metadata,
+            serde::Raw,
+        },
+        api::federation::authentication::ServerSignatures,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: POST,

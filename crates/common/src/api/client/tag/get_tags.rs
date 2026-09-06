@@ -10,9 +10,9 @@ pub mod v3 {
     use crate::__ruma::{
         OwnedRoomId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
+        events::tag::Tags,
         metadata,
     };
-    use crate::__ruma::events::tag::Tags;
 
     metadata! {
         method: GET,
@@ -60,11 +60,13 @@ pub mod v3 {
     #[cfg(all(test, feature = "server"))]
     mod server_tests {
         use assign::assign;
-        use crate::__ruma::api::OutgoingResponseExt as _;
-        use crate::__ruma::events::tag::{TagInfo, Tags};
         use serde_json::json;
 
         use super::Response;
+        use crate::__ruma::{
+            api::OutgoingResponseExt as _,
+            events::tag::{TagInfo, Tags},
+        };
 
         #[test]
         fn serializing_get_tags_response() {

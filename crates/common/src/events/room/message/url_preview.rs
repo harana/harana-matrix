@@ -52,7 +52,8 @@ impl PreviewImage {
         Self::with_image(PreviewImageSource::Url(url))
     }
 
-    /// Construct the PreviewImage for the given [`EncryptedFile`] as the source.
+    /// Construct the PreviewImage for the given [`EncryptedFile`] as the
+    /// source.
     pub fn encrypted(file: EncryptedFile) -> Self {
         Self::with_image(PreviewImageSource::EncryptedImage(file))
     }
@@ -126,12 +127,16 @@ mod tests {
     use assert_matches2::assert_matches;
     use assign::assign;
     use js_int::uint;
-    use crate::__ruma::{canonical_json::assert_to_canonical_json_eq, owned_mxc_uri};
-    use crate::events::room::message::{MessageType, RoomMessageEventContent};
     use serde_json::{from_value as from_json_value, json};
 
     use super::{super::text::TextMessageEventContent, *};
-    use crate::events::room::{EncryptedFile, EncryptedFileHashes, V2EncryptedFileInfo};
+    use crate::{
+        __ruma::{canonical_json::assert_to_canonical_json_eq, owned_mxc_uri},
+        events::room::{
+            EncryptedFile, EncryptedFileHashes, V2EncryptedFileInfo,
+            message::{MessageType, RoomMessageEventContent},
+        },
+    };
 
     fn encrypted_file() -> EncryptedFile {
         EncryptedFile::new(

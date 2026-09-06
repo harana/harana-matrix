@@ -14,8 +14,9 @@
 
 use std::sync::{Arc, RwLock};
 
-use client_matrix::{
+use harana_matrix_client::{
     Client as MatrixClient,
+    common::{SendOutsideWasm, SyncOutsideWasm},
     event_handler::EventHandlerHandle,
     notification_settings::{
         NotificationSettings as SdkNotificationSettings,
@@ -23,7 +24,6 @@ use client_matrix::{
     },
     ruma::events::push_rules::PushRulesEvent,
 };
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
 use harana_matrix_common::{
     Int, RoomId, UInt,
     events::push_rules::PushRulesEventContent,
@@ -414,7 +414,7 @@ impl From<RoomNotificationMode> for SdkRoomNotificationMode {
 }
 
 /// Delegate to notify of changes in push rules
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait NotificationSettingsDelegate: SyncOutsideWasm + SendOutsideWasm {
     fn settings_did_change(&self);
 }
@@ -463,7 +463,7 @@ impl Drop for NotificationSettings {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl NotificationSettings {
     pub fn set_delegate(&self, delegate: Option<Box<dyn NotificationSettingsDelegate>>) {
         if let Some(delegate) = delegate {

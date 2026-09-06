@@ -1,0 +1,76 @@
+// Copyright 2023 The Matrix.org Foundation C.I.C.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::fmt::Debug;
+#[cfg(feature = "reqwest-transport")]
+use std::time::Duration;
+
+use bytes::Bytes;
+use bytesize::ByteSize;
+use harana_matrix_common::api::{
+    IncomingResponseExt as _, OutgoingRequest, error::FromHttpResponseError,
+};
+
+#[cfg(feature = "reqwest-transport")]
+use super::response_to_http_response;
+use super::{HttpClient, RequestProgress};
+use crate::{config::RequestConfig, error::HttpError};
+
+#[cfg(feature = "reqwest-transport")]
+pub(super) async fn execute_request(
+    client: &reqwest::Client,
+    request: http::Request<Bytes>,
+    _timeout: Option<Duration>,
+    // The `fetch` API this ends up on gives no view of the body being sent or
+    // received, so there is no progress to report.
+    _progress: RequestProgress,
+) -> Result<http::Response<Bytes>, HttpError> {
+    let request = reqwest::Request::try_from(request)?;
+
+    Ok(response_to_http_response(client.execute(request).await?).await?)
+}
+
+impl HttpClient {
+    pub(super) async fn send_request<R>(
+        &self,
+        request: http::Request<Bytes>,
+        config: RequestConfig,
+        progress: RequestProgress,
+    ) -> Result<R::IncomingResponse, HttpError>
+    where
+        R: OutgoingRequest + Debug,
+        HttpError: From<FromHttpResponseError<R::EndpointError>>,
+    {
+        tracing::debug!("Sending request");
+
+        let before = harana_matrix_common::time::Instant::now();
+
+        let response =
+            self.inner.send_request_with_progress(request, config.timeout, progress).await?;
+
+        let request_duration =
+            harana_matrix_common::time::Instant::now().saturating_duration_since(before);
+        let status_code = response.status();
+        let response_size = ByteSize(response.body().len().try_into().unwrap_or(u64::MAX));
+
+        tracing::Span::current()
+            .record("status", status_code.as_u16())
+            .record("response_size", response_size.display().si_short().to_string())
+            .record("request_duration", tracing::field::debug(request_duration));
+
+        let (parts, body) = response.into_parts();
+        let response: http::Response<&[u8]> = http::Response::from_parts(parts, &body);
+        Ok(R::IncomingResponse::try_from_http_response(response)?)
+    }
+}

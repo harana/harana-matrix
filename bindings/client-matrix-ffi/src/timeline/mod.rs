@@ -17,26 +17,24 @@ use std::{collections::HashMap, fmt::Write as _, fs, panic, sync::Arc};
 use anyhow::{Context, Result};
 use eyeball_im::VectorDiff;
 use futures_util::pin_mut;
-use client_matrix::{
+use harana_matrix_client::{
     attachment::{
         AttachmentInfo, BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo, Thumbnail,
     },
+    common::{
+        executor::{AbortHandle, JoinHandle},
+        stream::StreamExt,
+    },
     event_cache::PaginationStatus,
     room::edit::EditedContent as SdkEditedContent,
+    ui::timeline::{
+        self, AttachmentConfig, AttachmentSource, EventItemOrigin,
+        LatestEventValue as UiLatestEventValue, LatestEventValueLocalState,
+        MediaUploadProgress as SdkMediaUploadProgress, Profile, TimelineDetails,
+        TimelineEventItemId, TimelineEventShieldState as SdkShieldState,
+        TimelineEventShieldStateCode, TimelineUniqueId as SdkTimelineUniqueId,
+    },
 };
-use client_common::{
-    executor::{AbortHandle, JoinHandle},
-    stream::StreamExt,
-};
-use client_ui::timeline::{
-    self, AttachmentConfig, AttachmentSource, EventItemOrigin,
-    LatestEventValue as UiLatestEventValue, LatestEventValueLocalState,
-    MediaUploadProgress as SdkMediaUploadProgress, Profile, TimelineDetails, TimelineEventItemId,
-    TimelineEventShieldState as SdkShieldState, TimelineEventShieldStateCode,
-    TimelineUniqueId as SdkTimelineUniqueId,
-};
-use mime::Mime;
-use reply::{EmbeddedEventDetails, InReplyToDetails};
 use harana_matrix_common::{
     EventId, UInt, assign,
     events::{
@@ -55,6 +53,8 @@ use harana_matrix_common::{
         },
     },
 };
+use mime::Mime;
+use reply::{EmbeddedEventDetails, InReplyToDetails};
 use tokio::sync::Mutex;
 use tracing::{error, warn};
 use uuid::Uuid;
@@ -78,19 +78,21 @@ mod msg_like;
 mod reply;
 pub mod threads;
 
-use client_matrix::utils::formatted_body_from;
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
+use harana_matrix_client::{
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    utils::formatted_body_from,
+};
 
 use crate::error::QueueWedgeError;
 
 #[derive(uniffi::Object)]
 #[repr(transparent)]
 pub struct Timeline {
-    pub(crate) inner: client_ui::timeline::Timeline,
+    pub(crate) inner: harana_matrix_client::ui::timeline::Timeline,
 }
 
 impl Timeline {
-    pub(crate) fn new(inner: client_ui::timeline::Timeline) -> Arc<Self> {
+    pub(crate) fn new(inner: harana_matrix_client::ui::timeline::Timeline) -> Arc<Self> {
         Arc::new(Self { inner })
     }
 
@@ -290,8 +292,8 @@ pub struct AbstractProgress {
     pub total: u64,
 }
 
-impl From<client_matrix::send_queue::AbstractProgress> for AbstractProgress {
-    fn from(value: client_matrix::send_queue::AbstractProgress) -> Self {
+impl From<harana_matrix_client::send_queue::AbstractProgress> for AbstractProgress {
+    fn from(value: harana_matrix_client::send_queue::AbstractProgress) -> Self {
         Self {
             current: value.current.try_into().unwrap_or(u64::MAX),
             total: value.total.try_into().unwrap_or(u64::MAX),
@@ -299,7 +301,7 @@ impl From<client_matrix::send_queue::AbstractProgress> for AbstractProgress {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Timeline {
     pub async fn add_listener(&self, listener: Box<dyn TimelineListener>) -> Arc<TaskHandle> {
         let (timeline_items, timeline_stream) = self.inner.subscribe().await;
@@ -848,16 +850,16 @@ impl Timeline {
 /// A handle to perform actions onto a local echo.
 #[derive(uniffi::Object)]
 pub struct SendHandle {
-    inner: Mutex<Option<client_matrix::send_queue::SendHandle>>,
+    inner: Mutex<Option<harana_matrix_client::send_queue::SendHandle>>,
 }
 
 impl SendHandle {
-    fn new(handle: client_matrix::send_queue::SendHandle) -> Self {
+    fn new(handle: harana_matrix_client::send_queue::SendHandle) -> Self {
         Self { inner: Mutex::new(Some(handle)) }
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SendHandle {
     /// Try to abort the sending of the current event, with an optional
     /// `reason` applied to the redaction when the event went out anyway.
@@ -916,12 +918,12 @@ pub enum FocusEventError {
     Other { msg: String },
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait TimelineListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, diff: Vec<TimelineDiff>);
 }
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait PaginationStatusListener: SyncOutsideWasm + SendOutsideWasm {
     fn on_update(&self, status: PaginationStatus);
 }
@@ -942,7 +944,9 @@ pub enum TimelineDiff {
 }
 
 impl TimelineDiff {
-    pub(crate) fn new(inner: VectorDiff<Arc<client_ui::timeline::TimelineItem>>) -> Self {
+    pub(crate) fn new(
+        inner: VectorDiff<Arc<harana_matrix_client::ui::timeline::TimelineItem>>,
+    ) -> Self {
         match inner {
             VectorDiff::Append { values } => {
                 Self::Append { values: values.into_iter().map(TimelineItem::from_arc).collect() }
@@ -994,17 +998,19 @@ impl From<&TimelineUniqueId> for SdkTimelineUniqueId {
 
 #[repr(transparent)]
 #[derive(Clone, uniffi::Object)]
-pub struct TimelineItem(pub(crate) client_ui::timeline::TimelineItem);
+pub struct TimelineItem(pub(crate) harana_matrix_client::ui::timeline::TimelineItem);
 
 impl TimelineItem {
-    pub(crate) fn from_arc(arc: Arc<client_ui::timeline::TimelineItem>) -> Arc<Self> {
+    pub(crate) fn from_arc(
+        arc: Arc<harana_matrix_client::ui::timeline::TimelineItem>,
+    ) -> Arc<Self> {
         // SAFETY: This is valid because Self is a repr(transparent) wrapper
         //         around the other Timeline type.
         unsafe { Arc::from_raw(Arc::into_raw(arc) as _) }
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl TimelineItem {
     pub fn as_event(self: Arc<Self>) -> Option<EventTimelineItem> {
         let event_item = self.0.as_event()?;
@@ -1012,7 +1018,7 @@ impl TimelineItem {
     }
 
     pub fn as_virtual(self: Arc<Self>) -> Option<VirtualTimelineItem> {
-        use client_ui::timeline::VirtualTimelineItem as VItem;
+        use harana_matrix_client::ui::timeline::VirtualTimelineItem as VItem;
         match self.0.as_virtual()? {
             VItem::DateDivider(ts) => Some(VirtualTimelineItem::DateDivider { ts: (*ts).into() }),
             VItem::ReadMarker => Some(VirtualTimelineItem::ReadMarker),
@@ -1058,16 +1064,16 @@ pub enum EventSendState {
     Sent { event_id: String },
 }
 
-impl From<&client_ui::timeline::EventSendState> for EventSendState {
-    fn from(value: &client_ui::timeline::EventSendState) -> Self {
-        use client_ui::timeline::EventSendState::*;
+impl From<&harana_matrix_client::ui::timeline::EventSendState> for EventSendState {
+    fn from(value: &harana_matrix_client::ui::timeline::EventSendState) -> Self {
+        use harana_matrix_client::ui::timeline::EventSendState::*;
 
         match value {
             NotSentYet { progress } => {
                 Self::NotSentYet { progress: progress.clone().map(|p| p.into()) }
             }
             SendingFailed { error, is_recoverable } => {
-                let as_queue_wedge_error: client_matrix::QueueWedgeError = (&**error).into();
+                let as_queue_wedge_error: harana_matrix_client::QueueWedgeError = (&**error).into();
                 Self::SendingFailed {
                     is_recoverable: *is_recoverable,
                     error: as_queue_wedge_error.into(),
@@ -1126,8 +1132,8 @@ pub struct EventTimelineItem {
     lazy_provider: Arc<LazyTimelineItemProvider>,
 }
 
-impl From<client_ui::timeline::EventTimelineItem> for EventTimelineItem {
-    fn from(item: client_ui::timeline::EventTimelineItem) -> Self {
+impl From<harana_matrix_client::ui::timeline::EventTimelineItem> for EventTimelineItem {
+    fn from(item: harana_matrix_client::ui::timeline::EventTimelineItem) -> Self {
         let item = Arc::new(item);
         let lazy_provider = Arc::new(LazyTimelineItemProvider(item.clone()));
         let read_receipts =
@@ -1290,7 +1296,7 @@ impl SendAttachmentJoinHandle {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl SendAttachmentJoinHandle {
     /// Wait until the attachment has been sent.
     ///
@@ -1348,7 +1354,9 @@ pub enum ReceiptType {
     FullyRead,
 }
 
-impl From<ReceiptType> for harana_matrix_common::api::client::receipt::create_receipt::v3::ReceiptType {
+impl From<ReceiptType>
+    for harana_matrix_common::api::client::receipt::create_receipt::v3::ReceiptType
+{
     fn from(value: ReceiptType) -> Self {
         match value {
             ReceiptType::Read => Self::Read,
@@ -1450,7 +1458,7 @@ impl TryFrom<EditedContent> for SdkEditedContent {
 ///
 /// If no `formatted_caption` is provided, then it's assumed the `caption`
 /// represents valid Markdown that can be used as the formatted caption.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 fn create_caption_edit(
     caption: Option<String>,
     formatted_caption: Option<FormattedBody>,
@@ -1467,9 +1475,9 @@ fn create_caption_edit(
 
 /// Wrapper to retrieve some timeline item info lazily.
 #[derive(Clone, uniffi::Object)]
-pub struct LazyTimelineItemProvider(Arc<client_ui::timeline::EventTimelineItem>);
+pub struct LazyTimelineItemProvider(Arc<harana_matrix_client::ui::timeline::EventTimelineItem>);
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl LazyTimelineItemProvider {
     /// Returns the shields for this event timeline item.
     fn get_shields(&self, strict: bool) -> ShieldState {
@@ -1565,16 +1573,16 @@ impl From<UiLatestEventValue> for LatestEventValue {
 mod galleries {
     use std::{panic, sync::Arc};
 
-    use client_matrix::{
+    use harana_matrix_client::{
         attachment::{
             AttachmentInfo, BaseAudioInfo, BaseFileInfo, BaseImageInfo, BaseVideoInfo, Thumbnail,
         },
+        common::executor::{AbortHandle, JoinHandle},
+        ui::timeline::GalleryConfig,
         utils::formatted_body_from,
     };
-    use client_common::executor::{AbortHandle, JoinHandle};
-    use client_ui::timeline::GalleryConfig;
-    use mime::Mime;
     use harana_matrix_common::{EventId, assign, events::room::message::TextMessageEventContent};
+    use mime::Mime;
     use tokio::sync::Mutex;
     use tracing::error;
 
@@ -1704,12 +1712,13 @@ mod galleries {
         }
     }
 
-    impl TryInto<client_ui::timeline::GalleryItemInfo> for GalleryItemInfo {
+    impl TryInto<harana_matrix_client::ui::timeline::GalleryItemInfo> for GalleryItemInfo {
         type Error = RoomError;
 
         fn try_into(
             self,
-        ) -> std::result::Result<client_ui::timeline::GalleryItemInfo, Self::Error> {
+        ) -> std::result::Result<harana_matrix_client::ui::timeline::GalleryItemInfo, Self::Error>
+        {
             let mime_str = self.mimetype().as_ref().ok_or(RoomError::InvalidAttachmentMimeType)?;
             let mime_type =
                 mime_str.parse::<Mime>().map_err(|_| RoomError::InvalidAttachmentMimeType)?;
@@ -1720,7 +1729,7 @@ mod galleries {
                 );
                 assign!(TextMessageEventContent::plain(caption), { formatted })
             });
-            Ok(client_ui::timeline::GalleryItemInfo {
+            Ok(harana_matrix_client::ui::timeline::GalleryItemInfo {
                 source: self.source().clone().into(),
                 content_type: mime_type,
                 attachment_info: self.attachment_info()?,
@@ -1744,7 +1753,7 @@ mod galleries {
         }
     }
 
-    #[client_matrix_ffi_macros::export]
+    #[harana_matrix_macros::uniffi_export]
     impl SendGalleryJoinHandle {
         /// Wait until the gallery has been sent.
         ///
@@ -1776,7 +1785,7 @@ mod galleries {
         }
     }
 
-    #[client_matrix_ffi_macros::export]
+    #[harana_matrix_macros::uniffi_export]
     impl Timeline {
         pub fn send_gallery(
             self: Arc<Self>,

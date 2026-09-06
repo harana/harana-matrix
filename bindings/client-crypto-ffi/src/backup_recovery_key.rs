@@ -1,10 +1,10 @@
 use std::{collections::HashMap, iter, ops::DerefMut, sync::Arc};
 
-use hmac::Hmac;
-use client_crypto::{
+use harana_matrix_client::crypto::{
     backups::DecryptionError,
     store::{CryptoStoreError as InnerStoreError, types::BackupDecryptionKey},
 };
+use hmac::Hmac;
 use pbkdf2::pbkdf2;
 use rand::{RngExt, distr::Alphanumeric, rng};
 use sha2::Sha512;
@@ -33,7 +33,7 @@ pub enum PkDecryptionError {
 pub enum DecodeError {
     /// An error happened while decoding the recovery key.
     #[error(transparent)]
-    Decode(#[from] client_crypto::backups::DecodeError),
+    Decode(#[from] harana_matrix_client::crypto::backups::DecodeError),
     /// An error happened in the storage layer while trying to save the
     /// decoded recovery key.
     #[error(transparent)]
@@ -69,7 +69,7 @@ impl BackupRecoveryKey {
     const PBKDF_ROUNDS: i32 = 500_000;
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl BackupRecoveryKey {
     /// Create a new random [`BackupRecoveryKey`].
     #[allow(clippy::new_without_default)]

@@ -3,34 +3,36 @@
 use std::{collections::BTreeMap, ops::Range};
 
 use assert_matches2::assert_matches;
-use js_int::{UInt, uint};
 use harana_matrix_common::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, owned_event_id,
-};
-use harana_matrix_common::events::{
-    AnyMessageLikeEvent, MessageLikeEvent,
-    message::TextContentBlock,
-    poll::{
-        compile_poll_results, compile_unstable_poll_results,
-        end::PollEndEventContent,
-        response::{OriginalSyncPollResponseEvent, PollResponseEventContent},
-        start::{
-            OriginalSyncPollStartEvent, PollAnswer, PollAnswers, PollAnswersError,
-            PollContentBlock, PollKind, PollStartEventContent,
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, MessageLikeEvent,
+        message::TextContentBlock,
+        poll::{
+            compile_poll_results, compile_unstable_poll_results,
+            end::PollEndEventContent,
+            response::{OriginalSyncPollResponseEvent, PollResponseEventContent},
+            start::{
+                OriginalSyncPollStartEvent, PollAnswer, PollAnswers, PollAnswersError,
+                PollContentBlock, PollKind, PollStartEventContent,
+            },
+            unstable_end::UnstablePollEndEventContent,
+            unstable_response::{
+                OriginalSyncUnstablePollResponseEvent, UnstablePollResponseEventContent,
+            },
+            unstable_start::{
+                NewUnstablePollStartEventContent, OriginalSyncUnstablePollStartEvent,
+                ReplacementUnstablePollStartEventContent, UnstablePollAnswer,
+                UnstablePollStartContentBlock, UnstablePollStartEventContent,
+            },
         },
-        unstable_end::UnstablePollEndEventContent,
-        unstable_response::{
-            OriginalSyncUnstablePollResponseEvent, UnstablePollResponseEventContent,
-        },
-        unstable_start::{
-            NewUnstablePollStartEventContent, OriginalSyncUnstablePollStartEvent,
-            ReplacementUnstablePollStartEventContent, UnstablePollAnswer,
-            UnstablePollStartContentBlock, UnstablePollStartEventContent,
-        },
+        relation::Reference,
+        room::message::{Relation, RelationWithoutReplacement},
     },
-    relation::Reference,
-    room::message::{Relation, RelationWithoutReplacement},
+    owned_event_id,
 };
+use js_int::{UInt, uint};
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

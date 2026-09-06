@@ -7,12 +7,13 @@ pub mod v1 {
     //!
     //! [MSC]: https://github.com/matrix-org/matrix-spec-proposals/pull/4143
 
-    use crate::__ruma::{
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::rtc::RtcTransport,
     };
-
-    use crate::api::client::rtc::RtcTransport;
 
     metadata! {
         method: GET,

@@ -4,8 +4,7 @@ use anyhow::Result;
 use assert_matches2::{assert_let, assert_matches};
 use eyeball::Subscriber;
 use futures::FutureExt as _;
-use http::StatusCode;
-use client_matrix::{
+use harana_matrix_client::{
     Room, RoomMemberships, RoomState, assert_let_timeout,
     encryption::{BackupDownloadStrategy, EncryptionSettings, recovery::RecoveryState},
     event_cache::RoomEventCacheUpdate,
@@ -28,10 +27,11 @@ use client_matrix::{
         serde::Raw,
         uint,
     },
+    test::TestResult,
     test_utils::assert_event_matches_msg,
+    ui::{sync_service::SyncService, timeline::TimelineBuilder},
 };
-use common_test::TestResult;
-use client_ui::{sync_service::SyncService, timeline::TimelineBuilder};
+use http::StatusCode;
 use tokio::{spawn, time::sleep};
 use tracing::{debug, error, warn};
 
@@ -751,9 +751,9 @@ async fn test_latest_event_few_rooms() -> Result<()> {
         let Some(ev_item) = item.as_event() else { continue };
         let Some(event_id) = ev_item.event_id() else { continue };
         match ev_item.content() {
-            client_ui::timeline::TimelineItemContent::MsgLike(msglikecontent) => {
+            harana_matrix_client::ui::timeline::TimelineItemContent::MsgLike(msglikecontent) => {
                 match &msglikecontent.kind {
-                    client_ui::timeline::MsgLikeKind::Message(msg) => {
+                    harana_matrix_client::ui::timeline::MsgLikeKind::Message(msg) => {
                         debug!(%event_id, "event: {}", msg.body());
                     }
                     _ => unreachable!(),

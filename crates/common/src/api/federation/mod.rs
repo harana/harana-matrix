@@ -3,9 +3,9 @@
 //!
 //! [federation-api]: https://spec.matrix.org/v1.19/server-server-api/
 
-// This crate is not useful without either of those features, so export nothing if they are not
-// enabled to avoid errors when running checks wrongly without enabling any of them.
-
+// This crate is not useful without either of those features, so export nothing
+// if they are not enabled to avoid errors when running checks wrongly without
+// enabling any of them.
 
 mod serde;
 
@@ -29,4 +29,3 @@ pub mod transactions;
 
 #[doc(hidden)]
 pub use crate::__ruma::PrivOwnedStr;
-

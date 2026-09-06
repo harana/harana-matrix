@@ -1,15 +1,15 @@
 use std::{sync::Arc, time::Duration};
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use client_matrix::{
+use harana_matrix_client::{
     SqliteEventCacheStore,
+    base::event_cache::{
+        Event, Gap,
+        store::{DEFAULT_CHUNK_CAPACITY, DynEventCacheStore, IntoEventCacheStore, MemoryStore},
+    },
     linked_chunk::{LinkedChunk, LinkedChunkId, Update, lazy_loader},
+    test::{ALICE, event_factory::EventFactory},
 };
-use client_base::event_cache::{
-    Event, Gap,
-    store::{DEFAULT_CHUNK_CAPACITY, DynEventCacheStore, IntoEventCacheStore, MemoryStore},
-};
-use common_test::{ALICE, event_factory::EventFactory};
 use harana_matrix_common::room_id;
 use tempfile::tempdir;
 use tokio::runtime::Builder;

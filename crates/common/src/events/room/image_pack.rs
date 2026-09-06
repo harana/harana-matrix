@@ -4,11 +4,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::__ruma::OwnedMxcUri;
 use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::events::{PrivOwnedStr, room::ImageInfo};
+use crate::{
+    __ruma::OwnedMxcUri,
+    events::{PrivOwnedStr, room::ImageInfo},
+};
 
 /// The content of an [`m.room.image_pack`] event.
 ///
@@ -26,8 +28,8 @@ pub struct RoomImagePackEventContent {
 
     /// Metadata about the image pack as a whole.
     ///
-    /// This field is not serialized if it is empty, and deserializes to its default value if it is
-    /// missing.
+    /// This field is not serialized if it is empty, and deserializes to its
+    /// default value if it is missing.
     #[serde(default, skip_serializing_if = "ImagePackMeta::is_empty")]
     pub pack: ImagePackMeta,
 }
@@ -72,13 +74,15 @@ impl ImagePackImage {
 pub struct ImagePackMeta {
     /// A display name for the pack.
     ///
-    /// If absent and the pack is defined in a room, defaults to the room's name.
+    /// If absent and the pack is defined in a room, defaults to the room's
+    /// name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
 
     /// The MXC URI of an avatar for the pack.
     ///
-    /// If absent and the pack is defined in a room, defaults to the room's avatar.
+    /// If absent and the pack is defined in a room, defaults to the room's
+    /// avatar.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<OwnedMxcUri>,
 

@@ -102,8 +102,8 @@ impl IdDstAttrs {
 
     /// Try to parse the given meta item and merge it into this `IdDstAttrs`.
     ///
-    /// Returns an error if an unknown `ruma_id` attribute is encountered, or if an attribute
-    /// that accepts a single value appears several times.
+    /// Returns an error if an unknown `ruma_id` attribute is encountered, or if
+    /// an attribute that accepts a single value appears several times.
     fn try_merge(&mut self, meta: ParseNestedMeta<'_>, attr: &syn::Attribute) -> syn::Result<()> {
         if meta.path.is_ident("validate") {
             return self.set_validate(meta.value()?.parse()?, attr);

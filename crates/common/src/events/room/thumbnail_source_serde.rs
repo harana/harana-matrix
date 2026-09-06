@@ -1,12 +1,13 @@
-//! De-/serialization functions for `Option<MediaSource>` objects representing a thumbnail source.
+//! De-/serialization functions for `Option<MediaSource>` objects representing a
+//! thumbnail source.
 
-use crate::__ruma::OwnedMxcUri;
 use serde::{
     Deserialize, Deserializer,
     ser::{SerializeStruct, Serializer},
 };
 
 use super::{EncryptedFile, MediaSource};
+use crate::__ruma::OwnedMxcUri;
 
 /// Serializes a MediaSource to a thumbnail source.
 pub(crate) fn serialize<S>(source: &Option<MediaSource>, serializer: S) -> Result<S::Ok, S::Error>
@@ -51,11 +52,13 @@ where
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::__ruma::{canonical_json::assert_to_canonical_json_eq, owned_mxc_uri, serde::Base64};
     use serde::{Deserialize, Serialize};
     use serde_json::json;
 
-    use crate::events::room::{EncryptedFile, EncryptedFileHash, MediaSource, V2EncryptedFileInfo};
+    use crate::{
+        __ruma::{canonical_json::assert_to_canonical_json_eq, owned_mxc_uri, serde::Base64},
+        events::room::{EncryptedFile, EncryptedFileHash, MediaSource, V2EncryptedFileInfo},
+    };
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct ThumbnailSourceTest {

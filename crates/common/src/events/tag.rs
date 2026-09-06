@@ -4,13 +4,12 @@
 
 use std::{collections::BTreeMap, error::Error, fmt, str::FromStr};
 
-#[cfg(feature = "compat-tag-info")]
-use crate::__ruma::serde::deserialize_as_optional_number_or_string;
-use crate::__ruma::serde::deserialize_cow_str;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
-use crate::events::PrivOwnedStr;
+#[cfg(feature = "compat-tag-info")]
+use crate::__ruma::serde::deserialize_as_optional_number_or_string;
+use crate::{__ruma::serde::deserialize_cow_str, events::PrivOwnedStr};
 
 /// Map of tag names to tag info.
 pub type Tags = BTreeMap<TagName, TagInfo>;
@@ -59,8 +58,8 @@ impl FromStr for UserTagName {
     }
 }
 
-/// An error returned when attempting to create a UserTagName with a string that would make it
-/// invalid.
+/// An error returned when attempting to create a UserTagName with a string that
+/// would make it invalid.
 #[derive(Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct InvalidUserTagName;
@@ -82,7 +81,8 @@ pub enum TagName {
     /// These should be shown with higher precedence than other rooms.
     Favorite,
 
-    /// `m.lowpriority`: These should be shown with lower precedence than others.
+    /// `m.lowpriority`: These should be shown with lower precedence than
+    /// others.
     LowPriority,
 
     /// `m.server_notice`: Used to identify
@@ -100,8 +100,9 @@ pub enum TagName {
 impl TagName {
     /// Returns the display name of the tag.
     ///
-    /// That means the string after `m.` or `u.` for spec- and user-defined tag names, and the
-    /// string after the last dot for custom tags. If no dot is found, returns the whole string.
+    /// That means the string after `m.` or `u.` for spec- and user-defined tag
+    /// names, and the string after the last dot for custom tags. If no dot
+    /// is found, returns the whole string.
     pub fn display_name(&self) -> &str {
         match self {
             Self::_Custom(s) => {
@@ -171,8 +172,9 @@ impl Serialize for TagName {
 pub struct TagInfo {
     /// Value to use for lexicographically ordering rooms with this tag.
     ///
-    /// If you activate the `compat-tag-info` feature, this field can be decoded as a stringified
-    /// floating-point value, instead of a number as it should be according to the specification.
+    /// If you activate the `compat-tag-info` feature, this field can be decoded
+    /// as a stringified floating-point value, instead of a number as it
+    /// should be according to the specification.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "compat-tag-info",

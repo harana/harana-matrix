@@ -4,8 +4,9 @@
 
 use std::borrow::Cow;
 
-use crate::__ruma::serde::JsonObject;
 use serde::{Deserialize, Deserializer, Serialize};
+
+use crate::__ruma::serde::JsonObject;
 
 pub mod transports;
 
@@ -52,14 +53,14 @@ impl<'de> Deserialize<'de> for RtcTransport {
 impl RtcTransport {
     /// A constructor to create a custom RTC transport.
     ///
-    /// Prefer to use the public variants of `RtcTransport` where possible; this constructor is
-    /// meant to be used for unsupported transport types only and does not allow setting arbitrary
-    /// data for supported ones.
+    /// Prefer to use the public variants of `RtcTransport` where possible; this
+    /// constructor is meant to be used for unsupported transport types only
+    /// and does not allow setting arbitrary data for supported ones.
     ///
     /// # Errors
     ///
-    /// Returns an error if the `transport_type` is known and serialization of `data` to the
-    /// corresponding `RtcTransport` variant fails.
+    /// Returns an error if the `transport_type` is known and serialization of
+    /// `data` to the corresponding `RtcTransport` variant fails.
     pub fn new(transport_type: &str, data: JsonObject) -> serde_json::Result<Self> {
         Ok(match transport_type {
             #[cfg(feature = "unstable-msc4195")]
@@ -91,8 +92,8 @@ impl RtcTransport {
     /// The returned JSON object won't contain the `type` field, please use
     /// [`.transport_type()`][Self::transport_type] to access that.
     ///
-    /// Prefer to use the public variants of `RtcTransport` where possible; this method is meant
-    /// to be used for custom transport types only.
+    /// Prefer to use the public variants of `RtcTransport` where possible; this
+    /// method is meant to be used for custom transport types only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         #[cfg(feature = "unstable-msc4195")]
         fn serialize<T: Serialize>(object: &T) -> JsonObject {

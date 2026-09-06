@@ -8,8 +8,9 @@ use as_variant::as_variant;
 use assert_matches::assert_matches;
 use assert_matches2::assert_let;
 use assign::assign;
-use client_matrix::{
+use harana_matrix_client::{
     Client, assert_next_eq_with_timeout,
+    base::crypto::{SasState, format_emojis},
     encryption::{
         BackupDownloadStrategy, EncryptionSettings, LocalTrust, VerificationState,
         backups::BackupState,
@@ -32,11 +33,10 @@ use client_matrix::{
         },
     },
     timeout::timeout,
-};
-use client_base::crypto::{SasState, format_emojis};
-use client_ui::{
-    notification_client::{NotificationClient, NotificationProcessSetup},
-    sync_service::SyncService,
+    ui::{
+        notification_client::{NotificationClient, NotificationProcessSetup},
+        sync_service::SyncService,
+    },
 };
 use similar_asserts::assert_eq;
 use tracing::{debug, warn};

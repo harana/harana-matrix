@@ -1,11 +1,11 @@
 #![allow(clippy::exhaustive_structs)]
 #![allow(dead_code)]
 
-use http::StatusCode;
 use harana_matrix_common::{
     api::{OutgoingResponseExt as _, auth_scheme::NoAuthentication, request, response},
     metadata,
 };
+use http::StatusCode;
 
 metadata! {
     method: GET,

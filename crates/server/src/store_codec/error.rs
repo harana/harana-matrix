@@ -81,8 +81,8 @@ pub(crate) fn type_name<T: ?Sized>() -> &'static str {
 ///
 /// The compact record format covers what a key or value in a key-value store
 /// needs, and nothing more: a caller reaching one of these branches has asked
-/// for a shape the format cannot represent, and wants [`crate::store_codec::Json`] around
-/// that value instead.
+/// for a shape the format cannot represent, and wants
+/// [`crate::store_codec::Json`] around that value instead.
 #[macro_export]
 macro_rules! unhandled {
     ($msg:literal) => {

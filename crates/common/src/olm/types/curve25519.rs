@@ -14,8 +14,8 @@
 
 use std::fmt::Display;
 
-use olm_base64::decoded_len_estimate;
 use matrix_pickle::{Decode, DecodeError};
+use olm_base64::decoded_len_estimate;
 use rand::rng;
 use serde::{Deserialize, Serialize};
 use x25519_dalek::{EphemeralSecret, PublicKey, ReusableSecret, SharedSecret, StaticSecret};
@@ -250,8 +250,8 @@ impl From<Curve25519Keypair> for Curve25519KeypairPickle {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use olm_base64::DecodeError;
     use insta::assert_debug_snapshot;
+    use olm_base64::DecodeError;
 
     use super::Curve25519PublicKey;
     use crate::olm::{Curve25519SecretKey, KeyError};

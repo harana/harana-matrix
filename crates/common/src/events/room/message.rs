@@ -5,12 +5,6 @@
 use std::borrow::Cow;
 
 use as_variant::as_variant;
-use crate::__ruma::{
-    EventId, OwnedEventId, UserId,
-    serde::{JsonObject, StringEnum},
-};
-#[cfg(feature = "html")]
-use crate::__ruma::html::{HtmlSanitizerMode, RemoveReplyFallback, sanitize_html};
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value as JsonValue;
@@ -18,9 +12,17 @@ use tracing::warn;
 
 #[cfg(feature = "html")]
 use self::sanitize::remove_plain_reply_fallback;
+#[cfg(feature = "html")]
+use crate::__ruma::html::{HtmlSanitizerMode, RemoveReplyFallback, sanitize_html};
 #[cfg(feature = "unstable-msc4471")]
 use crate::events::stream::StreamDescriptor;
-use crate::events::{Mentions, PrivOwnedStr, relation::Thread};
+use crate::{
+    __ruma::{
+        EventId, OwnedEventId, UserId,
+        serde::{JsonObject, StringEnum},
+    },
+    events::{Mentions, PrivOwnedStr, relation::Thread},
+};
 
 mod audio;
 mod content_serde;
@@ -90,11 +92,12 @@ pub struct RoomMessageEventContent {
 
     /// The [mentions] of this event.
     ///
-    /// This should always be set to avoid triggering the legacy mention push rules. It is
-    /// recommended to modify this field only before calling a method that adds a relation. For
-    /// example, [`make_replacement()`](Self::make_replacement) needs to know all the mentions
-    /// beforehand to avoid re-triggering notifications for users that were already mentioned in
-    /// the original event.
+    /// This should always be set to avoid triggering the legacy mention push
+    /// rules. It is recommended to modify this field only before calling a
+    /// method that adds a relation. For
+    /// example, [`make_replacement()`](Self::make_replacement) needs to know
+    /// all the mentions beforehand to avoid re-triggering notifications for
+    /// users that were already mentioned in the original event.
     ///
     /// [mentions]: https://spec.matrix.org/v1.19/client-server-api/#user-and-room-mentions
     #[serde(rename = "m.mentions", skip_serializing_if = "Option::is_none")]
@@ -170,12 +173,15 @@ impl RoomMessageEventContent {
         Self::new(MessageType::emote_markdown(body))
     }
 
-    /// Turns `self` into a [rich reply] to the message using the given metadata.
+    /// Turns `self` into a [rich reply] to the message using the given
+    /// metadata.
     ///
-    /// Sets the `in_reply_to` field inside `relates_to`, and optionally the `rel_type` to
-    /// `m.thread` if the metadata has a `thread` and `ForwardThread::Yes` is used.
+    /// Sets the `in_reply_to` field inside `relates_to`, and optionally the
+    /// `rel_type` to `m.thread` if the metadata has a `thread` and
+    /// `ForwardThread::Yes` is used.
     ///
-    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as a user mention.
+    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as
+    /// a user mention.
     ///
     /// [rich reply]: https://spec.matrix.org/v1.19/client-server-api/#rich-replies
     #[track_caller]
@@ -188,18 +194,21 @@ impl RoomMessageEventContent {
         self.without_relation().make_reply_to(metadata, forward_thread, add_mentions)
     }
 
-    /// Turns `self` into a new message for a [thread], that is optionally a reply.
+    /// Turns `self` into a new message for a [thread], that is optionally a
+    /// reply.
     ///
-    /// Looks for the `thread` in the given metadata. If it exists, this message will be in the same
-    /// thread. If it doesn't, a new thread is created with the `event_id` in the metadata as the
-    /// root.
+    /// Looks for the `thread` in the given metadata. If it exists, this message
+    /// will be in the same thread. If it doesn't, a new thread is created
+    /// with the `event_id` in the metadata as the root.
     ///
-    /// It also sets the `in_reply_to` field inside `relates_to` to point the `event_id`
-    /// in the metadata. If `ReplyWithinThread::Yes` is used, the metadata should be constructed
-    /// from the event to make a reply to, otherwise it should be constructed from the latest
-    /// event in the thread.
+    /// It also sets the `in_reply_to` field inside `relates_to` to point the
+    /// `event_id` in the metadata. If `ReplyWithinThread::Yes` is used, the
+    /// metadata should be constructed from the event to make a reply to,
+    /// otherwise it should be constructed from the latest event in the
+    /// thread.
     ///
-    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as a user mention.
+    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as
+    /// a user mention.
     ///
     /// [thread]: https://spec.matrix.org/v1.19/client-server-api/#threading
     pub fn make_for_thread<'a>(
@@ -214,15 +223,16 @@ impl RoomMessageEventContent {
     /// Turns `self` into a [replacement] (or edit) for a given message.
     ///
     /// The first argument after `self` can be `&OriginalRoomMessageEvent` or
-    /// `&OriginalSyncRoomMessageEvent` if you don't want to create `ReplacementMetadata` separately
-    /// before calling this function.
+    /// `&OriginalSyncRoomMessageEvent` if you don't want to create
+    /// `ReplacementMetadata` separately before calling this function.
     ///
-    /// This takes the content and sets it in `m.new_content`, and modifies the `content` to include
-    /// a fallback.
+    /// This takes the content and sets it in `m.new_content`, and modifies the
+    /// `content` to include a fallback.
     ///
-    /// If this message contains [`Mentions`], they are copied into `m.new_content` to keep the same
-    /// mentions, but the ones in `content` are filtered with the ones in the
-    /// [`ReplacementMetadata`] so only new mentions will trigger a notification.
+    /// If this message contains [`Mentions`], they are copied into
+    /// `m.new_content` to keep the same mentions, but the ones in `content`
+    /// are filtered with the ones in the [`ReplacementMetadata`] so only
+    /// new mentions will trigger a notification.
     ///
     /// # Panics
     ///
@@ -236,12 +246,13 @@ impl RoomMessageEventContent {
 
     /// Add the given [mentions] to this event.
     ///
-    /// If no [`Mentions`] was set on this events, this sets it. Otherwise, this updates the current
-    /// mentions by extending the previous `user_ids` with the new ones, and applies a logical OR to
-    /// the values of `room`.
+    /// If no [`Mentions`] was set on this events, this sets it. Otherwise, this
+    /// updates the current mentions by extending the previous `user_ids`
+    /// with the new ones, and applies a logical OR to the values of `room`.
     ///
-    /// This should be called before methods that add a relation, like [`Self::make_reply_to()`] and
-    /// [`Self::make_replacement()`], for the mentions to be correctly set.
+    /// This should be called before methods that add a relation, like
+    /// [`Self::make_reply_to()`] and [`Self::make_replacement()`], for the
+    /// mentions to be correctly set.
     ///
     /// [mentions]: https://spec.matrix.org/v1.19/client-server-api/#user-and-room-mentions
     pub fn add_mentions(mut self, mentions: Mentions) -> Self {
@@ -251,8 +262,8 @@ impl RoomMessageEventContent {
 
     /// Returns a reference to the `msgtype` string.
     ///
-    /// If you want to access the message type-specific data rather than the message type itself,
-    /// use the `msgtype` *field*, not this method.
+    /// If you want to access the message type-specific data rather than the
+    /// message type itself, use the `msgtype` *field*, not this method.
     pub fn msgtype(&self) -> &str {
         self.msgtype.msgtype()
     }
@@ -287,11 +298,11 @@ impl RoomMessageEventContent {
 
     /// Sanitize this message.
     ///
-    /// If this message contains HTML, this removes the [tags and attributes] that are not listed in
-    /// the Matrix specification.
+    /// If this message contains HTML, this removes the [tags and attributes]
+    /// that are not listed in the Matrix specification.
     ///
-    /// It can also optionally remove the [rich reply] fallback from the plain text and HTML
-    /// message.
+    /// It can also optionally remove the [rich reply] fallback from the plain
+    /// text and HTML message.
     ///
     /// This method is only effective on text, notice and emote messages.
     ///
@@ -333,9 +344,11 @@ pub enum ForwardThread {
     /// [info box for clients which are acutely aware of threads]: https://spec.matrix.org/v1.19/client-server-api/#fallback-for-unthreaded-clients
     Yes,
 
-    /// Create a reply in the main conversation even if the original message is in a thread.
+    /// Create a reply in the main conversation even if the original message is
+    /// in a thread.
     ///
-    /// This should be used if you client supports threads and you explicitly want that behavior.
+    /// This should be used if you client supports threads and you explicitly
+    /// want that behavior.
     No,
 }
 
@@ -347,7 +360,8 @@ pub enum AddMentions {
     ///
     /// Set this if your client supports intentional mentions.
     ///
-    /// The sender of the original event will be added to the mentions of this message.
+    /// The sender of the original event will be added to the mentions of this
+    /// message.
     Yes,
 
     /// Do not add intentional mentions to the reply.
@@ -369,7 +383,8 @@ pub enum ReplyWithinThread {
 
     /// This is not a reply.
     ///
-    /// Create a regular message in the thread, with a [fallback for unthreaded clients].
+    /// Create a regular message in the thread, with a [fallback for unthreaded
+    /// clients].
     ///
     /// [fallback for unthreaded clients]: https://spec.matrix.org/v1.19/client-server-api/#fallback-for-unthreaded-clients
     No,
@@ -435,17 +450,17 @@ impl MessageType {
     /// Creates a new `MessageType`.
     ///
     /// The `msgtype` and `body` are required fields as defined by [the `m.room.message` spec](https://spec.matrix.org/v1.19/client-server-api/#mroommessage).
-    /// Additionally it's possible to add arbitrary key/value pairs to the event content for custom
-    /// events through the `data` map.
+    /// Additionally it's possible to add arbitrary key/value pairs to the event
+    /// content for custom events through the `data` map.
     ///
-    /// Prefer to use the public variants of `MessageType` where possible; this constructor is meant
-    /// be used for unsupported message types only and does not allow setting arbitrary data for
-    /// supported ones.
+    /// Prefer to use the public variants of `MessageType` where possible; this
+    /// constructor is meant be used for unsupported message types only and
+    /// does not allow setting arbitrary data for supported ones.
     ///
     /// # Errors
     ///
-    /// Returns an error if the `msgtype` is known and serialization of `data` to the corresponding
-    /// `MessageType` variant fails.
+    /// Returns an error if the `msgtype` is known and serialization of `data`
+    /// to the corresponding `MessageType` variant fails.
     pub fn new(msgtype: &str, body: String, data: JsonObject) -> serde_json::Result<Self> {
         fn deserialize_variant<T: DeserializeOwned>(
             body: String,
@@ -562,11 +577,12 @@ impl MessageType {
 
     /// Returns the associated data.
     ///
-    /// The returned JSON object won't contain the `msgtype` and `body` fields, use
-    /// [`.msgtype()`][Self::msgtype] / [`.body()`](Self::body) to access those.
+    /// The returned JSON object won't contain the `msgtype` and `body` fields,
+    /// use [`.msgtype()`][Self::msgtype] / [`.body()`](Self::body) to
+    /// access those.
     ///
-    /// Prefer to use the public variants of `MessageType` where possible; this method is meant to
-    /// be used for custom message types only.
+    /// Prefer to use the public variants of `MessageType` where possible; this
+    /// method is meant to be used for custom message types only.
     pub fn data(&self) -> Cow<'_, JsonObject> {
         fn serialize<T: Serialize>(obj: &T) -> JsonObject {
             match serde_json::to_value(obj).expect("message type serialization to succeed") {
@@ -597,12 +613,13 @@ impl MessageType {
 
     /// Sanitize this message.
     ///
-    /// If this message contains HTML, this removes the [tags and attributes] that are not listed in
-    /// the Matrix specification.
+    /// If this message contains HTML, this removes the [tags and attributes]
+    /// that are not listed in the Matrix specification.
     ///
-    /// It can also optionally remove the [rich reply] fallback from the plain text and HTML
-    /// message. Note that you should be sure that the message is a reply, as there is no way to
-    /// differentiate plain text reply fallbacks and markdown quotes.
+    /// It can also optionally remove the [rich reply] fallback from the plain
+    /// text and HTML message. Note that you should be sure that the message
+    /// is a reply, as there is no way to differentiate plain text reply
+    /// fallbacks and markdown quotes.
     ///
     /// This method is only effective on text, notice and emote messages.
     ///
@@ -683,7 +700,8 @@ pub struct ReplacementMetadata {
 }
 
 impl ReplacementMetadata {
-    /// Creates a new `ReplacementMetadata` with the given event ID and mentions.
+    /// Creates a new `ReplacementMetadata` with the given event ID and
+    /// mentions.
     pub fn new(event_id: OwnedEventId, mentions: Option<Mentions>) -> Self {
         Self { event_id, mentions }
     }
@@ -716,7 +734,8 @@ pub struct ReplyMetadata<'a> {
 }
 
 impl<'a> ReplyMetadata<'a> {
-    /// Creates a new `ReplyMetadata` with the given event ID, sender and thread relation.
+    /// Creates a new `ReplyMetadata` with the given event ID, sender and thread
+    /// relation.
     pub fn new(event_id: &'a EventId, sender: &'a UserId, thread: Option<&'a Thread>) -> Self {
         Self { event_id, sender, thread }
     }
@@ -747,8 +766,8 @@ pub enum MessageFormat {
     _Custom(PrivOwnedStr),
 }
 
-/// Common message event content fields for message types that have separate plain-text and
-/// formatted representations.
+/// Common message event content fields for message types that have separate
+/// plain-text and formatted representations.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::exhaustive_structs)]
 pub struct FormattedBody {
@@ -766,7 +785,8 @@ impl FormattedBody {
         Self { format: MessageFormat::Html, body: body.into() }
     }
 
-    /// Creates a new HTML-formatted message body by parsing the Markdown in `body`.
+    /// Creates a new HTML-formatted message body by parsing the Markdown in
+    /// `body`.
     ///
     /// Returns `None` if no Markdown formatting was found.
     #[cfg(feature = "markdown")]
@@ -776,7 +796,8 @@ impl FormattedBody {
 
     /// Sanitize this `FormattedBody` if its format is `MessageFormat::Html`.
     ///
-    /// This removes any [tags and attributes] that are not listed in the Matrix specification.
+    /// This removes any [tags and attributes] that are not listed in the Matrix
+    /// specification.
     ///
     /// It can also optionally remove the [rich reply] fallback.
     ///
@@ -824,8 +845,9 @@ pub(crate) fn parse_markdown(text: &str) -> Option<String> {
         })
         .collect();
 
-    // Text that does not contain markdown syntax is always inline because when we encounter several
-    // blocks we convert them to HTML. Inline text is always wrapped by a single paragraph.
+    // Text that does not contain markdown syntax is always inline because when we
+    // encounter several blocks we convert them to HTML. Inline text is always
+    // wrapped by a single paragraph.
     let first_event_is_paragraph_start =
         parser_events.first().is_some_and(|event| matches!(event, Event::Start(Tag::Paragraph)));
     let last_event_is_paragraph_end =
@@ -834,8 +856,8 @@ pub(crate) fn parse_markdown(text: &str) -> Option<String> {
     let mut has_markdown = !is_inline;
 
     if !has_markdown {
-        // Check whether the events contain other blocks and whether they contain inline markdown
-        // syntax.
+        // Check whether the events contain other blocks and whether they contain inline
+        // markdown syntax.
         let mut pos = 0;
 
         for event in parser_events.iter().skip(1) {
@@ -889,7 +911,8 @@ pub(crate) fn parse_markdown(text: &str) -> Option<String> {
 
     let mut events_iter = parser_events.into_iter();
 
-    // If the content is inline, remove the wrapping paragraph, as instructed by the Matrix spec.
+    // If the content is inline, remove the wrapping paragraph, as instructed by the
+    // Matrix spec.
     if is_inline {
         events_iter.next();
         events_iter.next_back();

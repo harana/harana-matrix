@@ -219,7 +219,7 @@ jobs:
         run: |
           cargo nextest run --workspace \
             --exclude client-integration-testing \
-            --features testing,client-matrix/sqlite
+            --features testing,harana-matrix-client/sqlite,harana-matrix-common/full
 
       - name: Test documentation
         run: |

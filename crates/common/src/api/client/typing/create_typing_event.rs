@@ -9,12 +9,13 @@ pub mod v3 {
 
     use std::time::Duration;
 
+    use serde::{Deserialize, Deserializer, Serialize, de::Error};
+
     use crate::__ruma::{
         OwnedRoomId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
-    use serde::{Deserialize, Deserializer, Serialize, de::Error};
 
     metadata! {
         method: PUT,
@@ -48,7 +49,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given user ID, room ID and typing state.
+        /// Creates a new `Request` with the given user ID, room ID and typing
+        /// state.
         pub fn new(user_id: OwnedUserId, room_id: OwnedRoomId, state: Typing) -> Self {
             Self { user_id, room_id, state }
         }

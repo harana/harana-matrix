@@ -1,21 +1,23 @@
 use js_int::{int, uint};
-use crate::__ruma::{
-    MilliSecondsSinceUnixEpoch, RoomVersionId, owned_event_id,
-    room_version_rules::AuthorizationRules,
-};
-use crate::__ruma::events::StateEventType;
 use test_log::test;
 
 use super::{StateMap, is_power_event};
-use crate::state_res::{
-    test_utils::{RoomPowerLevelsPduContent, RoomTimelineFactory, UserFactory},
-    utils::{event_id_map::EventIdMap, event_id_set::EventIdSet},
+use crate::{
+    __ruma::{
+        MilliSecondsSinceUnixEpoch, RoomVersionId, events::StateEventType, owned_event_id,
+        room_version_rules::AuthorizationRules,
+    },
+    state_res::{
+        test_utils::{RoomPowerLevelsPduContent, RoomTimelineFactory, UserFactory},
+        utils::{event_id_map::EventIdMap, event_id_set::EventIdSet},
+    },
 };
 
 #[test]
 fn test_sort_power_events() {
-    // Because we use the keys and values of a `HashMap` to get the events to sort, their order
-    // before sorting changes every time, so let's run this several times.
+    // Because we use the keys and values of a `HashMap` to get the events to sort,
+    // their order before sorting changes every time, so let's run this several
+    // times.
     for _ in 0..20 {
         let factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V6);
 
@@ -44,8 +46,9 @@ fn test_sort_power_events() {
 
 #[test]
 fn test_mainline_sort() {
-    // Because we use the keys and values of a `HashMap` to get the events to sort, their order
-    // before sorting changes every time, so let's run this several times.
+    // Because we use the keys and values of a `HashMap` to get the events to sort,
+    // their order before sorting changes every time, so let's run this several
+    // times.
     for _ in 0..20 {
         let factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V10);
 

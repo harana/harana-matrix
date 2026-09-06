@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use client_crypto::Device as InnerDevice;
+use harana_matrix_client::crypto::Device as InnerDevice;
 
 /// An E2EE capable Matrix device.
 #[derive(uniffi::Record)]

@@ -55,7 +55,8 @@ where
         self.0.contains(event_id)
     }
 
-    /// Returns a reference to the event ID in the set, if any, that is equal to the given one.
+    /// Returns a reference to the event ID in the set, if any, that is equal to
+    /// the given one.
     pub fn get(&self, event_id: &EventId) -> Option<&E> {
         self.0.get(event_id)
     }
@@ -74,13 +75,14 @@ where
         self.0.remove(event_id)
     }
 
-    /// Removes and returns the event ID in the set, if any, that is equal to the given one.
+    /// Removes and returns the event ID in the set, if any, that is equal to
+    /// the given one.
     pub fn take(&mut self, event_id: &EventId) -> Option<E> {
         self.0.take(event_id)
     }
 
-    /// Visits the values representing the intersection, i.e., the values that are both in self and
-    /// other.
+    /// Visits the values representing the intersection, i.e., the values that
+    /// are both in self and other.
     pub fn intersection<'a>(&'a self, other: &'a Self) -> EventIdSetIntersection<'a, E> {
         EventIdSetIntersection(self.0.intersection(&other.0))
     }

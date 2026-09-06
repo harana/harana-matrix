@@ -43,7 +43,7 @@ mod utd;
 mod utils;
 mod widget;
 
-use client_matrix::ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+use harana_matrix_client::ruma::events::room::message::RoomMessageEventContentWithoutRelation;
 
 use self::{
     error::ClientError,
@@ -61,7 +61,7 @@ uniffi::include_scaffolding!("api");
 /// keep using the built-in SQLite, IndexedDB and in-memory stores, and the
 /// built-in text and Sentry log sinks.
 pub mod pluggable {
-    pub use client_matrix::StoreProvider;
+    pub use harana_matrix_client::StoreProvider;
 
     pub use crate::{
         client_builder::ClientBuilder,
@@ -69,7 +69,7 @@ pub mod pluggable {
     };
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 fn sdk_git_sha() -> String {
     env!("VERGEN_GIT_SHA").to_owned()
 }

@@ -1,15 +1,17 @@
 use assert_matches2::assert_matches;
-use js_int::uint;
-use maplit::btreemap;
 use harana_matrix_common::{
-    MilliSecondsSinceUnixEpoch, canonical_json::assert_to_canonical_json_eq, event_id,
+    MilliSecondsSinceUnixEpoch,
+    canonical_json::assert_to_canonical_json_eq,
+    event_id,
+    events::{
+        AnySyncEphemeralRoomEvent,
+        receipt::{Receipt, ReceiptEventContent, ReceiptType},
+        typing::TypingEventContent,
+    },
     owned_event_id, owned_user_id, user_id,
 };
-use harana_matrix_common::events::{
-    AnySyncEphemeralRoomEvent,
-    receipt::{Receipt, ReceiptEventContent, ReceiptType},
-    typing::TypingEventContent,
-};
+use js_int::uint;
+use maplit::btreemap;
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

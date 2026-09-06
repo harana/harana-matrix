@@ -1,7 +1,7 @@
 //! `GET /_matrix/client/*/rooms/{roomId}/joined_members`
 //!
-//! Get a map of user IDs to member info objects for members of the room. Primarily for use in
-//! Application Services.
+//! Get a map of user IDs to member info objects for members of the room.
+//! Primarily for use in Application Services.
 
 pub mod v3 {
     //! `/v3/` ([spec])
@@ -10,12 +10,13 @@ pub mod v3 {
 
     use std::collections::BTreeMap;
 
+    use serde::{Deserialize, Serialize};
+
     use crate::__ruma::{
         OwnedMxcUri, OwnedRoomId, OwnedUserId,
         api::{auth_scheme::AccessToken, request, response},
         metadata,
     };
-    use serde::{Deserialize, Serialize};
 
     metadata! {
         method: GET,
@@ -67,8 +68,9 @@ pub mod v3 {
 
         /// The mxc avatar url of the user.
         ///
-        /// If you activate the `compat-empty-string-null` feature, this field being an empty
-        /// string in JSON will result in `None` here during deserialization.
+        /// If you activate the `compat-empty-string-null` feature, this field
+        /// being an empty string in JSON will result in `None` here
+        /// during deserialization.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(
             feature = "compat-empty-string-null",
@@ -86,10 +88,10 @@ pub mod v3 {
 
     #[cfg(test)]
     mod tests {
-        use crate::__ruma::mxc_uri;
         use serde_json::{from_value as from_json_value, json};
 
         use super::RoomMember;
+        use crate::__ruma::mxc_uri;
 
         #[test]
         fn deserialize_room_member() {

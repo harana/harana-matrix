@@ -29,20 +29,26 @@
 //! [ruma]: https://github.com/ruma/ruma
 //! [vodozemac]: https://github.com/matrix-org/vodozemac
 //!
-//! > For internal consistency, Ruma uses American spelling for variable names. Names may differ
-//! > in the serialized representation, as the Matrix specification has a mix of British and
+//! > For internal consistency, Ruma uses American spelling for variable names.
+//! > Names may differ
+//! > in the serialized representation, as the Matrix specification has a mix of
+//! > British and
 //! > American English.
 //!
 //! # Cargo features
 //!
-//! * `client` -- `OutgoingRequest` / `IncomingResponse` impls, for code talking *to* a server.
-//! * `server` -- `IncomingRequest` / `OutgoingResponse` impls, for code answering requests.
-//! * `appservice-api` -- the application service registration types ([`api::appservice`]). Also
-//!   available as `appservice-api-c` and `appservice-api-s`, for parity with upstream `ruma`.
-//! * `federation-api` -- the server-server API (`api::federation`). Implies `signatures`.
-//! * `signatures` -- digital signatures (`signatures`).
-//! * `state-res` -- state resolution and the PDU authorization rules ([`state_res`]). Implies
+//! * `client` -- `OutgoingRequest` / `IncomingResponse` impls, for code talking
+//!   *to* a server.
+//! * `server` -- `IncomingRequest` / `OutgoingResponse` impls, for code
+//!   answering requests.
+//! * `appservice-api` -- the application service registration types
+//!   ([`api::appservice`]). Also available as `appservice-api-c` and
+//!   `appservice-api-s`, for parity with upstream `ruma`.
+//! * `federation-api` -- the server-server API (`api::federation`). Implies
 //!   `signatures`.
+//! * `signatures` -- digital signatures (`signatures`).
+//! * `state-res` -- state resolution and the PDU authorization rules
+//!   ([`state_res`]). Implies `signatures`.
 //! * `html` -- HTML parsing and sanitizing (`html`).
 //! * `olm` -- the Olm and Megolm ratchets (`olm`).
 //! * `markdown` -- parse markdown to construct messages.
@@ -50,19 +56,20 @@
 //! * `js` -- randomness and current system time in browser environments.
 //! * `testing` -- test helpers (`testing`).
 //! * `unstable-uniffi` -- UniFFI bindings for _some_ types. Work in progress.
-//! * `compat-*` -- tolerate known, reasonable deviations from the spec in external data. They
-//!   never make this crate *produce* non-spec-compliant data.
-//! * `unstable-mscXXXX` -- upcoming Matrix features that may change or be removed. Using any of
-//!   them opts you out of all semver guarantees.
+//! * `compat-*` -- tolerate known, reasonable deviations from the spec in
+//!   external data. They never make this crate *produce* non-spec-compliant
+//!   data.
+//! * `unstable-mscXXXX` -- upcoming Matrix features that may change or be
+//!   removed. Using any of them opts you out of all semver guarantees.
 //!
 //! # Compile-time `cfg` settings
 //!
 //! These are read from environment variables by `build.rs`:
 //!
-//! * `RUMA_IDENTIFIERS_STORAGE=Arc` -- back owned identifier types with `Arc<str>` instead of
-//!   `Box<str>`.
-//! * `RUMA_UNSTABLE_EXHAUSTIVE_TYPES` -- compile all types as exhaustive. Opts you out of all
-//!   semver guarantees.
+//! * `RUMA_IDENTIFIERS_STORAGE=Arc` -- back owned identifier types with
+//!   `Arc<str>` instead of `Box<str>`.
+//! * `RUMA_UNSTABLE_EXHAUSTIVE_TYPES` -- compile all types as exhaustive. Opts
+//!   you out of all semver guarantees.
 
 #![recursion_limit = "1024"]
 #![warn(missing_docs)]
@@ -119,8 +126,8 @@ pub mod signatures;
 pub mod state_res;
 #[cfg(feature = "testing")]
 pub mod testing;
-// Vendored verbatim from `ruma-identifiers-validation`, which documented none of
-// these; `harana-matrix-macros` carries a byte-identical copy.
+// Vendored verbatim from `ruma-identifiers-validation`, which documented none
+// of these; `harana-matrix-macros` carries a byte-identical copy.
 #[allow(missing_docs)]
 pub mod validation;
 
@@ -168,8 +175,8 @@ priv_owned_str!(uniffi);
 #[doc(hidden)]
 pub mod exports {
     pub use bytes;
-    pub use http;
     pub use harana_matrix_macros;
+    pub use http;
     pub use serde;
     pub use serde_html_form;
     pub use serde_json;

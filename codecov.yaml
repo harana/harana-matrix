@@ -7,16 +7,10 @@ coverage:
         target: auto
         threshold: 1%
         paths:
-          - "crates/client-matrix/"
-          - "crates/client-base/"
-          - "crates/client-common/"
-          - "crates/client-crypto/"
-          - "crates/client-qrcode/"
-          - "crates/client-sqlite/"
-          - "crates/client-store-encryption/"
-          # Coverage of wasm tests isn't supported at the moment,
-          # see rustwasm/wasm-bindgen#2276
-          # - "crates/client-indexeddb"
+          - "crates/client/"
+          - "crates/common/"
+          - "crates/server/"
+          - "crates/macros/"
       bindings:
         # Coverage of binding tests is recorded but for informational
         # purposes only
@@ -27,6 +21,8 @@ coverage:
 ignore:
   - "bindings/client-crypto-ffi"
   - "bindings/client-matrix-ffi"
-  - "crates/client-indexeddb"
+  # Coverage of wasm tests isn't supported at the moment,
+  # see rustwasm/wasm-bindgen#2276
+  - "crates/client/src/indexeddb"
   - "testing"
   - "xtask"

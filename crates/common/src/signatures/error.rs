@@ -1,9 +1,9 @@
-use crate::__ruma::{
-    IdParseError, canonical_json::CanonicalJsonFieldError, serde::Base64DecodeError,
-};
 use thiserror::Error;
 
-use crate::signatures::Ed25519VerificationError;
+use crate::{
+    __ruma::{IdParseError, canonical_json::CanonicalJsonFieldError, serde::Base64DecodeError},
+    signatures::Ed25519VerificationError,
+};
 
 /// All errors related to JSON validation/parsing.
 #[derive(Debug, Error)]

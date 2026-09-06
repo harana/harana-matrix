@@ -27,7 +27,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
+use harana_matrix_client::common::{SendOutsideWasm, SyncOutsideWasm};
 use tracing_core::{Event, Field, Level, Subscriber, field::Visit};
 use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
 
@@ -40,7 +40,7 @@ pub struct LogRecord {
     pub level: LogLevel,
 
     /// The target it was emitted with, usually a module path, e.g.
-    /// `client_matrix::client`.
+    /// `harana_matrix_client::client`.
     pub target: String,
 
     /// The formatted message, with the event's other fields appended as
@@ -59,7 +59,7 @@ pub struct LogRecord {
 }
 
 /// A consumer of [`LogRecord`]s.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait LogEventListener: SyncOutsideWasm + SendOutsideWasm {
     fn call(&self, event: LogRecord);
 }
@@ -79,14 +79,14 @@ thread_local! {
 /// The listener is called for the statements that pass the filter configured by
 /// `initPlatform`, and does not replace the file or stdout writers set up
 /// there. Setting a listener replaces the previously set one.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn set_log_event_listener(listener: Box<dyn LogEventListener>) {
     *LISTENER.write().unwrap() = Some(Arc::from(listener));
 }
 
 /// Stop delivering log statements to the listener set by
 /// [`set_log_event_listener`].
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn clear_log_event_listener() {
     *LISTENER.write().unwrap() = None;
 }

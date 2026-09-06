@@ -154,7 +154,9 @@ impl GroupSession {
         pickle: &str,
         pickle_key: &[u8],
     ) -> Result<Self, crate::olm::LibolmPickleError> {
-        use crate::olm::{megolm::group_session::libolm_compat::Pickle, utilities::unpickle_libolm};
+        use crate::olm::{
+            megolm::group_session::libolm_compat::Pickle, utilities::unpickle_libolm,
+        };
 
         const PICKLE_VERSION: u32 = 1;
         unpickle_libolm::<Pickle, _>(pickle, pickle_key, PICKLE_VERSION)

@@ -14,13 +14,15 @@
 
 use std::{fmt::Debug, sync::Arc, time::Duration};
 
-use client_base::crypto::types::events::UtdCause;
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
-use client_ui::unable_to_decrypt_hook::{
-    UnableToDecryptHook, UnableToDecryptInfo as SdkUnableToDecryptInfo,
+use harana_matrix_client::{
+    base::crypto::types::events::UtdCause,
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    ui::unable_to_decrypt_hook::{
+        UnableToDecryptHook, UnableToDecryptInfo as SdkUnableToDecryptInfo,
+    },
 };
 
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait UnableToDecryptDelegate: SyncOutsideWasm + SendOutsideWasm {
     fn on_utd(&self, info: UnableToDecryptInfo);
 }

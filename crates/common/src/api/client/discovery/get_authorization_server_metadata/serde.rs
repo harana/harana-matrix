@@ -57,8 +57,8 @@ impl<'de> Deserialize<'de> for AuthorizationServerMetadata {
                 ));
             }
         }
-        // If the field is missing, the default value is `["query", "fragment"]`, according to
-        // RFC8414.
+        // If the field is missing, the default value is `["query", "fragment"]`,
+        // according to RFC8414.
         let response_modes_supported = response_modes_supported
             .unwrap_or_else(|| [ResponseMode::Query, ResponseMode::Fragment].into());
 
@@ -140,12 +140,14 @@ mod tests {
         },
     };
 
-    /// A valid `AuthorizationServerMetadata` with all fields and values, as a JSON object.
+    /// A valid `AuthorizationServerMetadata` with all fields and values, as a
+    /// JSON object.
     fn authorization_server_metadata_object() -> JsonMap<String, JsonValue> {
         as_variant!(authorization_server_metadata_json(), JsonValue::Object).unwrap()
     }
 
-    /// Get a mutable reference to the array value with the given key in the given object.
+    /// Get a mutable reference to the array value with the given key in the
+    /// given object.
     ///
     /// Panics if the property doesn't exist or is not an array.
     fn get_mut_array<'a>(

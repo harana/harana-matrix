@@ -16,11 +16,13 @@ use std::{fmt::Debug, sync::Arc};
 
 use eyeball_im::VectorDiff;
 use futures_util::StreamExt as _;
-use client_matrix::live_locations_observer::{
-    BeaconInfoUpdate as SdkBeaconInfoUpdate, LiveLocationShare as SdkLiveLocationShare,
-    LiveLocationsObserver as SdkLiveLocationsObserver,
+use harana_matrix_client::{
+    common::{SendOutsideWasm, SyncOutsideWasm},
+    live_locations_observer::{
+        BeaconInfoUpdate as SdkBeaconInfoUpdate, LiveLocationShare as SdkLiveLocationShare,
+        LiveLocationsObserver as SdkLiveLocationsObserver,
+    },
 };
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
 
 use crate::{ruma::LocationContent, runtime::get_runtime_handle, task_handle::TaskHandle};
 
@@ -81,7 +83,7 @@ pub enum LiveLocationShareUpdate {
 }
 
 /// Listener for live location share updates.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait LiveLocationsListener: SendOutsideWasm + SyncOutsideWasm + Debug {
     /// Called with a batch of [`LiveLocationShareUpdate`]s whenever the list
     /// of active shares changes.
@@ -104,7 +106,7 @@ impl LiveLocationsObserver {
     }
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl LiveLocationsObserver {
     /// Subscribe to changes in the list of active live location shares.
     ///

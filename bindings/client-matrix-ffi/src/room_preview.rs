@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use anyhow::Context as _;
-use client_matrix::{Client, room_preview::RoomPreview as SdkRoomPreview};
+use harana_matrix_client::{Client, room_preview::RoomPreview as SdkRoomPreview};
 use harana_matrix_common::room::{JoinRuleSummary, RoomType as RumaRoomType};
 
 use crate::{
@@ -32,7 +32,7 @@ pub struct RoomPreview {
     client: AsyncRuntimeDropped<Client>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl RoomPreview {
     /// Returns the room info the preview contains.
     pub fn info(&self) -> RoomPreviewInfo {

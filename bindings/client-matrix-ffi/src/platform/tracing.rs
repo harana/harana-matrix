@@ -34,7 +34,7 @@ use tracing_core::{identify_callsite, metadata::Kind as MetadataKind};
 /// level + target) it is called with. Please make sure that the number of
 /// different combinations of those parameters this can be called with is
 /// constant in the final executable.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 fn log_event(file: String, line: Option<u32>, level: LogLevel, target: String, message: String) {
     static CALLSITES: Mutex<BTreeMap<MetadataId, &'static DefaultCallsite>> =
         Mutex::new(BTreeMap::new());
@@ -113,7 +113,7 @@ pub struct Span(tracing::Span);
 
 pub(crate) const BRIDGE_SPAN_NAME: &str = "<sdk_bridge_span>";
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl Span {
     /// Create a span originating at the given callsite (file, line and column).
     ///

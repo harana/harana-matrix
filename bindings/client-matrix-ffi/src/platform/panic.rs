@@ -25,7 +25,7 @@ use std::{
     sync::{Arc, OnceLock, RwLock},
 };
 
-use client_common::{SendOutsideWasm, SyncOutsideWasm};
+use harana_matrix_client::common::{SendOutsideWasm, SyncOutsideWasm};
 
 /// Details about a panic that happened inside the SDK.
 #[derive(Clone, uniffi::Record)]
@@ -60,7 +60,7 @@ pub struct PanicDetails {
 /// The callback runs on the panicking thread, while the panic is being
 /// handled, so it must not panic itself and should return quickly. The panic
 /// still unwinds afterwards.
-#[client_matrix_ffi_macros::export(callback_interface)]
+#[harana_matrix_macros::uniffi_export(callback_interface)]
 pub trait PanicListener: SyncOutsideWasm + SendOutsideWasm {
     /// Called with the details of a panic that just happened.
     fn on_panic(&self, details: PanicDetails);
@@ -81,7 +81,7 @@ fn listener() -> &'static SharedListener {
 /// This can be called before or after `init_platform`; the hook that feeds it
 /// is installed on first use and chains to whatever panic hook was in place,
 /// so the existing panic logging keeps working.
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 pub fn set_panic_listener(listener_to_set: Option<Box<dyn PanicListener>>) {
     install_hook();
     *listener().write().unwrap() = listener_to_set.map(Arc::from);

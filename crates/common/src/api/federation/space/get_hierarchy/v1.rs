@@ -2,14 +2,15 @@
 //!
 //! [spec]: https://spec.matrix.org/v1.19/server-server-api/#get_matrixfederationv1hierarchyroomid
 
-use crate::__ruma::{
-    OwnedRoomId,
-    api::{request, response},
-    metadata,
-    room::RoomSummary,
+use crate::{
+    __ruma::{
+        OwnedRoomId,
+        api::{request, response},
+        metadata,
+        room::RoomSummary,
+    },
+    api::federation::{authentication::ServerSignatures, space::SpaceHierarchyParentSummary},
 };
-
-use crate::api::federation::{authentication::ServerSignatures, space::SpaceHierarchyParentSummary};
 
 metadata! {
     method: GET,
@@ -41,10 +42,11 @@ pub struct Response {
     /// Rooms which the requesting server cannot peek/join will be excluded.
     pub children: Vec<RoomSummary>,
 
-    /// The list of room IDs the requesting server doesn’t have a viable way to peek/join.
+    /// The list of room IDs the requesting server doesn’t have a viable way to
+    /// peek/join.
     ///
-    /// Rooms which the responding server cannot provide details on will be outright
-    /// excluded from the response instead.
+    /// Rooms which the responding server cannot provide details on will be
+    /// outright excluded from the response instead.
     pub inaccessible_children: Vec<OwnedRoomId>,
 
     /// A summary of the requested room.
@@ -67,10 +69,10 @@ impl Response {
 
 #[cfg(all(test, feature = "client"))]
 mod tests {
-    use crate::__ruma::{OwnedRoomId, api::IncomingResponseExt as _};
     use serde_json::json;
 
     use super::Response;
+    use crate::__ruma::{OwnedRoomId, api::IncomingResponseExt as _};
 
     #[test]
     fn deserialize_response() {

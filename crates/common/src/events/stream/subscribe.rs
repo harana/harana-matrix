@@ -2,13 +2,15 @@
 //!
 //! [MSC4471]: https://github.com/matrix-org/matrix-spec-proposals/pull/4471
 
-use crate::__ruma::{OwnedDeviceId, OwnedEventId, OwnedRoomId};
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
+use crate::__ruma::{OwnedDeviceId, OwnedEventId, OwnedRoomId};
+
 /// The content of a to-device `m.stream.subscribe` event.
 ///
-/// Sent by a subscriber device to the publisher device named in a stream descriptor.
+/// Sent by a subscriber device to the publisher device named in a stream
+/// descriptor.
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 #[ruma_event(
@@ -29,8 +31,8 @@ pub struct ToDeviceStreamSubscribeEventContent {
     /// this before accepting the subscription.
     pub subscriber_device_id: OwnedDeviceId,
 
-    /// If `true`, request a fresh `replace` operation rather than continuing from the current
-    /// state.
+    /// If `true`, request a fresh `replace` operation rather than continuing
+    /// from the current state.
     #[serde(default, skip_serializing_if = "crate::__ruma::serde::is_default")]
     pub resync: bool,
 }
@@ -50,14 +52,16 @@ impl ToDeviceStreamSubscribeEventContent {
 #[cfg(test)]
 mod tests {
     use assert_matches2::assert_matches;
-    use crate::__ruma::{
-        canonical_json::assert_to_canonical_json_eq, owned_device_id, owned_event_id,
-        owned_room_id, serde::Raw,
-    };
     use serde_json::{from_value as from_json_value, json};
 
     use super::ToDeviceStreamSubscribeEventContent;
-    use crate::events::{AnyToDeviceEvent, ToDeviceEvent};
+    use crate::{
+        __ruma::{
+            canonical_json::assert_to_canonical_json_eq, owned_device_id, owned_event_id,
+            owned_room_id, serde::Raw,
+        },
+        events::{AnyToDeviceEvent, ToDeviceEvent},
+    };
 
     #[test]
     fn subscribe_round_trip() {

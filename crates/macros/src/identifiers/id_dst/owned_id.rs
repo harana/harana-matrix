@@ -1,4 +1,5 @@
-//! Types and functions to handle the identifiers internal storage representations.
+//! Types and functions to handle the identifiers internal storage
+//! representations.
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -24,9 +25,9 @@ impl OwnedId {
         Self { ident, id_type, storage_attrs: StorageCfgAttributes::new() }
     }
 
-    /// Expand an implementation for all the internal storage representations by calling the given
-    /// function for each value and concatenating the outputs gated behind the proper `#[cfg]`
-    /// attribute.
+    /// Expand an implementation for all the internal storage representations by
+    /// calling the given function for each value and concatenating the
+    /// outputs gated behind the proper `#[cfg]` attribute.
     fn expand_for_each_storage_value<F: Fn(&StorageCfgValue) -> TokenStream>(
         &self,
         expand_value_fn: F,
@@ -62,7 +63,8 @@ impl OwnedId {
         // Expanded code to access the inner field.
         let self_inner_field = quote! { self.inner };
         let id_inner_field = quote! { id.inner };
-        // The name of the string variable when constructing an identifier from a string.
+        // The name of the string variable when constructing an identifier from a
+        // string.
         let string_var = syn::Ident::new("s", Span::call_site());
 
         let (phantom_decl, phantom_ctor) = if generics.params.is_empty() {
@@ -358,7 +360,8 @@ impl StorageCfgValue {
 
     /// The docs for this value.
     ///
-    /// This should be a doc string that looks like `` `{value}` -- Use a `{type}`.``.
+    /// This should be a doc string that looks like `` `{value}` -- Use a
+    /// `{type}`.``.
     fn doc(&self) -> &'static str {
         match self {
             Self::Default => "",

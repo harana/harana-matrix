@@ -4,8 +4,8 @@
 
 use std::time::Duration;
 
-use js_int::UInt;
 use harana_matrix_macros::EventContent;
+use js_int::UInt;
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -17,8 +17,9 @@ use super::{
 
 /// The payload for an extensible video message.
 ///
-/// This is the new primary type introduced in [MSC3553] and should only be sent in rooms with a
-/// version that supports it. See the documentation of the [`message`] module for more information.
+/// This is the new primary type introduced in [MSC3553] and should only be sent
+/// in rooms with a version that supports it. See the documentation of the
+/// [`message`] module for more information.
 ///
 /// [MSC3553]: https://github.com/matrix-org/matrix-spec-proposals/pull/3553
 /// [`message`]: super::message
@@ -71,7 +72,8 @@ pub struct VideoEventContent {
 }
 
 impl VideoEventContent {
-    /// Creates a new `VideoEventContent` with the given fallback representation and file.
+    /// Creates a new `VideoEventContent` with the given fallback representation
+    /// and file.
     pub fn new(text: TextContentBlock, file: FileContentBlock) -> Self {
         Self {
             text,
@@ -85,8 +87,8 @@ impl VideoEventContent {
         }
     }
 
-    /// Creates a new `VideoEventContent` with the given plain text fallback representation and
-    /// file.
+    /// Creates a new `VideoEventContent` with the given plain text fallback
+    /// representation and file.
     pub fn with_plain_text(plain_text: impl Into<String>, file: FileContentBlock) -> Self {
         Self {
             text: TextContentBlock::plain(plain_text),
@@ -121,7 +123,8 @@ pub struct VideoDetailsContentBlock {
 }
 
 impl VideoDetailsContentBlock {
-    /// Creates a new `VideoDetailsContentBlock` with the given height and width.
+    /// Creates a new `VideoDetailsContentBlock` with the given height and
+    /// width.
     pub fn new(width: UInt, height: UInt) -> Self {
         Self { width, height, duration: None }
     }

@@ -135,19 +135,8 @@ wiremock = { version = "0.6.5", default-features = false }
 zeroize = "1.9.0"
 zxcvbn = { git = "https://github.com/shssoichiro/zxcvbn-rs", rev = "4e8e784b23541d118800df84feedf8160879d1af", default-features = false }
 
-client-matrix = { path = "crates/client-matrix", version = "0.18.0", default-features = false }
-client-base = { path = "crates/client-base", version = "0.18.0", default-features = false }
-client-common = { path = "crates/client-common", version = "0.18.0", default-features = false }
-client-contentscanner = { path = "crates/client-contentscanner", version = "0.18.0", default-features = false }
-client-crypto = { path = "crates/client-crypto", version = "0.18.0", default-features = false }
-client-matrix-ffi-macros = { path = "bindings/client-matrix-ffi-macros", version = "0.7.0" }
-client-indexeddb = { path = "crates/client-indexeddb", version = "0.18.0", default-features = false }
-client-qrcode = { path = "crates/client-qrcode", version = "0.18.0" }
-client-sqlite = { path = "crates/client-sqlite", version = "0.18.0", default-features = false }
-client-store-encryption = { path = "crates/client-store-encryption", version = "0.18.0" }
-common-test = { path = "testing/common-test", version = "0.18.0" }
-client-ui = { path = "crates/client-ui", version = "0.18.0", default-features = false }
-client-search = { path = "crates/client-search", version = "0.18.0", default-features = false }
+harana-matrix-client = { path = "crates/client", version = "0.18.0", default-features = false }
+harana-matrix-server = { path = "crates/server", version = "0.18.0", default-features = false }
 
 [workspace.lints.rust]
 rust_2018_idioms = "warn"

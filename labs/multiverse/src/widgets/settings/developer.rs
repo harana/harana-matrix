@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
-use client_matrix::Client;
-use client_ui::sync_service::{self, SyncService};
+use harana_matrix_client::{
+    Client,
+    ui::sync_service::{self, SyncService},
+};
 use ratatui::{
     prelude::*,
     widgets::{HighlightSpacing, *},

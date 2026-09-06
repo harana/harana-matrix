@@ -1,7 +1,11 @@
 use assert_matches2::{assert_let, assert_matches};
+use harana_matrix_common::{
+    MilliSecondsSinceUnixEpoch,
+    events::{AnyStateEvent, AnySyncStateEvent, AnyTimelineEvent, StateEvent, SyncStateEvent},
+    mxc_uri,
+    serde::CanBeEmpty,
+};
 use js_int::uint;
-use harana_matrix_common::{MilliSecondsSinceUnixEpoch, mxc_uri, serde::CanBeEmpty};
-use harana_matrix_common::events::{AnyStateEvent, AnySyncStateEvent, AnyTimelineEvent, StateEvent, SyncStateEvent};
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

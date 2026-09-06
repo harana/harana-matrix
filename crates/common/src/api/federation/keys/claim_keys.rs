@@ -9,15 +9,16 @@ pub mod v1 {
 
     use std::collections::BTreeMap;
 
-    use crate::__ruma::{
-        OneTimeKeyAlgorithm, OwnedDeviceId, OwnedOneTimeKeyId, OwnedUserId,
-        api::{request, response},
-        encryption::OneTimeKey,
-        metadata,
-        serde::Raw,
+    use crate::{
+        __ruma::{
+            OneTimeKeyAlgorithm, OwnedDeviceId, OwnedOneTimeKeyId, OwnedUserId,
+            api::{request, response},
+            encryption::OneTimeKey,
+            metadata,
+            serde::Raw,
+        },
+        api::federation::authentication::ServerSignatures,
     };
-
-    use crate::api::federation::authentication::ServerSignatures;
 
     metadata! {
         method: POST,

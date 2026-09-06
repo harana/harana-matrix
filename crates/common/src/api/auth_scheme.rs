@@ -1,5 +1,5 @@
-//! The `AuthScheme` trait used to specify the authentication scheme used by endpoints and the types
-//! that implement it.
+//! The `AuthScheme` trait used to specify the authentication scheme used by
+//! endpoints and the types that implement it.
 
 #![allow(clippy::exhaustive_structs)]
 
@@ -7,33 +7,40 @@ use as_variant::as_variant;
 use http::{HeaderMap, header};
 use serde::Deserialize;
 
-/// Trait implemented by types representing an authentication scheme used by an endpoint.
+/// Trait implemented by types representing an authentication scheme used by an
+/// endpoint.
 pub trait AuthScheme: Sized {
     /// The input necessary to generate the authentication.
     type Input<'a>;
 
-    /// The error type returned from [`add_authentication()`](Self::add_authentication).
+    /// The error type returned from
+    /// [`add_authentication()`](Self::add_authentication).
     type AddAuthenticationError: Into<Box<dyn std::error::Error + Send + Sync + 'static>>;
 
     /// The authentication data that can be extracted from a request.
     type Output;
 
-    /// The error type returned from [`extract_authentication()`](Self::extract_authentication).
+    /// The error type returned from
+    /// [`extract_authentication()`](Self::extract_authentication).
     type ExtractAuthenticationError: Into<Box<dyn std::error::Error + Send + Sync + 'static>>;
 
-    /// Add this authentication scheme to the given outgoing request, if necessary.
+    /// Add this authentication scheme to the given outgoing request, if
+    /// necessary.
     ///
-    /// Returns an error if the endpoint requires authentication but the input doesn't provide it,
-    /// or if the input fails to serialize to the proper format.
+    /// Returns an error if the endpoint requires authentication but the input
+    /// doesn't provide it, or if the input fails to serialize to the proper
+    /// format.
     fn add_authentication<T: AsRef<[u8]>>(
         request: &mut http::Request<T>,
         input: Self::Input<'_>,
     ) -> Result<(), Self::AddAuthenticationError>;
 
-    /// Extract the data of this authentication scheme from the given incoming request.
+    /// Extract the data of this authentication scheme from the given incoming
+    /// request.
     ///
-    /// Returns an error if the endpoint requires authentication but the request doesn't provide it,
-    /// or if the output fails to deserialize to the proper format.
+    /// Returns an error if the endpoint requires authentication but the request
+    /// doesn't provide it, or if the output fails to deserialize to the
+    /// proper format.
     fn extract_authentication<T>(
         request: &http::Request<T>,
     ) -> Result<Self::Output, Self::ExtractAuthenticationError>;
@@ -64,10 +71,11 @@ impl AuthScheme for NoAuthentication {
     }
 }
 
-/// No authentication is performed on an API that usually relies on access tokens.
+/// No authentication is performed on an API that usually relies on access
+/// tokens.
 ///
-/// Contrary to [`NoAuthentication`], this type accepts a [`SendAccessToken`] as input to be able to
-/// send it regardless of whether it is required.
+/// Contrary to [`NoAuthentication`], this type accepts a [`SendAccessToken`] as
+/// input to be able to send it regardless of whether it is required.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoAccessToken;
 
@@ -96,8 +104,8 @@ impl AuthScheme for NoAccessToken {
     }
 }
 
-/// Authentication is performed by including an access token in the `Authentication` http
-/// header, or an `access_token` query parameter.
+/// Authentication is performed by including an access token in the
+/// `Authentication` http header, or an `access_token` query parameter.
 ///
 /// Using the query parameter is deprecated since Matrix 1.11.
 #[derive(Debug, Clone, Copy, Default)]
@@ -127,8 +135,8 @@ impl AuthScheme for AccessToken {
     }
 }
 
-/// Authentication is optional, and it is performed by including an access token in the
-/// `Authentication` http header, or an `access_token` query parameter.
+/// Authentication is optional, and it is performed by including an access token
+/// in the `Authentication` http header, or an `access_token` query parameter.
 ///
 /// Using the query parameter is deprecated since Matrix 1.11.
 #[derive(Debug, Clone, Copy, Default)]
@@ -159,9 +167,9 @@ impl AuthScheme for AccessTokenOptional {
     }
 }
 
-/// Authentication is required, and can only be performed for appservices, by including an
-/// appservice access token in the `Authentication` http header, or `access_token` query
-/// parameter.
+/// Authentication is required, and can only be performed for appservices, by
+/// including an appservice access token in the `Authentication` http header, or
+/// `access_token` query parameter.
 ///
 /// Using the query parameter is deprecated since Matrix 1.11.
 #[derive(Debug, Clone, Copy, Default)]
@@ -191,9 +199,9 @@ impl AuthScheme for AppserviceToken {
     }
 }
 
-/// No authentication is performed for clients, but it can be performed for appservices, by
-/// including an appservice access token in the `Authentication` http header, or an
-/// `access_token` query parameter.
+/// No authentication is performed for clients, but it can be performed for
+/// appservices, by including an appservice access token in the `Authentication`
+/// http header, or an `access_token` query parameter.
 ///
 /// Using the query parameter is deprecated since Matrix 1.11.
 #[derive(Debug, Clone, Copy, Default)]
@@ -224,7 +232,8 @@ impl AuthScheme for AppserviceTokenOptional {
     }
 }
 
-/// Add the given access token as an `Authorization` HTTP header to the given map.
+/// Add the given access token as an `Authorization` HTTP header to the given
+/// map.
 fn add_access_token_as_authorization_header(
     headers: &mut HeaderMap,
     token: &str,
@@ -233,8 +242,8 @@ fn add_access_token_as_authorization_header(
     Ok(())
 }
 
-/// Extract the access token from the `Authorization` HTTP header or the query string of the given
-/// request.
+/// Extract the access token from the `Authorization` HTTP header or the query
+/// string of the given request.
 fn extract_bearer_or_query_token<T>(
     request: &http::Request<T>,
 ) -> Result<Option<String>, ExtractTokenError> {
@@ -282,24 +291,26 @@ fn extract_access_token_from_query(
     serde_html_form::from_str::<AccessTokenDeHelper>(query).map(|helper| helper.access_token)
 }
 
-/// An enum to control whether an access token should be added to outgoing requests
+/// An enum to control whether an access token should be added to outgoing
+/// requests
 #[derive(Clone, Copy, Debug)]
 #[allow(clippy::exhaustive_enums)]
 pub enum SendAccessToken<'a> {
-    /// Add the given access token to the request only if the `METADATA` on the request requires
-    /// it.
+    /// Add the given access token to the request only if the `METADATA` on the
+    /// request requires it.
     IfRequired(&'a str),
 
     /// Always add the access token.
     Always(&'a str),
 
-    /// Add the given appservice token to the request only if the `METADATA` on the request
-    /// requires it.
+    /// Add the given appservice token to the request only if the `METADATA` on
+    /// the request requires it.
     Appservice(&'a str),
 
     /// Don't add an access token.
     ///
-    /// This will lead to an error if the request endpoint requires authentication
+    /// This will lead to an error if the request endpoint requires
+    /// authentication
     None,
 }
 
@@ -327,7 +338,8 @@ impl<'a> SendAccessToken<'a> {
     }
 }
 
-/// An error that can occur when adding an [`AuthScheme`] that requires an access token.
+/// An error that can occur when adding an [`AuthScheme`] that requires an
+/// access token.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum AddRequiredTokenError {
@@ -340,7 +352,8 @@ pub enum AddRequiredTokenError {
     IntoHeader(#[from] header::InvalidHeaderValue),
 }
 
-/// An error that can occur when extracting an [`AuthScheme`] that expects an access token.
+/// An error that can occur when extracting an [`AuthScheme`] that expects an
+/// access token.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ExtractTokenError {

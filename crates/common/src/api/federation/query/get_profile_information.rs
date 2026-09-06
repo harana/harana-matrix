@@ -9,15 +9,17 @@ pub mod v1 {
 
     use std::collections::btree_map;
 
-    use crate::__ruma::{
-        OwnedUserId,
-        api::{request, response},
-        metadata,
-        profile::{ProfileFieldName, ProfileFieldValue, StaticProfileField, UserProfile},
-    };
     use serde_json::Value as JsonValue;
 
-    use crate::api::federation::authentication::ServerSignatures;
+    use crate::{
+        __ruma::{
+            OwnedUserId,
+            api::{request, response},
+            metadata,
+            profile::{ProfileFieldName, ProfileFieldValue, StaticProfileField, UserProfile},
+        },
+        api::federation::authentication::ServerSignatures,
+    };
 
     metadata! {
         method: GET,
@@ -68,9 +70,9 @@ pub mod v1 {
 
         /// Returns the value of the given [`StaticProfileField`].
         ///
-        /// Returns `Ok(Some(_))` if the field is present and the value was deserialized
-        /// successfully, `Ok(None)` if the field is not set, or an error if deserialization of the
-        /// value failed.
+        /// Returns `Ok(Some(_))` if the field is present and the value was
+        /// deserialized successfully, `Ok(None)` if the field is not
+        /// set, or an error if deserialization of the value failed.
         pub fn get_static<F: StaticProfileField>(
             &self,
         ) -> Result<Option<F::Value>, serde_json::Error> {

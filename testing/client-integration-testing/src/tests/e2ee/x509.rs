@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use client_matrix::encryption::EncryptionSettings;
-use client_crypto::x509::{
-    RawX509Signer, RawX509Verifier, RustRawX509Signer, RustRawX509Verifier,
+use harana_matrix_client::{
+    crypto::x509::{RawX509Signer, RawX509Verifier, RustRawX509Signer, RustRawX509Verifier},
+    encryption::EncryptionSettings,
 };
 use rand::RngExt as _;
 use rcgen::{

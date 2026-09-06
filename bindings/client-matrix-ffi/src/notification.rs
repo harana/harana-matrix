@@ -14,7 +14,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use client_ui::notification_client::{
+use harana_matrix_client::ui::notification_client::{
     NotificationClient as SdkNotificationClient, NotificationEvent as SdkNotificationEvent,
     NotificationItem as SdkNotificationItem, NotificationStatus as SdkNotificationStatus,
     RawNotificationEvent as SdkRawNotificationEvent,
@@ -184,7 +184,7 @@ pub struct NotificationClient {
     pub(crate) client: Arc<Client>,
 }
 
-#[client_matrix_ffi_macros::export]
+#[harana_matrix_macros::uniffi_export]
 impl NotificationClient {
     /// Fetches a room by its ID using the in-memory state store backed client.
     ///
@@ -272,7 +272,7 @@ impl NotificationItemsRequest {
 }
 
 impl TryFrom<NotificationItemsRequest>
-    for client_ui::notification_client::NotificationItemsRequest
+    for harana_matrix_client::ui::notification_client::NotificationItemsRequest
 {
     type Error = ClientError;
     fn try_from(value: NotificationItemsRequest) -> Result<Self, Self::Error> {

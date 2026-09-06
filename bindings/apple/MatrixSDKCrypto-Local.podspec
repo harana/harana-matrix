@@ -17,5 +17,5 @@ Pod::Spec.new do |s|
     s.source                = { :git => "Not Published", :tag => "Cocoapods/#{s.name}/#{s.version}" }
     s.vendored_frameworks   = "generated/MatrixSDKCryptoFFI.xcframework"
     s.source_files          = "generated/Sources/**/*.{swift}"
-    s.resources             = ["bindings/client-crypto-ffi/src/**/*.rs", "crates/client-crypto/src/**/*.rs"]
+    s.resources             = ["bindings/client-crypto-ffi/src/**/*.rs", "crates/client/src/crypto/**/*.rs"]
 end

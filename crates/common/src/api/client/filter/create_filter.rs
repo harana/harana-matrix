@@ -7,13 +7,14 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#post_matrixclientv3useruseridfilter
 
-    use crate::__ruma::{
-        OwnedUserId,
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            OwnedUserId,
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::filter::FilterDefinition,
     };
-
-    use crate::api::client::filter::FilterDefinition;
 
     metadata! {
         method: POST,
@@ -30,7 +31,8 @@ pub mod v3 {
     pub struct Request {
         /// The ID of the user uploading the filter.
         ///
-        /// The access token must be authorized to make requests for this user ID.
+        /// The access token must be authorized to make requests for this user
+        /// ID.
         #[ruma_api(path)]
         pub user_id: OwnedUserId,
 
@@ -47,7 +49,8 @@ pub mod v3 {
     }
 
     impl Request {
-        /// Creates a new `Request` with the given user ID and filter definition.
+        /// Creates a new `Request` with the given user ID and filter
+        /// definition.
         pub fn new(user_id: OwnedUserId, filter: FilterDefinition) -> Self {
             Self { user_id, filter }
         }
@@ -65,9 +68,8 @@ pub mod v3 {
         #[cfg(feature = "server")]
         #[test]
         fn deserialize_request() {
-            use crate::__ruma::api::IncomingRequest as _;
-
             use super::Request;
+            use crate::__ruma::api::IncomingRequest as _;
 
             let req = Request::try_from_http_request(
                 http::Request::builder()
@@ -88,15 +90,16 @@ pub mod v3 {
         fn serialize_request() {
             use std::borrow::Cow;
 
-            use crate::__ruma::{
-                api::{
-                    MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
-                    auth_scheme::SendAccessToken,
+            use crate::{
+                __ruma::{
+                    api::{
+                        MatrixVersion, OutgoingRequestExt as _, SupportedVersions,
+                        auth_scheme::SendAccessToken,
+                    },
+                    owned_user_id,
                 },
-                owned_user_id,
+                api::client::filter::FilterDefinition,
             };
-
-            use crate::api::client::filter::FilterDefinition;
 
             let supported = SupportedVersions {
                 versions: [MatrixVersion::V1_1].into(),

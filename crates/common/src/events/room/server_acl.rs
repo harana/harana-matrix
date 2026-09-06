@@ -2,12 +2,11 @@
 //!
 //! [`m.room.server_acl`]: https://spec.matrix.org/v1.19/client-server-api/#mroomserver_acl
 
-use crate::__ruma::ServerName;
 use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 use wildmatch::WildMatch;
 
-use crate::events::EmptyStateKey;
+use crate::{__ruma::ServerName, events::EmptyStateKey};
 
 /// The content of an `m.room.server_acl` event.
 ///
@@ -18,9 +17,10 @@ use crate::events::EmptyStateKey;
 pub struct RoomServerAclEventContent {
     /// Whether to allow server names that are IP address literals.
     ///
-    /// This is strongly recommended to be set to false as servers running with IP literal names
-    /// are strongly discouraged in order to require legitimate homeservers to be backed by a
-    /// valid registered domain name.
+    /// This is strongly recommended to be set to false as servers running with
+    /// IP literal names are strongly discouraged in order to require
+    /// legitimate homeservers to be backed by a valid registered domain
+    /// name.
     #[serde(
         default = "crate::__ruma::serde::default_true",
         skip_serializing_if = "crate::__ruma::serde::is_true"
@@ -29,17 +29,19 @@ pub struct RoomServerAclEventContent {
 
     /// The server names to allow in the room, excluding any port information.
     ///
-    /// Wildcards may be used to cover a wider range of hosts, where `*` matches zero or more
-    /// characters and `?` matches exactly one character.
+    /// Wildcards may be used to cover a wider range of hosts, where `*` matches
+    /// zero or more characters and `?` matches exactly one character.
     ///
-    /// **Defaults to an empty list when not provided, effectively disallowing every server.**
+    /// **Defaults to an empty list when not provided, effectively disallowing
+    /// every server.**
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allow: Vec<String>,
 
-    /// The server names to disallow in the room, excluding any port information.
+    /// The server names to disallow in the room, excluding any port
+    /// information.
     ///
-    /// Wildcards may be used to cover a wider range of hosts, where * matches zero or more
-    /// characters and `?` matches exactly one character.
+    /// Wildcards may be used to cover a wider range of hosts, where * matches
+    /// zero or more characters and `?` matches exactly one character.
     ///
     /// Defaults to an empty list when not provided.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -47,8 +49,8 @@ pub struct RoomServerAclEventContent {
 }
 
 impl RoomServerAclEventContent {
-    /// Creates a new `RoomServerAclEventContent` with the given IP literal allowance flag, allowed
-    /// and denied servers.
+    /// Creates a new `RoomServerAclEventContent` with the given IP literal
+    /// allowance flag, allowed and denied servers.
     pub fn new(allow_ip_literals: bool, allow: Vec<String>, deny: Vec<String>) -> Self {
         Self { allow_ip_literals, allow, deny }
     }
@@ -68,11 +70,10 @@ impl RoomServerAclEventContent {
 
 #[cfg(test)]
 mod tests {
-    use crate::__ruma::server_name;
     use serde_json::{from_value as from_json_value, json};
 
     use super::RoomServerAclEventContent;
-    use crate::events::OriginalStateEvent;
+    use crate::{__ruma::server_name, events::OriginalStateEvent};
 
     #[test]
     fn default_values() {

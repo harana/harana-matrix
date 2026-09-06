@@ -1,20 +1,20 @@
 #![cfg(feature = "unstable-msc3551")]
 
 use assert_matches2::assert_matches;
-use js_int::uint;
 use harana_matrix_common::{
     MilliSecondsSinceUnixEpoch,
     canonical_json::assert_to_canonical_json_eq,
+    events::{
+        AnyMessageLikeEvent, MessageLikeEvent,
+        file::{EncryptedContent, FileEventContent},
+        message::TextContentBlock,
+        relation::Reply,
+        room::{EncryptedFileHash, V2EncryptedFileInfo, message::Relation},
+    },
     owned_event_id, owned_mxc_uri,
     serde::{Base64, CanBeEmpty},
 };
-use harana_matrix_common::events::{
-    AnyMessageLikeEvent, MessageLikeEvent,
-    file::{EncryptedContent, FileEventContent},
-    message::TextContentBlock,
-    relation::Reply,
-    room::{EncryptedFileHash, V2EncryptedFileInfo, message::Relation},
-};
+use js_int::uint;
 use serde_json::{from_value as from_json_value, json};
 
 #[test]

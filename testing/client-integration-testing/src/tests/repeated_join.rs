@@ -2,15 +2,15 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use assign::assign;
-use client_matrix::{
+use harana_matrix_client::{
     Client, Room, RoomMemberships, RoomState, StateStoreExt,
+    common::executor::spawn,
     event_handler::Ctx,
     ruma::{
         api::client::room::create_room::v3::Request as CreateRoomRequest,
         events::room::member::{MembershipState, StrippedRoomMemberEvent},
     },
 };
-use client_common::executor::spawn;
 use tokio::sync::Notify;
 
 use crate::helpers::TestClientBuilder;

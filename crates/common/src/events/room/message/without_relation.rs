@@ -36,7 +36,8 @@ pub struct RoomMessageEventContentWithoutRelation {
 }
 
 impl RoomMessageEventContentWithoutRelation {
-    /// Creates a new `RoomMessageEventContentWithoutRelation` with the given `MessageType`.
+    /// Creates a new `RoomMessageEventContentWithoutRelation` with the given
+    /// `MessageType`.
     pub fn new(msgtype: MessageType) -> Self {
         Self {
             msgtype,
@@ -94,7 +95,8 @@ impl RoomMessageEventContentWithoutRelation {
         Self::new(MessageType::emote_markdown(body))
     }
 
-    /// Transform `self` into a `RoomMessageEventContent` with the given relation.
+    /// Transform `self` into a `RoomMessageEventContent` with the given
+    /// relation.
     pub fn with_relation(
         self,
         relates_to: Option<Relation<RoomMessageEventContentWithoutRelation>>,
@@ -114,12 +116,15 @@ impl RoomMessageEventContentWithoutRelation {
         }
     }
 
-    /// Turns `self` into a [rich reply] to the message using the given metadata.
+    /// Turns `self` into a [rich reply] to the message using the given
+    /// metadata.
     ///
-    /// Sets the `in_reply_to` field inside `relates_to`, and optionally the `rel_type` to
-    /// `m.thread` if the metadata has a `thread` and `ForwardThread::Yes` is used.
+    /// Sets the `in_reply_to` field inside `relates_to`, and optionally the
+    /// `rel_type` to `m.thread` if the metadata has a `thread` and
+    /// `ForwardThread::Yes` is used.
     ///
-    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as a user mention.
+    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as
+    /// a user mention.
     ///
     /// [rich reply]: https://spec.matrix.org/v1.19/client-server-api/#rich-replies
     #[track_caller]
@@ -152,18 +157,21 @@ impl RoomMessageEventContentWithoutRelation {
         self.with_relation(Some(relates_to))
     }
 
-    /// Turns `self` into a new message for a [thread], that is optionally a reply.
+    /// Turns `self` into a new message for a [thread], that is optionally a
+    /// reply.
     ///
-    /// Looks for the `thread` in the given metadata. If it exists, this message will be in the same
-    /// thread. If it doesn't, a new thread is created with the `event_id` in the metadata as the
-    /// root.
+    /// Looks for the `thread` in the given metadata. If it exists, this message
+    /// will be in the same thread. If it doesn't, a new thread is created
+    /// with the `event_id` in the metadata as the root.
     ///
-    /// It also sets the `in_reply_to` field inside `relates_to` to point the `event_id`
-    /// in the metadata. If `ReplyWithinThread::Yes` is used, the metadata should be constructed
-    /// from the event to make a reply to, otherwise it should be constructed from the latest
-    /// event in the thread.
+    /// It also sets the `in_reply_to` field inside `relates_to` to point the
+    /// `event_id` in the metadata. If `ReplyWithinThread::Yes` is used, the
+    /// metadata should be constructed from the event to make a reply to,
+    /// otherwise it should be constructed from the latest event in the
+    /// thread.
     ///
-    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as a user mention.
+    /// If `AddMentions::Yes` is used, the `sender` in the metadata is added as
+    /// a user mention.
     ///
     /// [thread]: https://spec.matrix.org/v1.19/client-server-api/#threading
     pub fn make_for_thread<'a>(
@@ -198,15 +206,16 @@ impl RoomMessageEventContentWithoutRelation {
     /// Turns `self` into a [replacement] (or edit) for a given message.
     ///
     /// The first argument after `self` can be `&OriginalRoomMessageEvent` or
-    /// `&OriginalSyncRoomMessageEvent` if you don't want to create `ReplacementMetadata` separately
-    /// before calling this function.
+    /// `&OriginalSyncRoomMessageEvent` if you don't want to create
+    /// `ReplacementMetadata` separately before calling this function.
     ///
-    /// This takes the content and sets it in `m.new_content`, and modifies the `content` to include
-    /// a fallback.
+    /// This takes the content and sets it in `m.new_content`, and modifies the
+    /// `content` to include a fallback.
     ///
-    /// If this message contains [`Mentions`], they are copied into `m.new_content` to keep the same
-    /// mentions, but the ones in `content` are filtered with the ones in the
-    /// [`ReplacementMetadata`] so only new mentions will trigger a notification.
+    /// If this message contains [`Mentions`], they are copied into
+    /// `m.new_content` to keep the same mentions, but the ones in `content`
+    /// are filtered with the ones in the [`ReplacementMetadata`] so only
+    /// new mentions will trigger a notification.
     ///
     /// # Panics
     ///
@@ -266,9 +275,9 @@ impl RoomMessageEventContentWithoutRelation {
 
     /// Add the given [mentions] to this event.
     ///
-    /// If no [`Mentions`] was set on this events, this sets it. Otherwise, this updates the current
-    /// mentions by extending the previous `user_ids` with the new ones, and applies a logical OR to
-    /// the values of `room`.
+    /// If no [`Mentions`] was set on this events, this sets it. Otherwise, this
+    /// updates the current mentions by extending the previous `user_ids`
+    /// with the new ones, and applies a logical OR to the values of `room`.
     ///
     /// [mentions]: https://spec.matrix.org/v1.19/client-server-api/#user-and-room-mentions
     pub fn add_mentions(mut self, mentions: Mentions) -> Self {

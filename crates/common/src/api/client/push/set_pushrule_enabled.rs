@@ -7,12 +7,13 @@ pub mod v3 {
     //!
     //! [spec]: https://spec.matrix.org/v1.19/client-server-api/#put_matrixclientv3pushrulesglobalkindruleidenabled
 
-    use crate::__ruma::{
-        api::{auth_scheme::AccessToken, request, response},
-        metadata,
+    use crate::{
+        __ruma::{
+            api::{auth_scheme::AccessToken, request, response},
+            metadata,
+        },
+        api::client::push::RuleKind,
     };
-
-    use crate::api::client::push::RuleKind;
 
     metadata! {
         method: PUT,
@@ -45,7 +46,8 @@ pub mod v3 {
     pub struct Response {}
 
     impl Request {
-        /// Creates a new `Request` with the given rule kind, rule ID and enabled flag.
+        /// Creates a new `Request` with the given rule kind, rule ID and
+        /// enabled flag.
         pub fn new(kind: RuleKind, rule_id: String, enabled: bool) -> Self {
             Self { kind, rule_id, enabled }
         }
