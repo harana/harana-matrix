@@ -339,14 +339,26 @@ impl BackupMachine {
         }
     }
 
-    /// Sign a [`RoomKeyBackupInfo`] using the device's identity key and, if
-    /// available, the cross-signing master key.
+    /// Sign a [`RoomKeyBackupInfo`] using the cross-signing master key and the
+    /// device's identity key.
+    ///
+    /// A backup signed only by the device that created it stops being
+    /// verifiable the moment that device is deleted, and a session that comes
+    /// later then has no way to tell whether the backup's auth data was
+    /// tampered with. Signing therefore fails rather than falling back to a
+    /// device-only signature when the master key is not available; the caller
+    /// should set cross-signing up first.
     ///
     /// # Arguments
     ///
     /// * `backup_info`: The backup version that should be verified. Should be
     ///   created from the [`BackupDecryptionKey`] using the
     ///   [`BackupDecryptionKey::to_backup_info()`] method.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SignatureError::MissingSigningKey`] if we do not hold the
+    /// private part of the cross-signing master key.
     pub async fn sign_backup(
         &self,
         backup_info: &mut RoomKeyBackupInfo,
@@ -354,14 +366,25 @@ impl BackupMachine {
         if let RoomKeyBackupInfo::MegolmBackupV1Curve25519AesSha2(data) = backup_info {
             let canonical_json = data.to_canonical_json()?;
 
-            let private_identity = self.store.private_identity();
-            let identity = private_identity.lock().await;
+            let master_key_signature = {
+                let private_identity = self.store.private_identity();
+                let identity = private_identity.lock().await;
 
-            if let Some(key_id) = identity.master_key_id().await
-                && let Ok(signature) = identity.sign(&canonical_json).await
-            {
-                data.signatures.add_signature(self.store.user_id().to_owned(), key_id, signature);
-            }
+                match identity.master_key_id().await {
+                    Some(key_id) => Some((key_id, identity.sign(&canonical_json).await?)),
+                    None => None,
+                }
+            };
+
+            let Some((master_key_id, master_key_signature)) = master_key_signature else {
+                return Err(SignatureError::MissingSigningKey);
+            };
+
+            data.signatures.add_signature(
+                self.store.user_id().to_owned(),
+                master_key_id,
+                master_key_signature,
+            );
 
             let cache = self.store.cache().await?;
             let account = cache.account().await?;
@@ -638,14 +661,14 @@ impl BackupMachine {
 mod tests {
     use std::collections::BTreeMap;
 
-    use assert_matches2::assert_let;
+    use assert_matches2::{assert_let, assert_matches};
     use matrix_sdk_test::async_test;
     use ruma::{CanonicalJsonValue, DeviceId, RoomId, UserId, device_id, room_id, user_id};
     use serde_json::json;
 
     use super::BackupMachine;
     use crate::{
-        OlmError, OlmMachine, OlmMachineBuilder,
+        OlmError, OlmMachine, OlmMachineBuilder, SignatureError,
         olm::BackedUpRoomKey,
         store::{
             CryptoStore, MemoryStore,
@@ -887,6 +910,7 @@ mod tests {
     #[async_test]
     async fn test_sign_backup_info() {
         let machine = OlmMachine::new(alice_id(), alice_device_id()).await;
+        machine.bootstrap_cross_signing(false).await.unwrap();
         let backup_machine = machine.backup_machine();
 
         let decryption_key = BackupDecryptionKey::new();
@@ -901,6 +925,31 @@ mod tests {
         let result = backup_machine.verify_backup(backup_info, false).await.unwrap();
 
         assert!(result.trusted());
+    }
+
+    /// A backup signed only by the device that created it stops being
+    /// verifiable once that device is deleted, so signing has to fail rather
+    /// than quietly produce one.
+    #[async_test]
+    async fn test_sign_backup_info_without_cross_signing() {
+        let machine = OlmMachine::new(alice_id(), alice_device_id()).await;
+        let backup_machine = machine.backup_machine();
+
+        let decryption_key = BackupDecryptionKey::new();
+        let mut backup_info = decryption_key.to_backup_info();
+
+        assert_matches!(
+            backup_machine.sign_backup(&mut backup_info).await,
+            Err(SignatureError::MissingSigningKey)
+        );
+
+        let RoomKeyBackupInfo::MegolmBackupV1Curve25519AesSha2(data) = &backup_info else {
+            panic!("The backup info should use the megolm v1 algorithm");
+        };
+        assert!(
+            data.signatures.is_empty(),
+            "A backup we refused to sign should carry no signature at all",
+        );
     }
 
     #[async_test]

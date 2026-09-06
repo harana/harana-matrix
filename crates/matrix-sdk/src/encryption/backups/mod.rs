@@ -133,8 +133,13 @@ impl Backups {
             // [spec]: https://spec.matrix.org/v1.8/client-server-api/#server-side-key-backups
             let mut backup_info = decryption_key.to_backup_info();
 
-            if let Err(e) = olm_machine.backup_machine().sign_backup(&mut backup_info).await {
-                warn!("Unable to sign the newly created backup version: {e:?}");
+            // A backup signed only by this device stops being verifiable the moment
+            // this device is deleted, and the spec requires a client to check the auth
+            // data before storing keys in a backup. Refuse to create one rather than
+            // leave a future session with a backup it can never trust.
+            if let Err(error) = olm_machine.backup_machine().sign_backup(&mut backup_info).await {
+                warn!("Unable to sign the newly created backup version: {error:?}");
+                return Err(crate::Error::BackupNotCrossSigned.into());
             }
 
             let algorithm = Raw::new(&backup_info)?.cast();
@@ -1334,6 +1339,21 @@ mod test {
     use super::*;
     use crate::test_utils::{logged_in_client, mocks::MatrixMockServer};
 
+    /// Set up a private cross-signing identity for the client, without
+    /// uploading anything.
+    ///
+    /// Creating a backup now requires a cross-signing master key signature, so
+    /// tests that create one need an identity to sign with.
+    async fn bootstrap_cross_signing_locally(client: &crate::Client) {
+        let olm_machine = client.olm_machine().await;
+        olm_machine
+            .as_ref()
+            .expect("The client should have an OlmMachine")
+            .bootstrap_cross_signing(false)
+            .await
+            .expect("We should be able to create a cross-signing identity");
+    }
+
     fn room_key() -> ExportedRoomKey {
         let json = json!({
             "algorithm": "m.megolm.v1.aes-sha2",
@@ -1487,6 +1507,7 @@ mod test {
     async fn test_backup_disabling_after_remote_deletion() {
         let server = MockServer::start().await;
         let client = logged_in_client(Some(server.uri())).await;
+        bootstrap_cross_signing_locally(&client).await;
 
         {
             let machine = client.olm_machine().await;
@@ -1685,6 +1706,7 @@ mod test {
     async fn test_adding_a_backup_invalidates_exists_on_server_cache() {
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
+        bootstrap_cross_signing_locally(&client).await;
         let backups = client.encryption().backups();
 
         {
@@ -1739,6 +1761,7 @@ mod test {
     async fn test_waiting_for_steady_state_resets_the_delay() {
         let server = MatrixMockServer::new().await;
         let client = server.client_builder().build().await;
+        bootstrap_cross_signing_locally(&client).await;
 
         server.mock_add_room_keys_version().ok().expect(1).mount().await;
 
