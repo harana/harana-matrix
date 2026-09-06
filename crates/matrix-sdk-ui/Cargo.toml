@@ -17,6 +17,10 @@ uniffi = ["dep:uniffi", "matrix-sdk/uniffi", "matrix-sdk-base/uniffi"]
 
 rustls-aws-lc-rs = ["reqwest-transport", "matrix-sdk/rustls-aws-lc-rs"]
 
+# Use ring rather than aws-lc-rs as the rustls crypto provider; see
+# `matrix-sdk`'s feature of the same name.
+rustls-ring = ["reqwest-transport", "matrix-sdk/rustls-ring"]
+
 # Send HTTP requests with `reqwest`; see `matrix-sdk`'s feature of the same
 # name.
 reqwest-transport = ["matrix-sdk/reqwest-transport"]

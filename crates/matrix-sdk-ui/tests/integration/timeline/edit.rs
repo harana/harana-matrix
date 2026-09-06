@@ -401,15 +401,25 @@ async fn test_send_edit() {
     let edit_item =
         assert_next_matches!(timeline_stream, VectorDiff::Set { index: 0, value } => value);
 
-    // The event itself is already known to the server. We don't currently have
-    // a separate edit send state.
+    // The event itself is already known to the server, so the item has no send
+    // state of its own; the edit's send state is reported separately.
     assert_matches!(edit_item.send_state(), None);
+    assert_matches!(
+        edit_item.local_edit().map(|edit| &edit.send_state),
+        Some(EventSendState::NotSentYet { .. })
+    );
     let edit_message = edit_item.content().as_message().unwrap();
     assert_eq!(edit_message.body(), "Hello, Room!");
     assert!(edit_message.is_edited());
     assert_matches!(edit_item.original_json(), Some(_));
     // The local echo doesn't have the edit's JSON yet.
     assert_matches!(edit_item.latest_edit_json(), None);
+
+    // The server accepts the edit: it isn't in flight anymore.
+    assert_let_timeout!(Some(update) = timeline_stream.next());
+    assert_let!(VectorDiff::Set { index: 0, value: edit_item } = update);
+    assert_matches!(edit_item.local_edit(), None);
+    assert_eq!(edit_item.content().as_message().unwrap().body(), "Hello, Room!");
 
     // We receive the remote echo for the edit.
     server

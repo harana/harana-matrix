@@ -1745,61 +1745,79 @@ macro_rules! cryptostore_integration_tests_time {
 
             use super::cryptostore_integration_tests::*;
 
+            /// The lease lock is a cross-process lock, so its semantics are
+            /// expressed in wall-clock time. To stay deterministic, this test
+            /// only ever asserts on lower bounds: a lease that must still be
+            /// held is taken for `LONG_LEASE_MS`, which no CI machine will
+            /// outrun, and a lease that must have expired is taken for 0ms and
+            /// then given a short sleep so the clock is guaranteed to have
+            /// moved past its expiration.
             #[async_test]
             async fn test_lease_locks() {
+                /// A lease long enough that it cannot expire while the test is
+                /// asserting that it is still held.
+                const LONG_LEASE_MS: u32 = 60_000;
+
+                /// Long enough for the millisecond-resolution clocks used by
+                /// the store backends to move past an already-expired lease.
+                const PAST_EXPIRATION: Duration = Duration::from_millis(10);
+
                 let (_account, store) = get_loaded_store("lease_locks").await;
 
                 let acquired0 = store.try_take_leased_lock(0, "key", "alice").await.unwrap();
-                assert_eq!(acquired0, Some(1)); // first generation
+                assert_eq!(acquired0, Some(1)); // first lock generation
 
                 // Should extend the lease automatically (same holder).
-                let acquired2 = store.try_take_leased_lock(300, "key", "alice").await.unwrap();
+                let acquired2 =
+                    store.try_take_leased_lock(LONG_LEASE_MS, "key", "alice").await.unwrap();
                 assert_eq!(acquired2, Some(1)); // same lock generation
 
                 // Should extend the lease automatically (same holder + time is ok).
-                let acquired3 = store.try_take_leased_lock(300, "key", "alice").await.unwrap();
+                let acquired3 =
+                    store.try_take_leased_lock(LONG_LEASE_MS, "key", "alice").await.unwrap();
                 assert_eq!(acquired3, Some(1)); // same lock generation
 
                 // Another attempt at taking the lock should fail, because it's taken.
-                let acquired4 = store.try_take_leased_lock(300, "key", "bob").await.unwrap();
+                let acquired4 =
+                    store.try_take_leased_lock(LONG_LEASE_MS, "key", "bob").await.unwrap();
                 assert!(acquired4.is_none()); // not acquired
 
                 // Even if we insist.
-                let acquired5 = store.try_take_leased_lock(300, "key", "bob").await.unwrap();
-                assert!(acquired5.is_none());
+                let acquired5 =
+                    store.try_take_leased_lock(LONG_LEASE_MS, "key", "bob").await.unwrap();
+                assert!(acquired5.is_none()); // not acquired
 
-                // That's a nice test we got here, go take a little nap.
-                matrix_sdk_common::sleep::sleep(Duration::from_millis(50)).await;
+                // The holder shortens its own lease to nothing, and we wait for the
+                // clock to move past it.
+                let acquired55 = store.try_take_leased_lock(0, "key", "alice").await.unwrap();
+                assert_eq!(acquired55, Some(1)); // same lock generation
+                matrix_sdk_common::sleep::sleep(PAST_EXPIRATION).await;
 
-                // Still too early.
-                let acquired55 = store.try_take_leased_lock(300, "key", "bob").await.unwrap();
-                assert!(acquired55.is_none()); // not acquired
-
-                // Ok you can take another nap then.
-                matrix_sdk_common::sleep::sleep(Duration::from_millis(250)).await;
-
-                // At some point, we do get the lock.
+                // Now that the lease has expired, the other holder does get the lock.
                 let acquired6 = store.try_take_leased_lock(0, "key", "bob").await.unwrap();
                 assert_eq!(acquired6, Some(2)); // new lock generation!
 
-                matrix_sdk_common::sleep::sleep(Duration::from_millis(1)).await;
+                matrix_sdk_common::sleep::sleep(PAST_EXPIRATION).await;
 
-                // The other gets it almost immediately too.
+                // And the first one gets it back, since bob's lease expired too.
                 let acquired7 = store.try_take_leased_lock(0, "key", "alice").await.unwrap();
                 assert_eq!(acquired7, Some(3)); // new lock generation!
 
-                matrix_sdk_common::sleep::sleep(Duration::from_millis(1)).await;
+                matrix_sdk_common::sleep::sleep(PAST_EXPIRATION).await;
 
                 // But when we take a longer lease…
-                let acquired8 = store.try_take_leased_lock(300, "key", "bob").await.unwrap();
+                let acquired8 =
+                    store.try_take_leased_lock(LONG_LEASE_MS, "key", "bob").await.unwrap();
                 assert_eq!(acquired8, Some(4)); // new lock generation!
 
                 // It blocks the other user.
-                let acquired9 = store.try_take_leased_lock(300, "key", "alice").await.unwrap();
+                let acquired9 =
+                    store.try_take_leased_lock(LONG_LEASE_MS, "key", "alice").await.unwrap();
                 assert!(acquired9.is_none()); // not acquired
 
                 // We can hold onto our lease.
-                let acquired10 = store.try_take_leased_lock(300, "key", "bob").await.unwrap();
+                let acquired10 =
+                    store.try_take_leased_lock(LONG_LEASE_MS, "key", "bob").await.unwrap();
                 assert_eq!(acquired10, Some(4)); // same lock generation
             }
         }

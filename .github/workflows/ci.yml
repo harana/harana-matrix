@@ -38,6 +38,7 @@ jobs:
           - no-encryption-and-sqlite
           - sqlite-cryptostore
           - experimental-encrypted-state-events
+          - rustls-ring
 
     steps:
       - name: Checkout

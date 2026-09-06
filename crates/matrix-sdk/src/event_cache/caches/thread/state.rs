@@ -466,7 +466,7 @@ impl<'a> StateLockWriteGuard<'a, ThreadEventCacheState> {
 
         let DeduplicationOutcome {
             all_events: events,
-            in_memory_duplicated_event_ids,
+            mut in_memory_duplicated_event_ids,
             in_store_duplicated_event_ids,
             non_empty_all_duplicates: all_duplicates,
         } = filter_duplicate_events(
@@ -499,6 +499,30 @@ impl<'a> StateLockWriteGuard<'a, ThreadEventCacheState> {
             self.state.waited_for_initial_prev_token = true;
         }
 
+        // Events we already know about, sitting at the very end of the linked chunk in
+        // the same order as they arrive here, don't move: update them in place instead
+        // of removing and pushing them back, so observers don't see the item disappear
+        // and reappear. See the same reasoning in the room state.
+        let in_place = if prev_batch_token.is_none() {
+            self.state.thread_linked_chunk.common_tail_with(&events)
+        } else {
+            Vec::new()
+        };
+
+        if !in_place.is_empty() {
+            in_memory_duplicated_event_ids
+                .retain(|(_event_id, position)| !in_place.contains(position));
+
+            // Replace before removing anything: the positions above were computed on the
+            // untouched linked chunk, and replacing an event doesn't move any other one.
+            for (position, event) in in_place.iter().zip(events.iter()) {
+                self.state
+                    .thread_linked_chunk
+                    .replace_event_at(*position, event.clone())
+                    .expect("we just read this position from the linked chunk");
+            }
+        }
+
         // Remove the old duplicated events.
         //
         // We don't have to worry about the removals can change the position of the
@@ -507,7 +531,7 @@ impl<'a> StateLockWriteGuard<'a, ThreadEventCacheState> {
 
         self.state.thread_linked_chunk.push_live_events(
             prev_batch_token.as_ref().map(|prev_token| Gap { token: prev_token.clone() }),
-            &events,
+            &events[in_place.len()..],
         );
 
         // Update the store.

@@ -481,7 +481,7 @@ impl StoreTransaction {
         // the write in that case matters: `process_sync_changes` runs several times per
         // sync and re-pickling the account each time is expensive, especially on
         // IndexedDB.
-        if self.changes.account.as_ref().is_some_and(|account| !account.dirty())
+        if self.changes.account.as_ref().is_some_and(|account| !account.is_dirty())
             && let Some(account) = self.changes.account.take()
         {
             *self.cache.account.lock().await = Some(account);
@@ -924,8 +924,9 @@ impl Store {
                 // recomputation above has no way of knowing where the session came
                 // from, so carry it over rather than silently downgrading the session
                 // and hiding its messages.
-                let sender_data =
-                    sender_data.with_legacy_session(session.sender_data.legacy_session());
+                let legacy_session =
+                    sender_data.legacy_session() || session.sender_data.legacy_session();
+                let sender_data = sender_data.with_legacy_session(legacy_session);
 
                 debug!("Updating existing InboundGroupSession with new SenderData {sender_data:?}");
                 session.sender_data = sender_data;
@@ -2339,6 +2340,49 @@ mod tests {
         let stored = stored.lock().await;
 
         assert_eq!(stored.len(), 6, "sessions used within the grace period should all be kept");
+    }
+
+    /// Regression test for issue #70: a transaction that only reads the
+    /// account used to write it back anyway.
+    #[async_test]
+    async fn test_transaction_only_writes_a_changed_account() {
+        let machine = OlmMachine::new(user_id!("@alice:localhost"), device_id!("DEVICEID")).await;
+        let store = machine.store();
+
+        // A transaction that only looks at the account leaves it clean...
+        store
+            .with_transaction(async |tr| {
+                let account = tr.account().await?;
+                assert!(!account.is_dirty());
+                let _ = account.uploaded_key_count();
+                assert!(!account.is_dirty());
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // ... and the account is back in the cache afterwards, either way.
+        store
+            .with_transaction(async |tr| {
+                let account = tr.account().await?;
+                assert!(!account.is_dirty());
+
+                // Changing something marks it for writing.
+                account.generate_one_time_keys(1);
+                assert!(account.is_dirty());
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // The committed account was written and read back clean.
+        store
+            .with_transaction(async |tr| {
+                assert!(!tr.account().await?.is_dirty());
+                Ok(())
+            })
+            .await
+            .unwrap();
     }
 
     #[async_test]

@@ -1,11 +1,12 @@
 use std::{collections::BTreeMap, ops::Not as _, time::Duration};
 
 use assert_matches2::{assert_let, assert_matches};
+use eyeball::SharedObservable;
 use eyeball_im::VectorDiff;
 use futures_util::{FutureExt, StreamExt, pin_mut};
 use matrix_sdk::{
     Client, Error, MemoryStore, SlidingSyncList, StateChanges, StateStore, ThreadingSupport,
-    assert_let_timeout,
+    TransmissionProgress, assert_let_timeout,
     authentication::oauth::{OAuthError, error::OAuthTokenRevocationError},
     config::{RequestConfig, StoreConfig, SyncSettings, SyncToken},
     event_cache::RoomEventCacheUpdate,
@@ -40,7 +41,7 @@ use ruma::{
             get_public_rooms,
             get_public_rooms_filtered::{self, v3::Request as PublicRoomsFilterRequest},
         },
-        sync::sync_events::v5,
+        sync::sync_events::{v3, v5},
         threads::get_thread_subscriptions_changes::unstable::{
             ThreadSubscription, ThreadUnsubscription,
         },
@@ -2319,4 +2320,90 @@ async fn test_sync_processing_of_custom_stripped_join_rule() {
         .sync_once(Default::default())
         .await
         .expect("We should be able to process the sync despite there being a custom join rule");
+}
+
+/// The receive-progress observable is wired into every request, not just the
+/// media ones, so a caller can watch any large response arrive.
+#[async_test]
+async fn test_send_request_reports_receive_progress() {
+    let (client, server) = logged_in_client_with_server().await;
+
+    // Big enough that the body arrives in more than one chunk, and padded into
+    // the one field a sync response is required to have.
+    let padding = "x".repeat(512 * 1024);
+
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/r0/sync"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "next_batch": padding })))
+        .mount(&server)
+        .await;
+
+    // The observable is supplied first, so the subscriber taken from it below
+    // is the one the request actually reports into.
+    let progress = SharedObservable::<TransmissionProgress>::default();
+    let send = client.send(v3::Request::new()).with_receive_progress_observable(progress.clone());
+    let mut subscriber = send.subscribe_to_receive_progress();
+
+    let updates = spawn(async move {
+        let mut updates = Vec::new();
+
+        while let Some(update) = subscriber.next().await {
+            updates.push((update.current, update.total));
+        }
+
+        updates
+    });
+
+    let response = send.await.unwrap();
+    assert_eq!(response.next_batch, padding);
+
+    // Once the response is in, the observable accounts for the whole body.
+    let final_progress = progress.get();
+    assert_eq!(final_progress.current, final_progress.total);
+    assert!(
+        final_progress.current > padding.len(),
+        "the body carries the padding plus the JSON around it"
+    );
+
+    // Dropping the observable ends the subscriber's stream.
+    drop(progress);
+    let updates = updates.await.unwrap();
+    assert!(!updates.is_empty(), "progress should have been reported while the body arrived");
+
+    // Progress only ever moves forward, and never past the total. The subscriber
+    // only ever sees the latest value, so it may skip intermediate ones; what
+    // matters is that every value it does see is consistent.
+    let mut previous = 0;
+    for (current, total) in updates {
+        assert!(current >= previous);
+        assert!(current <= total);
+        previous = current;
+    }
+}
+
+/// Without a subscriber the response is buffered in one go, as it always was,
+/// and nothing is reported.
+#[async_test]
+async fn test_send_request_without_a_subscriber_reports_nothing() {
+    let (client, server) = logged_in_client_with_server().await;
+
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/r0/sync"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "next_batch": "s72595" })))
+        .mount(&server)
+        .await;
+
+    let progress = SharedObservable::<TransmissionProgress>::default();
+
+    let response = client
+        .send(v3::Request::new())
+        .with_receive_progress_observable(progress.clone())
+        .await
+        .unwrap();
+    assert_eq!(response.next_batch, "s72595");
+
+    // Nothing subscribed, so the body was never read chunk by chunk.
+    let progress = progress.get();
+    assert_eq!(progress.current, 0);
+    assert_eq!(progress.total, 0);
 }

@@ -81,6 +81,7 @@ ruma = { path = "crates/ruma", version = "0.16.0", features = [
     "compat-encrypted-stickers",
     "compat-lax-room-create-deser",
     "compat-lax-room-topic-deser",
+    "compat-optional",
     "unstable-msc1763",
     "unstable-msc3230",
     "unstable-msc3401",
@@ -102,6 +103,7 @@ ruma = { path = "crates/ruma", version = "0.16.0", features = [
 sanitize-filename = { version = "0.6.0", default-features = false }
 ruma-identifiers-validation = { path = "crates/ruma-identifiers-validation", version = "0.12.1" }
 ruma-macros = { path = "crates/ruma-macros", version = "=0.19.0" }
+rustls = { version = "0.23.43", default-features = false }
 sentry = { version = "0.49.0", default-features = false }
 sentry-tracing = { version = "0.49.0", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["std", "rc", "derive"] }
@@ -139,7 +141,7 @@ zxcvbn = { git = "https://github.com/shssoichiro/zxcvbn-rs", rev = "4e8e784b2354
 matrix-sdk = { path = "crates/matrix-sdk", version = "0.18.0", default-features = false }
 matrix-sdk-base = { path = "crates/matrix-sdk-base", version = "0.18.0", default-features = false }
 matrix-sdk-common = { path = "crates/matrix-sdk-common", version = "0.18.0", default-features = false }
-matrix-sdk-contentscanner = { path = "crates/matrix-sdk-contentscanner", version = "0.18.0" }
+matrix-sdk-contentscanner = { path = "crates/matrix-sdk-contentscanner", version = "0.18.0", default-features = false }
 matrix-sdk-crypto = { path = "crates/matrix-sdk-crypto", version = "0.18.0", default-features = false }
 matrix-sdk-ffi-macros = { path = "bindings/matrix-sdk-ffi-macros", version = "0.7.0" }
 matrix-sdk-indexeddb = { path = "crates/matrix-sdk-indexeddb", version = "0.18.0", default-features = false }

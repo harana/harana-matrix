@@ -370,6 +370,18 @@ fn strict_durability() -> TransactionOptions {
     TransactionOptions::new().with_durability(TransactionDurability::Strict)
 }
 
+/// Does this set of changes carry state whose loss would corrupt our
+/// cryptographic state rather than merely a cache?
+///
+/// Olm sessions ratchet: once one has been used to encrypt or decrypt, the
+/// persisted state has to move with it. IndexedDB's default durability lets the
+/// browser acknowledge a write that is still only in the operating system's
+/// buffers, so a crash or a power cut can leave our stored session behind the
+/// one the other side has already seen, which wedges it and produces UTDs.
+fn needs_strict_durability(changes: &Changes) -> bool {
+    !changes.sessions.is_empty()
+}
+
 impl IndexeddbCryptoStore {
     pub(crate) async fn open_with_store_cipher(
         prefix: &str,
@@ -889,13 +901,9 @@ impl_crypto_store! {
         // TODO: #2000 should make this lock go away, or change its shape.
         let _guard = self.save_changes_lock.lock().await;
 
-        // Olm sessions ratchet: once we have used one to encrypt or decrypt, the
-        // persisted state has to move with it. IndexedDB's default durability lets the
-        // browser acknowledge a write that is still only in the operating system's
-        // buffers, so a crash or a power cut can leave our stored session behind the one
-        // the other side has already seen, which wedges it and produces UTDs. Ask for
-        // strict durability whenever a session is part of the write.
-        let needs_strict_durability = !changes.sessions.is_empty();
+        // Ask for strict durability whenever an Olm session is part of the write; see
+        // `needs_strict_durability`.
+        let needs_strict_durability = needs_strict_durability(&changes);
 
         let indexeddb_changes = self.prepare_for_transaction(&changes).await?;
 
@@ -1307,6 +1315,7 @@ impl_crypto_store! {
             .inner
             .transaction(keys::INBOUND_GROUP_SESSIONS_V3)
             .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
             .build()?;
 
         let object_store = tx.object_store(keys::INBOUND_GROUP_SESSIONS_V3)?;
@@ -1335,6 +1344,7 @@ impl_crypto_store! {
             .inner
             .transaction(keys::INBOUND_GROUP_SESSIONS_V3)
             .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
             .build()?;
 
         if let Some(mut cursor) =
@@ -1362,6 +1372,7 @@ impl_crypto_store! {
             .inner
             .transaction(keys::TRACKED_USERS)
             .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
             .build()?;
         let os = tx.object_store(keys::TRACKED_USERS)?;
 
@@ -1473,6 +1484,7 @@ impl_crypto_store! {
             .inner
             .transaction(keys::SECRETS_INBOX_V2)
             .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
             .build()?;
         transaction.object_store(keys::SECRETS_INBOX_V2)?.delete(&range).build()?;
         transaction.commit().await?;
@@ -1527,6 +1539,7 @@ impl_crypto_store! {
             .inner
             .transaction(keys::GOSSIP_REQUESTS)
             .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
             .build()?;
         tx.object_store(keys::GOSSIP_REQUESTS)?.delete(jskey).build()?;
         tx.commit().await.map_err(|e| e.into())
@@ -1736,8 +1749,12 @@ impl_crypto_store! {
 
     #[allow(clippy::unused_async)] // Mandated by trait on wasm.
     async fn set_custom_value(&self, key: &str, value: Vec<u8>) -> Result<()> {
-        let transaction =
-            self.inner.transaction(keys::CORE).with_mode(TransactionMode::Readwrite).build()?;
+        let transaction = self
+            .inner
+            .transaction(keys::CORE)
+            .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
+            .build()?;
         transaction
             .object_store(keys::CORE)?
             .put(&self.serializer.serialize_value(&value)?)
@@ -1749,8 +1766,12 @@ impl_crypto_store! {
 
     #[allow(clippy::unused_async)] // Mandated by trait on wasm.
     async fn remove_custom_value(&self, key: &str) -> Result<()> {
-        let transaction =
-            self.inner.transaction(keys::CORE).with_mode(TransactionMode::Readwrite).build()?;
+        let transaction = self
+            .inner
+            .transaction(keys::CORE)
+            .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
+            .build()?;
         transaction.object_store(keys::CORE)?.delete(&JsValue::from_str(key)).build()?;
         transaction.commit().await?;
         Ok(())
@@ -1768,6 +1789,7 @@ impl_crypto_store! {
             .inner
             .transaction(keys::LEASE_LOCKS)
             .with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
             .build()?;
         let object_store = txn.object_store(keys::LEASE_LOCKS)?;
 
@@ -1905,7 +1927,9 @@ async fn save_store_cipher(
     export: &Vec<u8>,
 ) -> Result<(), IndexeddbCryptoStoreError> {
     let tx: Transaction<'_> =
-        db.transaction("matrix-sdk-crypto").with_mode(TransactionMode::Readwrite).build()?;
+        db.transaction("matrix-sdk-crypto").with_mode(TransactionMode::Readwrite)
+            .with_options(strict_durability())
+            .build()?;
     let ob = tx.object_store("matrix-sdk-crypto")?;
 
     ob.put(&JsValue::from_serde(&export)?)
@@ -2157,6 +2181,37 @@ impl InboundGroupSessionIndexedDbObject {
             sender_key: Some(sender_key),
             sender_data_type: Some(session.sender_data_type() as u8),
         })
+    }
+}
+
+#[cfg(test)]
+mod durability_tests {
+    use matrix_sdk_crypto::store::types::Changes;
+    use matrix_sdk_test::async_test;
+
+    use super::needs_strict_durability;
+
+    /// A write that carries an Olm session has to wait for the browser to put
+    /// it in persistent storage; anything else can take the default, cheaper
+    /// durability (#99).
+    #[async_test]
+    async fn test_only_session_writes_ask_for_strict_durability() {
+        assert!(!needs_strict_durability(&Changes::default()));
+
+        let mut alice = matrix_sdk_crypto::olm::Account::with_device_id(
+            ruma::user_id!("@alice:localhost"),
+            ruma::device_id!("ALICE"),
+        );
+        let mut bob = matrix_sdk_crypto::olm::Account::with_device_id(
+            ruma::user_id!("@bob:localhost"),
+            ruma::device_id!("BOB"),
+        );
+        let (session, _) = alice.create_session_for_test_helper(&mut bob).await;
+
+        assert!(needs_strict_durability(&Changes {
+            sessions: vec![session],
+            ..Default::default()
+        }));
     }
 }
 

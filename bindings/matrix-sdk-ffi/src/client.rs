@@ -37,10 +37,11 @@ use matrix_sdk::{
         DefaultMediaFetcher, MediaFormat, MediaRequestParameters, MediaRetentionPolicy,
         MediaThumbnailSettings,
     },
+    pusher::set_disable_badge_count,
     ruma::{
         EventEncryptionAlgorithm, RoomId, TransactionId, UInt, UserId,
         api::client::{
-            account::request_openid_token,
+            account::{register, request_openid_token, request_registration_token_via_email},
             discovery::get_authorization_server_metadata::v1::Prompt as RumaOAuthPrompt,
             push::{EmailPusherData, PusherIds, PusherInit, PusherKind as RumaPusherKind},
             room::{Visibility, create_room},
@@ -95,7 +96,7 @@ use ruma::{
     },
     events::{
         AnyMessageLikeEventContent, AnySyncTimelineEvent,
-        GlobalAccountDataEvent as RumaGlobalAccountDataEvent,
+        GlobalAccountDataEvent as RumaGlobalAccountDataEvent, MessageLikeEventType,
         RoomAccountDataEvent as RumaRoomAccountDataEvent, RoomAccountDataEventType,
         direct::DirectEventContent,
         fully_read::FullyReadEventContent,
@@ -124,6 +125,7 @@ use serde_json::{Value, json};
 use tokio::sync::{RwLock, broadcast::error::RecvError};
 use tracing::{debug, error, warn};
 use url::Url;
+use zeroize::Zeroize as _;
 
 use super::{
     room::{Room, room_info::RoomInfo},
@@ -152,7 +154,8 @@ use crate::{
     room_preview::RoomPreview,
     ruma::{
         AccountDataEvent, AccountDataEventType, AuthData, InviteAvatars, MediaPreviewConfig,
-        MediaPreviews, MediaSource, PresenceState, RoomAccountDataEvent, UserCall, UserStatus,
+        MediaPreviews, MediaSource, PresenceState, RoomAccountDataEvent, UiaaChallenge, UserCall,
+        UserStatus,
     },
     runtime::get_runtime_handle,
     spaces::SpaceService,
@@ -160,7 +163,7 @@ use crate::{
     sync_v2::{SyncListenerV2, SyncResponseV2, SyncSettingsV2},
     task_handle::TaskHandle,
     utd::{UnableToDecryptDelegate, UtdHook},
-    utils::AsyncRuntimeDropped,
+    utils::{AsyncRuntimeDropped, u64_to_uint},
 };
 
 #[derive(Clone, uniffi::Record)]
@@ -241,9 +244,19 @@ pub trait ClientDelegate: SyncOutsideWasm + SendOutsideWasm {
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
+#[async_trait::async_trait]
 pub trait ClientSessionDelegate: SyncOutsideWasm + SendOutsideWasm {
-    fn retrieve_session_from_keychain(&self, user_id: String) -> Result<Session, ClientError>;
-    fn save_session_in_keychain(&self, session: Session);
+    /// Reads the session of `user_id` back from the host's storage.
+    ///
+    /// Async, so a host whose storage is reached asynchronously (a keychain
+    /// behind a bridge, for instance) does not have to block a thread here.
+    async fn retrieve_session_from_keychain(&self, user_id: String)
+    -> Result<Session, ClientError>;
+
+    /// Hands the session to the host to store. See
+    /// [`ClientSessionDelegate::retrieve_session_from_keychain`] for why this
+    /// is async.
+    async fn save_session_in_keychain(&self, session: Session);
 }
 
 #[matrix_sdk_ffi_macros::export(callback_interface)]
@@ -488,15 +501,20 @@ impl Client {
                     let session_delegate = session_delegate.clone();
                     Box::new(move |client| {
                         let session_delegate = session_delegate.clone();
-                        let user_id = client.user_id().context("user isn't logged in")?;
-                        Ok(Self::retrieve_session(session_delegate, user_id)?)
+                        Box::pin(async move {
+                            let user_id =
+                                client.user_id().context("user isn't logged in")?.to_owned();
+                            Ok(Self::retrieve_session(session_delegate, &user_id).await?)
+                        })
                     })
                 },
                 {
                     let session_delegate = session_delegate.clone();
                     Box::new(move |client| {
                         let session_delegate = session_delegate.clone();
-                        Ok(Self::save_session(session_delegate, client)?)
+                        Box::pin(
+                            async move { Ok(Self::save_session(session_delegate, client).await?) },
+                        )
                     })
                 },
             )?;
@@ -1669,7 +1687,15 @@ impl Client {
     }
 
     /// Registers a pusher with given parameters
+    ///
+    /// Set `disable_badge_count` to signal, per [MSC4076], that this client
+    /// computes its own badge counts, so the homeserver stops sending
+    /// high-priority pushes whose only purpose is to update the unread count.
+    /// It only applies to HTTP pushers and is ignored for email pushers.
+    ///
+    /// [MSC4076]: https://github.com/matrix-org/matrix-spec-proposals/pull/4076
     #[allow(clippy::too_many_arguments)]
+    #[uniffi::method(default(disable_badge_count = false))]
     pub async fn set_pusher(
         &self,
         identifiers: PusherIdentifiers,
@@ -1679,17 +1705,17 @@ impl Client {
         profile_tag: Option<String>,
         lang: String,
         append: bool,
+        disable_badge_count: bool,
     ) -> Result<(), ClientError> {
         let ids = identifiers.into();
 
-        let pusher_init = PusherInit {
-            ids,
-            kind: kind.try_into()?,
-            app_display_name,
-            device_display_name,
-            profile_tag,
-            lang,
-        };
+        let mut kind: RumaPusherKind = kind.try_into()?;
+        if let RumaPusherKind::Http(data) = &mut kind {
+            set_disable_badge_count(data, disable_badge_count);
+        }
+
+        let pusher_init =
+            PusherInit { ids, kind, app_display_name, device_display_name, profile_tag, lang };
         self.inner.pusher().set(pusher_init.into(), append).await?;
         Ok(())
     }
@@ -2143,6 +2169,150 @@ impl Client {
         matches!(self.inner.auth_api(), Some(AuthApi::Matrix(_)))
     }
 
+    /// Registers a new account on the homeserver the client was built for, and
+    /// logs in with it.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - The localpart of the desired user ID. Leave it unset to
+    ///   let the homeserver pick one.
+    ///
+    /// * `password` - The password for the new account. It is zeroized once the
+    ///   request has been sent, and never appears in the logs or in the
+    ///   returned value. Leave it unset for an account that cannot log in with
+    ///   a password.
+    ///
+    /// * `initial_device_name` - The display name of the device the
+    ///   registration creates.
+    ///
+    /// * `device_id` - Reuse this device rather than creating one.
+    ///
+    /// * `auth_data` - The homeserver protects registration with the
+    ///   [User-Interactive Authentication API][uiaa]. Leave this unset for the
+    ///   first attempt: the call then reports
+    ///   [`RegistrationOutcome::AuthenticationRequired`] with the challenge to
+    ///   answer, and it should be made again with the matching `auth_data`,
+    ///   carrying the session from the challenge. A flow usually takes several
+    ///   rounds, one per stage.
+    ///
+    /// For homeservers that authenticate through OAuth 2.0 instead,
+    /// registration is a `Create` prompt on [`Client::url_for_oauth`], per
+    /// [MSC2965].
+    ///
+    /// [uiaa]: https://spec.matrix.org/latest/client-server-api/#user-interactive-authentication-api
+    /// [MSC2965]: https://github.com/matrix-org/matrix-spec-proposals/pull/2965
+    pub async fn register(
+        &self,
+        username: Option<String>,
+        mut password: Option<String>,
+        initial_device_name: Option<String>,
+        device_id: Option<String>,
+        auth_data: Option<AuthData>,
+    ) -> Result<RegistrationOutcome, ClientError> {
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        let mut request = register::v3::Request::new();
+        request.username = username;
+        request.password = password.clone();
+        request.initial_device_display_name = initial_device_name;
+        request.device_id = device_id.map(Into::into);
+        request.auth = auth_data;
+
+        let result = self.inner.matrix_auth().register(request).await;
+
+        if let Some(password) = password.as_mut() {
+            password.zeroize();
+        }
+
+        match result {
+            Ok(_) => Ok(RegistrationOutcome::Registered),
+
+            Err(error) => {
+                if let Some(uiaa_info) = error.as_uiaa_response() {
+                    return Ok(RegistrationOutcome::AuthenticationRequired {
+                        challenge: uiaa_info.into(),
+                    });
+                }
+
+                Err(ClientError::from_err(error))
+            }
+        }
+    }
+
+    /// Asks the homeserver to send a validation email to `email`, so the
+    /// address can answer the `m.login.email.identity` stage of a registration
+    /// flow.
+    ///
+    /// # Arguments
+    ///
+    /// * `email` - The address to validate.
+    ///
+    /// * `client_secret` - A secret string the client generates, which ties
+    ///   this request to the [`AuthData::EmailIdentity`] that answers with it.
+    ///   The same secret must be used for every attempt at one address.
+    ///
+    /// * `send_attempt` - Increase this to have the homeserver send the email
+    ///   again; repeating a value only retries the request itself.
+    ///
+    /// Returns the session identifier to pass to [`AuthData::EmailIdentity`],
+    /// once the user has followed the link in the email.
+    pub async fn request_registration_email_token(
+        &self,
+        email: String,
+        client_secret: String,
+        send_attempt: u64,
+    ) -> Result<String, ClientError> {
+        let request = request_registration_token_via_email::v3::Request::new(
+            ruma::ClientSecret::parse(client_secret)?,
+            email,
+            u64_to_uint(send_attempt),
+        );
+
+        let response = self.inner.send(request).await?;
+
+        Ok(response.sid.to_string())
+    }
+
+    /// Change the password of the logged-in account.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_password` - The password to set. It is zeroized once the request
+    ///   has been sent, and never appears in the logs or in the returned value.
+    ///
+    /// * `auth_data` - The homeserver protects this endpoint with the
+    ///   [User-Interactive Authentication API][uiaa]. Leave this unset for the
+    ///   first attempt: the call then reports
+    ///   [`PasswordChangeOutcome::AuthenticationRequired`] with the challenge
+    ///   to answer, and it should be made again with the matching `auth_data`,
+    ///   carrying the session from the challenge.
+    ///
+    /// [uiaa]: https://spec.matrix.org/latest/client-server-api/#user-interactive-authentication-api
+    pub async fn change_password(
+        &self,
+        mut new_password: String,
+        auth_data: Option<AuthData>,
+    ) -> Result<PasswordChangeOutcome, ClientError> {
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        let result = self.inner.account().change_password(&new_password, auth_data).await;
+        new_password.zeroize();
+
+        match result {
+            Ok(_) => Ok(PasswordChangeOutcome::Changed),
+
+            Err(error) => {
+                if let Some(uiaa_info) = error.as_uiaa_response() {
+                    return Ok(PasswordChangeOutcome::AuthenticationRequired {
+                        challenge: uiaa_info.into(),
+                    });
+                }
+
+                Err(ClientError::from_err(error))
+            }
+        }
+    }
+
     /// Deactivate this account definitively.
     /// Similarly to `encryption::reset_identity` this
     /// will only work with password-based authentication (`m.login.password`)
@@ -2158,11 +2328,8 @@ impl Client {
         auth_data: Option<AuthData>,
         erase_data: bool,
     ) -> Result<(), ClientError> {
-        if let Some(auth_data) = auth_data {
-            _ = self.inner.account().deactivate(None, Some(auth_data.into()), erase_data).await?;
-        } else {
-            _ = self.inner.account().deactivate(None, None, erase_data).await?;
-        }
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+        _ = self.inner.account().deactivate(None, auth_data, erase_data).await?;
 
         Ok(())
     }
@@ -2600,6 +2767,10 @@ async fn notification_handler(
         is_direct,
         is_space: room.is_space(),
         is_dm: room.compute_is_dm().await.ok().unwrap_or_default(),
+        can_send_message: room
+            .power_levels_or_default()
+            .await
+            .user_can_send_message(room.own_user_id(), MessageLikeEventType::RoomMessage),
     };
 
     listener.on_notification(
@@ -2665,15 +2836,24 @@ pub trait IgnoredUsersListener: SyncOutsideWasm + SendOutsideWasm {
 
 #[derive(uniffi::Enum)]
 pub enum NotificationProcessSetup {
-    MultipleProcesses,
-    SingleProcess { sync_service: Arc<SyncService> },
+    /// The notification client runs in its own process.
+    ///
+    /// `lock_holder_name` identifies this process for the cross-process lock
+    /// guarding writes to the SDK stores. It must be unique per process; two
+    /// processes sharing it will both believe they hold the lock.
+    MultipleProcesses {
+        lock_holder_name: String,
+    },
+    SingleProcess {
+        sync_service: Arc<SyncService>,
+    },
 }
 
 impl From<NotificationProcessSetup> for MatrixNotificationProcessSetup {
     fn from(value: NotificationProcessSetup) -> Self {
         match value {
-            NotificationProcessSetup::MultipleProcesses => {
-                MatrixNotificationProcessSetup::MultipleProcesses
+            NotificationProcessSetup::MultipleProcesses { lock_holder_name } => {
+                MatrixNotificationProcessSetup::MultipleProcesses { lock_holder_name }
             }
             NotificationProcessSetup::SingleProcess { sync_service } => {
                 MatrixNotificationProcessSetup::SingleProcess {
@@ -2825,11 +3005,14 @@ impl Client {
         }
     }
 
-    fn retrieve_session(
+    async fn retrieve_session(
         session_delegate: Arc<dyn ClientSessionDelegate>,
         user_id: &UserId,
     ) -> anyhow::Result<SessionTokens> {
-        Ok(session_delegate.retrieve_session_from_keychain(user_id.to_string())?.into_tokens())
+        Ok(session_delegate
+            .retrieve_session_from_keychain(user_id.to_string())
+            .await?
+            .into_tokens())
     }
 
     fn session_inner(client: matrix_sdk::Client) -> Result<Session, ClientError> {
@@ -2841,12 +3024,12 @@ impl Client {
         Session::new(auth_api, homeserver_url, sliding_sync_version.into())
     }
 
-    fn save_session(
+    async fn save_session(
         session_delegate: Arc<dyn ClientSessionDelegate>,
         client: matrix_sdk::Client,
     ) -> anyhow::Result<()> {
         let session = Self::session_inner(client)?;
-        session_delegate.save_session_in_keychain(session);
+        session_delegate.save_session_in_keychain(session).await;
         Ok(())
     }
 }
@@ -3683,6 +3866,36 @@ pub struct ExtendedProfileFields {
     pub disallowed: Vec<String>,
 }
 
+/// The outcome of a call to [`Client::register`].
+#[derive(uniffi::Enum)]
+pub enum RegistrationOutcome {
+    /// The account was created, and the client is now logged in with it.
+    Registered,
+
+    /// The homeserver wants the user to complete an authentication stage
+    /// before it creates the account. Answer `challenge` and call again with
+    /// the matching authentication data.
+    AuthenticationRequired {
+        /// The challenge the homeserver posed.
+        challenge: UiaaChallenge,
+    },
+}
+
+/// The outcome of a call to [`Client::change_password`].
+#[derive(uniffi::Enum)]
+pub enum PasswordChangeOutcome {
+    /// The password was changed.
+    Changed,
+
+    /// The homeserver wants the user to authenticate before it changes the
+    /// password. Answer `challenge` and call again with the matching
+    /// authentication data.
+    AuthenticationRequired {
+        /// The challenge the homeserver posed.
+        challenge: UiaaChallenge,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -3922,5 +4135,217 @@ mod tests {
         assert!(converted.avatar_url.is_none());
         assert!(converted.status.is_none());
         assert!(converted.call.is_none());
+    }
+
+    /// The registration and password-change flows both run over UIAA: the
+    /// first attempt is refused with a challenge, and the second carries the
+    /// answer and the session the challenge named.
+    #[cfg(not(target_family = "wasm"))]
+    mod uiaa_flows {
+        use std::sync::Arc;
+
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use matrix_sdk_common::cross_process_lock::CrossProcessLockConfig;
+        use serde_json::json;
+        use wiremock::{
+            Mock, ResponseTemplate,
+            matchers::{body_partial_json, method, path},
+        };
+
+        use crate::{
+            client::{Client, PasswordChangeOutcome, RegistrationOutcome},
+            ruma::AuthData,
+        };
+
+        /// Builds the FFI client over a mocked homeserver. The single-process
+        /// lock keeps `Client::new` from demanding session delegates.
+        async fn ffi_client(server: &MatrixMockServer, logged_in: bool) -> Arc<Client> {
+            let builder = server.client_builder().on_builder(|builder| {
+                builder.cross_process_store_config(CrossProcessLockConfig::SingleProcess)
+            });
+            let sdk_client =
+                if logged_in { builder.build().await } else { builder.unlogged().build().await };
+
+            Arc::new(Client::new(sdk_client, None, None).await.expect("the FFI client is built"))
+        }
+
+        #[tokio::test]
+        async fn test_registration_reports_the_challenge_then_registers() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            // The homeserver refuses the first attempt and names the stages.
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register"))
+                .respond_with(ResponseTemplate::new(401).set_body_json(json!({
+                    "flows": [{ "stages": ["m.login.dummy"] }],
+                    "params": {},
+                    "session": "registration-session",
+                })))
+                .up_to_n_times(1)
+                .mount(server.server())
+                .await;
+
+            let outcome = client
+                .register(Some("alice".to_owned()), Some("hunter2".to_owned()), None, None, None)
+                .await
+                .unwrap();
+
+            let RegistrationOutcome::AuthenticationRequired { challenge } = outcome else {
+                panic!("a UIAA response must be reported as a challenge, not an error");
+            };
+            assert_eq!(challenge.session.as_deref(), Some("registration-session"));
+            assert_eq!(challenge.flows.len(), 1);
+            assert_eq!(challenge.flows[0].stages, ["m.login.dummy"]);
+
+            // The second attempt answers the stage, carrying the session back.
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register"))
+                .and(body_partial_json(json!({
+                    "auth": { "type": "m.login.dummy", "session": "registration-session" },
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "user_id": "@alice:example.com",
+                    "device_id": "DEVICEID",
+                    "access_token": "an-access-token",
+                })))
+                .mount(server.server())
+                .await;
+
+            let outcome = client
+                .register(
+                    Some("alice".to_owned()),
+                    Some("hunter2".to_owned()),
+                    None,
+                    None,
+                    Some(AuthData::Dummy { session: Some("registration-session".to_owned()) }),
+                )
+                .await
+                .unwrap();
+
+            assert!(matches!(outcome, RegistrationOutcome::Registered));
+        }
+
+        /// An error that isn't a challenge stays an error: a taken username
+        /// must not be reported as though the flow could continue.
+        #[tokio::test]
+        async fn test_a_rejected_registration_is_an_error() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register"))
+                .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                    "errcode": "M_USER_IN_USE",
+                    "error": "Desired user ID is already taken.",
+                })))
+                .mount(server.server())
+                .await;
+
+            assert!(
+                client
+                    .register(
+                        Some("alice".to_owned()),
+                        Some("hunter2".to_owned()),
+                        None,
+                        None,
+                        None
+                    )
+                    .await
+                    .is_err(),
+                "a username that is taken is an error, not a challenge to answer"
+            );
+        }
+
+        /// The email token request hands back the session id the
+        /// `m.login.email.identity` stage is answered with.
+        #[tokio::test]
+        async fn test_the_email_token_request_returns_the_session_id() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/register/email/requestToken"))
+                .and(body_partial_json(json!({
+                    "email": "alice@example.com",
+                    "client_secret": "a-secret",
+                    "send_attempt": 1,
+                })))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(json!({ "sid": "email-session" })),
+                )
+                .mount(server.server())
+                .await;
+
+            let sid = client
+                .request_registration_email_token(
+                    "alice@example.com".to_owned(),
+                    "a-secret".to_owned(),
+                    1,
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(sid, "email-session");
+        }
+
+        /// A client secret the spec doesn't allow is rejected before any
+        /// request is made.
+        #[tokio::test]
+        async fn test_an_empty_client_secret_is_rejected() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, false).await;
+
+            client
+                .request_registration_email_token("alice@example.com".to_owned(), String::new(), 1)
+                .await
+                .unwrap_err();
+        }
+
+        #[tokio::test]
+        async fn test_changing_the_password_reports_the_challenge_then_changes_it() {
+            let server = MatrixMockServer::new().await;
+            let client = ffi_client(&server, true).await;
+
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/account/password"))
+                .respond_with(ResponseTemplate::new(401).set_body_json(json!({
+                    "flows": [{ "stages": ["m.login.password"] }],
+                    "params": {},
+                    "session": "password-session",
+                })))
+                .up_to_n_times(1)
+                .mount(server.server())
+                .await;
+
+            let outcome = client.change_password("new-password".to_owned(), None).await.unwrap();
+
+            let PasswordChangeOutcome::AuthenticationRequired { challenge } = outcome else {
+                panic!("a UIAA response must be reported as a challenge, not an error");
+            };
+            assert_eq!(challenge.session.as_deref(), Some("password-session"));
+            assert_eq!(challenge.flows[0].stages, ["m.login.password"]);
+
+            // The second attempt carries the session from the challenge;
+            // without it the homeserver starts a new flow and refuses again.
+            Mock::given(method("POST"))
+                .and(path("/_matrix/client/v3/account/password"))
+                .and(body_partial_json(json!({
+                    "auth": { "type": "m.login.dummy", "session": "password-session" },
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+                .mount(server.server())
+                .await;
+
+            let outcome = client
+                .change_password(
+                    "new-password".to_owned(),
+                    Some(AuthData::Dummy { session: Some("password-session".to_owned()) }),
+                )
+                .await
+                .unwrap();
+
+            assert!(matches!(outcome, PasswordChangeOutcome::Changed));
+        }
     }
 }

@@ -891,6 +891,106 @@ mod tests {
         assert!(!manager.outgoing_to_device_requests.read().is_empty())
     }
 
+    /// A device whose very first Olm session is the wedged one has no session
+    /// to rate limit against. We used to read that as "too soon to unwedge"
+    /// and give up, leaving the device wedged for good (#103).
+    #[async_test]
+    async fn test_session_unwedging_without_an_existing_session() {
+        let (manager, _identity_manager) = session_manager_test_helper().await;
+        let bob = bob_account();
+        let bob_device = DeviceData::from_account(&bob);
+
+        manager.store.save_device_data(std::slice::from_ref(&bob_device)).await.unwrap();
+
+        let curve_key = bob_device.curve25519_key().unwrap();
+
+        // No session was ever created for this device.
+        let sessions = manager.store.get_sessions(&curve_key.to_base64()).await.unwrap();
+        match sessions {
+            None => (),
+            Some(sessions) => assert!(sessions.lock().await.is_empty()),
+        }
+        assert!(!manager.is_device_wedged(&bob_device));
+
+        manager.mark_device_as_wedged(bob_device.user_id(), curve_key).await.unwrap();
+
+        assert!(manager.is_device_wedged(&bob_device));
+        assert!(manager.users_for_key_claim.read().contains_key(bob.user_id()));
+    }
+
+    #[async_test]
+    async fn test_the_session_which_last_decrypted_is_used_to_send() {
+        use ruma::{SecondsSinceUnixEpoch, uint};
+
+        let (manager, _identity_manager) = session_manager_test_helper().await;
+        let mut bob = bob_account();
+        let bob_device = DeviceData::from_account(&bob);
+
+        manager.store.save_device_data(std::slice::from_ref(&bob_device)).await.unwrap();
+
+        // Given two Olm sessions with the same device, where the older one is the one
+        // that most recently decrypted a message from it
+        let mut sessions = Vec::new();
+
+        for _ in 0..2 {
+            let (_, session) = manager
+                .store
+                .with_transaction(async |tr| {
+                    let manager_account = tr.account().await.unwrap();
+                    let res = bob.create_session_for_test_helper(manager_account).await;
+                    Ok(res)
+                })
+                .await
+                .unwrap();
+
+            sessions.push(session);
+        }
+
+        let (mut older, mut newer) = (sessions.remove(0), sessions.remove(0));
+
+        older.creation_time = SecondsSinceUnixEpoch(uint!(100));
+        older.last_decryption_time = Some(SecondsSinceUnixEpoch(uint!(200)));
+
+        newer.creation_time = SecondsSinceUnixEpoch(uint!(300));
+        newer.last_decryption_time = None;
+
+        let older_session_id = older.session_id().to_owned();
+        manager.store.save_sessions(&[older, newer]).await.unwrap();
+
+        // When we look for the session to send the next message with
+        let session = bob_device
+            .get_most_recent_session(&manager.store.crypto_store())
+            .await
+            .unwrap()
+            .expect("We should have found a session for the device");
+
+        // Then it is the one which most recently decrypted a message, not the one
+        // which was created last
+        assert_eq!(session.session_id(), older_session_id);
+    }
+
+    #[async_test]
+    async fn test_unwedging_a_device_we_have_no_session_for() {
+        let (manager, _identity_manager) = session_manager_test_helper().await;
+        let bob = bob_account();
+        let bob_device = DeviceData::from_account(&bob);
+
+        // Given we know about the device but have no Olm session stored for it, as
+        // happens when the very first session we created for it is the wedged one
+        manager.store.save_device_data(std::slice::from_ref(&bob_device)).await.unwrap();
+
+        let curve_key = bob_device.curve25519_key().unwrap();
+        assert!(!manager.is_device_wedged(&bob_device));
+
+        // When we mark it as wedged
+        manager.mark_device_as_wedged(bob_device.user_id(), curve_key).await.unwrap();
+
+        // Then the device is flagged and a key claim is queued for it, so that a fresh
+        // session gets established
+        assert!(manager.is_device_wedged(&bob_device));
+        assert!(manager.users_for_key_claim.read().contains_key(bob.user_id()));
+    }
+
     #[async_test]
     async fn test_failure_handling() {
         let alice = user_id!("@alice:example.org");

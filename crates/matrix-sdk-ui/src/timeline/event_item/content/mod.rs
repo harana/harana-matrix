@@ -80,7 +80,7 @@ pub(in crate::timeline) use self::{
 pub use self::{
     live_location::{BeaconInfo, LiveLocationState},
     message::Message,
-    msg_like::{MsgLikeContent, MsgLikeKind, ThreadSummary},
+    msg_like::{MsgLikeContent, MsgLikeKind, RedactedMessage, ThreadSummary},
     other::OtherMessageLike,
     polls::{PollResult, PollState},
     reply::{EmbeddedEvent, InReplyToDetails},
@@ -152,7 +152,7 @@ impl TimelineItemContent {
                 MsgLikeKind::Message(_) => MessageLikeEventType::RoomMessage.to_string(),
                 MsgLikeKind::Sticker(_) => MessageLikeEventType::Sticker.to_string(),
                 MsgLikeKind::Poll(_) => MessageLikeEventType::PollStart.to_string(),
-                MsgLikeKind::Redacted => return None,
+                MsgLikeKind::Redacted(_) => return None,
                 MsgLikeKind::UnableToDecrypt(_) => MessageLikeEventType::RoomEncrypted.to_string(),
                 MsgLikeKind::Other(other) => other.event_type().to_string(),
                 MsgLikeKind::LiveLocation(_) => StateEventType::BeaconInfo.to_string(),
@@ -339,7 +339,7 @@ impl TimelineItemContent {
     }
 
     pub fn is_redacted(&self) -> bool {
-        matches!(self, Self::MsgLike(MsgLikeContent { kind: MsgLikeKind::Redacted, .. }))
+        matches!(self, Self::MsgLike(MsgLikeContent { kind: MsgLikeKind::Redacted(_), .. }))
     }
 
     // These constructors could also be `From` implementations, but that would
@@ -448,16 +448,20 @@ impl TimelineItemContent {
         }
     }
 
-    pub(in crate::timeline) fn redact(&self, rules: &RedactionRules) -> Self {
+    pub(in crate::timeline) fn redact(
+        &self,
+        rules: &RedactionRules,
+        redacted: RedactedMessage,
+    ) -> Self {
         match self {
             Self::MsgLike(msglike) => TimelineItemContent::MsgLike(MsgLikeContent {
-                kind: MsgLikeKind::Redacted,
+                kind: MsgLikeKind::Redacted(redacted),
                 reactions: Default::default(),
                 in_reply_to: None,
                 ..msglike.clone()
             }),
             Self::CallInvite | Self::RtcNotification { .. } => {
-                TimelineItemContent::MsgLike(MsgLikeContent::redacted())
+                TimelineItemContent::MsgLike(MsgLikeContent::redacted_by(redacted))
             }
             Self::MembershipChange(ev) => Self::MembershipChange(ev.redact(rules)),
             Self::ProfileChange(ev) => Self::ProfileChange(ev.redact()),
@@ -1029,7 +1033,7 @@ mod tests {
             change: Some(MembershipChange::Banned),
         });
 
-        let redacted = content.redact(&RedactionRules::V11);
+        let redacted = content.redact(&RedactionRules::V11, Default::default());
         assert_let!(TimelineItemContent::MembershipChange(inner) = redacted);
         assert_eq!(inner.change, Some(MembershipChange::Banned));
         assert_let!(StateEventContentChange::Redacted(inner_content_redacted) = inner.content);

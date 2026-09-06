@@ -144,6 +144,16 @@ impl ReadReceiptsState {
         let mut new_item_pos = None;
         let mut new_item_event_id = None;
 
+        // A receipt of a user must never be attached to an event that predates their
+        // membership: they can't have read it. This happens either because the
+        // homeserver reports a receipt pointing at such an event, or because the
+        // receipt points at the user's own join event, which usually isn't rendered
+        // and would otherwise push the receipt onto the message before it.
+        //
+        // The iteration below walks backwards in time, so once it walks past that
+        // user's join event, every remaining event predates their membership.
+        let mut before_user_membership = false;
+
         for (pos, event) in all_events.iter().rev().enumerate() {
             if old_receipt_pos.is_none() && old_event_id == Some(&event.event_id) {
                 old_receipt_pos = Some(pos);
@@ -165,20 +175,38 @@ impl ReadReceiptsState {
             }
 
             // The receipt should appear on the first visible event that can show read
-            // receipts.
+            // receipts, but never before the user joined the room.
             if new_receipt_pos.is_some()
                 && new_item_event_id.is_none()
                 && event.visible
                 && event.can_show_read_receipts
+                && !before_user_membership
             {
                 new_item_pos = event.timeline_item_index;
                 new_item_event_id = Some(event.event_id.clone());
             }
 
-            if old_item_event_id.is_some() && new_item_event_id.is_some() {
+            // Checked after the candidate above, so a receipt targeting the user's own
+            // join event may still be shown on it.
+            if event.is_join && event.sender.as_deref() == Some(new_receipt.user_id) {
+                before_user_membership = true;
+            }
+
+            if old_item_event_id.is_some()
+                && new_receipt_pos.is_some()
+                && (new_item_event_id.is_some() || before_user_membership)
+            {
                 // We have everything we need, stop.
                 break;
             }
+        }
+
+        if new_item_event_id.is_none() && before_user_membership && !is_own_user_id {
+            trace!(
+                to_event = ?new_receipt.event_id,
+                "the read receipt targets an event that predates the user's membership, \
+                 it won't be shown in the timeline",
+            );
         }
 
         // Check if the old receipt is more recent than the new receipt.

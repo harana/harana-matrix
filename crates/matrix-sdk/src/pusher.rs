@@ -15,9 +15,38 @@
 
 //! High-level pusher API.
 
-use ruma::api::client::push::{PusherIds, set_pusher};
+use ruma::{
+    api::client::push::{PusherIds, set_pusher},
+    push::HttpPusherData,
+};
 
 use crate::{Client, Result};
+
+/// The name of the field carrying the [MSC4076] `disable_badge_count` flag in
+/// the data of an HTTP pusher.
+///
+/// A client that computes its own badge counts can set this flag so the
+/// homeserver stops sending high-priority pushes whose only purpose is to
+/// update the unread count.
+///
+/// [MSC4076]: https://github.com/matrix-org/matrix-spec-proposals/pull/4076
+pub const DISABLE_BADGE_COUNT_FIELD: &str = "org.matrix.msc4076.disable_badge_count";
+
+/// Sets or clears the [MSC4076] `disable_badge_count` flag on the data of an
+/// HTTP pusher.
+///
+/// The field is only written when `disable_badge_count` is `true`, since a
+/// homeserver that doesn't know about the flag treats its absence and `false`
+/// the same way.
+///
+/// [MSC4076]: https://github.com/matrix-org/matrix-spec-proposals/pull/4076
+pub fn set_disable_badge_count(data: &mut HttpPusherData, disable_badge_count: bool) {
+    if disable_badge_count {
+        data.data.insert(DISABLE_BADGE_COUNT_FIELD.to_owned(), true.into());
+    } else {
+        data.data.remove(DISABLE_BADGE_COUNT_FIELD);
+    }
+}
 
 /// A high-level API to interact with the pusher API.
 ///
@@ -65,6 +94,7 @@ mod tests {
         matchers::{body_partial_json, method, path},
     };
 
+    use super::{DISABLE_BADGE_COUNT_FIELD, set_disable_badge_count};
     use crate::test_utils::logged_in_client;
 
     async fn mock_api(server: MockServer) {
@@ -113,6 +143,41 @@ mod tests {
         let response = client.pusher().set(dummy_pusher().into(), true).await;
 
         assert!(response.is_ok());
+    }
+
+    #[async_test]
+    async fn test_set_pusher_forwards_disable_badge_count_flag() {
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+
+        Mock::given(method("POST"))
+            .and(path("_matrix/client/r0/pushers/set"))
+            .and(body_partial_json(
+                json!({ "data": { "org.matrix.msc4076.disable_badge_count": true } }),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::EMPTY))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let mut pusher = dummy_pusher();
+        let PusherKind::Http(data) = &mut pusher.kind else { panic!("expected an HTTP pusher") };
+        set_disable_badge_count(data, true);
+
+        let response = client.pusher().set(pusher.into(), false).await;
+
+        assert!(response.is_ok());
+    }
+
+    #[test]
+    fn test_set_disable_badge_count_removes_the_field_when_disabled() {
+        let mut data = HttpPusherData::new("dummy".to_owned());
+
+        set_disable_badge_count(&mut data, true);
+        assert_eq!(data.data.get(DISABLE_BADGE_COUNT_FIELD), Some(&json!(true)));
+
+        set_disable_badge_count(&mut data, false);
+        assert!(data.data.get(DISABLE_BADGE_COUNT_FIELD).is_none());
     }
 
     #[async_test]

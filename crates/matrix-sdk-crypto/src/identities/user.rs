@@ -494,6 +494,51 @@ impl OtherUserIdentity {
         Ok(())
     }
 
+    /// Read this identity back from the store, so that a targeted change can
+    /// be applied to the current data rather than to our own, possibly stale,
+    /// copy of it.
+    ///
+    /// Returns `None` when the stored identity no longer presents the master
+    /// key our copy was built from. In that case the identity changed
+    /// underneath us: writing our copy back would revert the new cross-signing
+    /// keys, and applying the change to the new identity would record a
+    /// decision the user never made about it.
+    async fn identity_to_update(&self) -> Result<Option<OtherUserIdentityData>, CryptoStoreError> {
+        let stored = self.verification_machine.store.inner().get_user_identity(self.user_id()).await?;
+
+        match stored {
+            // Nothing stored yet, so there is nothing of ours to overwrite.
+            None => Ok(Some(self.inner.clone())),
+
+            Some(UserIdentityData::Other(stored)) if *stored.master_key() == *self.master_key => {
+                Ok(Some(stored))
+            }
+
+            Some(_) => {
+                warn!(
+                    user_id = ?self.user_id(),
+                    master_key = ?self.master_key.get_first_key(),
+                    "The stored identity changed since we read it; not writing our stale copy back",
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    async fn save_identity(&self, identity: OtherUserIdentityData) -> Result<(), CryptoStoreError> {
+        let changes = Changes {
+            identities: IdentityChanges {
+                changed: vec![UserIdentityData::Other(identity)],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        self.verification_machine.store.inner().save_changes(changes).await?;
+
+        Ok(())
+    }
+
     /// Has the identity changed in a way that requires approval from the user?
     ///
     /// A user identity needs approval if it changed after the crypto machine
@@ -525,12 +570,11 @@ impl OtherUserIdentity {
             "Withdrawing verification status and pinning current identity"
         );
         self.inner.withdraw_verification();
-        let to_save = UserIdentityData::Other(self.inner.clone());
-        let changes = Changes {
-            identities: IdentityChanges { changed: vec![to_save], ..Default::default() },
-            ..Default::default()
-        };
-        self.verification_machine.store.inner().save_changes(changes).await?;
+
+        let Some(to_save) = self.identity_to_update().await? else { return Ok(()) };
+        to_save.withdraw_verification();
+
+        self.save_identity(to_save).await?;
 
         // Sessions this user's devices sent us are recorded as a verification
         // violation; now that the violation is withdrawn they should show the
@@ -1959,6 +2003,50 @@ pub(crate) mod tests {
         assert!(!other_identity.identity_needs_user_approval());
         // But there is still a pin violation
         assert!(other_identity.inner.has_pin_violation());
+    }
+
+    /// Pinning wrote the whole identity the caller was holding back to the
+    /// store, so a `/keys/query` that landed in between was silently undone
+    /// and we went back to talking to the old keys (#129).
+    #[async_test]
+    async fn test_pinning_a_stale_identity_does_not_revert_a_newer_one() {
+        use test_json::keys_query_sets::IdentityChangeDataSet as DataSet;
+
+        let my_user_id = user_id!("@me:localhost");
+        let machine = OlmMachine::new(my_user_id, device_id!("ABCDEFGH")).await;
+        machine.bootstrap_cross_signing(false).await.unwrap();
+
+        let other_user_id = DataSet::user_id();
+
+        machine
+            .mark_request_as_sent(&TransactionId::new(), &DataSet::key_query_with_identity_a())
+            .await
+            .unwrap();
+
+        // Given a handle taken while identity A was the current one,
+        let stale =
+            machine.get_identity(other_user_id, None).await.unwrap().unwrap().other().unwrap();
+
+        // ... and a `/keys/query` that has brought in identity B since,
+        machine
+            .mark_request_as_sent(&TransactionId::new(), &DataSet::key_query_with_identity_b())
+            .await
+            .unwrap();
+
+        let current =
+            machine.get_identity(other_user_id, None).await.unwrap().unwrap().other().unwrap();
+        let master_key_b = current.master_key().clone();
+        assert!(current.identity_needs_user_approval());
+
+        // When we pin through the stale handle,
+        stale.pin_current_master_key().await.unwrap();
+
+        // Then the newer identity is still the stored one, and it still needs
+        // approval: we have not quietly pinned the keys the user never saw.
+        let stored =
+            machine.get_identity(other_user_id, None).await.unwrap().unwrap().other().unwrap();
+        assert_eq!(*stored.master_key(), master_key_b);
+        assert!(stored.identity_needs_user_approval());
     }
 
     #[async_test]

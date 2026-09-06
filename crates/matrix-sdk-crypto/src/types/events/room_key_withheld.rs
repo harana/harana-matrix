@@ -81,8 +81,12 @@ macro_rules! construct_withheld_content {
             }
             WithheldCode::NoOlm => {
                 RoomKeyWithheldContent::$algorithm(MegolmV1AesSha2WithheldContent::NoOlm(
-                    NoOlmWithheldContent { $sender_key, $from_device, other: Default::default() }
-                        .into(),
+                    NoOlmWithheldContent {
+                        $sender_key,
+                        $from_device,
+                        other: Default::default(),
+                    }
+                    .into(),
                 ))
             }
             WithheldCode::_Custom(_) => {

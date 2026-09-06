@@ -17,6 +17,7 @@
 use std::{fmt, sync::Arc, time::Duration};
 
 use matrix_sdk_base::{SessionMeta, locks::Mutex};
+use matrix_sdk_common::BoxFuture;
 use ruma::time::Instant;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex as AsyncMutex, OnceCell, broadcast};
@@ -79,18 +80,22 @@ pub(crate) struct SessionTokensState {
 
 pub(crate) type SessionCallbackError = Box<dyn std::error::Error + Send + Sync>;
 
+// The callbacks return futures: a host whose session storage is asynchronous
+// (a keychain reached over a bridge, for instance) would otherwise have to
+// block a thread inside them.
 #[cfg(not(target_family = "wasm"))]
 pub(crate) type SaveSessionCallback =
-    dyn Fn(Client) -> Result<(), SessionCallbackError> + Send + Sync;
+    dyn Fn(Client) -> BoxFuture<'static, Result<(), SessionCallbackError>> + Send + Sync;
 #[cfg(target_family = "wasm")]
-pub(crate) type SaveSessionCallback = dyn Fn(Client) -> Result<(), SessionCallbackError>;
+pub(crate) type SaveSessionCallback =
+    dyn Fn(Client) -> BoxFuture<'static, Result<(), SessionCallbackError>>;
 
 #[cfg(not(target_family = "wasm"))]
 pub(crate) type ReloadSessionCallback =
-    dyn Fn(Client) -> Result<SessionTokens, SessionCallbackError> + Send + Sync;
+    dyn Fn(Client) -> BoxFuture<'static, Result<SessionTokens, SessionCallbackError>> + Send + Sync;
 #[cfg(target_family = "wasm")]
 pub(crate) type ReloadSessionCallback =
-    dyn Fn(Client) -> Result<SessionTokens, SessionCallbackError>;
+    dyn Fn(Client) -> BoxFuture<'static, Result<SessionTokens, SessionCallbackError>>;
 
 /// All the data relative to authentication, and that must be shared between a
 /// client and all its children.

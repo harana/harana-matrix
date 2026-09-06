@@ -25,8 +25,10 @@ use std::{
 
 use eyeball::SharedObservable;
 use matrix_sdk_base::{
+    RoomInfoNotableUpdateReasons,
     deserialized_responses::{AmbiguityChange, ThreadSummary},
     event_cache::Event,
+    read_receipts::ReadReceipts,
     sync::{JoinedRoomUpdate, LeftRoomUpdate, Timeline},
 };
 use ruma::{
@@ -36,7 +38,9 @@ use ruma::{
     events::{
         AnyRoomAccountDataEvent, AnySyncMessageLikeEvent, AnySyncTimelineEvent,
         SyncMessageLikeEvent,
-        receipt::ReceiptEventContent,
+        receipt::{
+            Receipt, ReceiptEventContent, ReceiptThread, ReceiptType, Receipts, UserReceipts,
+        },
         relation::RelationType,
         room::{MediaSource, message::MessageType},
         sticker::StickerMediaSource,
@@ -108,6 +112,68 @@ impl RoomEventCache {
     /// Get the room ID for this [`RoomEventCache`].
     pub fn room_id(&self) -> &RoomId {
         &self.inner.room_id
+    }
+
+    /// Apply a read receipt of the current user locally, i.e. without waiting
+    /// for the server to send it back through sync.
+    ///
+    /// It gives a local echo to marking a room as read: the unread counts of
+    /// the room drop as soon as the request is issued, instead of when the
+    /// receipt comes back.
+    ///
+    /// It returns the [`ReadReceipts`] the room had before, if it has been
+    /// changed, so that the caller can hand it back to
+    /// [`Self::restore_read_receipts`] if the request fails.
+    pub async fn apply_local_read_receipt(
+        &self,
+        receipt_type: ReceiptType,
+        thread: ReceiptThread,
+        event_id: OwnedEventId,
+    ) -> Result<Option<ReadReceipts>> {
+        let Some(room) = self.inner.weak_room.get() else {
+            trace!("can't apply a local read receipt: client's closing");
+            return Ok(None);
+        };
+
+        let previous_read_receipts = room.read_receipts();
+
+        // Build the receipt event the server would send us back, and let the regular
+        // machinery compute the new unread counts out of it.
+        let mut receipt = Receipt::new(MilliSecondsSinceUnixEpoch::now());
+        receipt.thread = thread;
+
+        let receipt_event = ReceiptEventContent::from_iter([(
+            event_id,
+            Receipts::from_iter([(
+                receipt_type,
+                UserReceipts::from_iter([(self.inner.own_user_id.clone(), receipt)]),
+            )]),
+        )]);
+
+        self.inner.state.write().await?.update_read_receipts(&[receipt_event]).await?;
+
+        Ok((room.read_receipts() != previous_read_receipts).then_some(previous_read_receipts))
+    }
+
+    /// Restore the [`ReadReceipts`] returned by
+    /// [`Self::apply_local_read_receipt`], because the request that was
+    /// supposed to send the receipt failed.
+    pub async fn restore_read_receipts(&self, read_receipts: ReadReceipts) {
+        let Some(room) = self.inner.weak_room.get() else {
+            trace!("can't restore the read receipts: client's closing");
+            return;
+        };
+
+        let result = room
+            .update_and_save_room_info(|mut room_info| {
+                room_info.set_read_receipts(read_receipts);
+                (room_info, RoomInfoNotableUpdateReasons::READ_RECEIPT)
+            })
+            .await;
+
+        if let Err(error) = result {
+            warn!(room_id = ?room.room_id(), ?error, "Failed to restore the read receipts");
+        }
     }
 
     /// Get the owner of this [`RoomEventCache`].
@@ -721,15 +787,116 @@ impl RoomEventCacheInner {
 
 #[cfg(test)]
 mod tests {
-    use matrix_sdk_base::{RoomState, event_cache::Event};
+    use matrix_sdk_base::{
+        RoomState,
+        event_cache::Event,
+        linked_chunk::{ChunkIdentifier, LinkedChunkId, Position, Update},
+    };
     use matrix_sdk_test::{async_test, event_factory::EventFactory};
     use ruma::{
         RoomId, event_id,
-        events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
+        events::{
+            receipt::{ReceiptThread, ReceiptType},
+            relation::RelationType,
+            room::message::RoomMessageEventContentWithoutRelation,
+        },
         room_id, user_id,
     };
 
     use crate::test_utils::logged_in_client;
+
+    #[async_test]
+    async fn test_local_read_receipt_can_be_applied_and_restored() {
+        let room_id = room_id!("!galette:saucisse.bzh");
+        let other_user_id = user_id!("@dexter:saucisse.bzh");
+        let event_id_0 = event_id!("$ev0");
+        let event_id_1 = event_id!("$ev1");
+
+        let client = logged_in_client(None).await;
+        let event_factory = EventFactory::new().room(room_id).sender(other_user_id);
+
+        // Two messages from somebody else are in the room.
+        client
+            .event_cache_store()
+            .lock()
+            .await
+            .expect("Could not acquire the event cache lock")
+            .as_clean()
+            .expect("Could not acquire a clean event cache lock")
+            .handle_linked_chunk_updates(
+                LinkedChunkId::Room(room_id),
+                vec![
+                    Update::NewItemsChunk {
+                        previous: None,
+                        new: ChunkIdentifier::new(0),
+                        next: None,
+                    },
+                    Update::PushItems {
+                        at: Position::new(ChunkIdentifier::new(0), 0),
+                        items: vec![
+                            event_factory.text_msg("hello").event_id(event_id_0).into_event(),
+                            event_factory.text_msg("world").event_id(event_id_1).into_event(),
+                        ],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let event_cache = client.event_cache();
+        event_cache.subscribe().unwrap();
+
+        client.base_client().get_or_create_room(room_id, RoomState::Joined);
+        let room = client.get_room(room_id).unwrap();
+        let (room_event_cache, _drop_handles) = room.event_cache().await.unwrap();
+
+        // Compute the unread counts a first time, as a sync would do.
+        room_event_cache
+            .inner
+            .state
+            .write()
+            .await
+            .unwrap()
+            .update_read_receipts(&[])
+            .await
+            .unwrap();
+
+        assert_eq!(room.num_unread_messages(), 2);
+
+        // Applying a read receipt locally drops the unread counts right away, and
+        // returns the previous value.
+        let previous_read_receipts = room_event_cache
+            .apply_local_read_receipt(
+                ReceiptType::Read,
+                ReceiptThread::Unthreaded,
+                event_id_1.to_owned(),
+            )
+            .await
+            .unwrap()
+            .expect("the read receipts must have changed");
+
+        assert_eq!(previous_read_receipts.num_unread, 2);
+        assert_eq!(room.num_unread_messages(), 0);
+
+        // Applying the very same receipt again changes nothing, so there is nothing to
+        // restore.
+        assert!(
+            room_event_cache
+                .apply_local_read_receipt(
+                    ReceiptType::Read,
+                    ReceiptThread::Unthreaded,
+                    event_id_1.to_owned(),
+                )
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        // Restoring the previous value rolls the local echo back.
+        room_event_cache.restore_read_receipts(previous_read_receipts).await;
+
+        assert_eq!(room.num_unread_messages(), 2);
+    }
 
     #[async_test]
     async fn test_find_event_by_id_with_edit_relation() {

@@ -225,6 +225,43 @@ impl EventLinkedChunk {
         self.chunks.items()
     }
 
+    /// Return the positions of the trailing events of this linked chunk that
+    /// are, in the same order, the leading events of `new_events`.
+    ///
+    /// This is the overlap between what we already know and what we are about
+    /// to insert. Events in that overlap don't move: they can be updated in
+    /// place rather than removed and pushed back, which spares observers a
+    /// remove/insert pair for an item that didn't actually change position.
+    ///
+    /// The returned positions are ordered from the oldest to the newest, and
+    /// map one-to-one onto the first events of `new_events`.
+    pub fn common_tail_with(&self, new_events: &[Event]) -> Vec<Position> {
+        if new_events.is_empty() {
+            return Vec::new();
+        }
+
+        // The last `new_events.len()` known events, from the oldest to the newest;
+        // no more than that many can overlap with `new_events`.
+        let mut known = self
+            .revents()
+            .take(new_events.len())
+            .map(|(position, event)| (position, event.event_id()))
+            .collect::<Vec<_>>();
+        known.reverse();
+
+        // Look for the longest suffix of the known events that is a prefix of the new
+        // events, starting with the longest candidate.
+        (0..known.len())
+            .map(|skip| &known[skip..])
+            .find(|candidate| {
+                candidate.iter().zip(new_events).all(|((_, known_id), new_event)| {
+                    known_id.is_some() && *known_id == new_event.event_id()
+                })
+            })
+            .map(|candidate| candidate.iter().map(|(position, _)| *position).collect())
+            .unwrap_or_default()
+    }
+
     /// Return the order of an event in the room linked chunk.
     ///
     /// Can return `None` if the event can't be found in the linked chunk.
@@ -717,6 +754,94 @@ mod tests {
         let linked_chunk = EventLinkedChunk::new();
 
         assert_eq!(linked_chunk.events().count(), 0);
+    }
+
+    #[test]
+    fn test_common_tail_with_finds_the_overlap() {
+        let (_, event_0) = new_event("$ev0");
+        let (_, event_1) = new_event("$ev1");
+        let (_, event_2) = new_event("$ev2");
+        let (_, event_3) = new_event("$ev3");
+
+        let mut linked_chunk = EventLinkedChunk::new();
+        linked_chunk.chunks.push_items_back([event_0.clone(), event_1.clone(), event_2.clone()]);
+
+        // The whole known list is the head of the new events.
+        let positions = linked_chunk.common_tail_with(&[
+            event_0,
+            event_1.clone(),
+            event_2.clone(),
+            event_3.clone(),
+        ]);
+        assert_eq!(positions.len(), 3);
+        assert_eq!(positions[0].index(), 0);
+        assert_eq!(positions[1].index(), 1);
+        assert_eq!(positions[2].index(), 2);
+
+        // Only the tail of the known list is; the longest such suffix wins.
+        let positions = linked_chunk.common_tail_with(&[event_1.clone(), event_2.clone()]);
+        assert_eq!(positions.len(), 2);
+        assert_eq!(positions[0].index(), 1);
+        assert_eq!(positions[1].index(), 2);
+
+        // The very last known event alone, which is what a just-sent message looks
+        // like when the sync brings it back.
+        let positions = linked_chunk.common_tail_with(&[event_2.clone(), event_3]);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].index(), 2);
+
+        // Known events arriving in a different order overlap on the last one only:
+        // the rest of the incoming list is new material to push after it.
+        let positions = linked_chunk.common_tail_with(&[event_2, event_1]);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].index(), 2);
+    }
+
+    #[test]
+    fn test_common_tail_with_finds_no_overlap() {
+        let (_, event_0) = new_event("$ev0");
+        let (_, event_1) = new_event("$ev1");
+        let (_, event_2) = new_event("$ev2");
+        let (_, event_3) = new_event("$ev3");
+
+        let mut linked_chunk = EventLinkedChunk::new();
+        linked_chunk.chunks.push_items_back([event_0.clone(), event_1.clone(), event_2.clone()]);
+
+        // Nothing in common.
+        assert!(linked_chunk.common_tail_with(&[event_3]).is_empty());
+
+        // Nothing to compare against.
+        assert!(linked_chunk.common_tail_with(&[]).is_empty());
+
+        // A known event, but not at the end: it has moved, so it isn't an overlap.
+        assert!(linked_chunk.common_tail_with(&[event_1]).is_empty());
+
+        // A gap between the known events and the new ones.
+        assert!(linked_chunk.common_tail_with(&[event_0.clone(), event_2]).is_empty());
+
+        // An empty linked chunk has no tail to match.
+        let empty = EventLinkedChunk::new();
+        assert!(empty.common_tail_with(&[event_0]).is_empty());
+    }
+
+    #[test]
+    fn test_common_tail_with_spans_chunks() {
+        // The overlap is computed over the events, not over the chunks they happen to
+        // sit in.
+        let (_, event_0) = new_event("$ev0");
+        let (_, event_1) = new_event("$ev1");
+        let (_, event_2) = new_event("$ev2");
+
+        let mut linked_chunk = EventLinkedChunk::new();
+        linked_chunk.chunks.push_items_back([event_0]);
+        linked_chunk.chunks.push_gap_back(Gap { token: "hello".to_owned() });
+        linked_chunk.chunks.push_items_back([event_1.clone(), event_2.clone()]);
+
+        let positions = linked_chunk.common_tail_with(&[event_1, event_2]);
+        assert_eq!(positions.len(), 2);
+        assert_eq!(positions[0].index(), 0);
+        assert_eq!(positions[1].index(), 1);
+        assert_eq!(positions[0].chunk_identifier(), positions[1].chunk_identifier());
     }
 
     #[test]

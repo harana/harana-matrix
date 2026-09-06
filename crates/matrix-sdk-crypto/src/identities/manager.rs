@@ -2418,6 +2418,107 @@ pub(crate) mod tests {
         assert!(has_latch_violation);
     }
 
+    /// Regression test for issue #129: pinning through a stale
+    /// [`OtherUserIdentity`] used to write the whole in-memory identity back,
+    /// reverting cross-signing keys the store had already learned about.
+    #[async_test]
+    async fn test_pinning_a_stale_identity_does_not_revert_newer_keys() {
+        use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
+
+        let machine = common_verified_identity_changes_machine_setup().await;
+
+        // Given we know about Bob's identity...
+        machine
+            .mark_request_as_sent(&TransactionId::new(), &DataSet::bob_keys_query_response_signed())
+            .await
+            .unwrap();
+
+        let stale_identity =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        let old_master_key = stale_identity.master_key().get_first_key();
+
+        // ... and Bob then rotates it...
+        machine
+            .mark_request_as_sent(
+                &TransactionId::new(),
+                &DataSet::bob_keys_query_response_rotated(),
+            )
+            .await
+            .unwrap();
+
+        let new_master_key = machine
+            .get_identity(DataSet::bob_id(), None)
+            .await
+            .unwrap()
+            .unwrap()
+            .other()
+            .unwrap()
+            .master_key()
+            .get_first_key();
+        assert_ne!(old_master_key, new_master_key);
+
+        // ... when we pin through the handle we grabbed before the rotation...
+        stale_identity.pin_current_master_key().await.unwrap();
+
+        // ... then the store keeps the rotated keys, and the new identity is still
+        // waiting for the user to approve it.
+        let stored =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        assert_eq!(stored.master_key().get_first_key(), new_master_key);
+        assert!(stored.has_pin_violation());
+    }
+
+    /// The other half of issue #129: `withdraw_verification` pins too, so it
+    /// must not write a stale identity back either.
+    #[async_test]
+    async fn test_withdrawing_through_a_stale_identity_does_not_revert_newer_keys() {
+        use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
+
+        let machine = common_verified_identity_changes_machine_setup().await;
+
+        // Given we have verified Bob...
+        machine
+            .mark_request_as_sent(&TransactionId::new(), &DataSet::bob_keys_query_response_signed())
+            .await
+            .unwrap();
+
+        let stale_identity =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        assert!(stale_identity.was_previously_verified());
+
+        // ... and Bob then rotates his identity...
+        machine
+            .mark_request_as_sent(
+                &TransactionId::new(),
+                &DataSet::bob_keys_query_response_rotated(),
+            )
+            .await
+            .unwrap();
+
+        let new_master_key = machine
+            .get_identity(DataSet::bob_id(), None)
+            .await
+            .unwrap()
+            .unwrap()
+            .other()
+            .unwrap()
+            .master_key()
+            .get_first_key();
+        assert_ne!(stale_identity.master_key().get_first_key(), new_master_key);
+
+        // ... when we withdraw through the handle we grabbed before the rotation...
+        stale_identity.withdraw_verification().await.unwrap();
+
+        // ... then the store keeps the rotated keys, and the violation still stands:
+        // the user withdrew their verification of an identity that is no longer the
+        // current one, so it is not ours to clear.
+        let stored =
+            machine.get_identity(DataSet::bob_id(), None).await.unwrap().unwrap().other().unwrap();
+        assert_eq!(stored.master_key().get_first_key(), new_master_key);
+        assert!(stored.was_previously_verified());
+        assert!(stored.has_pin_violation());
+    }
+
     #[async_test]
     async fn test_manager_verified_identity_changes_setup_on_updated_identities() {
         use test_json::keys_query_sets::VerificationViolationTestData as DataSet;
@@ -2656,6 +2757,47 @@ pub(crate) mod tests {
                     .expect("Could not find session after update");
                 assert_matches!(updated.sender_data, SenderData::UnknownDevice { .. });
             }
+        }
+
+        #[async_test]
+        async fn test_keeps_the_legacy_flag_when_the_device_shows_up() {
+            let manager = manager_test_helper(user_id(), device_id()).await;
+
+            // Given a session that we restored from a backup, and which is therefore
+            // flagged as legacy...
+            let account = Account::new(user_id());
+            let mut session = create_inbound_group_session(&account).await;
+            session.sender_data = SenderData::legacy();
+            manager
+                .store
+                .save_changes(Changes {
+                    inbound_group_sessions: vec![session.clone()],
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            // ... when a /keys/query tells us about the sending device...
+            manager
+                .update_sender_data_from_device_changes(&DeviceChanges {
+                    changed: vec![DeviceData::from_account(&account)],
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            // ... then we learn about the device, but the session stays legacy.
+            let updated = manager
+                .store
+                .get_inbound_group_session(session.room_id(), session.session_id())
+                .await
+                .unwrap()
+                .expect("Could not find session after update");
+
+            assert_matches!(
+                updated.sender_data,
+                SenderData::DeviceInfo { legacy_session: true, .. }
+            );
         }
 
         /// Create an InboundGroupSession sent from the given account

@@ -43,7 +43,10 @@ use ruma::{
 use tracing::{Span, debug, field::debug, info, instrument, trace, warn};
 use vodozemac::Curve25519PublicKey;
 
-use super::{GossipRequest, GossippedSecret, RequestEvent, RequestInfo, SecretInfo, WaitQueue};
+use super::{
+    GossipRequest, GossippedSecret, RequestEvent, RequestInfo, SecretInfo, ServedSecretRequests,
+    WaitQueue,
+};
 use crate::{
     Device, MegolmError,
     error::{EventError, OlmError, OlmResult},
@@ -84,6 +87,15 @@ pub(crate) struct GossipMachineInner {
     wait_queue: WaitQueue,
     users_for_key_claim: Arc<StdRwLock<BTreeMap<OwnedUserId, BTreeSet<OwnedDeviceId>>>>,
 
+    /// The secret requests we have already answered.
+    ///
+    /// A request which arrived while we had no Olm session with the requesting
+    /// device is put on the wait queue, but the homeserver keeps redelivering
+    /// the to-device event until we have acknowledged the sync it came in.
+    /// Once a key claim gives us a session, the queued copy and the redelivered
+    /// one would both be served, and the secret sent twice.
+    served_secret_requests: StdRwLock<ServedSecretRequests>,
+
     /// Whether we should respond to incoming `m.room_key_request` messages.
     room_key_forwarding_enabled: AtomicBool,
 
@@ -115,6 +127,7 @@ impl GossipMachine {
                 incoming_key_requests: Default::default(),
                 wait_queue: WaitQueue::new(),
                 users_for_key_claim,
+                served_secret_requests: Default::default(),
                 room_key_forwarding_enabled,
                 room_key_requests_enabled,
                 identity_manager,
@@ -414,7 +427,22 @@ impl GossipMachine {
 
         if let Some(device) = device {
             if device.user_id() == self.user_id() {
-                if device.is_verified() {
+                if self.inner.served_secret_requests.read().contains(
+                    device.user_id(),
+                    device.device_id(),
+                    &event.content.request_id,
+                ) {
+                    trace!(
+                        user_id = ?device.user_id(),
+                        device_id = ?device.device_id(),
+                        ?secret_name,
+                        request_id = ?event.content.request_id,
+                        "We have already answered this secret request, not sending the \
+                         secret a second time",
+                    );
+
+                    Ok(None)
+                } else if device.is_verified() {
                     info!(
                         user_id = ?device.user_id(),
                         device_id = ?device.device_id(),
@@ -424,9 +452,17 @@ impl GossipMachine {
 
                     match self.share_secret(&device, content, secret_name).await {
                         Ok(s) => {
-                            // The device now has the secret. Drop any request for it that
-                            // is still waiting for an Olm session, so that establishing
-                            // one doesn't make us send the same secret a second time.
+                            // The device now has the secret. Remember that we answered
+                            // this request, and drop any request for it that is still
+                            // waiting for an Olm session, so that neither a redelivered
+                            // copy nor a newly established session makes us send the
+                            // same secret a second time.
+                            self.inner.served_secret_requests.write().insert(
+                                device.user_id().to_owned(),
+                                device.device_id().to_owned(),
+                                event.content.request_id.to_owned(),
+                            );
+
                             self.inner.wait_queue.remove_secret_requests(
                                 device.user_id(),
                                 device.device_id(),
@@ -2274,6 +2310,80 @@ mod tests {
             alice_machine.collect_incoming_key_requests(&alice_cache).await.unwrap();
         }
         assert!(!alice_machine.inner.outgoing_requests.read().is_empty());
+    }
+
+    /// A device that asks for the same secret twice while we have no Olm
+    /// session with it leaves two requests behind. Servicing one of them used
+    /// to leave the other in the wait queue, so establishing a session sent the
+    /// secret a second time (#75).
+    #[async_test]
+    async fn test_a_secret_is_not_shared_twice() {
+        let alice_machine = get_machine_test_helper().await;
+
+        let mut second_account = alice_2_account();
+        let alice_device = DeviceData::from_account(&second_account);
+
+        // We only serve secrets to a device we trust, and only if we have one to
+        // serve.
+        alice_device.set_trust_state(LocalTrust::Verified);
+        alice_machine
+            .inner
+            .store
+            .save_device_data(std::slice::from_ref(&alice_device))
+            .await
+            .unwrap();
+        alice_machine.inner.store.reset_cross_signing_identity().await;
+
+        let second_device_id = second_account.device_id().to_owned();
+        let request = |request_id: &str| {
+            RumaToDeviceEvent::new(
+                alice_id().to_owned(),
+                ToDeviceSecretRequestEventContent::new(
+                    RequestAction::Request(SecretRequestAction::new(
+                        SecretName::CrossSigningMasterKey,
+                    )),
+                    second_device_id.clone(),
+                    request_id.into(),
+                ),
+            )
+        };
+
+        // Given a request for a secret that we can't answer for lack of an Olm
+        // session,
+        alice_machine.receive_incoming_secret_request(&request("first"));
+        {
+            let cache = alice_machine.inner.store.cache().await.unwrap();
+            alice_machine.collect_incoming_key_requests(&cache).await.unwrap();
+        }
+
+        assert!(!alice_machine.inner.wait_queue.is_empty());
+        assert!(alice_machine.inner.outgoing_requests.read().is_empty());
+
+        // ... and a session that turns up afterwards,
+        let alice_session = alice_machine
+            .inner
+            .store
+            .with_transaction(async |tr| {
+                let alice_account = tr.account().await?;
+                let (alice_session, _) =
+                    alice_account.create_session_for_test_helper(&mut second_account).await;
+                Ok(alice_session)
+            })
+            .await
+            .unwrap();
+        alice_machine.inner.store.save_sessions(&[alice_session]).await.unwrap();
+
+        // When the device asks a second time and we answer that one,
+        alice_machine.receive_incoming_secret_request(&request("second"));
+        {
+            let cache = alice_machine.inner.store.cache().await.unwrap();
+            alice_machine.collect_incoming_key_requests(&cache).await.unwrap();
+        }
+
+        // Then the secret goes out exactly once, and the request still sitting in the
+        // queue is dropped rather than sending it again.
+        assert_eq!(alice_machine.inner.outgoing_requests.read().len(), 1);
+        assert!(alice_machine.inner.wait_queue.is_empty());
     }
 
     #[async_test]

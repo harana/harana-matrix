@@ -17,9 +17,10 @@
 use std::ops::Add;
 
 use eyeball::SharedObservable;
-#[cfg(feature = "unstable-msc4274")]
-use matrix_sdk_base::store::AccumulatedSentMediaInfo;
-use matrix_sdk_base::{media::MediaRequestParameters, store::DependentQueuedRequestKind};
+use matrix_sdk_base::{
+    media::MediaRequestParameters,
+    store::{DependentQueuedRequestKind, SentMediaItem},
+};
 use matrix_sdk_common::executor::spawn;
 use ruma::{TransactionId, events::room::MediaSource};
 use tokio::sync::broadcast;
@@ -78,20 +79,14 @@ impl RoomSendQueue {
         related_to: &TransactionId,
         cache_key: &MediaRequestParameters,
         thumbnail_source: Option<&MediaSource>,
-        #[cfg(feature = "unstable-msc4274")] accumulated: &[AccumulatedSentMediaInfo],
+        uploaded: &[SentMediaItem],
         room: &Room,
         queue: &QueueStorage,
     ) -> MediaUploadProgressInfo {
-        // Determine the item's index, if this is a gallery upload.
-        let index = {
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "unstable-msc4274")] {
-                    accumulated.len()
-                } else {
-                    0 // Before MSC4274 only a single file (and thumbnail) could be sent per event.
-                }
-            }
-        };
+        // Determine the item's index, if this is a gallery upload. Before MSC4274,
+        // only a single file (and thumbnail) could be sent per event, so this is
+        // always zero.
+        let index = uploaded.len();
 
         // Get the size of the file being uploaded from the event cache.
         let bytes = match room.client().media_store().lock().await {

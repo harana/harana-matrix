@@ -6,7 +6,7 @@ use ruma::{
     },
 };
 
-use super::command::Command;
+use super::{command::Command, rules::encrypted_events_rule_id};
 use crate::NotificationSettingsError;
 
 /// A `RuleCommand` allows to generate a list of `Command` needed to modify a
@@ -41,6 +41,25 @@ impl RuleCommands {
                     "cannot insert a rule for this kind.".to_owned(),
                 ));
             }
+        };
+
+        self.rules.insert(command.to_push_rule()?, None, None)?;
+        self.commands.push(command);
+
+        Ok(())
+    }
+
+    /// Insert an `Override` rule that notifies for the encrypted events of a
+    /// room.
+    ///
+    /// See [`encrypted_events_rule_id`] for why this is needed.
+    pub(crate) fn insert_encrypted_events_rule(
+        &mut self,
+        room_id: &RoomId,
+    ) -> Result<(), NotificationSettingsError> {
+        let command = Command::SetEncryptedEventsPushRule {
+            rule_id: encrypted_events_rule_id(room_id),
+            room_id: room_id.to_owned(),
         };
 
         self.rules.insert(command.to_push_rule()?, None, None)?;
