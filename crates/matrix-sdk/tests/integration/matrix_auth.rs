@@ -653,7 +653,6 @@ fn test_serialize_session() {
             device_id: owned_device_id!("EFGHIJ"),
         },
         tokens: SessionTokens { access_token: "abcd".to_owned(), refresh_token: None },
-        homeserver: None,
     };
     assert_eq!(
         to_json_value(session.clone()).unwrap(),

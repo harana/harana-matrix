@@ -68,28 +68,28 @@ pub use edit_validation::*;
 #[cfg(not(target_family = "wasm"))]
 pub trait SendOutsideWasm: Send {}
 #[cfg(not(target_family = "wasm"))]
-impl<T: Send> SendOutsideWasm for T {}
+impl<T: Send + ?Sized> SendOutsideWasm for T {}
 
 /// Alias for `Send` on non-wasm, empty trait (implemented by everything) on
 /// wasm.
 #[cfg(target_family = "wasm")]
 pub trait SendOutsideWasm {}
 #[cfg(target_family = "wasm")]
-impl<T> SendOutsideWasm for T {}
+impl<T: ?Sized> SendOutsideWasm for T {}
 
 /// Alias for `Sync` on non-wasm, empty trait (implemented by everything) on
 /// wasm.
 #[cfg(not(target_family = "wasm"))]
 pub trait SyncOutsideWasm: Sync {}
 #[cfg(not(target_family = "wasm"))]
-impl<T: Sync> SyncOutsideWasm for T {}
+impl<T: Sync + ?Sized> SyncOutsideWasm for T {}
 
 /// Alias for `Sync` on non-wasm, empty trait (implemented by everything) on
 /// wasm.
 #[cfg(target_family = "wasm")]
 pub trait SyncOutsideWasm {}
 #[cfg(target_family = "wasm")]
-impl<T> SyncOutsideWasm for T {}
+impl<T: ?Sized> SyncOutsideWasm for T {}
 
 /// Super trait that is used for our store traits, this trait will differ if
 /// it's used on WASM. WASM targets will not require `Send` and `Sync` to have

@@ -17,7 +17,7 @@ use std::{fmt::Debug, iter, pin::Pin};
 use assert_matches::assert_matches;
 use futures_core::Stream;
 use futures_util::{FutureExt, StreamExt};
-use matrix_sdk_common::deserialized_responses::ProcessedToDeviceEvent;
+use matrix_sdk_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
 use matrix_sdk_test::async_test;
 use ruma::{
     DeviceKeyId, RoomId, TransactionId, UserId, canonical_json::to_canonical_value, owned_user_id,
@@ -427,7 +427,7 @@ pub async fn receive_to_device_event<C>(
     decryption_settings: &DecryptionSettings,
 ) -> (Vec<ProcessedToDeviceEvent>, Vec<RoomKeyInfo>)
 where
-    C: EventType + Serialize + Debug + Sync,
+    C: EventType + Serialize + Debug + SyncOutsideWasm,
 {
     let event_json = serde_json::to_string(event).expect("Unable to serialize to-device message");
 

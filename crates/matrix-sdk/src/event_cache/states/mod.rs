@@ -26,6 +26,7 @@ use matrix_sdk_base::{
     timer,
     tracing_timer::TracingTimer,
 };
+use matrix_sdk_common::SyncOutsideWasm;
 use ruma::{OwnedEventId, OwnedRoomId, RoomId};
 use tokio::sync::{Mutex, RwLock, RwLockMappedWriteGuard, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{instrument, trace};
@@ -646,7 +647,7 @@ where
     // `Sync`, because the guards below are awaited from spawned
     // tasks and a `&CacheStateLock<Selector>` is only `Send`
     // when the selector is `Sync`.
-    Selector: selectors::CacheState + Sync,
+    Selector: selectors::CacheState + SyncOutsideWasm,
     EventCacheError: for<'a> From<&'a Selector>,
 {
     /// Lock this [`CacheStateLock`] by locking the full [`State`] with

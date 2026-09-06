@@ -329,8 +329,9 @@ impl Ruleset {
     where
         // `Raw<T>` is only `Sync` when `T` is, and without that this future
         // cannot be sent to another thread, which the callers spawning push
-        // rule evaluation need it to be.
-        T: Sync,
+        // rule evaluation need it to be. WASM has no threads, so there the
+        // bound would only rule out valid callers.
+        T: crate::SyncOutsideWasm,
     {
         let event = FlattenedJson::from_raw(event);
 
@@ -363,7 +364,7 @@ impl Ruleset {
         context: &PushConditionRoomCtx,
     ) -> &[Action]
     where
-        T: Sync,
+        T: crate::SyncOutsideWasm,
     {
         self.get_match(event, context).await.map(|rule| rule.actions()).unwrap_or(&[])
     }

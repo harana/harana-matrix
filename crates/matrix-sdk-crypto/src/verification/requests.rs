@@ -18,6 +18,7 @@ use as_variant::as_variant;
 use eyeball::{ObservableWriteGuard, SharedObservable, WeakObservable};
 use futures_core::Stream;
 use futures_util::StreamExt;
+use matrix_sdk_common::SyncOutsideWasm;
 #[cfg(feature = "qrcode")]
 use matrix_sdk_qrcode::QrVerificationData;
 use ruma::{
@@ -1213,7 +1214,7 @@ struct Ready {
 }
 
 #[cfg(feature = "qrcode")]
-async fn scan_qr_code<T: Clone + Sync>(
+async fn scan_qr_code<T: Clone + SyncOutsideWasm>(
     data: QrVerificationData,
     request_state: &RequestState<T>,
     state: &Ready,
@@ -1247,7 +1248,7 @@ async fn scan_qr_code<T: Clone + Sync>(
 }
 
 #[cfg(feature = "qrcode")]
-async fn generate_qr_code<T: Clone + Sync>(
+async fn generate_qr_code<T: Clone + SyncOutsideWasm>(
     request_state: &RequestState<T>,
     state: &Ready,
     we_started: bool,
@@ -1379,7 +1380,7 @@ async fn generate_qr_code<T: Clone + Sync>(
     }
 }
 
-async fn receive_start<T: Clone + Sync>(
+async fn receive_start<T: Clone + SyncOutsideWasm>(
     sender: &UserId,
     content: &StartContent<'_>,
     we_started: bool,
@@ -1509,7 +1510,7 @@ async fn receive_start<T: Clone + Sync>(
     }
 }
 
-async fn start_sas<T: Clone + Sync>(
+async fn start_sas<T: Clone + SyncOutsideWasm>(
     request_state: &RequestState<T>,
     state: &Ready,
     we_started: bool,

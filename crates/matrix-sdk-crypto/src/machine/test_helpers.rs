@@ -18,7 +18,7 @@
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 use as_variant::as_variant;
-use matrix_sdk_common::deserialized_responses::ProcessedToDeviceEvent;
+use matrix_sdk_common::{SyncOutsideWasm, deserialized_responses::ProcessedToDeviceEvent};
 use matrix_sdk_test::{ruma_response_from_json, test_json};
 use ruma::{
     DeviceId, OwnedOneTimeKeyId, TransactionId, UserId,
@@ -252,7 +252,7 @@ pub async fn build_encrypted_to_device_content_without_sender_data(
     sender: &OlmMachine,
     recipient_device: &DeviceKeys,
     event_type: &str,
-    content: &(impl Serialize + Sync),
+    content: &(impl Serialize + SyncOutsideWasm),
 ) -> ToDeviceEncryptedEventContent {
     let sender_store = &sender.inner.store;
 

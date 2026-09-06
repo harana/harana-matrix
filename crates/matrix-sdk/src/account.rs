@@ -139,10 +139,10 @@ impl Account {
         let user_id = self.client.user_id().ok_or(Error::AuthenticationRequired)?;
 
         // Prefer the endpoint to delete profile fields, if it is supported.
-        if name.is_none() {
-            if self.client.supports_endpoint::<delete_profile_field::v3::Request>().await? {
-                return self.delete_profile_field(ProfileFieldName::DisplayName).await;
-            }
+        if name.is_none()
+            && self.client.supports_endpoint::<delete_profile_field::v3::Request>().await?
+        {
+            return self.delete_profile_field(ProfileFieldName::DisplayName).await;
         }
 
         // If name is `Some(_)`, this endpoint is the same as `set_profile_field`, but
@@ -239,10 +239,10 @@ impl Account {
         let user_id = self.client.user_id().ok_or(Error::AuthenticationRequired)?;
 
         // Prefer the endpoint to delete profile fields, if it is supported.
-        if url.is_none() {
-            if self.client.supports_endpoint::<delete_profile_field::v3::Request>().await? {
-                return self.delete_profile_field(ProfileFieldName::AvatarUrl).await;
-            }
+        if url.is_none()
+            && self.client.supports_endpoint::<delete_profile_field::v3::Request>().await?
+        {
+            return self.delete_profile_field(ProfileFieldName::AvatarUrl).await;
         }
 
         // If url is `Some(_)`, this endpoint is the same as `set_profile_field`, but

@@ -112,8 +112,8 @@ use matrix_sdk_base::{
     store::DynStateStore,
 };
 use matrix_sdk_common::{
-    deserialized_responses::TimelineEvent, ring_buffer::RingBuffer,
-    serde_helpers::extract_thread_root,
+    SendOutsideWasm, SyncOutsideWasm, deserialized_responses::TimelineEvent,
+    ring_buffer::RingBuffer, serde_helpers::extract_thread_root,
 };
 use ruma::{
     EventId, OwnedEventId, OwnedUserId, RoomId, UserId,
@@ -290,7 +290,7 @@ pub trait EventFilter {
         &self,
         user_id: &UserId,
         receipt_type: ReceiptType,
-    ) -> impl Future<Output = Option<(OwnedEventId, Receipt)>> + Send;
+    ) -> impl Future<Output = Option<(OwnedEventId, Receipt)>> + SendOutsideWasm;
 }
 
 /// Type to filter room events that are candidates for read receipts.
@@ -554,7 +554,7 @@ async fn try_find_stored_receipts<T>(
     event_filter: &T,
     read_receipts: &mut ReadReceipts,
 ) where
-    T: EventFilter + Sync,
+    T: EventFilter + SyncOutsideWasm,
 {
     for receipt_type in ALL_RECEIPT_TYPES {
         if let Some((event_id, _receipt)) =
@@ -588,7 +588,7 @@ pub(crate) async fn compute_unread_counts<T>(
     read_receipts: &mut ReadReceipts,
     back_pagination_queue: Option<&BackPaginationQueue>,
 ) where
-    T: EventFilter + Sync,
+    T: EventFilter + SyncOutsideWasm,
 {
     debug!(?read_receipts, "Starting");
 

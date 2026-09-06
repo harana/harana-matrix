@@ -520,7 +520,7 @@ impl Media {
     /// * `use_cache` - If we should use the media cache for this file.
     pub async fn get_file(
         &self,
-        event_content: &(impl MediaEventContent + Sync),
+        event_content: &(impl MediaEventContent + SyncOutsideWasm),
         use_cache: bool,
     ) -> Result<Option<Vec<u8>>> {
         let Some(source) = event_content.source() else { return Ok(None) };
@@ -541,7 +541,10 @@ impl Media {
     /// # Arguments
     ///
     /// * `event_content` - The media event content.
-    pub async fn remove_file(&self, event_content: &(impl MediaEventContent + Sync)) -> Result<()> {
+    pub async fn remove_file(
+        &self,
+        event_content: &(impl MediaEventContent + SyncOutsideWasm),
+    ) -> Result<()> {
         if let Some(source) = event_content.source() {
             self.remove_media_content(&MediaRequestParameters {
                 source,
@@ -573,7 +576,7 @@ impl Media {
     /// * `use_cache` - If we should use the media cache for this thumbnail.
     pub async fn get_thumbnail(
         &self,
-        event_content: &(impl MediaEventContent + Sync),
+        event_content: &(impl MediaEventContent + SyncOutsideWasm),
         settings: MediaThumbnailSettings,
         use_cache: bool,
     ) -> Result<Option<Vec<u8>>> {
@@ -600,7 +603,7 @@ impl Media {
     ///   settings requested with [`get_thumbnail`](#method.get_thumbnail).
     pub async fn remove_thumbnail(
         &self,
-        event_content: &(impl MediaEventContent + Sync),
+        event_content: &(impl MediaEventContent + SyncOutsideWasm),
         settings: MediaThumbnailSettings,
     ) -> Result<()> {
         if let Some(source) = event_content.source() {

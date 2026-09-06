@@ -45,7 +45,6 @@ fn session() -> MatrixSession {
             access_token: "1234".to_owned(),
             refresh_token: Some("abcd".to_owned()),
         },
-        homeserver: None,
     }
 }
 

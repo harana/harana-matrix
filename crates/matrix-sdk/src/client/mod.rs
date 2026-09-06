@@ -3868,10 +3868,10 @@ impl Client {
     pub async fn sync_with_callback<C>(
         &self,
         sync_settings: crate::config::SyncSettings,
-        callback: impl Fn(SyncResponse) -> C + Send + Sync,
+        callback: impl Fn(SyncResponse) -> C + SendOutsideWasm + SyncOutsideWasm,
     ) -> Result<(), Error>
     where
-        C: Future<Output = LoopCtrl> + Send,
+        C: Future<Output = LoopCtrl> + SendOutsideWasm,
     {
         self.sync_with_result_callback(sync_settings, |result| async {
             Ok(callback(result?).await)

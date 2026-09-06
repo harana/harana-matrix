@@ -104,6 +104,7 @@ pub mod integration_tests;
 pub(crate) use crypto_store_wrapper::CryptoStoreWrapper;
 pub use error::{CryptoStoreError, Result};
 use matrix_sdk_common::{
+    SyncOutsideWasm,
     cross_process_lock::{CrossProcessLock, CrossProcessLockConfig, CrossProcessLockGeneration},
     deserialized_responses::WithheldCode,
     timeout::timeout,
@@ -1279,7 +1280,11 @@ impl Store {
     }
 
     /// Store custom value associated with a key
-    pub async fn set_value(&self, key: &str, value: &(impl Serialize + Sync)) -> Result<()> {
+    pub async fn set_value(
+        &self,
+        key: &str,
+        value: &(impl Serialize + SyncOutsideWasm),
+    ) -> Result<()> {
         let serialized = self.serialize_value(value)?;
         self.set_custom_value(key, serialized).await?;
         Ok(())
