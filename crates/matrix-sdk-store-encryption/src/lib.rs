@@ -472,8 +472,49 @@ impl StoreCipher {
     /// # anyhow::Ok(()) };
     /// ```
     pub fn encrypt_value(&self, value: &impl Serialize) -> Result<Vec<u8>, Error> {
-        let data = serde_json::to_vec(value)?;
-        Ok(serde_json::to_vec(&self.encrypt_value_data(data)?)?)
+        self.encrypt_value_with(&JsonCodec, value)
+    }
+
+    /// Encrypt a value, serializing it through the given [`StoreCodec`].
+    ///
+    /// [`StoreCipher::encrypt_value`] hardcodes JSON, which spends a lot of
+    /// bytes writing ciphertext and nonces out as arrays of decimal integers.
+    /// This is the same operation with the format left to the caller; the
+    /// value and the envelope that carries it both go through the codec, so
+    /// the two must match on the way back out
+    /// ([`StoreCipher::decrypt_value_with`]).
+    ///
+    /// The format is part of the on-disk layout: changing the codec of a store
+    /// that already holds data makes that data unreadable, and needs the same
+    /// treatment as a schema migration.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # let example = || {
+    /// use matrix_sdk_store_encryption::{MessagePackCodec, StoreCipher};
+    /// use serde_json::{json, value::Value};
+    ///
+    /// let store_cipher = StoreCipher::new()?;
+    ///
+    /// let value = json!({
+    ///     "some": "data",
+    /// });
+    ///
+    /// let encrypted = store_cipher.encrypt_value_with(&MessagePackCodec, &value)?;
+    /// let decrypted: Value =
+    ///     store_cipher.decrypt_value_with(&MessagePackCodec, &encrypted)?;
+    ///
+    /// assert_eq!(value, decrypted);
+    /// # anyhow::Ok(()) };
+    /// ```
+    pub fn encrypt_value_with(
+        &self,
+        codec: &dyn StoreCodec,
+        value: &impl Serialize,
+    ) -> Result<Vec<u8>, Error> {
+        let data = codec.encode_value(value)?;
+        Ok(codec.encode_value(&self.encrypt_value_data(data)?)?)
     }
 
     /// Encrypt some data before it is inserted into the key/value store.
@@ -590,9 +631,22 @@ impl StoreCipher {
     /// # anyhow::Ok(()) };
     /// ```
     pub fn decrypt_value<T: DeserializeOwned>(&self, value: &[u8]) -> Result<T, Error> {
-        let value: EncryptedValue = serde_json::from_slice(value)?;
+        self.decrypt_value_with(&JsonCodec, value)
+    }
+
+    /// Decrypt a value that was encrypted with
+    /// [`StoreCipher::encrypt_value_with`], deserializing it through the given
+    /// [`StoreCodec`].
+    ///
+    /// The codec must be the one the value was written with.
+    pub fn decrypt_value_with<T: DeserializeOwned>(
+        &self,
+        codec: &dyn StoreCodec,
+        value: &[u8],
+    ) -> Result<T, Error> {
+        let value: EncryptedValue = codec.decode_value(value)?;
         let mut plaintext = self.decrypt_value_data(value)?;
-        let ret = serde_json::from_slice(&plaintext);
+        let ret = codec.decode_value(&plaintext);
         plaintext.zeroize();
         Ok(ret?)
     }
@@ -944,11 +998,65 @@ mod tests {
     use super::{Error, StoreCipher};
     use crate::{
         EncryptedStoreCipher, EncryptedValue, EncryptedValueBase64, EncryptedValueBase64DecodeError,
+        JsonCodec, MessagePackCodec,
     };
 
     #[test]
     fn generating() {
         StoreCipher::new().unwrap();
+    }
+
+    #[test]
+    fn test_a_value_round_trips_through_a_caller_chosen_codec() {
+        let cipher = StoreCipher::new().unwrap();
+        let value = json!({ "some": "data" });
+
+        let encrypted = cipher.encrypt_value_with(&MessagePackCodec, &value).unwrap();
+        let decrypted: Value = cipher.decrypt_value_with(&MessagePackCodec, &encrypted).unwrap();
+
+        assert_eq!(value, decrypted);
+    }
+
+    #[test]
+    fn test_the_codec_is_part_of_the_stored_format() {
+        let cipher = StoreCipher::new().unwrap();
+        let value = json!({ "some": "data" });
+
+        let encrypted = cipher.encrypt_value_with(&MessagePackCodec, &value).unwrap();
+
+        assert!(
+            cipher.decrypt_value::<Value>(&encrypted).is_err(),
+            "reading a value back with a different codec must fail rather than \
+             produce something",
+        );
+    }
+
+    #[test]
+    fn test_encrypt_value_still_writes_json() {
+        let cipher = StoreCipher::new().unwrap();
+        let value = json!({ "some": "data" });
+
+        let encrypted = cipher.encrypt_value(&value).unwrap();
+        let decrypted: Value = cipher.decrypt_value_with(&JsonCodec, &encrypted).unwrap();
+
+        assert_eq!(value, decrypted);
+    }
+
+    #[test]
+    fn test_a_binary_codec_is_more_compact_than_json() {
+        let cipher = StoreCipher::new().unwrap();
+        let value = json!({ "some": "data", "and": ["a", "little", "more"] });
+
+        let json = cipher.encrypt_value_with(&JsonCodec, &value).unwrap();
+        let message_pack = cipher.encrypt_value_with(&MessagePackCodec, &value).unwrap();
+
+        assert!(
+            message_pack.len() < json.len(),
+            "MessagePack ({}) should be smaller than JSON ({}), which writes the \
+             ciphertext and nonce out as decimal integers",
+            message_pack.len(),
+            json.len(),
+        );
     }
 
     #[test]
