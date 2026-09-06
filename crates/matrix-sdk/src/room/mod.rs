@@ -2526,6 +2526,13 @@ impl Room {
     async fn preshare_room_key(&self) -> Result<()> {
         self.ensure_room_joined()?;
 
+        // The recipients of a room key are read from the member list in the state
+        // store. With lazy loading that list can hold nothing but ourselves until
+        // the members have been fetched, and a room key shared against it reaches
+        // nobody: the message is undecryptable for the whole room, permanently,
+        // and there is nothing in the result to say so. Fetch the members first.
+        self.sync_members().await?;
+
         // Take and release the lock on the store, if needs be.
         let _guard = self.client.encryption().spin_lock_store(Some(60000)).await?;
 
