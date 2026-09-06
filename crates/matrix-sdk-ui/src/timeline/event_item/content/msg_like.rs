@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use as_variant::as_variant;
-use ruma::OwnedEventId;
+use ruma::{OwnedEventId, OwnedUserId};
 
 use super::{
     EmbeddedEvent, EncryptedMessage, InReplyToDetails, LiveLocationState, Message, PollState,
     Sticker,
 };
 use crate::timeline::{
-    ReactionsByKeyBySender, TimelineDetails, event_item::content::other::OtherMessageLike,
+    Profile, ReactionsByKeyBySender, TimelineDetails, event_item::content::other::OtherMessageLike,
 };
 
 #[derive(Clone, Debug)]
@@ -35,7 +35,7 @@ pub enum MsgLikeKind {
     Poll(PollState),
 
     /// A redacted message.
-    Redacted,
+    Redacted(RedactedMessage),
 
     /// An `m.room.encrypted` event that could not be decrypted.
     UnableToDecrypt(EncryptedMessage),
@@ -45,6 +45,26 @@ pub enum MsgLikeKind {
 
     /// A live location sharing session (MSC3489).
     LiveLocation(LiveLocationState),
+}
+
+/// What is known about the redaction of a redacted message.
+#[derive(Clone, Debug)]
+pub struct RedactedMessage {
+    /// The user who sent the redaction, if it is known.
+    ///
+    /// This is `None` when the timeline never saw the redaction event itself,
+    /// e.g. because the event arrived already redacted and the homeserver
+    /// didn't bundle the redaction in `unsigned.redacted_because`.
+    pub redacted_by: Option<OwnedUserId>,
+
+    /// The profile of the user who sent the redaction.
+    pub redacted_by_profile: TimelineDetails<Profile>,
+}
+
+impl Default for RedactedMessage {
+    fn default() -> Self {
+        Self { redacted_by: None, redacted_by_profile: TimelineDetails::Unavailable }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -90,16 +110,22 @@ impl MsgLikeContent {
             MsgLikeKind::Message(_) => "a message",
             MsgLikeKind::Sticker(_) => "a sticker",
             MsgLikeKind::Poll(_) => "a poll",
-            MsgLikeKind::Redacted => "a redacted message",
+            MsgLikeKind::Redacted(_) => "a redacted message",
             MsgLikeKind::UnableToDecrypt(_) => "an encrypted message we couldn't decrypt",
             MsgLikeKind::Other(_) => "a custom message-like event",
             MsgLikeKind::LiveLocation(_) => "a live location share",
         }
     }
 
+    /// A redacted message whose redaction sender isn't known.
     pub fn redacted() -> Self {
+        Self::redacted_by(RedactedMessage::default())
+    }
+
+    /// A redacted message, along with what is known about its redaction.
+    pub fn redacted_by(redacted: RedactedMessage) -> Self {
         Self {
-            kind: MsgLikeKind::Redacted,
+            kind: MsgLikeKind::Redacted(redacted),
             reactions: Default::default(),
             thread_root: None,
             in_reply_to: None,

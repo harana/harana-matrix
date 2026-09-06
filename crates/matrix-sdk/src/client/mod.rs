@@ -99,7 +99,7 @@ use self::{
 };
 use crate::{
     Account, AuthApi, AuthSession, Error, HttpError, Media, Pusher, RefreshTokenError, Result,
-    Room, SessionTokens, TransmissionProgress,
+    Room, SessionTokens,
     authentication::{
         AuthCtx, AuthData, ReloadSessionCallback, SaveSessionCallback,
         matrix::{MatrixAuth, MatrixSession},
@@ -117,7 +117,9 @@ use crate::{
         EventHandler, EventHandlerContext, EventHandlerDropGuard, EventHandlerHandle,
         EventHandlerStore, ObservableEventHandler, SyncEvent,
     },
-    http_client::{HttpClient, HttpSend, SupportedAuthScheme, SupportedPathBuilder},
+    http_client::{
+        HttpClient, HttpSend, RequestProgress, SupportedAuthScheme, SupportedPathBuilder,
+    },
     latest_events::LatestEvents,
     live_locations_observer::BeaconInfoUpdate,
     media::{MediaError, MediaFetcher},
@@ -594,6 +596,18 @@ impl Client {
 
     pub(crate) fn base_client(&self) -> &BaseClient {
         &self.inner.base_client
+    }
+
+    /// The threading support this client was configured with, via
+    /// [`ClientBuilder::with_threading_support()`].
+    ///
+    /// Note this only reflects the client's own configuration; it says nothing
+    /// about whether the homeserver supports threads. See
+    /// [`Client::enabled_thread_subscriptions()`] for that.
+    ///
+    /// [`ClientBuilder::with_threading_support()`]: crate::ClientBuilder::with_threading_support
+    pub fn threading_support(&self) -> ThreadingSupport {
+        self.base_client().threading_support
     }
 
     /// The transport the client sends its HTTP requests over.
@@ -1721,6 +1735,22 @@ impl Client {
     /// Similar to [`Client::restore_session_with`], with
     /// [`RoomLoadSettings::default()`].
     ///
+    /// # Store persistence
+    ///
+    /// Restoring a session only restores the session: it does not bring back
+    /// the state and crypto stores that went with it. Those live in the store
+    /// the [`ClientBuilder`] was pointed at, and they have to be persisted
+    /// separately, at the same path and with the same passphrase or key as
+    /// before. A session restored against a fresh store looks like it worked,
+    /// but the device has no keys, so encrypted messages arrive undecryptable
+    /// and other devices see a new, unverified device.
+    ///
+    /// See the `persist_session` example in the repository for a full
+    /// login-then-restore cycle; `ClientBuilder::sqlite_store` is the usual
+    /// way of pointing a client at a persistent store.
+    ///
+    /// [`ClientBuilder`]: crate::ClientBuilder
+    ///
     /// # Panics
     ///
     /// Panics if a session was already restored or logged in.
@@ -1734,7 +1764,8 @@ impl Client {
     /// [`RoomLoadSettings`].
     ///
     /// See the documentation of the corresponding authentication API's
-    /// `restore_session` method for more information.
+    /// `restore_session` method for more information, and
+    /// [`Client::restore_session`] for the store persistence this assumes.
     ///
     /// # Panics
     ///
@@ -2411,19 +2442,14 @@ impl Client {
         for<'a> <Request::PathBuilder as PathBuilder>::Input<'a>: SendOutsideWasm + SyncOutsideWasm,
         HttpError: From<FromHttpResponseError<Request::EndpointError>>,
     {
-        SendRequest {
-            client: self.clone(),
-            request,
-            config: None,
-            send_progress: Default::default(),
-        }
+        SendRequest { client: self.clone(), request, config: None, progress: Default::default() }
     }
 
     pub(crate) async fn send_inner<Request>(
         &self,
         request: Request,
         config: Option<RequestConfig>,
-        send_progress: SharedObservable<TransmissionProgress>,
+        progress: RequestProgress,
     ) -> HttpResult<Request::IncomingResponse>
     where
         Request: OutgoingRequest + Debug,
@@ -2448,7 +2474,7 @@ impl Client {
                 homeserver,
                 access_token.as_deref(),
                 path_builder_input,
-                send_progress,
+                progress,
             )
             .await;
 
@@ -4069,6 +4095,7 @@ impl Client {
                     self.event_cache().clone(),
                     SendQueue::new(self.clone()),
                     self.room_info_notable_update_receiver(),
+                    self.subscribe_to_ignore_user_list_changes(),
                 )
             })
             .await
@@ -4158,13 +4185,6 @@ impl Client {
     #[cfg(feature = "experimental-search-core")]
     pub fn search_index(&self) -> &SearchIndex {
         &self.inner.search_index
-    }
-
-    /// The threading support this client was built with.
-    ///
-    /// See [`ClientBuilder::with_threading_support`] for more details.
-    pub fn threading_support(&self) -> ThreadingSupport {
-        self.base_client().threading_support
     }
 
     /// Whether the client is configured to take thread subscriptions (MSC4306
@@ -4442,7 +4462,6 @@ pub(crate) mod tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
-    use eyeball::SharedObservable;
     use futures_util::{FutureExt, StreamExt, pin_mut};
     use js_int::{UInt, uint};
     use matrix_sdk_base::{
@@ -4491,7 +4510,7 @@ pub(crate) mod tests {
 
     use super::Client;
     use crate::{
-        Error, Result, TransmissionProgress,
+        Error, Result,
         client::{WeakClient, caches::CachedValue, futures::SendMediaUploadRequest},
         config::{RequestConfig, SyncSettings},
         futures::SendRequest,
@@ -6169,7 +6188,7 @@ pub(crate) mod tests {
             client: client.clone(),
             request: upload_request,
             config: None,
-            send_progress: SharedObservable::new(TransmissionProgress::default()),
+            progress: Default::default(),
         };
         let media_request = SendMediaUploadRequest::new(request);
 
@@ -6463,6 +6482,42 @@ pub(crate) mod tests {
         assert_key_count!(client, 0);
 
         Ok(())
+    }
+
+    #[async_test]
+    async fn test_threading_support_reflects_the_builder_configuration() {
+        use matrix_sdk_base::ThreadingSupport;
+
+        // A client built without threading support reports it as disabled. This is
+        // the default.
+        let client = MockClientBuilder::new(None).build().await;
+        assert_matches!(client.threading_support(), ThreadingSupport::Disabled);
+
+        // A client built with threading support, without subscriptions.
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder
+                    .with_threading_support(ThreadingSupport::Enabled { with_subscriptions: false })
+            })
+            .build()
+            .await;
+        assert_matches!(
+            client.threading_support(),
+            ThreadingSupport::Enabled { with_subscriptions: false }
+        );
+
+        // And one with subscriptions too.
+        let client = MockClientBuilder::new(None)
+            .on_builder(|builder| {
+                builder
+                    .with_threading_support(ThreadingSupport::Enabled { with_subscriptions: true })
+            })
+            .build()
+            .await;
+        assert_matches!(
+            client.threading_support(),
+            ThreadingSupport::Enabled { with_subscriptions: true }
+        );
     }
 
     #[async_test]

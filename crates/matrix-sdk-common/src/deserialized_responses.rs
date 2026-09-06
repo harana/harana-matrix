@@ -1219,6 +1219,14 @@ pub enum UnableToDecryptReason {
     /// `TrustRequirement`.
     SenderIdentityNotTrusted(VerificationLevel),
 
+    /// The event was not shown because it reuses the Megolm message index of an
+    /// event we have already decrypted: somebody re-sent a ciphertext the room
+    /// had already seen.
+    ReplayedMessageIndex {
+        /// The event which originally used this Megolm message index.
+        original_event_id: OwnedEventId,
+    },
+
     /// The outer state key could not be verified against the inner encrypted
     /// state key and type.
     #[cfg(feature = "experimental-encrypted-state-events")]

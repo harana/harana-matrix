@@ -159,6 +159,7 @@ impl<P: RoomDataProvider> TimelineState<P> {
         txn_id: OwnedTransactionId,
         send_handle: Option<SendHandle>,
         content: AnyMessageLikeEventContent,
+        allowed_by_filter: bool,
     ) {
         let mut txn = self.transaction();
 
@@ -169,19 +170,24 @@ impl<P: RoomDataProvider> TimelineState<P> {
             txn.meta.process_content_relations(&content, None, &txn.items, is_thread_focus);
 
         // TODO merge with other should_add, one way or another?
-        let should_add_new_items = match &txn.focus {
-            TimelineFocusKind::Live { hide_threaded_events, .. } => {
-                thread_root.is_none() || !hide_threaded_events
-            }
-            TimelineFocusKind::Thread { root_event_id, .. } => {
-                thread_root.as_ref().is_some_and(|r| r == root_event_id)
-            }
-            TimelineFocusKind::Event { .. } | TimelineFocusKind::PinnedEvents { .. } => {
-                // Don't add new items to these timelines; aggregations are added independently
-                // of the `should_add_new_items` value.
-                false
-            }
-        };
+        //
+        // Note that the event filter only decides whether the local echo becomes a
+        // timeline item of its own: like a remote event, an aggregation (an edit, a
+        // reaction) is still applied to the item it targets.
+        let should_add_new_items = allowed_by_filter
+            && match &txn.focus {
+                TimelineFocusKind::Live { hide_threaded_events, .. } => {
+                    thread_root.is_none() || !hide_threaded_events
+                }
+                TimelineFocusKind::Thread { root_event_id, .. } => {
+                    thread_root.as_ref().is_some_and(|r| r == root_event_id)
+                }
+                TimelineFocusKind::Event { .. } | TimelineFocusKind::PinnedEvents { .. } => {
+                    // Don't add new items to these timelines; aggregations are added
+                    // independently of the `should_add_new_items` value.
+                    false
+                }
+            };
 
         let ctx = TimelineEventContext {
             sender: own_user_id,

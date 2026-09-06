@@ -109,6 +109,11 @@ impl DateDividerAdjuster {
     /// be.
     #[instrument(skip_all)]
     pub fn run(&mut self, items: &mut ObservableItemsTransaction<'_>, meta: &mut TimelineMetadata) {
+        if matches!(self.mode, DateDividerMode::None) {
+            self.remove_all_date_dividers(items, meta);
+            return;
+        }
+
         // We're going to record vector operations like inserting, replacing and
         // removing date dividers. Since we may remove or insert new items,
         // recorded offsets will change as we're iterating over the array. The
@@ -210,6 +215,37 @@ impl DateDividerAdjuster {
             error!(sentry = true, %report, "day divider invariants violated");
             #[cfg(any(debug_assertions, test))]
             panic!("There was an error checking date separator invariants");
+        }
+
+        self.consumed = true;
+    }
+
+    /// Removes every date divider from the timeline.
+    ///
+    /// Used when the mode is [`DateDividerMode::None`], where the timeline must
+    /// never carry any date divider.
+    fn remove_all_date_dividers(
+        &mut self,
+        items: &mut ObservableItemsTransaction<'_>,
+        meta: &mut TimelineMetadata,
+    ) {
+        // Operations must be recorded in non-decreasing order of the indices, which
+        // iterating forwards guarantees.
+        for (i, item) in items.iter_remotes_and_locals_regions() {
+            if item.is_date_divider() {
+                trace!("removing date divider @ {i} (date dividers are disabled)");
+                self.ops.push(DateDividerOperation::Remove(i));
+            }
+        }
+
+        self.process_ops(items, meta);
+
+        if let Some((i, _)) =
+            items.iter_remotes_and_locals_regions().find(|(_, item)| item.is_date_divider())
+        {
+            error!(sentry = true, "a date divider remained at {i} while they are disabled");
+            #[cfg(any(debug_assertions, test))]
+            panic!("a date divider remained at {i} while they are disabled");
         }
 
         self.consumed = true;
@@ -523,6 +559,9 @@ impl DateDividerAdjuster {
             DateDividerMode::Monthly => {
                 timestamp_to_date(lhs).is_same_month_as(timestamp_to_date(rhs))
             }
+            // No date divider is ever inserted, so all the events belong to the same
+            // (nonexistent) group.
+            DateDividerMode::None => true,
         }
     }
 }

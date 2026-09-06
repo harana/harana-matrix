@@ -103,6 +103,48 @@ use crate::{
 pub enum AuthData {
     /// Password-based authentication (`m.login.password`).
     Password { password_details: AuthDataPasswordDetails },
+
+    /// Authentication that only acknowledges the stage (`m.login.dummy`).
+    Dummy {
+        /// The session identifier of the flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: Option<String>,
+    },
+
+    /// Token-based registration (`m.login.registration_token`).
+    RegistrationToken {
+        /// The token the homeserver handed the user out of band.
+        token: String,
+
+        /// The session identifier of the flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: Option<String>,
+    },
+
+    /// Email-based authentication (`m.login.email.identity`).
+    ///
+    /// Answers the stage with the credentials of an email address whose
+    /// ownership the user has already proven, by following the link the
+    /// homeserver sent after [`Client::request_registration_email_token`].
+    EmailIdentity {
+        /// The session identifier the token request returned.
+        email_session_id: String,
+
+        /// The client secret used for that token request.
+        client_secret: String,
+
+        /// The session identifier of the UIAA flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: Option<String>,
+    },
+
+    /// Acknowledgement that a stage was completed through the homeserver's
+    /// fallback web page.
+    FallbackAcknowledgement {
+        /// The session identifier of the flow this answers, as given by
+        /// [`UiaaChallenge::session`].
+        session: String,
+    },
 }
 
 #[derive(uniffi::Record)]
@@ -112,19 +154,123 @@ pub struct AuthDataPasswordDetails {
 
     /// The plaintext password.
     password: String,
+
+    /// The session identifier of the user-interactive authentication flow this
+    /// answers, as given by [`UiaaChallenge::session`].
+    ///
+    /// Required to continue a flow the homeserver has already started; leave
+    /// it unset for the first attempt.
+    session: Option<String>,
 }
 
-impl From<AuthData> for ruma::api::client::uiaa::AuthData {
-    fn from(value: AuthData) -> ruma::api::client::uiaa::AuthData {
+impl TryFrom<AuthData> for ruma::api::client::uiaa::AuthData {
+    type Error = ClientError;
+
+    fn try_from(value: AuthData) -> Result<ruma::api::client::uiaa::AuthData, Self::Error> {
+        use ruma::api::client::uiaa;
+
         match value {
             AuthData::Password { password_details } => {
-                let user_id = ruma::UserId::parse(password_details.identifier).unwrap();
+                let user_id = ruma::UserId::parse(password_details.identifier)?;
 
-                ruma::api::client::uiaa::AuthData::Password(ruma::api::client::uiaa::Password::new(
-                    user_id.into(),
-                    password_details.password,
-                ))
+                let mut password = uiaa::Password::new(user_id.into(), password_details.password);
+                password.session = password_details.session;
+
+                Ok(uiaa::AuthData::Password(password))
             }
+
+            AuthData::Dummy { session } => {
+                let mut dummy = uiaa::Dummy::new();
+                dummy.session = session;
+
+                Ok(uiaa::AuthData::Dummy(dummy))
+            }
+
+            AuthData::RegistrationToken { token, session } => {
+                let mut registration_token = uiaa::RegistrationToken::new(token);
+                registration_token.session = session;
+
+                Ok(uiaa::AuthData::RegistrationToken(registration_token))
+            }
+
+            AuthData::EmailIdentity { email_session_id, client_secret, session } => {
+                // `EmailIdentity` is non-exhaustive and has no constructor, so it is
+                // built the way ruma builds it from a UIAA response.
+                let credentials = uiaa::ThirdpartyIdCredentials::new(
+                    ruma::SessionId::parse(email_session_id)?,
+                    ruma::ClientSecret::parse(client_secret)?,
+                );
+
+                let mut data = serde_json::Map::new();
+                data.insert("threepid_creds".to_owned(), serde_json::to_value(credentials)?);
+
+                Ok(uiaa::AuthData::new("m.login.email.identity", session, data)?)
+            }
+
+            AuthData::FallbackAcknowledgement { session } => {
+                Ok(uiaa::AuthData::fallback_acknowledgement(session))
+            }
+        }
+    }
+}
+
+/// A user-interactive authentication challenge, as returned by the homeserver
+/// when it wants the user to authenticate before it carries out a request.
+///
+/// See the [spec] for the meaning of each field.
+///
+/// [spec]: https://spec.matrix.org/latest/client-server-api/#user-interactive-authentication-api
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct UiaaChallenge {
+    /// The authentication flows the homeserver accepts. Completing the stages
+    /// of any one of them, in order, satisfies the challenge.
+    pub flows: Vec<UiaaFlow>,
+
+    /// The stages that have already been completed for this session.
+    pub completed: Vec<String>,
+
+    /// The session identifier to send back with the next attempt.
+    pub session: Option<String>,
+
+    /// Stage-specific parameters, as a JSON object encoded in a string.
+    pub params: Option<String>,
+
+    /// The human-readable error of the previous attempt, if it failed.
+    pub error: Option<String>,
+
+    /// The error code of the previous attempt, if it failed.
+    pub error_code: Option<String>,
+}
+
+/// One authentication flow of a [`UiaaChallenge`].
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct UiaaFlow {
+    /// The types of the stages to complete, in order.
+    pub stages: Vec<String>,
+}
+
+impl From<&ruma::api::client::uiaa::UiaaInfo> for UiaaChallenge {
+    fn from(info: &ruma::api::client::uiaa::UiaaInfo) -> Self {
+        let (error, error_code) = match &info.auth_error {
+            Some(error) => {
+                (Some(error.message.clone()), Some(error.kind.errcode().as_str().to_owned()))
+            }
+            None => (None, None),
+        };
+
+        Self {
+            flows: info
+                .flows
+                .iter()
+                .map(|flow| UiaaFlow {
+                    stages: flow.stages.iter().map(ToString::to_string).collect(),
+                })
+                .collect(),
+            completed: info.completed.iter().map(ToString::to_string).collect(),
+            session: info.session.clone(),
+            params: info.params.as_ref().map(|params| params.get().to_owned()),
+            error,
+            error_code,
         }
     }
 }
@@ -2030,5 +2176,97 @@ mod tests {
         assert_eq!(emote.body, "*waves*");
         assert_let!(Some(formatted) = &emote.formatted);
         assert_eq!(formatted.body, "<em>waves</em>");
+    }
+}
+
+#[cfg(test)]
+mod uiaa_tests {
+    use ruma::api::client::uiaa;
+
+    use super::{AuthData, AuthDataPasswordDetails, UiaaChallenge};
+
+    #[test]
+    fn test_uiaa_info_is_mapped_to_a_challenge() {
+        let mut info = uiaa::UiaaInfo::new(vec![uiaa::AuthFlow::new(vec![
+            uiaa::AuthType::Password,
+            uiaa::AuthType::Dummy,
+        ])]);
+        info.completed = vec![uiaa::AuthType::Dummy];
+        info.session = Some("a-session".to_owned());
+
+        let challenge = UiaaChallenge::from(&info);
+
+        assert_eq!(challenge.flows.len(), 1);
+        assert_eq!(challenge.flows[0].stages, vec!["m.login.password", "m.login.dummy"]);
+        assert_eq!(challenge.completed, vec!["m.login.dummy"]);
+        assert_eq!(challenge.session.as_deref(), Some("a-session"));
+        assert!(challenge.error.is_none());
+        assert!(challenge.error_code.is_none());
+    }
+
+    #[test]
+    fn test_auth_data_carries_the_session_back() {
+        let auth_data = AuthData::Password {
+            password_details: AuthDataPasswordDetails {
+                identifier: "@alice:localhost".to_owned(),
+                password: "hunter2".to_owned(),
+                session: Some("a-session".to_owned()),
+            },
+        };
+
+        let auth_data: uiaa::AuthData = auth_data.try_into().expect("the user ID is a valid one");
+
+        let uiaa::AuthData::Password(password) = auth_data else {
+            panic!("expected a password auth data");
+        };
+        assert_eq!(password.session.as_deref(), Some("a-session"));
+    }
+
+    #[test]
+    fn test_the_registration_stages_map_to_their_ruma_types() {
+        let dummy: uiaa::AuthData = AuthData::Dummy { session: Some("s".to_owned()) }
+            .try_into()
+            .expect("a dummy stage always converts");
+        let uiaa::AuthData::Dummy(dummy) = dummy else { panic!("expected a dummy stage") };
+        assert_eq!(dummy.session.as_deref(), Some("s"));
+
+        let token: uiaa::AuthData = AuthData::RegistrationToken {
+            token: "a-token".to_owned(),
+            session: Some("s".to_owned()),
+        }
+        .try_into()
+        .expect("a registration token always converts");
+        let uiaa::AuthData::RegistrationToken(token) = token else {
+            panic!("expected a registration token stage")
+        };
+        assert_eq!(token.token, "a-token");
+        assert_eq!(token.session.as_deref(), Some("s"));
+
+        let email: uiaa::AuthData = AuthData::EmailIdentity {
+            email_session_id: "an-sid".to_owned(),
+            client_secret: "a-secret".to_owned(),
+            session: Some("s".to_owned()),
+        }
+        .try_into()
+        .expect("valid identifiers convert");
+        let uiaa::AuthData::EmailIdentity(email) = email else {
+            panic!("expected an email identity stage")
+        };
+        assert_eq!(email.thirdparty_id_creds.sid, "an-sid");
+        assert_eq!(email.thirdparty_id_creds.client_secret, "a-secret");
+        assert_eq!(email.session.as_deref(), Some("s"));
+    }
+
+    #[test]
+    fn test_an_invalid_user_id_is_an_error_rather_than_a_panic() {
+        let auth_data = AuthData::Password {
+            password_details: AuthDataPasswordDetails {
+                identifier: "not a user id".to_owned(),
+                password: "hunter2".to_owned(),
+                session: None,
+            },
+        };
+
+        assert!(uiaa::AuthData::try_from(auth_data).is_err());
     }
 }

@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use std::io::Write;
 
 use anyhow::{Context, Result};
@@ -246,6 +248,13 @@ struct Cli {
     /// Set the proxy that should be used for the connection.
     #[clap(short, long)]
     proxy: Option<Url>,
+
+    /// The user to send a verification request to.
+    ///
+    /// Use your own user ID to verify another one of your devices. If this is
+    /// left out, we only wait for somebody else to start a verification.
+    #[clap(short = 'u', long)]
+    verify_user: Option<OwnedUserId>,
 
     /// Enable verbose logging output.
     #[clap(long, action)]

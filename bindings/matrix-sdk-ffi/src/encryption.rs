@@ -28,7 +28,10 @@ use tracing::{error, info};
 use zeroize::Zeroize;
 
 use crate::{
-    client::Client, error::ClientError, ruma::AuthData, runtime::get_runtime_handle,
+    client::Client,
+    error::ClientError,
+    ruma::AuthData,
+    runtime::get_runtime_handle,
     task_handle::TaskHandle,
 };
 
@@ -669,6 +672,8 @@ impl Encryption {
         let backups = self.inner.backups();
         let wait_for_steady_state = backups.wait_for_steady_state();
 
+        backups.trigger_upload();
+
         let task = if let Some(listener) = progress_listener {
             let mut progress_stream = wait_for_steady_state.subscribe_to_progress();
 
@@ -782,7 +787,9 @@ impl Encryption {
             return Ok(CrossSigningBootstrapResult::AlreadyPresent);
         }
 
-        match self.inner.bootstrap_cross_signing(auth_data.map(Into::into)).await {
+        let auth_data = auth_data.map(TryInto::try_into).transpose()?;
+
+        match self.inner.bootstrap_cross_signing(auth_data).await {
             Ok(()) => Ok(CrossSigningBootstrapResult::Created),
             Err(error) => {
                 if error.as_uiaa_response().is_some() {
@@ -1127,7 +1134,8 @@ impl IdentityResetHandle {
     /// 3. Go through the cross-signing key reset flow
     /// 4. Finally, re-enable key backups only if they were enabled before
     pub async fn reset(&self, auth: Option<AuthData>) -> Result<(), ClientError> {
-        self.inner.reset(auth.map(Into::into)).await.map_err(ClientError::from_err)
+        let auth = auth.map(TryInto::try_into).transpose()?;
+        self.inner.reset(auth).await.map_err(ClientError::from_err)
     }
 
     pub async fn cancel(&self) {

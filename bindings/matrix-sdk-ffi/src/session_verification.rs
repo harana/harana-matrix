@@ -55,6 +55,19 @@ pub enum SessionVerificationData {
     Decimals { values: Vec<u16> },
 }
 
+/// Details about the device a verification just finished with.
+#[derive(uniffi::Record)]
+pub struct SessionVerificationCompletionDetails {
+    /// The user the verified device belongs to.
+    user_id: String,
+
+    /// The device that was verified.
+    device_id: String,
+
+    /// The display name the verified device advertises, if any.
+    device_display_name: Option<String>,
+}
+
 /// Details about the incoming verification request
 #[derive(uniffi::Record)]
 pub struct SessionVerificationRequestDetails {
@@ -74,7 +87,10 @@ pub trait SessionVerificationControllerDelegate: SyncOutsideWasm + SendOutsideWa
     fn did_receive_verification_data(&self, data: SessionVerificationData);
     fn did_fail(&self);
     fn did_cancel(&self);
-    fn did_finish(&self);
+    /// The verification finished successfully. `details` names the device that
+    /// was verified, so a completion dialog can name it, and is only absent
+    /// when the flow finished without this device taking part in it.
+    fn did_finish(&self, details: Option<SessionVerificationCompletionDetails>);
 }
 
 pub type Delegate = Arc<RwLock<Option<Arc<dyn SessionVerificationControllerDelegate>>>>;
@@ -395,7 +411,13 @@ impl SessionVerificationController {
                 }
                 SasState::Done { .. } => {
                     if let Some(current_delegate) = Self::current_delegate(&delegate) {
-                        current_delegate.did_finish()
+                        let other_device = sas.other_device();
+
+                        current_delegate.did_finish(Some(SessionVerificationCompletionDetails {
+                            user_id: sas.other_user_id().to_string(),
+                            device_id: other_device.device_id().to_string(),
+                            device_display_name: other_device.display_name().map(ToOwned::to_owned),
+                        }))
                     }
                     break;
                 }
@@ -421,8 +443,9 @@ mod tests {
     use std::sync::{Arc, RwLock};
 
     use super::{
-        Delegate, SessionVerificationController, SessionVerificationControllerDelegate,
-        SessionVerificationData, SessionVerificationRequestDetails,
+        Delegate, SessionVerificationCompletionDetails, SessionVerificationController,
+        SessionVerificationControllerDelegate, SessionVerificationData,
+        SessionVerificationRequestDetails,
     };
 
     /// A delegate that detaches itself from within a callback. The only
@@ -441,7 +464,7 @@ mod tests {
         fn did_start_sas_verification(&self) {}
         fn did_receive_verification_data(&self, _: SessionVerificationData) {}
         fn did_fail(&self) {}
-        fn did_finish(&self) {}
+        fn did_finish(&self, _: Option<SessionVerificationCompletionDetails>) {}
     }
 
     #[test]

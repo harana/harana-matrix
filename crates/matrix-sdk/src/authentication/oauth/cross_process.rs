@@ -292,7 +292,10 @@ mod tests {
             Box::new({
                 // This is only called because of extra checks in the code.
                 let tokens = tokens.clone();
-                move |_| Ok(tokens.clone())
+                move |_| {
+                    let tokens = tokens.clone();
+                    Box::pin(async move { Ok(tokens) })
+                }
             }),
             Box::new(|_| panic!("save_session_callback shouldn't be called here")),
         )?;
@@ -502,7 +505,10 @@ mod tests {
                 Box::new({
                     // This is only called because of extra checks in the code.
                     let tokens = next_tokens.clone();
-                    move |_| Ok(tokens.clone())
+                    move |_| {
+                        let tokens = tokens.clone();
+                        Box::pin(async move { Ok(tokens) })
+                    }
                 }),
                 Box::new(|_| panic!("save_session_callback shouldn't be called here")),
             )?;
@@ -541,7 +547,10 @@ mod tests {
             Box::new({
                 // This is only called because of extra checks in the code.
                 let tokens = next_tokens.clone();
-                move |_| Ok(tokens.clone())
+                move |_| {
+                    let tokens = tokens.clone();
+                    Box::pin(async move { Ok(tokens) })
+                }
             }),
             Box::new(|_| panic!("save_session_callback shouldn't be called here")),
         )?;
@@ -604,6 +613,93 @@ mod tests {
             assert!(guard.hash_guard.is_none());
             assert!(!guard.hash_mismatch);
         }
+
+        Ok(())
+    }
+
+    /// The reload callback returns a future, so that a host whose session
+    /// storage is asynchronous (a keychain reached over a bridge, say) does
+    /// not have to block a thread inside it. A callback that suspends must
+    /// still be driven to completion, and its tokens adopted.
+    #[async_test]
+    async fn test_the_reload_session_callback_is_awaited_to_completion() -> anyhow::Result<()> {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        let server = MatrixMockServer::new().await;
+
+        // One store, shared by two clients: the second one restores a session
+        // whose hash doesn't match what the first one left in the database,
+        // which is what sends it through the reload callback.
+        let tmp_dir = tempfile::tempdir()?;
+
+        let first = server
+            .client_builder()
+            .on_builder(|builder| builder.sqlite_store(&tmp_dir, None))
+            .unlogged()
+            .build()
+            .await;
+        first.oauth().enable_cross_process_refresh_lock("first".to_owned()).await?;
+        first.set_session_callbacks(
+            Box::new(|_| panic!("the first client's session is never reloaded")),
+            Box::new(|_| Box::pin(async { Ok(()) })),
+        )?;
+
+        let trusted_tokens = mock_session_tokens_with_refresh();
+        first
+            .oauth()
+            .restore_session(mock_session(trusted_tokens.clone()), RoomLoadSettings::default())
+            .await?;
+
+        let second = server
+            .client_builder()
+            .on_builder(|builder| builder.sqlite_store(&tmp_dir, None))
+            .unlogged()
+            .build()
+            .await;
+        second.oauth().enable_cross_process_refresh_lock("second".to_owned()).await?;
+
+        let resumed = Arc::new(AtomicBool::new(false));
+        second.set_session_callbacks(
+            Box::new({
+                let resumed = resumed.clone();
+                let trusted_tokens = trusted_tokens.clone();
+                move |_| {
+                    let resumed = resumed.clone();
+                    let trusted_tokens = trusted_tokens.clone();
+                    Box::pin(async move {
+                        // Suspend, so the callback only finishes if the SDK
+                        // polls it again rather than dropping the future.
+                        tokio::task::yield_now().await;
+                        resumed.store(true, Ordering::SeqCst);
+                        Ok(trusted_tokens)
+                    })
+                }
+            }),
+            Box::new(|_| Box::pin(async { Ok(()) })),
+        )?;
+
+        // The stale tokens this client starts from hash differently, so
+        // restoring hits the mismatch path.
+        second
+            .oauth()
+            .restore_session(
+                mock_session(mock_prev_session_tokens_with_refresh()),
+                RoomLoadSettings::default(),
+            )
+            .await?;
+
+        assert!(
+            resumed.load(Ordering::SeqCst),
+            "the reload callback's future was not driven past its first await point"
+        );
+        assert_eq!(
+            second.session_tokens().unwrap(),
+            trusted_tokens,
+            "the tokens the callback returned were not adopted"
+        );
 
         Ok(())
     }
@@ -680,8 +776,8 @@ mod tests {
             .await
             .unwrap();
         app.set_session_callbacks(
-            Box::new(|_| Ok(mock_session_tokens_with_refresh())),
-            Box::new(|_| Ok(())),
+            Box::new(|_| Box::pin(async { Ok(mock_session_tokens_with_refresh()) })),
+            Box::new(|_| Box::pin(async { Ok(()) })),
         )
         .unwrap();
 
@@ -700,8 +796,8 @@ mod tests {
             .await
             .unwrap();
         nse.set_session_callbacks(
-            Box::new(|_| Ok(mock_session_tokens_with_refresh())),
-            Box::new(|_| Ok(())),
+            Box::new(|_| Box::pin(async { Ok(mock_session_tokens_with_refresh()) })),
+            Box::new(|_| Box::pin(async { Ok(()) })),
         )
         .unwrap();
 

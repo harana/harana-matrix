@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Fixed
+
+- Commit the transactions that carry Olm session or account state with strict
+  durability, so a crash or power cut cannot leave the persisted session behind
+  the one the peer has already ratcheted past.
+  ([#99](https://github.com/harana/harana-matrix/issues/99))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 No significant changes.

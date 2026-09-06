@@ -431,6 +431,7 @@ impl TimelineMetadata {
                                 edit_json,
                                 encryption_info: ctx.bundled_edit_encryption_info,
                                 bundled_item_owner: Some(ctx.event_id.to_owned()),
+                                local: None,
                             }),
                         );
                         self.aggregations.add(
@@ -469,6 +470,7 @@ impl TimelineMetadata {
                                 edit_json,
                                 encryption_info: ctx.bundled_edit_encryption_info,
                                 bundled_item_owner: Some(ctx.event_id.to_owned()),
+                                local: None,
                             }),
                         );
                         self.aggregations.add(
@@ -590,6 +592,13 @@ pub(in crate::timeline) struct EventMeta {
     /// Whether the event can show read receipts.
     pub can_show_read_receipts: bool,
 
+    /// Whether this event is the `m.room.member` event with which
+    /// [`Self::sender`] joined the room.
+    ///
+    /// Used to keep a user's read receipt from landing on an event that
+    /// predates their membership.
+    pub is_join: bool,
+
     /// Foundation for the mapping between remote events to timeline items.
     ///
     /// Let's explain it. The events represent the first set and are stored in
@@ -661,6 +670,7 @@ impl EventMeta {
         visible: bool,
         can_show_read_receipts: bool,
         thread_root_id: Option<OwnedEventId>,
+        is_join: bool,
     ) -> Self {
         Self {
             event_id,
@@ -668,6 +678,7 @@ impl EventMeta {
             thread_root_id,
             visible,
             can_show_read_receipts,
+            is_join,
             timeline_item_index: None,
         }
     }

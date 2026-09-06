@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Fixed
+
+- Stop retrying a `/keys/upload` the server rejects with "One time key ...
+  already exists". The request is now marked as sent, so it no longer blocks
+  everything queued behind it, cross-signing bootstrap included.
+  ([#191](https://github.com/harana/harana-matrix/issues/191),
+  [#259](https://github.com/harana/harana-matrix/issues/259))
+- Document on `Client::restore_session` that the store has to be persisted
+  separately. ([#58](https://github.com/harana/harana-matrix/issues/58))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 ### Added

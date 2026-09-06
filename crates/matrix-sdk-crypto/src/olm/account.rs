@@ -753,6 +753,7 @@ impl Account {
     pub fn mark_keys_as_published(&mut self) {
         self.dirty = true;
         self.inner.mark_keys_as_published();
+        self.dirty = true;
     }
 
     /// Sign the given string using the accounts signing key.
@@ -1934,8 +1935,9 @@ impl Account {
         Self::from_pickle(self.pickle()).unwrap()
     }
 
-    /// Has this account been modified since it was last persisted?
-    pub(crate) fn dirty(&self) -> bool {
+    /// Has this account changed since it was last read from, or written to,
+    /// the store?
+    pub(crate) fn is_dirty(&self) -> bool {
         self.dirty
     }
 }
@@ -2068,6 +2070,222 @@ mod tests {
 
     fn device_id() -> &'static DeviceId {
         device_id!("DEVICEID")
+    }
+
+    /// A `tracing` subscriber that keeps the events emitted while it is
+    /// installed, so a test can assert on what was logged.
+    ///
+    /// The crate installs a global subscriber for tests; `set_default` layers
+    /// this one over it for the current thread, which is where the whole of a
+    /// `#[tokio::test]` runs.
+    mod log_capture {
+        use std::{
+            collections::BTreeMap,
+            fmt,
+            sync::{Arc, Mutex},
+        };
+
+        use tracing::{
+            Event, Level, Metadata,
+            field::{Field, Visit},
+            span,
+        };
+
+        #[derive(Debug)]
+        pub(super) struct RecordedEvent {
+            pub level: Level,
+            pub fields: BTreeMap<String, String>,
+        }
+
+        impl RecordedEvent {
+            /// The value of a field, as it was formatted into the event.
+            pub fn field(&self, name: &str) -> Option<&str> {
+                self.fields.get(name).map(String::as_str)
+            }
+        }
+
+        #[derive(Clone, Default)]
+        pub(super) struct Recorder(Arc<Mutex<Vec<RecordedEvent>>>);
+
+        impl Recorder {
+            /// Run `f` with this recorder installed, and return what it logged.
+            pub fn capture(f: impl FnOnce()) -> Vec<RecordedEvent> {
+                let recorder = Self::default();
+                {
+                    let _guard = tracing::subscriber::set_default(recorder.clone());
+                    f();
+                }
+
+                Arc::into_inner(recorder.0)
+                    .expect("the subscriber should have been dropped with the guard")
+                    .into_inner()
+                    .unwrap()
+            }
+        }
+
+        struct FieldCollector<'a>(&'a mut BTreeMap<String, String>);
+
+        impl Visit for FieldCollector<'_> {
+            fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+                self.0.insert(field.name().to_owned(), format!("{value:?}"));
+            }
+
+            fn record_str(&mut self, field: &Field, value: &str) {
+                self.0.insert(field.name().to_owned(), value.to_owned());
+            }
+        }
+
+        impl tracing::Subscriber for Recorder {
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                true
+            }
+
+            fn new_span(&self, _: &span::Attributes<'_>) -> span::Id {
+                span::Id::from_u64(1)
+            }
+
+            fn record(&self, _: &span::Id, _: &span::Record<'_>) {}
+
+            fn record_follows_from(&self, _: &span::Id, _: &span::Id) {}
+
+            fn event(&self, event: &Event<'_>) {
+                let mut fields = BTreeMap::new();
+                event.record(&mut FieldCollector(&mut fields));
+
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(RecordedEvent { level: *event.metadata().level(), fields });
+            }
+
+            fn enter(&self, _: &span::Id) {}
+
+            fn exit(&self, _: &span::Id) {}
+        }
+    }
+
+    /// Regression test for issue #101: generating one-time keys reports the
+    /// resulting stock against the maximum.
+    #[test]
+    fn test_generating_one_time_keys_is_logged() {
+        let mut account = Account::with_device_id(user_id(), device_id());
+        // Clear the keys the account starts with, so a full batch is generated.
+        account.mark_keys_as_published();
+
+        let events = log_capture::Recorder::capture(|| {
+            account.generate_one_time_keys_if_needed();
+        });
+
+        let event = events
+            .iter()
+            .find(|event| event.field("created_keys").is_some())
+            .expect("generating one-time keys should be logged");
+
+        assert_eq!(event.level, tracing::Level::DEBUG);
+        assert_eq!(event.field("uploaded_one_time_keys"), Some("0"));
+        assert_eq!(
+            event.field("max_one_time_keys"),
+            Some(account.max_one_time_keys().to_string().as_str())
+        );
+        assert!(event.field("discarded_keys").is_some());
+    }
+
+    /// Regression test for issue #101: consuming a one-time key to create an
+    /// inbound session names the key and what is left.
+    #[async_test]
+    async fn test_consuming_a_one_time_key_is_logged() {
+        let alice = Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICEDEV"));
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOBDEV"));
+
+        bob.generate_one_time_keys(1);
+        let one_time_key = *bob.one_time_keys().values().next().unwrap();
+
+        let mut session = alice
+            .create_outbound_session_helper(
+                vodozemac::olm::SessionConfig::version_1(),
+                bob.identity_keys().curve25519,
+                one_time_key,
+                false,
+                alice.device_keys(),
+            )
+            .unwrap();
+
+        let alice_device = DeviceData::from_account(&alice);
+        let message = session
+            .encrypt(
+                &alice_device,
+                "m.dummy",
+                ruma::events::dummy::ToDeviceDummyEventContent::new(),
+                None,
+            )
+            .await
+            .unwrap()
+            .deserialize()
+            .unwrap();
+
+        let content = as_variant::as_variant!(
+            message,
+            crate::types::events::room::encrypted::ToDeviceEncryptedEventContent::OlmV1Curve25519AesSha2
+        )
+        .expect("we encrypt with the v1 algorithm by default");
+
+        let vodozemac::olm::OlmMessage::PreKey(prekey) = content.ciphertext else {
+            panic!("the first message in a session is a pre-key message");
+        };
+
+        let bob_device_keys = bob.device_keys();
+        let events = log_capture::Recorder::capture(|| {
+            bob.create_inbound_session(
+                alice_device.curve25519_key().unwrap(),
+                bob_device_keys,
+                &prekey,
+            )
+            .unwrap();
+        });
+
+        let event = events
+            .iter()
+            .find(|event| event.field("consumed_unpublished_one_time_keys").is_some())
+            .expect("consuming a one-time key should be logged");
+
+        assert_eq!(event.level, tracing::Level::DEBUG);
+        assert_eq!(event.field("consumed_unpublished_one_time_keys"), Some("1"));
+        assert!(event.field("unpublished_one_time_keys").is_some());
+        assert!(event.field("uploaded_one_time_keys").is_some());
+        assert!(event.field("max_one_time_keys").is_some());
+    }
+
+    #[test]
+    fn test_dirty_flag_tracks_real_changes() {
+        // A freshly unpickled account has nothing outstanding.
+        let mut account =
+            Account::with_device_id(user_id!("@alice:localhost"), device_id!("DEVICEID"))
+                .deep_clone();
+        assert!(!account.is_dirty());
+
+        // Reading does not dirty it.
+        let count = account.uploaded_key_count();
+        let _ = account.one_time_keys();
+        assert!(!account.is_dirty());
+
+        // Neither does writing the same value back.
+        account.update_uploaded_key_count(count);
+        assert!(!account.is_dirty());
+
+        // Marking an already-shared account as shared is a no-op too.
+        account.mark_as_shared();
+        assert!(account.is_dirty());
+        let mut account = account.deep_clone();
+        assert!(account.shared());
+        account.mark_as_shared();
+        assert!(!account.is_dirty());
+
+        // Generating keys is a real change.
+        account.generate_one_time_keys(1);
+        assert!(account.is_dirty());
+
+        // And the flag does not survive a round trip through the store.
+        assert!(!account.deep_clone().is_dirty());
     }
 
     #[test]
@@ -2309,17 +2527,17 @@ mod tests {
     fn test_account_dirty_flag_tracks_real_changes() {
         // A brand new account has never been persisted.
         let mut account = Account::with_device_id(user_id!("@alice:localhost"), device_id!("DEV"));
-        assert!(account.dirty(), "A new account has to be written to the store");
+        assert!(account.is_dirty(), "A new account has to be written to the store");
         account.mark_as_shared();
 
         // Round-tripping through the store leaves it clean.
         let mut account = Account::from_pickle(account.pickle()).unwrap();
-        assert!(!account.dirty(), "An account restored from the store matches the store");
+        assert!(!account.is_dirty(), "An account restored from the store matches the store");
 
         // Reading it doesn't dirty it.
         let _ = account.one_time_keys();
         let _ = account.identity_keys();
-        assert!(!account.dirty());
+        assert!(!account.is_dirty());
 
         // Neither does setting a field to the value it already holds, which is what a
         // sync response that repeats the same one-time key count does.
@@ -2327,11 +2545,11 @@ mod tests {
         account.update_uploaded_key_count(count);
         account.mark_as_shared();
         account.mark_as_shared();
-        assert!(!account.dirty(), "A no-op update must not force a store write");
+        assert!(!account.is_dirty(), "A no-op update must not force a store write");
 
         // An actual change does dirty it.
         account.update_uploaded_key_count(count + 1);
-        assert!(account.dirty());
+        assert!(account.is_dirty());
     }
 
     #[test]

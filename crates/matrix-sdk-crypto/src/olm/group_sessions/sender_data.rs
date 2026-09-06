@@ -203,6 +203,7 @@ impl SenderData {
     /// known to be legacy: the recomputation has no way of telling that the
     /// session came from a backup or a key export, so the flag has to be
     /// carried over rather than reset.
+    #[must_use]
     pub fn with_legacy_session(self, legacy: bool) -> Self {
         match self {
             SenderData::UnknownDevice { owner_check_failed, .. } => {

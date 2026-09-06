@@ -105,6 +105,7 @@ impl LatestEvents {
         event_cache: EventCache,
         send_queue: SendQueue,
         room_info_updates: broadcast::Receiver<RoomInfoNotableUpdate>,
+        ignore_user_list_updates: Subscriber<Vec<String>>,
     ) -> Self {
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
@@ -121,6 +122,7 @@ impl LatestEvents {
                     event_cache,
                     send_queue,
                     room_info_updates,
+                    ignore_user_list_updates,
                     latest_event_queue_sender,
                 ),
             )
@@ -480,6 +482,7 @@ async fn listen_to_updates_task(
     event_cache: EventCache,
     send_queue: SendQueue,
     room_info_updates: broadcast::Receiver<RoomInfoNotableUpdate>,
+    mut ignore_user_list_updates: Subscriber<Vec<String>>,
     latest_event_queue_sender: mpsc::UnboundedSender<LatestEventQueueUpdate>,
 ) {
     let mut event_cache_generic_updates_subscriber =
@@ -493,6 +496,7 @@ async fn listen_to_updates_task(
             &mut event_cache_generic_updates_subscriber,
             &mut send_queue_generic_updates_subscriber,
             &mut room_info_updates_subscriber,
+            &mut ignore_user_list_updates,
             &latest_event_queue_sender,
         )
         .await
@@ -514,6 +518,7 @@ async fn listen_to_updates(
     event_cache_generic_updates_subscriber: &mut broadcast::Receiver<RoomEventCacheGenericUpdate>,
     send_queue_generic_updates_subscriber: &mut broadcast::Receiver<SendQueueUpdate>,
     room_info_updates_subscriber: &mut broadcast::Receiver<RoomInfoNotableUpdate>,
+    ignore_user_list_updates_subscriber: &mut Subscriber<Vec<String>>,
     latest_event_queue_sender: &mpsc::UnboundedSender<LatestEventQueueUpdate>,
 ) -> ControlFlow<()> {
     select! {
@@ -570,6 +575,26 @@ async fn listen_to_updates(
                 }
             } else {
                 warn!("`room_info_updates` channel has been closed");
+
+                return ControlFlow::Break(());
+            }
+        }
+
+        ignore_user_list_update = ignore_user_list_updates_subscriber.next() => {
+            if ignore_user_list_update.is_some() {
+                // The events of an ignored user are not candidates for a latest event.
+                // Ignoring or unignoring somebody can consequently change the latest event
+                // of any room. The events are still in the event cache: it's enough to
+                // recompute the values.
+                info!("Ignore user list has changed, recomputing all the latest events");
+
+                for room_id in registered_rooms.read().await.keys() {
+                    let _ = latest_event_queue_sender.send(LatestEventQueueUpdate::EventCache {
+                        room_id: room_id.clone(),
+                    });
+                }
+            } else {
+                warn!("`ignore_user_list_updates` stream has been closed");
 
                 return ControlFlow::Break(());
             }
@@ -681,6 +706,7 @@ mod tests {
     use std::{collections::HashMap, ops::Not, time::Duration};
 
     use assert_matches::assert_matches;
+    use eyeball::SharedObservable;
     use matrix_sdk_base::{
         RoomState,
         deserialized_responses::TimelineEventKind,
@@ -882,6 +908,8 @@ mod tests {
         let (_send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
             broadcast::channel(1);
         let (_room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
         // New event cache update, but the `LatestEvents` isn't listening to it.
@@ -897,6 +925,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -923,6 +952,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -952,6 +982,8 @@ mod tests {
         let (send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
             broadcast::channel(1);
         let (_room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
         // New send queue update, but the `LatestEvents` isn't listening to it.
@@ -973,6 +1005,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -1005,6 +1038,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -1034,6 +1068,8 @@ mod tests {
         let (_send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
             broadcast::channel(1);
         let (room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
         // New room info update, but the `LatestEvents` isn't listening to it.
@@ -1052,6 +1088,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -1081,6 +1118,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -1110,6 +1148,8 @@ mod tests {
         let (_send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
             broadcast::channel(1);
         let (room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
         registered_rooms
@@ -1137,6 +1177,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -1162,6 +1203,7 @@ mod tests {
                     &mut room_event_cache_generic_update_receiver,
                     &mut send_queue_generic_update_receiver,
                     &mut room_info_update_receiver,
+                    &mut ignore_user_list_subscriber,
                     &latest_event_queue_sender,
                 )
                 .await
@@ -1174,6 +1216,61 @@ mod tests {
     }
 
     #[async_test]
+    async fn test_inputs_task_recomputes_everything_when_the_ignore_user_list_changes() {
+        let room_id = owned_room_id!("!r0");
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let weak_client = WeakClient::from_client(&client);
+        let weak_room = WeakRoom::new(weak_client, room_id.clone());
+
+        let event_cache = client.event_cache();
+
+        let registered_rooms = RwLock::new(HashMap::new());
+
+        let (_room_event_cache_generic_update_sender, mut room_event_cache_generic_update_receiver) =
+            broadcast::channel(1);
+        let (_send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
+            broadcast::channel(1);
+        let (_room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
+        let (latest_event_queue_sender, mut latest_event_queue_receiver) =
+            mpsc::unbounded_channel();
+
+        registered_rooms
+            .write()
+            .await
+            .insert(room_id.clone(), With::inner(RoomLatestEvents::new(weak_room, event_cache)));
+
+        // Somebody is ignored.
+        ignore_user_list_observable.set(vec!["@spammer:matrix.org".to_owned()]);
+
+        assert!(
+            listen_to_updates(
+                &registered_rooms,
+                &mut room_event_cache_generic_update_receiver,
+                &mut send_queue_generic_update_receiver,
+                &mut room_info_update_receiver,
+                &mut ignore_user_list_subscriber,
+                &latest_event_queue_sender,
+            )
+            .await
+            .is_continue()
+        );
+
+        // The latest event of every registered room is recomputed, from the events
+        // that are still in the event cache.
+        assert_matches!(
+            latest_event_queue_receiver.try_recv(),
+            Ok(LatestEventQueueUpdate::EventCache { room_id: updated_room_id }) => {
+                assert_eq!(updated_room_id, room_id);
+            }
+        );
+        assert!(latest_event_queue_receiver.is_empty());
+    }
+
+    #[async_test]
     async fn test_inputs_task_stops_when_event_cache_channel_is_closed() {
         let registered_rooms = RwLock::new(HashMap::new());
         let (room_event_cache_generic_update_sender, mut room_event_cache_generic_update_receiver) =
@@ -1181,6 +1278,8 @@ mod tests {
         let (_send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
             broadcast::channel(1);
         let (_room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
         // Drop the sender to close the channel.
@@ -1193,6 +1292,7 @@ mod tests {
                 &mut room_event_cache_generic_update_receiver,
                 &mut send_queue_generic_update_receiver,
                 &mut room_info_update_receiver,
+                &mut ignore_user_list_subscriber,
                 &latest_event_queue_sender,
             )
             .await
@@ -1211,6 +1311,8 @@ mod tests {
         let (send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
             broadcast::channel(1);
         let (_room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
         // Drop the sender to close the channel.
@@ -1223,6 +1325,7 @@ mod tests {
                 &mut room_event_cache_generic_update_receiver,
                 &mut send_queue_generic_update_receiver,
                 &mut room_info_update_receiver,
+                &mut ignore_user_list_subscriber,
                 &latest_event_queue_sender,
             )
             .await
@@ -1241,6 +1344,8 @@ mod tests {
         let (_send_queue_generic_update_sender, mut send_queue_generic_update_receiver) =
             broadcast::channel(1);
         let (room_info_update_sender, mut room_info_update_receiver) = broadcast::channel(1);
+        let ignore_user_list_observable = SharedObservable::new(Vec::new());
+        let mut ignore_user_list_subscriber = ignore_user_list_observable.subscribe();
         let (latest_event_queue_sender, latest_event_queue_receiver) = mpsc::unbounded_channel();
 
         // Drop the sender to close the channel.
@@ -1253,6 +1358,7 @@ mod tests {
                 &mut room_event_cache_generic_update_receiver,
                 &mut send_queue_generic_update_receiver,
                 &mut room_info_update_receiver,
+                &mut ignore_user_list_subscriber,
                 &latest_event_queue_sender,
             )
             .await

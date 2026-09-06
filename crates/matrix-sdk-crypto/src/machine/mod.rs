@@ -278,6 +278,9 @@ pub struct OlmMachineInner {
     /// and the collision reproduces on every retry. Handing back the same
     /// request keeps that from happening.
     outgoing_keys_upload_request: StdRwLock<Option<(OwnedTransactionId, UploadKeysRequest)>>,
+    /// Record of the Megolm message indices we have already decrypted, used to
+    /// detect an event which replays a ciphertext we have seen before.
+    replay_protection: ReplayProtection,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -414,6 +417,7 @@ impl OlmMachine {
             identity_manager,
             backup_machine,
             outgoing_keys_upload_request: Default::default(),
+            replay_protection: Default::default(),
         });
 
         Self { inner }
@@ -2369,7 +2373,25 @@ impl OlmMachine {
 
         let result = session.decrypt(event).await;
         match result {
-            Ok((decrypted_event, _)) => {
+            Ok((decrypted_event, message_index)) => {
+                // A Megolm message index is only ever used once, so the same index turning
+                // up on a second event means somebody re-sent a ciphertext we have already
+                // seen, hoping we would show it again as a new message.
+                if let Some(original_event_id) = self.inner.replay_protection.check_and_record(
+                    session.session_id(),
+                    message_index,
+                    &event.event_id,
+                ) {
+                    ReplayProtection::warn_about_replay(
+                        session.session_id(),
+                        message_index,
+                        &event.event_id,
+                        &original_event_id,
+                    );
+
+                    return Err(MegolmError::ReplayedMessageIndex { original_event_id });
+                }
+
                 let encryption_info = self.get_encryption_info(&session, &event.sender).await?;
 
                 self.check_sender_trust_requirement(
@@ -2563,7 +2585,16 @@ impl OlmMachine {
     ) -> MegolmResult<DecryptedRoomEvent> {
         let _timer = timer!(tracing::Level::TRACE, "_method");
 
-        let raw_event = event;
+        // A redaction strips the whole content of an `m.room.encrypted` event, the
+        // `algorithm` field included, so the event no longer parses as an encrypted
+        // event at all. Reporting that as a malformed event, or as one using an
+        // algorithm we don't support, used to inflate UTD rates with events that no
+        // key was ever going to open.
+        if is_redacted(event) {
+            debug!("Not decrypting a room event that has been redacted");
+            return Err(MegolmError::RedactedEvent);
+        }
+
         let event = event.deserialize()?;
 
         Span::current()
@@ -2584,16 +2615,6 @@ impl OlmMachine {
             #[cfg(feature = "experimental-algorithms")]
             RoomEventEncryptionScheme::MegolmV2AesSha2(c) => c.into(),
             RoomEventEncryptionScheme::Unknown(_) => {
-                // A redaction strips the `algorithm` field along with the rest of the
-                // content, so a redacted event is indistinguishable from one using an
-                // algorithm we don't know unless we look at `unsigned.redacted_because`.
-                // Reporting these as unsupported-algorithm failures used to inflate UTD
-                // rates with events that were never going to decrypt.
-                if is_redacted(raw_event) {
-                    debug!("Not decrypting a room event that has been redacted");
-                    return Err(MegolmError::RedactedEvent);
-                }
-
                 warn!("Received an encrypted room event with an unsupported algorithm");
                 return Err(EventError::UnsupportedAlgorithm.into());
             }
@@ -3508,6 +3529,9 @@ fn megolm_error_to_utd_info(
         JsonError(_) => UnableToDecryptReason::PayloadDeserializationFailure,
         MismatchedIdentityKeys(_) => UnableToDecryptReason::MismatchedIdentityKeys,
         SenderIdentityNotTrusted(level) => UnableToDecryptReason::SenderIdentityNotTrusted(level),
+        ReplayedMessageIndex { original_event_id } => {
+            UnableToDecryptReason::ReplayedMessageIndex { original_event_id }
+        }
         #[cfg(feature = "experimental-encrypted-state-events")]
         StateKeyVerificationFailed => UnableToDecryptReason::StateKeyVerificationFailed,
 
@@ -3563,6 +3587,10 @@ impl From<DecryptToDeviceError> for OlmError {
         }
     }
 }
+
+mod replay_protection;
+
+use replay_protection::ReplayProtection;
 
 #[cfg(test)]
 pub(crate) mod test_helpers;

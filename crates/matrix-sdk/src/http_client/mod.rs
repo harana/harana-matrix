@@ -174,7 +174,7 @@ impl HttpClient {
         homeserver: String,
         access_token: Option<&str>,
         path_builder_input: <R::PathBuilder as path_builder::PathBuilder>::Input<'_>,
-        send_progress: SharedObservable<TransmissionProgress>,
+        progress: RequestProgress,
     ) -> impl Future<Output = Result<R::IncomingResponse, HttpError>>
     where
         R: OutgoingRequest + Debug,
@@ -252,7 +252,7 @@ impl HttpClient {
             // There's a bunch of state in send_request, factor out a pinned inner
             // future to reduce the size of futures that await this function.
             let result = tokio::select! {
-                result = Box::pin(self.send_request::<R>(request, config, send_progress)) => result,
+                result = Box::pin(self.send_request::<R>(request, config, progress)) => result,
                 _ = cancelled.cancelled() => Err(HttpError::Cancelled),
             };
 
@@ -278,6 +278,32 @@ pub struct TransmissionProgress {
     pub current: usize,
     /// How many bytes there are in total.
     pub total: usize,
+}
+
+/// The progress observables of a single request, in both directions.
+///
+/// A transport only does the work of reporting progress in a direction that
+/// someone is watching, which is why both observables travel together: the
+/// number of subscribers is what says whether it is worth streaming rather than
+/// buffering.
+#[derive(Clone, Debug, Default)]
+pub struct RequestProgress {
+    /// Progress of sending the request body, for uploads.
+    pub send: SharedObservable<TransmissionProgress>,
+    /// Progress of receiving the response body, for downloads.
+    pub receive: SharedObservable<TransmissionProgress>,
+}
+
+impl RequestProgress {
+    /// A pair of progress observables nobody is watching.
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    /// Report progress of sending the request body into the given observable.
+    pub fn with_send(send: SharedObservable<TransmissionProgress>) -> Self {
+        Self { send, receive: Default::default() }
+    }
 }
 
 #[cfg(feature = "reqwest-transport")]

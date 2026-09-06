@@ -14,6 +14,10 @@
 
 //! Types and traits for attachments.
 
+#[cfg(feature = "image-proc")]
+mod blurhash;
+mod exif;
+
 use std::time::Duration;
 
 use ruma::{
@@ -204,6 +208,19 @@ pub struct AttachmentConfig {
     /// Additional top-level fields to include in the media event's content.
     /// The event's own fields take precedence on conflicts.
     pub extra_content: Option<serde_json::Map<String, serde_json::Value>>,
+
+    /// Whether to remove the metadata embedded in the image before uploading
+    /// it.
+    ///
+    /// See [`AttachmentConfig::strip_exif`].
+    pub strip_exif: bool,
+
+    /// Whether to compute the [BlurHash] of the image before uploading it.
+    ///
+    /// See [`AttachmentConfig::generate_blurhash`].
+    ///
+    /// [BlurHash]: https://blurha.sh/
+    pub generate_blurhash: bool,
 }
 
 impl AttachmentConfig {
@@ -279,6 +296,55 @@ impl AttachmentConfig {
         self
     }
 
+    /// Remove the metadata embedded in the image before uploading it.
+    ///
+    /// A photo straight off a phone carries an Exif block holding the GPS
+    /// coordinates and the wall-clock time of the shot, the device model and
+    /// sometimes its serial number. With this set, that block, and the other
+    /// metadata containers (XMP, IPTC, PNG text chunks, comments), are removed
+    /// from the attachment and from its thumbnail before either is uploaded.
+    ///
+    /// The Exif `Orientation` tag is deliberately kept, so photos are still
+    /// displayed the right way up. The pixels are never re-encoded, so this
+    /// costs no image quality.
+    ///
+    /// This applies to JPEG, PNG and WebP images. Any other attachment is
+    /// uploaded unchanged, including HEIC/HEIF photos, whose metadata this SDK
+    /// cannot yet parse; a client handling those should strip them itself.
+    ///
+    /// Off by default, since the sender may well want to keep the metadata.
+    #[must_use]
+    pub fn strip_exif(mut self, strip_exif: bool) -> Self {
+        self.strip_exif = strip_exif;
+        self
+    }
+
+    /// Compute the [BlurHash] of the image before uploading it, and put it in
+    /// the media event's content.
+    ///
+    /// A BlurHash is a short string describing the rough colours of an image.
+    /// A receiving client can render it instantly, as a blurred placeholder,
+    /// while the media itself is still downloading. It is sent in the clear
+    /// even in an encrypted room, but at this resolution it reveals no more
+    /// than a heavily blurred thumbnail would.
+    ///
+    /// For an image attachment the hash is computed from the image; for a
+    /// video, from its thumbnail, since the SDK cannot decode video. A
+    /// BlurHash already present in [`AttachmentConfig::info`] is left alone.
+    ///
+    /// This requires the `image-proc` feature, which pulls in an image
+    /// decoder; without it, asking for a BlurHash logs a warning and does
+    /// nothing.
+    ///
+    /// Off by default, since decoding the image costs time and memory.
+    ///
+    /// [BlurHash]: https://blurha.sh/
+    #[must_use]
+    pub fn generate_blurhash(mut self, generate_blurhash: bool) -> Self {
+        self.generate_blurhash = generate_blurhash;
+        self
+    }
+
     /// Set additional top-level fields for the media event's content.
     ///
     /// # Arguments
@@ -291,6 +357,119 @@ impl AttachmentConfig {
         self.extra_content = extra_content;
         self
     }
+}
+
+/// Apply the preprocessing steps [`AttachmentConfig`] asks for to an
+/// attachment and its thumbnail, before either is cached or uploaded.
+///
+/// The attachment info is updated in place, since a computed BlurHash belongs
+/// in the media event's content.
+///
+/// This runs on a blocking thread: an attachment can be tens of megabytes, and
+/// neither walking it nor decoding it must stall the caller's executor.
+pub(crate) async fn preprocess(
+    content_type: &mime::Mime,
+    data: Vec<u8>,
+    thumbnail: Option<Thumbnail>,
+    config: &mut AttachmentConfig,
+) -> (Vec<u8>, Option<Thumbnail>) {
+    let strip_exif = config.strip_exif;
+    let generate_blurhash = config.generate_blurhash;
+
+    if !strip_exif && !generate_blurhash {
+        return (data, thumbnail);
+    }
+
+    let content_type = content_type.clone();
+    let info = config.info.take();
+
+    let (data, thumbnail, info) = matrix_sdk_common::executor::spawn_blocking(move || {
+        let (data, thumbnail) = if strip_exif {
+            let data = exif::strip_metadata(&content_type, data);
+
+            let thumbnail = thumbnail.map(|mut thumbnail| {
+                thumbnail.data = exif::strip_metadata(&thumbnail.content_type, thumbnail.data);
+                thumbnail.size = UInt::new_saturating(thumbnail.data.len() as u64);
+                thumbnail
+            });
+
+            (data, thumbnail)
+        } else {
+            (data, thumbnail)
+        };
+
+        let info = if generate_blurhash {
+            add_blurhash(&content_type, &data, thumbnail.as_ref(), info)
+        } else {
+            info
+        };
+
+        (data, thumbnail, info)
+    })
+    .await
+    .expect("Preprocessing an attachment should never panic");
+
+    config.info = info;
+
+    (data, thumbnail)
+}
+
+/// Fill in the BlurHash of the attachment info, if it doesn't have one yet.
+///
+/// An image is hashed from its own data; a video from its thumbnail, since the
+/// SDK has no video decoder. Anything else has nowhere to put a BlurHash.
+#[cfg(feature = "image-proc")]
+fn add_blurhash(
+    content_type: &mime::Mime,
+    data: &[u8],
+    thumbnail: Option<&Thumbnail>,
+    info: Option<AttachmentInfo>,
+) -> Option<AttachmentInfo> {
+    // With no info at all, only an image gets one made for it: for any other
+    // type the SDK would be inventing metadata it knows nothing about.
+    let info = info.or_else(|| {
+        (content_type.type_() == mime::IMAGE)
+            .then(|| AttachmentInfo::Image(BaseImageInfo::default()))
+    })?;
+
+    Some(match info {
+        AttachmentInfo::Image(mut image) => {
+            if image.blurhash.is_none() {
+                image.blurhash = blurhash::compute(content_type, data);
+            }
+
+            AttachmentInfo::Image(image)
+        }
+
+        AttachmentInfo::Video(mut video) => {
+            if video.blurhash.is_none()
+                && let Some(thumbnail) = thumbnail
+            {
+                video.blurhash = blurhash::compute(&thumbnail.content_type, &thumbnail.data);
+            }
+
+            AttachmentInfo::Video(video)
+        }
+
+        info => info,
+    })
+}
+
+/// Without the `image-proc` feature there is no image decoder to compute a
+/// BlurHash with, so say so once rather than silently doing nothing.
+#[cfg(not(feature = "image-proc"))]
+fn add_blurhash(
+    _content_type: &mime::Mime,
+    _data: &[u8],
+    _thumbnail: Option<&Thumbnail>,
+    info: Option<AttachmentInfo>,
+) -> Option<AttachmentInfo> {
+    tracing::warn!(
+        "a blurhash was requested for an attachment, but the SDK was built \
+         without the `image-proc` feature"
+    );
+
+    info
 }
 
 /// Configuration for sending a gallery.
@@ -392,4 +571,103 @@ pub struct GalleryItemInfo {
     pub caption: Option<TextMessageEventContent>,
     /// The thumbnail.
     pub thumbnail: Option<Thumbnail>,
+}
+
+#[cfg(all(test, feature = "image-proc"))]
+mod tests {
+    use assert_matches2::assert_let;
+    use image::{ImageFormat, Rgba, RgbaImage};
+    use ruma::uint;
+
+    use super::{AttachmentInfo, BaseImageInfo, BaseVideoInfo, Thumbnail, add_blurhash};
+
+    fn solid_png(width: u32, height: u32) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        RgbaImage::from_pixel(width, height, Rgba([0, 128, 255, 255]))
+            .write_to(&mut out, ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
+    }
+
+    fn video_mp4() -> mime::Mime {
+        "video/mp4".parse().unwrap()
+    }
+
+    fn thumbnail() -> Thumbnail {
+        let data = solid_png(16, 16);
+
+        Thumbnail {
+            size: (data.len() as u32).into(),
+            data,
+            content_type: mime::IMAGE_PNG,
+            height: uint!(16),
+            width: uint!(16),
+        }
+    }
+
+    /// A video has no still image of its own to hash, so its thumbnail stands
+    /// in for it.
+    #[test]
+    fn test_video_is_hashed_from_its_thumbnail() {
+        let info = AttachmentInfo::Video(BaseVideoInfo::default());
+
+        let info = add_blurhash(&video_mp4(), b"not an image", Some(&thumbnail()), Some(info));
+
+        assert_let!(Some(AttachmentInfo::Video(video)) = info);
+        assert!(video.blurhash.is_some(), "the thumbnail should have been hashed");
+    }
+
+    /// With no thumbnail there is nothing to hash, and the SDK has no video
+    /// decoder to fall back on.
+    #[test]
+    fn test_video_without_a_thumbnail_has_no_blurhash() {
+        let info = AttachmentInfo::Video(BaseVideoInfo::default());
+
+        let info = add_blurhash(&video_mp4(), b"not an image", None, Some(info));
+
+        assert_let!(Some(AttachmentInfo::Video(video)) = info);
+        assert_eq!(video.blurhash, None);
+    }
+
+    /// A hash the caller already worked out is theirs, not ours to replace.
+    #[test]
+    fn test_an_existing_image_blurhash_is_kept() {
+        let info = AttachmentInfo::Image(BaseImageInfo {
+            blurhash: Some("caller's own hash".to_owned()),
+            ..Default::default()
+        });
+
+        let info = add_blurhash(&mime::IMAGE_PNG, &solid_png(32, 32), None, Some(info));
+
+        assert_let!(Some(AttachmentInfo::Image(image_info)) = info);
+        assert_eq!(image_info.blurhash.as_deref(), Some("caller's own hash"));
+    }
+
+    #[test]
+    fn test_an_existing_video_blurhash_is_kept() {
+        let info = AttachmentInfo::Video(BaseVideoInfo {
+            blurhash: Some("caller's own hash".to_owned()),
+            ..Default::default()
+        });
+
+        let info = add_blurhash(&video_mp4(), b"not an image", Some(&thumbnail()), Some(info));
+
+        assert_let!(Some(AttachmentInfo::Video(video)) = info);
+        assert_eq!(video.blurhash.as_deref(), Some("caller's own hash"));
+    }
+
+    /// An image with no info at all still gets one made for it; anything else
+    /// would mean inventing metadata the SDK knows nothing about.
+    #[test]
+    fn test_an_image_without_info_gets_one() {
+        let info = add_blurhash(&mime::IMAGE_PNG, &solid_png(32, 32), None, None);
+
+        assert_let!(Some(AttachmentInfo::Image(image_info)) = info);
+        assert!(image_info.blurhash.is_some());
+    }
+
+    #[test]
+    fn test_a_non_image_without_info_stays_without_one() {
+        assert!(add_blurhash(&video_mp4(), b"not an image", None, None).is_none());
+    }
 }

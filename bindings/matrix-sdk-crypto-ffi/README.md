@@ -22,63 +22,89 @@ The Android NDK will be required as well, it can be installed either through
 Android Studio or directly using an
 [installer](https://developer.android.com/ndk/downloads).
 
-### Configuring Rust for cross compilation
-
-First we'll need to install the Rust target for our desired Android
-architecture, for example:
+Point one of `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT` or `ANDROID_NDK` at the
+installation:
 
 ```text
-# rustup target add aarch64-linux-android
+$ export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/<some-installed-version>
 ```
 
-This will add support to cross-compile for the aarch64-linux-android target,
+The whole cross-compilation toolchain is derived from that directory. This
+matters beyond the linker: the bindings pull in a bundled SQLite through
+`libsqlite3-sys`, which compiles C code and therefore needs the NDK's C
+compiler and archiver as well.
+
+### Rust target
+
+Install the Rust target for the Android architecture you are building for, for
+example:
+
+```text
+$ rustup target add aarch64-linux-android
+```
+
 Rust supports many different [targets], you'll have to make sure to pick the
 right one for your device or emulator.
 
-After this is done, we'll have to configure [Cargo] to use the correct linker
-for our target, by providing the Cargo setting of
-[target.<triple>.linker](https://doc.rust-lang.org/cargo/reference/config.html#targettriplelinker)
-with a value of the path to an appropriate linker in your NDK installation.
+## Building
 
-This may be set through an environment variable:
+### With the xtask (recommended)
+
+`cargo ndk` derives the linker, the C compiler and the archiver from the NDK, so
+the whole build works with one command. Install it once:
 
 ```text
-$ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="<path-to-ndk-installation>/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang"
+$ cargo install cargo-ndk
 ```
 
-Alternatively, it may be set in the `.cargo/config.toml` file in the current
-directory, any parent directory, or your home directory:
+Then build the bindings, together with their Kotlin sources, from the repository
+root:
+
+```text
+$ cargo xtask kotlin build-android-library --package crypto-sdk --src-dir <output-dir>
+```
+
+Pass `--only-target aarch64-linux-android` to build a single architecture, and
+`--release` for a release build. The task fails early, naming what to set, if no
+NDK is configured.
+
+### With cargo directly
+
+A plain `cargo build` does not know about the NDK, so the toolchain variables
+have to be set by hand. For `aarch64`, with a Linux host:
+
+```text
+$ TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+$ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android30-clang"
+$ export CC_aarch64_linux_android="$TOOLCHAIN/aarch64-linux-android30-clang"
+$ export AR_aarch64_linux_android="$TOOLCHAIN/llvm-ar"
+$ cargo build --target aarch64-linux-android
+```
+
+Replace `linux-x86_64` with `darwin-x86_64` on macOS, and `30` with the minimum
+API level you target. Setting only the linker is not enough: without `CC` the
+bundled SQLite build fails with "no C compiler found". Alternatively, the linker
+may be set in the `.cargo/config.toml` file in the current directory, any parent
+directory, or your home directory:
 
 ```text
 [target.aarch64-linux-android]
 linker = "<path-to-ndk-installation>/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang"
 ```
 
-## Building
+`CC` and `AR` are read from the environment by the `cc` crate and have no
+equivalent Cargo configuration key, so they always have to be exported.
 
-To enable cross compilation for `olm-sys` which builds our `libolm` C library
-we'll need to set the `ANDROID_NDK` environment variable to the location of our
-Android NDK installation.
-
-```text
-$ export ANDROID_NDK=$HOME/Android/Sdk/ndk/<some-installed-version>
-```
-
-Also, include the NDK tools directory in your `PATH`:
+Building without the bundled SQLite avoids the C compilation entirely, if the
+target already provides SQLite:
 
 ```text
-$ export PATH="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+$ cargo build --target aarch64-linux-android --no-default-features
 ```
 
-### Building for a target
+### Using the result
 
-The bindings can built for the `aarch64` target with:
-
-```text
-$ cargo build --target aarch64-linux-android
-```
-
-After that, a dynamic library can be found in the
+After the build, a dynamic library can be found in the
 `target/aarch64-linux-android/debug` directory, under the repository root
 directory. The library will be called `libmatrix_sdk_crypto_ffi.so` and needs to
 be renamed and copied into the `jniLibs` directory of your Android project, for
@@ -88,6 +114,9 @@ Element Android:
 $ cp ../../target/aarch64-linux-android/debug/libmatrix_sdk_crypto_ffi.so \
      /home/example/matrix-sdk-android/src/main/jniLibs/aarch64/libuniffi_olm.so
 ```
+
+The xtask does this copying for you, into the `jniLibs` subdirectory of the
+`--src-dir` you pass it.
 
 ## License
 
