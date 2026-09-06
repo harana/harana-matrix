@@ -66,6 +66,35 @@ pub enum ForwardedRoomKeyContent {
 }
 
 impl ForwardedRoomKeyContent {
+    /// Say whether we can vouch for the session we are forwarding, as defined
+    /// in [MSC3879].
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    pub fn set_trusted(&mut self, trusted: bool) {
+        match self {
+            ForwardedRoomKeyContent::MegolmV1AesSha2(content) => content.trusted = trusted,
+            #[cfg(feature = "experimental-algorithms")]
+            ForwardedRoomKeyContent::MegolmV2AesSha2(content) => content.trusted = trusted,
+            ForwardedRoomKeyContent::Unknown(_) => {}
+        }
+    }
+
+    /// Whether the forwarding device says it can vouch for this session, as
+    /// defined in [MSC3879].
+    ///
+    /// A recipient may act on this only if the forwarder is another device of
+    /// its own user, and that device is verified.
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    pub fn trusted(&self) -> bool {
+        match self {
+            ForwardedRoomKeyContent::MegolmV1AesSha2(content) => content.trusted,
+            #[cfg(feature = "experimental-algorithms")]
+            ForwardedRoomKeyContent::MegolmV2AesSha2(content) => content.trusted,
+            ForwardedRoomKeyContent::Unknown(_) => false,
+        }
+    }
+
     /// Get the algorithm of the forwarded room key content.
     pub fn algorithm(&self) -> EventEncryptionAlgorithm {
         match self {
@@ -133,6 +162,23 @@ pub struct ForwardedMegolmV1AesSha2Content {
     )]
     pub claimed_ed25519_key: Ed25519PublicKey,
 
+    /// Whether the forwarding device believes the session can be trusted, as
+    /// defined in [MSC3879].
+    ///
+    /// A recipient may treat the session as trusted only if this is set, the
+    /// forwarder is another device of its own user, and that device is
+    /// verified. Absent or `false` means the forwarder could not vouch for the
+    /// session and the recipient must not either.
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    #[serde(
+        default,
+        rename = "org.matrix.msc3879.trusted",
+        alias = "trusted",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub trusted: bool,
+
     #[serde(flatten)]
     pub(crate) other: BTreeMap<String, Value>,
 }
@@ -167,6 +213,23 @@ pub struct ForwardedMegolmV2AesSha2Content {
     /// part of this key.
     #[serde(default)]
     pub claimed_signing_keys: SigningKeys<DeviceKeyAlgorithm>,
+
+    /// Whether the forwarding device believes the session can be trusted, as
+    /// defined in [MSC3879].
+    ///
+    /// A recipient may treat the session as trusted only if this is set, the
+    /// forwarder is another device of its own user, and that device is
+    /// verified. Absent or `false` means the forwarder could not vouch for the
+    /// session and the recipient must not either.
+    ///
+    /// [MSC3879]: https://github.com/matrix-org/matrix-spec-proposals/pull/3879
+    #[serde(
+        default,
+        rename = "org.matrix.msc3879.trusted",
+        alias = "trusted",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub trusted: bool,
 
     #[serde(flatten)]
     pub(crate) other: BTreeMap<String, Value>,

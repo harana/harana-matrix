@@ -294,6 +294,9 @@ impl TryFrom<ExportedRoomKey> for ForwardedRoomKeyContent {
                             forwarding_curve25519_key_chain: room_key
                                 .forwarding_curve25519_key_chain
                                 .clone(),
+                            // Set by the forwarder once it has decided whether it can
+                            // vouch for the session; an export on its own says nothing.
+                            trusted: false,
                             other: Default::default(),
                         }
                         .into(),
@@ -311,6 +314,7 @@ impl TryFrom<ExportedRoomKey> for ForwardedRoomKeyContent {
                         session_key: room_key.session_key,
                         claimed_sender_key: room_key.sender_key,
                         claimed_signing_keys: room_key.sender_claimed_keys,
+                        trusted: false,
                         other: Default::default(),
                     }
                     .into(),

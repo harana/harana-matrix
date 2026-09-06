@@ -1118,7 +1118,20 @@ impl GossipMachine {
         event: &DecryptedForwardedRoomKeyEvent,
     ) -> Result<Option<InboundGroupSession>, CryptoStoreError> {
         match InboundGroupSession::try_from(event) {
-            Ok(session) => {
+            Ok(mut session) => {
+                // `should_accept_forward` has already established the other two
+                // conditions MSC3879 puts on trusting a forward: the forwarder is
+                // another device of our own user, and it is verified. What is left is
+                // whether the forwarder itself vouched for the session.
+                if event.content.trusted() {
+                    trace!(
+                        session_id = session.session_id(),
+                        "The forwarding device vouched for this session",
+                    );
+
+                    session.mark_as_trusted_forward();
+                }
+
                 let new_session = self.inner.store.merge_received_group_session(session).await?;
                 if new_session.is_some() {
                     self.mark_as_done(info).await?;
@@ -1609,6 +1622,100 @@ mod tests {
         assert!(machine.outgoing_to_device_requests().await.unwrap().is_empty());
         machine.create_outgoing_key_request(session.room_id(), &event).await.unwrap();
         assert!(machine.outgoing_to_device_requests().await.unwrap().is_empty());
+    }
+
+    /// A forwarded key is only as good as what the forwarder can say about it.
+    /// MSC3879 has the forwarder say so explicitly, and only a forward marked
+    /// trusted - from a device of our own that we have verified, which
+    /// `should_accept_forward` has already established - lets the session be
+    /// attributed to its creator.
+    #[async_test]
+    #[cfg(feature = "automatic-room-key-forwarding")]
+    async fn test_a_trusted_forward_is_recorded_as_such() {
+        let machine = get_machine_test_helper().await;
+        let account = account();
+
+        let second_account = alice_2_account();
+        let alice_device = DeviceData::from_account(&second_account);
+        alice_device.set_trust_state(LocalTrust::Verified);
+        machine
+            .inner
+            .store
+            .save_device_data(std::slice::from_ref(&alice_device))
+            .await
+            .unwrap();
+
+        let (outbound, session) = account.create_group_session_pair_with_defaults(room_id()).await;
+        let result = outbound.encrypt("m.dummy", &message_like_event_content!({})).await;
+        let room_event = wrap_encrypted_content(machine.user_id(), result.content);
+
+        let receive_forward = async |trusted: bool| {
+            machine.create_outgoing_key_request(session.room_id(), &room_event).await.unwrap();
+
+            let requests = machine.outgoing_to_device_requests().await.unwrap();
+            let request_id = requests[0].request_id.clone();
+            machine.mark_outgoing_request_as_sent(&request_id).await.unwrap();
+
+            let export = session.export_at_index(0).await;
+            let mut content: ForwardedRoomKeyContent = export.try_into().unwrap();
+            content.set_trusted(trusted);
+
+            let event = DecryptedOlmV1Event::new(
+                alice_id(),
+                alice_id(),
+                alice_device.ed25519_key().unwrap(),
+                None,
+                content,
+            );
+
+            machine
+                .receive_forwarded_room_key(alice_device.curve25519_key().unwrap(), &event)
+                .await
+                .unwrap()
+                .expect("The forwarded key should have been accepted")
+        };
+
+        // A forward the sender could not vouch for stays unattributable: the Olm
+        // channel binds the forwarder's keys, not the creator's.
+        let session = receive_forward(false).await;
+        assert!(!session.is_trusted_forward());
+        assert!(
+            !session.is_trusted_for_forwarding(),
+            "A forward we could not trust must not be passed on as trusted either",
+        );
+
+        // A trusted one is attributed to the device the forwarder named.
+        let session = receive_forward(true).await;
+        assert!(session.is_trusted_forward());
+    }
+
+    /// We must only tell another device that a session can be trusted if it
+    /// reached us in a way that ties it to its creator.
+    #[async_test]
+    async fn test_only_a_session_we_can_vouch_for_is_forwarded_as_trusted() {
+        let account = account();
+        let (_, session) = account.create_group_session_pair_with_defaults(room_id()).await;
+
+        assert!(
+            session.is_trusted_for_forwarding(),
+            "A session we created ourselves can be vouched for",
+        );
+
+        let mut imported = session.clone();
+        imported.mark_as_imported();
+
+        assert!(
+            !imported.is_trusted_for_forwarding(),
+            "A session restored from a backup or a file export cannot be vouched for",
+        );
+
+        let mut forwarded = imported.clone();
+        forwarded.mark_as_trusted_forward();
+
+        assert!(
+            forwarded.is_trusted_for_forwarding(),
+            "A session another of our verified devices vouched for can be passed on",
+        );
     }
 
     #[async_test]
