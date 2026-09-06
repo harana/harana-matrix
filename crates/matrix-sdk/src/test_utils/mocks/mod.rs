@@ -4505,7 +4505,8 @@ impl<'a> MockEndpoint<'a, LoginEndpoint> {
             "access_token": response.access_token,
             "device_id": response.device_id,
             "user_id": response.user_id,
-            "expires_in": response.expires_in.map(|duration| { duration.as_millis() }),
+            // The spec, and so the deserialized response, calls this `expires_in_ms`.
+            "expires_in_ms": response.expires_in.map(|duration| { duration.as_millis() }),
             "refresh_token": response.refresh_token,
             "well_known": response.well_known.map(|vals| {
                 json!({

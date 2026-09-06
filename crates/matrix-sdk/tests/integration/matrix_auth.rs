@@ -1,10 +1,11 @@
-use std::{collections::BTreeMap, sync::Mutex};
+use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 
 use assert_matches::assert_matches;
 use matrix_sdk::{
-    AuthApi, AuthSession, Client, SessionTokens,
+    AuthApi, AuthSession, Client, HttpError, SessionTokens,
     authentication::matrix::MatrixSession,
     config::RequestConfig,
+    executor::spawn,
     test_utils::{
         logged_in_client_with_server, mocks::MatrixMockServer, no_retry_test_client_with_server,
     },
@@ -61,6 +62,139 @@ async fn test_logout_stops_the_send_queue() {
     // Queued requests belong to the session that queued them, so nothing more is
     // sent under the token we just invalidated.
     assert!(!client.send_queue().is_enabled());
+}
+
+#[async_test]
+async fn test_the_session_carries_the_homeserver_it_belongs_to() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    let session = client.matrix_auth().session().expect("we are logged in");
+
+    // Saving this session is enough to restore it later: the homeserver it was
+    // opened against is part of it, so restoring it doesn't have to discover the
+    // homeserver again.
+    assert_eq!(session.homeserver, Some(client.homeserver()));
+}
+
+#[async_test]
+async fn test_restoring_a_session_uses_the_homeserver_stored_with_it() {
+    let previous_homeserver = MatrixMockServer::new().await;
+    let homeserver = MatrixMockServer::new().await;
+
+    // The client is built pointing at one server, and the session says it belongs
+    // to another: this is the client that saved a session, was rebuilt from the
+    // URL it happened to have, and would otherwise have to look the homeserver up
+    // again.
+    let client = previous_homeserver.client_builder().unlogged().build().await;
+
+    let session = MatrixSession {
+        meta: SessionMeta {
+            user_id: owned_user_id!("@example:localhost"),
+            device_id: owned_device_id!("DEVICEID"),
+        },
+        tokens: SessionTokens { access_token: "1234".to_owned(), refresh_token: None },
+        homeserver: Some(Url::parse(&homeserver.uri()).unwrap()),
+    };
+
+    client
+        .matrix_auth()
+        .restore_session(session, matrix_sdk::store::RoomLoadSettings::default())
+        .await
+        .unwrap();
+
+    assert_eq!(client.homeserver(), Url::parse(&homeserver.uri()).unwrap());
+
+    // And the requests go there, rather than to the server the client was built
+    // with.
+    homeserver.mock_who_am_i().ok().mock_once().mount().await;
+    client.whoami().await.unwrap();
+}
+
+#[async_test]
+async fn test_restoring_a_session_without_a_homeserver_keeps_the_one_of_the_client() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().unlogged().build().await;
+    let homeserver = client.homeserver();
+
+    // A session stored before this SDK kept the homeserver with it deserializes
+    // with none, and the client stays where it was pointed.
+    let session = MatrixSession {
+        meta: SessionMeta {
+            user_id: owned_user_id!("@example:localhost"),
+            device_id: owned_device_id!("DEVICEID"),
+        },
+        tokens: SessionTokens { access_token: "1234".to_owned(), refresh_token: None },
+        homeserver: None,
+    };
+
+    client
+        .matrix_auth()
+        .restore_session(session, matrix_sdk::store::RoomLoadSettings::default())
+        .await
+        .unwrap();
+
+    assert_eq!(client.homeserver(), homeserver);
+}
+
+#[async_test]
+async fn test_a_session_stored_without_a_homeserver_still_deserializes() {
+    let session: MatrixSession = from_json_value(json!({
+        "access_token": "abcd",
+        "user_id": "@user:localhost",
+        "device_id": "HIJKLMN",
+    }))
+    .unwrap();
+
+    assert_eq!(session.homeserver, None);
+}
+
+#[async_test]
+async fn test_logout_cancels_the_requests_in_flight() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+
+    // A request the homeserver takes its time answering. The test never waits for
+    // that answer: logging out is what ends the request.
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/account/whoami"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(&*test_json::WHOAMI)
+                .set_delay(Duration::from_secs(60)),
+        )
+        .mount(server.server())
+        .await;
+    server.mock_logout().ok().mock_once().mount().await;
+
+    let whoami = spawn({
+        let client = client.clone();
+        async move { client.whoami().await }
+    });
+
+    // Wait for the request to reach the homeserver, so it is really in flight when
+    // the logout happens.
+    while !server
+        .server()
+        .received_requests()
+        .await
+        .expect("the mock server records the requests it receives")
+        .iter()
+        .any(|request| request.url.path().ends_with("/account/whoami"))
+    {
+        tokio::task::yield_now().await;
+    }
+
+    client.matrix_auth().logout().await.unwrap();
+
+    // The session is over, so waiting for that answer is pointless: the request is
+    // dropped rather than left to finish under an invalidated token.
+    assert_matches!(whoami.await.unwrap(), Err(HttpError::Cancelled));
+
+    // Requests made after the logout are not cancelled: this ends a session, it
+    // doesn't close the client.
+    server.mock_versions().ok().mock_once().named("versions").mount().await;
+    client.fetch_server_versions(None).await.unwrap();
 }
 
 #[async_test]
@@ -447,6 +581,7 @@ fn test_serialize_session() {
             device_id: owned_device_id!("EFGHIJ"),
         },
         tokens: SessionTokens { access_token: "abcd".to_owned(), refresh_token: None },
+        homeserver: None,
     };
     assert_eq!(
         to_json_value(session.clone()).unwrap(),

@@ -286,7 +286,7 @@ where
         batch_size: u16,
         prev_token: Option<String>,
     ) -> Result<Option<BackPaginationOutcome>> {
-        let Some((events, new_token)) =
+        let Some((events, mut new_token)) =
             self.cache.paginate_backwards_with_network(batch_size, &prev_token).await?
         else {
             // Return an empty default response.
@@ -295,6 +295,23 @@ where
                 events: Default::default(),
             }));
         };
+
+        // A server may answer a back-pagination with no events and the very token we
+        // sent it. Sending that token again would ask the same question and get the
+        // same answer, so `run_backwards_until` would spin forever and the timeline
+        // would keep showing a loading indicator, or show nothing but its most recent
+        // event, without ever recovering.
+        //
+        // There is nothing behind such a token, so treat it as the start of the
+        // timeline: the gap is resolved, the pagination terminates, and observers are
+        // told the pagination is over.
+        if events.is_empty() && new_token.is_some() && new_token == prev_token {
+            debug!(
+                "the server returned no events and an unchanged pagination token; \
+                 considering the start of the timeline reached"
+            );
+            new_token = None;
+        }
 
         self.cache.conclude_backwards_pagination_from_network(events, prev_token, new_token).await
     }

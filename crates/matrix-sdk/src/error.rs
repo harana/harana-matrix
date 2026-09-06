@@ -89,6 +89,11 @@ pub enum HttpError {
     #[error(transparent)]
     RefreshToken(RefreshTokenError),
 
+    /// The request was cancelled before it was answered, because the session
+    /// it was made on behalf of ended.
+    #[error("the request was cancelled, the session it belongs to is over")]
+    Cancelled,
+
     /// Error while fetching data that is cached.
     ///
     /// This variant is present for convenience because cached data wraps

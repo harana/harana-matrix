@@ -23,7 +23,14 @@ use matrix_sdk_base::deserialized_responses::{DecryptedRoomEvent, TimelineEvent}
 use matrix_sdk_test::{ALICE, BOB, async_test};
 use ruma::{
     event_id,
-    events::room::message::{MessageType, RedactedRoomMessageEventContent},
+    events::{
+        AnyMessageLikeEventContent,
+        relation::Replacement,
+        room::message::{
+            MessageType, RedactedRoomMessageEventContent, Relation, RoomMessageEventContent,
+            RoomMessageEventContentWithoutRelation,
+        },
+    },
     room_id,
 };
 use stream_assert::{assert_next_matches, assert_pending};
@@ -278,6 +285,125 @@ async fn test_relations_edit_overrides_pending_edit_msg() {
 
     let date_divider = assert_next_matches!(stream, VectorDiff::PushFront { value } => value);
     assert!(date_divider.is_date_divider());
+
+    assert_pending!(stream);
+}
+
+#[async_test]
+async fn test_chained_local_edits_resolve_to_the_most_recent_one() {
+    // Several edits of the same event pending at once: the timeline must show the
+    // last one, not the first one recorded.
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe().await;
+
+    let f = &timeline.factory;
+
+    let original_event_id = event_id!("$original");
+
+    timeline
+        .handle_live_event(f.text_msg("original").sender(*ALICE).event_id(original_event_id))
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    assert_eq!(item.as_event().unwrap().content().as_message().unwrap().body(), "original");
+
+    let date_divider = assert_next_matches!(stream, VectorDiff::PushFront { value } => value);
+    assert!(date_divider.is_date_divider());
+
+    let local_edit = |body: &str| {
+        let mut content = RoomMessageEventContent::text_plain(format!("* {body}"));
+        content.relates_to = Some(Relation::Replacement(Replacement::new(
+            original_event_id.to_owned(),
+            RoomMessageEventContentWithoutRelation::text_plain(body),
+        )));
+        AnyMessageLikeEventContent::RoomMessage(content)
+    };
+
+    timeline.handle_local_event(local_edit("edit 1")).await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    assert_eq!(item.as_event().unwrap().content().as_message().unwrap().body(), "edit 1");
+
+    // A second edit, sent before the first one has reached the server, must win.
+    timeline.handle_local_event(local_edit("edit 2")).await;
+
+    let item = assert_next_matches!(stream, VectorDiff::Set { value, .. } => value);
+    assert_eq!(item.as_event().unwrap().content().as_message().unwrap().body(), "edit 2");
+
+    assert_pending!(stream);
+}
+
+#[async_test]
+async fn test_chained_bundled_edits_resolve_to_the_most_recent_one() {
+    // Two edits of the same event, neither of which has its own event in the
+    // loaded window, so their positions can't order them: the newest by
+    // `origin_server_ts` wins, per MSC2676.
+    let timeline = TestTimeline::new().await;
+    let mut stream = timeline.subscribe().await;
+
+    let f = &timeline.factory;
+
+    let original_event_id = event_id!("$original");
+    let edit1_event_id = event_id!("$edit1");
+    let edit2_event_id = event_id!("$edit2");
+
+    // The *newest* edit is bundled with the original event.
+    timeline
+        .handle_live_event(
+            f.text_msg("original")
+                .sender(*ALICE)
+                .event_id(original_event_id)
+                .server_ts(1000)
+                .with_bundled_edit(
+                    f.text_msg("* edit 2")
+                        .sender(*ALICE)
+                        .edit(original_event_id, MessageType::text_plain("edit 2").into())
+                        .event_id(edit2_event_id)
+                        .server_ts(3000),
+                ),
+        )
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    let event = item.as_event().unwrap();
+    assert_eq!(event.content().as_message().unwrap().body(), "edit 2");
+    assert_eq!(event.latest_edit_json().unwrap().deserialize().unwrap().event_id(), edit2_event_id);
+
+    let date_divider = assert_next_matches!(stream, VectorDiff::PushFront { value } => value);
+    assert!(date_divider.is_date_divider());
+
+    // An older edit arrives afterwards, also without its own event in the window.
+    // It must not override the newer one just because it was recorded last.
+    timeline
+        .handle_live_event(
+            f.text_msg("hi")
+                .sender(*ALICE)
+                .event_id(event_id!("$other"))
+                .server_ts(1500)
+                .with_bundled_edit(
+                    f.text_msg("* edit 1")
+                        .sender(*ALICE)
+                        .edit(original_event_id, MessageType::text_plain("edit 1").into())
+                        .event_id(edit1_event_id)
+                        .server_ts(2000),
+                ),
+        )
+        .await;
+
+    let item = assert_next_matches!(stream, VectorDiff::PushBack { value } => value);
+    assert_eq!(item.as_event().unwrap().content().as_message().unwrap().body(), "hi");
+
+    let items = timeline.controller.items().await;
+    let edited = items
+        .iter()
+        .filter_map(|item| item.as_event())
+        .find(|event| event.event_id() == Some(original_event_id))
+        .unwrap();
+    assert_eq!(edited.content().as_message().unwrap().body(), "edit 2");
+    assert_eq!(
+        edited.latest_edit_json().unwrap().deserialize().unwrap().event_id(),
+        edit2_event_id
+    );
 
     assert_pending!(stream);
 }

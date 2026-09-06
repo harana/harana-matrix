@@ -1,21 +1,20 @@
-//! Types for the [Application Service API].
+//! Types for the [appservice API].
 //!
-//! Only the registration-file types are vendored here. The appservice HTTP
-//! endpoints themselves (`/transactions`, `/users`, `/rooms`, `/ping` and the
-//! third-party lookups) are not used by this workspace and are not included.
+//! Only the registration file format is vendored here: the endpoints of the
+//! appservice API are not used by this workspace.
 //!
-//! [Application Service API]: https://spec.matrix.org/v1.18/application-service-api/
+//! [appservice API]: https://spec.matrix.org/latest/application-service-api/
 
 use serde::{Deserialize, Serialize};
 
 /// A namespace defined by an application service.
 ///
-/// Used for [appservice registration](https://spec.matrix.org/v1.18/application-service-api/#registration).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Used for [`Namespaces`].
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Namespace {
-    /// Whether this application service has exclusive access to events within
-    /// this namespace.
+    /// Whether this application service has exclusive access to matching
+    /// events.
     pub exclusive: bool,
 
     /// A regular expression defining which values this namespace includes.
@@ -31,55 +30,52 @@ impl Namespace {
 
 /// Namespaces defined by an application service.
 ///
-/// Used for [appservice registration](https://spec.matrix.org/v1.18/application-service-api/#registration).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+/// Used for [`Registration`].
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Namespaces {
     /// Events which are sent from certain users.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub users: Vec<Namespace>,
 
     /// Events which are sent in rooms with certain room aliases.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub aliases: Vec<Namespace>,
 
     /// Events which are sent in rooms with certain room IDs.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub rooms: Vec<Namespace>,
 }
 
 impl Namespaces {
-    /// Creates a new `Namespaces` instance with empty namespaces for `users`,
-    /// `aliases` and `rooms` (none of them are explicitly required)
+    /// Creates a new `Namespaces` instance with empty namespaces.
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-/// Information required in the registration yaml file that a homeserver needs.
+/// A registration is represented by a YAML file provided to each homeserver.
 ///
-/// To create an instance of this type, first create a `RegistrationInit` and
-/// convert it via `Registration::from` / `.into()`.
-///
-/// Used for [appservice registration](https://spec.matrix.org/v1.18/application-service-api/#registration).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// It defines the namespaces the application service is interested in, and the
+/// tokens the homeserver and the application service authenticate each other
+/// with.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(not(ruma_unstable_exhaustive_types), non_exhaustive)]
 pub struct Registration {
-    /// A unique, user - defined ID of the application service which will never
+    /// A unique, user-defined ID of the application service which will never
     /// change.
     pub id: String,
 
     /// The URL for the application service.
     ///
-    /// Optionally set to `null` if no traffic is required.
-    #[serde(deserialize_with = "Option::deserialize")]
+    /// Optionally set to `None` if no traffic is required.
     pub url: Option<String>,
 
     /// A unique token for application services to use to authenticate requests
-    /// to Homeservers.
+    /// to homeservers.
     pub as_token: String,
 
-    /// A unique token for Homeservers to use to authenticate requests to
+    /// A unique token for homeservers to use to authenticate requests to
     /// application services.
     pub hs_token: String,
 
@@ -93,44 +89,35 @@ pub struct Registration {
     /// Whether requests from masqueraded users are rate-limited.
     ///
     /// The sender is excluded.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_limited: Option<bool>,
 
     /// The external protocols which the application service provides (e.g.
     /// IRC).
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub protocols: Option<Vec<String>>,
-
-    /// Whether the application service wants to receive ephemeral data.
-    ///
-    /// Defaults to `false`.
-    #[serde(default, skip_serializing_if = "crate::serde::is_default")]
-    pub receive_ephemeral: bool,
 }
 
-/// Initial set of fields of `Registration`.
+/// Initial set of fields of [`Registration`].
 ///
 /// This struct will not be updated even if additional fields are added to
-/// `Registration` in a new (non-breaking) release of the Matrix specification.
-///
-/// Used for [appservice registration](https://spec.matrix.org/v1.18/application-service-api/#registration).
-#[derive(Debug)]
+/// [`Registration`] in a new (non-breaking) release of the Matrix
+/// specification.
+#[derive(Clone, Debug)]
 #[allow(clippy::exhaustive_structs)]
 pub struct RegistrationInit {
-    /// A unique, user - defined ID of the application service which will never
+    /// A unique, user-defined ID of the application service which will never
     /// change.
     pub id: String,
 
     /// The URL for the application service.
     ///
-    /// Optionally set to `null` if no traffic is required.
+    /// Optionally set to `None` if no traffic is required.
     pub url: Option<String>,
 
     /// A unique token for application services to use to authenticate requests
-    /// to Homeservers.
+    /// to homeservers.
     pub as_token: String,
 
-    /// A unique token for Homeservers to use to authenticate requests to
+    /// A unique token for homeservers to use to authenticate requests to
     /// application services.
     pub hs_token: String,
 
@@ -163,7 +150,8 @@ impl From<RegistrationInit> for Registration {
             rate_limited,
             protocols,
         } = init;
-        Self {
+
+        Registration {
             id,
             url,
             as_token,
@@ -172,67 +160,66 @@ impl From<RegistrationInit> for Registration {
             namespaces,
             rate_limited,
             protocols,
-            receive_ephemeral: false,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Namespace, Namespaces, Registration, RegistrationInit};
+    use serde_json::{json, to_value as to_json_value};
 
-    fn registration() -> Registration {
+    use super::{Namespace, Namespaces, Registration};
+
+    #[test]
+    fn registration_serializes_to_the_documented_shape() {
         let mut namespaces = Namespaces::new();
-        namespaces.users = vec![Namespace::new(true, r"@bridge_.*:localhost".to_owned())];
+        namespaces.users = vec![Namespace::new(true, "@_bridge_.*".to_owned())];
 
-        RegistrationInit {
+        let registration = Registration {
             id: "bridge".to_owned(),
             url: Some("http://localhost:9000".to_owned()),
             as_token: "as-token".to_owned(),
             hs_token: "hs-token".to_owned(),
             sender_localpart: "bridgebot".to_owned(),
             namespaces,
-            rate_limited: Some(false),
+            rate_limited: None,
             protocols: None,
-        }
-        .into()
-    }
+        };
 
-    #[test]
-    fn test_registration_init_defaults_receive_ephemeral_to_false() {
-        assert!(!registration().receive_ephemeral);
-    }
-
-    #[test]
-    fn test_registration_round_trips_through_json() {
-        let registration = registration();
-        let json = serde_json::to_value(&registration).unwrap();
-        let parsed: Registration = serde_json::from_value(json).unwrap();
-
-        assert_eq!(parsed.id, registration.id);
-        assert_eq!(parsed.sender_localpart, registration.sender_localpart);
-        assert_eq!(parsed.namespaces.users.len(), 1);
-        assert!(parsed.namespaces.users[0].exclusive);
-        assert!(parsed.namespaces.aliases.is_empty());
-    }
-
-    #[test]
-    fn test_absent_namespaces_deserialize_as_empty() {
-        let parsed: Registration = serde_json::from_str(
-            r#"{
+        assert_eq!(
+            to_json_value(&registration).unwrap(),
+            json!({
                 "id": "bridge",
-                "url": null,
-                "as_token": "as",
-                "hs_token": "hs",
+                "url": "http://localhost:9000",
+                "as_token": "as-token",
+                "hs_token": "hs-token",
                 "sender_localpart": "bridgebot",
-                "namespaces": {}
-            }"#,
-        )
+                "namespaces": {
+                    "users": [{ "exclusive": true, "regex": "@_bridge_.*" }],
+                    "aliases": [],
+                    "rooms": [],
+                },
+                "rate_limited": null,
+                "protocols": null,
+            })
+        );
+    }
+
+    #[test]
+    fn a_registration_without_namespaces_deserializes() {
+        let registration: Registration = serde_json::from_value(json!({
+            "id": "bridge",
+            "url": null,
+            "as_token": "as-token",
+            "hs_token": "hs-token",
+            "sender_localpart": "bridgebot",
+            "namespaces": {},
+        }))
         .unwrap();
 
-        assert!(parsed.url.is_none());
-        assert!(parsed.namespaces.users.is_empty());
-        assert!(parsed.namespaces.aliases.is_empty());
-        assert!(parsed.namespaces.rooms.is_empty());
+        assert!(registration.namespaces.users.is_empty());
+        assert!(registration.namespaces.aliases.is_empty());
+        assert!(registration.namespaces.rooms.is_empty());
+        assert_eq!(registration.url, None);
     }
 }
