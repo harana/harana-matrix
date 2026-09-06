@@ -139,7 +139,7 @@ impl Backups {
             // leave a future session with a backup it can never trust.
             if let Err(error) = olm_machine.backup_machine().sign_backup(&mut backup_info).await {
                 warn!("Unable to sign the newly created backup version: {error:?}");
-                return Err(crate::Error::BackupNotCrossSigned.into());
+                return Err(Error::BackupNotCrossSigned);
             }
 
             let algorithm = Raw::new(&backup_info)?.cast();
@@ -1344,7 +1344,7 @@ mod test {
     ///
     /// Creating a backup now requires a cross-signing master key signature, so
     /// tests that create one need an identity to sign with.
-    async fn bootstrap_cross_signing_locally(client: &crate::Client) {
+    async fn bootstrap_cross_signing_locally(client: &Client) {
         let olm_machine = client.olm_machine().await;
         olm_machine
             .as_ref()

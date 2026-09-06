@@ -72,7 +72,8 @@ pub(crate) struct DataMigrationContext<'a> {
 ///
 /// See the [module documentation](self) for how these relate to the backends'
 /// own schema migrations.
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub(crate) trait DataMigration: fmt::Debug + Send + Sync {
     /// The version this migration brings the store to.
     ///
@@ -171,7 +172,8 @@ async fn set_stored_version(store: &Store, version: u32) -> Result<()> {
 #[derive(Debug)]
 struct PostVerifiedLatchSupport;
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl DataMigration for PostVerifiedLatchSupport {
     fn version(&self) -> u32 {
         1
@@ -212,6 +214,7 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
 
+    use async_trait::async_trait;
     use matrix_sdk_test::async_test;
     use ruma::{device_id, user_id};
 
@@ -242,7 +245,8 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl DataMigration for CountingMigration {
         fn version(&self) -> u32 {
             self.version

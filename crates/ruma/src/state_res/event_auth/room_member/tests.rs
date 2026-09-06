@@ -414,7 +414,7 @@ fn join_knock_restricted_join_rule_already_invited() {
     );
     factory.add_room_member(
         owned_event_id!("$room-member-charlie-invite"),
-        charlie_id.clone(),
+        charlie_id,
         RoomMemberPduContent::Invite { sender: alice_id },
     );
 

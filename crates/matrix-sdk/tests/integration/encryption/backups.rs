@@ -469,7 +469,7 @@ async fn setup_backups(client: &Client, server: &wiremock::MockServer) {
         "We should initially be in the unknown state"
     );
 
-    bootstrap_cross_signing_locally(&client).await;
+    bootstrap_cross_signing_locally(client).await;
     backups.create().await.expect("We should be able to create a new backup");
 
     assert_eq!(

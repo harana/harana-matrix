@@ -512,6 +512,9 @@ fn collect_sessions(
             forwarder_data: None,
             room_id: RoomId::parse(session.room_id)?,
             imported: session.imported,
+            // A session migrated in from libolm says nothing about how it was
+            // forwarded, so it does not get MSC3879's benefit of the doubt.
+            trusted_forward: false,
             backed_up: session.backed_up,
             history_visibility: None,
             shared_history: false,

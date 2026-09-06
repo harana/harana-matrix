@@ -2232,9 +2232,7 @@ mod tests {
 
     /// Build `count` Olm sessions between two accounts, each with the given age
     /// since it was last used.
-    async fn sessions_with_ages(
-        ages: &[std::time::Duration],
-    ) -> (Account, Vec<crate::olm::Session>) {
+    fn sessions_with_ages(ages: &[std::time::Duration]) -> (Account, Vec<crate::olm::Session>) {
         use ruma::SecondsSinceUnixEpoch;
 
         let alice = Account::with_device_id(user_id!("@a:s.co"), device_id!("ABC"));
@@ -2308,7 +2306,7 @@ mod tests {
     async fn test_stale_olm_sessions_are_expired() {
         let year = std::time::Duration::from_secs(365 * 24 * 60 * 60);
         let ages: Vec<_> = (1..=6).map(|n| year * n).collect();
-        let (account, sessions) = sessions_with_ages(&ages).await;
+        let (account, sessions) = sessions_with_ages(&ages);
 
         let sender_key = sessions[0].sender_key.to_base64();
         let newest: Vec<String> = sessions[..4].iter().map(|s| s.session_id().to_owned()).collect();
@@ -2332,7 +2330,7 @@ mod tests {
     async fn test_recently_used_olm_sessions_are_never_expired() {
         let day = std::time::Duration::from_secs(24 * 60 * 60);
         let ages: Vec<_> = (1..=6).map(|n| day * n).collect();
-        let (account, sessions) = sessions_with_ages(&ages).await;
+        let (account, sessions) = sessions_with_ages(&ages);
 
         let sender_key = sessions[0].sender_key.to_base64();
         let store = store_with_sessions(&account, sessions).await;

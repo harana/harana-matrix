@@ -1709,7 +1709,7 @@ mod tests {
             "A session we created ourselves can be vouched for",
         );
 
-        let mut imported = session.clone();
+        let mut imported = session;
         imported.mark_as_imported();
 
         assert!(

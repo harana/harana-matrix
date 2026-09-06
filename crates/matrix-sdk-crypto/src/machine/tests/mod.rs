@@ -945,7 +945,7 @@ async fn test_sender_data_survives_a_round_trip_through_an_authenticated_backup(
         .unwrap()
         .inbound_group_session
         .unwrap();
-    bob.store().save_inbound_group_sessions(&[session.clone()]).await.unwrap();
+    bob.store().save_inbound_group_sessions(std::slice::from_ref(&session)).await.unwrap();
 
     let original_sender_data = session.sender_data.clone();
     assert_matches!(original_sender_data, SenderData::DeviceInfo { .. });

@@ -2231,11 +2231,23 @@ pub(crate) mod tests {
         let bob_identity_data =
             bob_verification_machine.get_own_user_identity_data().await.unwrap();
 
+        let bob_store = Store::new(
+            bob_account.static_data().clone(),
+            bob_verification_machine.store.private_identity.clone(),
+            Arc::new(CryptoStoreWrapper::new(
+                bob_account.user_id(),
+                bob_account.device_id(),
+                MemoryStore::new(),
+            )),
+            bob_verification_machine.clone(),
+        );
+
         // When Bob checks Alice's identity without using X.509
         let mut bobs_view_of_alice = OtherUserIdentity {
             inner: alice_identity_data.clone(),
             own_identity: Some(bob_identity_data),
             verification_machine: bob_verification_machine.clone(),
+            store: bob_store,
             x509_verifier: None,
         };
 
