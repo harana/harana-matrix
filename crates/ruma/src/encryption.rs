@@ -170,6 +170,15 @@ pub enum KeyUsage {
     /// User-signing key.
     UserSigning,
 
+    /// TOFU signing key, as defined in [MSC3834].
+    ///
+    /// Used to pin another user's master key the first time we see it.
+    ///
+    /// [MSC3834]: https://github.com/matrix-org/matrix-spec-proposals/pull/3834
+    #[cfg(feature = "unstable-msc3834")]
+    #[ruma_enum(rename = "org.matrix.msc3834.v1.cross_signing.tofu_signing", alias = "m.cross_signing.tofu_signing")]
+    TofuSigning,
+
     #[doc(hidden)]
     _Custom(PrivOwnedStr),
 }

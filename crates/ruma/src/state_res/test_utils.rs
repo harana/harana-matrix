@@ -1,4 +1,9 @@
 #![allow(clippy::exhaustive_enums, clippy::exhaustive_structs)]
+// Vendored from ruma-state-res, where these helpers were a `pub` module of
+// their own crate and the enums they match on were `non_exhaustive` across the
+// crate boundary. Inside the merged crate neither holds, so the catch-all arms
+// read as unreachable and the unused helpers as dead code.
+#![allow(dead_code, unreachable_patterns)]
 
 use crate::{OwnedRoomId, owned_room_id, room_version_rules::RoomIdFormatVersion};
 

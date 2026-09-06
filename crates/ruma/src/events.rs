@@ -182,6 +182,8 @@ pub mod room_key_request;
 #[cfg(feature = "unstable-msc4310")]
 pub mod rtc;
 pub mod secret;
+#[cfg(feature = "unstable-msc3834")]
+pub mod signatures_hash;
 pub mod secret_storage;
 pub mod space;
 #[cfg(feature = "unstable-msc3230")]

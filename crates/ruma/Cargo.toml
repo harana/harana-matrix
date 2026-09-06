@@ -73,6 +73,7 @@ full = [
     "unstable-msc3723",
     "unstable-msc3768",
     "unstable-msc3814",
+    "unstable-msc3834",
     "unstable-msc3843",
     "unstable-msc3927",
     "unstable-msc3930",
@@ -230,6 +231,7 @@ unstable-msc3618 = []
 unstable-msc3723 = []
 unstable-msc3768 = []
 unstable-msc3814 = []
+unstable-msc3834 = []
 unstable-msc3843 = []
 unstable-msc3927 = ["unstable-msc3551"]
 unstable-msc3930 = []

@@ -257,6 +257,12 @@ event_enum! {
         #[cfg(feature = "unstable-msc4471")]
         #[ruma_enum(alias = "m.stream.update")]
         "org.matrix.msc4471.stream.update" => super::stream::update,
+        #[cfg(feature = "unstable-msc3834")]
+        #[ruma_enum(alias = "m.signatures_hash_request")]
+        "org.matrix.msc3834.v1.signatures_hash_request" => super::signatures_hash,
+        #[cfg(feature = "unstable-msc3834")]
+        #[ruma_enum(alias = "m.signatures_hash")]
+        "org.matrix.msc3834.v1.signatures_hash" => super::signatures_hash,
     }
 }
 
