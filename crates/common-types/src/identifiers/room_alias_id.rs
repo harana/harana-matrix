@@ -1,6 +1,6 @@
 //! Matrix room alias identifiers.
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 use super::{MatrixToUri, MatrixUri, OwnedEventId, matrix_uri::UriAction, server_name::ServerName};
 

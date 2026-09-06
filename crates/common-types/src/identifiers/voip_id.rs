@@ -1,6 +1,6 @@
 //! VoIP identifier.
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 /// A VoIP identifier.
 ///

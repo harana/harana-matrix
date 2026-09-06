@@ -3,7 +3,7 @@
 //! [`m.room.history_visibility`]: https://spec.matrix.org/v1.19/client-server-api/#mroomhistory_visibility
 
 use crate::__ruma::serde::StringEnum;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::{EmptyStateKey, PrivOwnedStr};

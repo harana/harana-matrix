@@ -165,7 +165,7 @@ where
     Ok(raw)
 }
 
-pub use common_macros::{
+pub use harana_matrix_macros::{
     _FakeDeriveSerde, AsRefStr, AsStrAsRefStr, DebugAsRefStr, DeserializeFromCowStr,
     DisplayAsRefStr, EqAsRefStr, FromString, OrdAsRefStr, SerializeAsRefStr, StringEnum,
 };

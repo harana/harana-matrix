@@ -2,7 +2,7 @@
 //!
 //! [predefined push rules]: https://spec.matrix.org/v1.19/client-server-api/#predefined-rules
 
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 
 use super::{
     Action::*, ConditionalPushRule, EventMatchConditionData, EventPropertyContainsConditionData,

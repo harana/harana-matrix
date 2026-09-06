@@ -4,7 +4,7 @@
 //!
 //! [MSC4495]: https://github.com/matrix-org/matrix-spec-proposals/pull/4495
 
-use common_macros::{EventContent, StringEnum};
+use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
 use crate::{EmptyStateKey, PrivOwnedStr};

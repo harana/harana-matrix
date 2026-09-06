@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::__ruma::{OwnedVoipId, VoipVersionId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "unstable-msc2747")]

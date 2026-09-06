@@ -20,7 +20,7 @@ use std::{
 };
 
 use server_state_res::{Error, Event, StateMap, resolve, utils::event_id_set::EventIdSet};
-use common_test_macros::async_test;
+use harana_matrix_macros::async_test;
 use common_ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt,
     UserId,

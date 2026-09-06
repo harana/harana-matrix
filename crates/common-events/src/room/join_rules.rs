@@ -7,7 +7,7 @@ use crate::__ruma::{
     room_version_rules::RedactionRules,
     serde::{JsonCastable, JsonObject},
 };
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize, de};
 
 use crate::{

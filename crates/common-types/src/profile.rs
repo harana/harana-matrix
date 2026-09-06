@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 #[cfg(feature = "unstable-msc4426")]
 use serde::Deserialize;
 use serde::Serialize;

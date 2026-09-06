@@ -11,7 +11,7 @@ use crate::__ruma::{
     room_version_rules::RedactionRules,
     serde::{CanBeEmpty, JsonCastable, JsonObject},
 };
-use common_macros::{Event, EventContent};
+use harana_matrix_macros::{Event, EventContent};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 

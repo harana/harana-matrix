@@ -17,7 +17,7 @@ use crate::__ruma::{
         base64::{Standard, UrlSafe},
     },
 };
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize, de};
 use serde_json::Value as JsonValue;
 use zeroize::Zeroize;

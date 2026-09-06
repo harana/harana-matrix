@@ -3,7 +3,7 @@
 //! [MSC4268]: https://github.com/matrix-org/matrix-spec-proposals/pull/4268
 
 use crate::__ruma::OwnedRoomId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::room::EncryptedFile;

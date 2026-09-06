@@ -136,14 +136,14 @@ mod unsigned;
 /// It is not considered part of this module's public API.
 #[doc(hidden)]
 pub mod exports {
-    pub use common_macros;
+    pub use harana_matrix_macros;
     pub use serde;
     pub use serde_json;
 }
 
 /// Re-export of all the derives needed to create your own event types.
 pub mod macros {
-    pub use common_macros::{Event, EventContent};
+    pub use harana_matrix_macros::{Event, EventContent};
 }
 
 #[cfg(feature = "unstable-msc3927")]

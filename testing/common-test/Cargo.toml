@@ -26,7 +26,7 @@ as_variant.workspace = true
 http.workspace = true
 insta.workspace = true
 client-common = { version = "0.18.0", path = "../../crates/client-common" }
-common-test-macros = { version = "0.18.0", path = "../common-test-macros" }
+harana-matrix-macros.workspace = true
 # Enable the unstable feature for polls support.
 # "server" is needed to serialize Response objects to JSON.
 common-ruma = { workspace = true, features = ["server", "rand", "unstable-msc3381", "unstable-msc4274"] }

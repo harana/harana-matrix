@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 
 use crate::__ruma::OwnedUserId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::EmptyStateKey;

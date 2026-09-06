@@ -10,7 +10,7 @@
 //!
 //! [MSC3834]: https://github.com/matrix-org/matrix-spec-proposals/pull/3834
 
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.signatures_hash_request` event.

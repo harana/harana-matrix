@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use as_variant::as_variant;
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize, de};
 use serde_json::{Value as JsonValue, value::RawValue as RawJsonValue};
 

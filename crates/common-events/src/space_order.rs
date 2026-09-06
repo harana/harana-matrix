@@ -3,7 +3,7 @@
 //! [`m.space_order`]: https://github.com/matrix-org/matrix-spec-proposals/pull/3230
 
 use crate::__ruma::OwnedSpaceChildOrder;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.space_order` event.

@@ -3,7 +3,7 @@
 //! [MSC4471]: https://github.com/matrix-org/matrix-spec-proposals/pull/4471
 
 use crate::__ruma::{OwnedDeviceId, OwnedEventId, OwnedRoomId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of a to-device `m.stream.subscribe` event.

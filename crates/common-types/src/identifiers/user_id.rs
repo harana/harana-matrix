@@ -2,7 +2,7 @@
 
 pub use common_identifiers_validation::user_id::localpart_is_fully_conforming;
 use common_identifiers_validation::{ID_MAX_BYTES, localpart_is_backwards_compatible};
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 use super::{IdParseError, MatrixToUri, MatrixUri, ServerName, matrix_uri::UriAction};
 

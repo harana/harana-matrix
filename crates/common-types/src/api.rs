@@ -15,7 +15,7 @@
 use std::{convert::TryInto as _, error::Error as StdError};
 
 use bytes::BufMut;
-pub use common_macros::OutgoingBodyJson;
+pub use harana_matrix_macros::OutgoingBodyJson;
 /// Generates [`OutgoingRequest`] and [`IncomingRequest`] implementations.
 ///
 /// The `OutgoingRequest` impl is feature-gated behind `cfg(feature = "client")`.
@@ -142,7 +142,7 @@ pub use common_macros::OutgoingBodyJson;
 /// ```
 ///
 /// [serde_html_form]: https://crates.io/crates/serde_html_form
-pub use common_macros::request;
+pub use harana_matrix_macros::request;
 /// Generates [`OutgoingResponse`] and [`IncomingResponse`] implementations.
 ///
 /// The `OutgoingResponse` impl is feature-gated behind `cfg(feature = "server")`.
@@ -245,7 +245,7 @@ pub use common_macros::request;
 ///     }
 /// }
 /// ```
-pub use common_macros::response;
+pub use harana_matrix_macros::response;
 use serde::{Deserialize, Serialize};
 
 use self::error::{FromHttpRequestError, FromHttpResponseError, IntoHttpError};

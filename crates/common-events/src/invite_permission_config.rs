@@ -2,7 +2,7 @@
 //!
 //! [`m.invite_permission_config`]: https://spec.matrix.org/v1.19/client-server-api/#minvite_permission_config
 
-use common_macros::{EventContent, StringEnum};
+use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

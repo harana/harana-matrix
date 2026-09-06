@@ -2,7 +2,7 @@
 
 use std::hint::unreachable_unchecked;
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 use tracing::warn;
 
 use super::{OwnedRoomAliasId, OwnedRoomId, RoomAliasId, RoomId, server_name::ServerName};

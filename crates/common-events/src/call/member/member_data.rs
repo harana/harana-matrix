@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use as_variant::as_variant;
 use crate::__ruma::{DeviceId, MilliSecondsSinceUnixEpoch, OwnedDeviceId};
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 

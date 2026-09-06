@@ -1,6 +1,6 @@
 //! Key algorithms used in Matrix spec.
 
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 
 use crate::PrivOwnedStr;
 

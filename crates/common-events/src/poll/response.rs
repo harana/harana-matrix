@@ -3,7 +3,7 @@
 use std::{ops::Deref, vec};
 
 use crate::__ruma::OwnedEventId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{PollResponseData, start::PollContentBlock, validate_selections};

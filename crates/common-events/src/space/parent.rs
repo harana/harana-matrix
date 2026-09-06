@@ -3,7 +3,7 @@
 //! [`m.space.parent`]: https://spec.matrix.org/v1.19/client-server-api/#mspaceparent
 
 use crate::__ruma::{OwnedRoomId, OwnedServerName};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.space.parent` event.

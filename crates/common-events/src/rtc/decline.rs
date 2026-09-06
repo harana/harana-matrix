@@ -7,7 +7,7 @@
 //! [MSC4310]: https://github.com/matrix-org/matrix-spec-proposals/pull/4310
 
 use crate::relation::Reference;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.rtc.decline` event.

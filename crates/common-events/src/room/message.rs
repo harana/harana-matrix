@@ -11,7 +11,7 @@ use crate::__ruma::{
 };
 #[cfg(feature = "html")]
 use crate::__ruma::html::{HtmlSanitizerMode, RemoveReplyFallback, sanitize_html};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value as JsonValue;
 use tracing::warn;

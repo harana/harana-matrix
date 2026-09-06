@@ -3,7 +3,7 @@
 //! [`m.policy.rule.server`]: https://spec.matrix.org/v1.19/client-server-api/#mpolicyruleserver
 
 use crate::__ruma::room_version_rules::RedactionRules;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{PolicyRuleEventContent, PossiblyRedactedPolicyRuleEventContent};

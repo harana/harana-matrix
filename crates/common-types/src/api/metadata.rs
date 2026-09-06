@@ -7,7 +7,7 @@ use std::{
 
 use bytes::BufMut;
 use http::Method;
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 
 use super::{auth_scheme::AuthScheme, error::UnknownVersionError, path_builder::PathBuilder};
 use crate::{PrivOwnedStr, RoomVersionId, api::error::IntoHttpError, serde::slice_to_buf};

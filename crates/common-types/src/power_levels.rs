@@ -3,7 +3,7 @@
 //! [power_levels]: https://spec.matrix.org/v1.19/client-server-api/#mroompower_levels
 
 use js_int::{Int, int};
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

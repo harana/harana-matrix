@@ -3,7 +3,7 @@
 //! [`m.push_rules`]: https://spec.matrix.org/v1.19/client-server-api/#mpush_rules
 
 use crate::__ruma::push::Ruleset;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.push_rules` event.

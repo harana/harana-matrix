@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::__ruma::OwnedRoomId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of a `dm.filament.do_not_disturb` event.

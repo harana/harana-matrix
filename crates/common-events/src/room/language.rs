@@ -3,7 +3,7 @@
 //! [`m.room.language`]: https://github.com/matrix-org/matrix-spec-proposals/pull/4334
 
 use language_tags::LanguageTag;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::EmptyStateKey;

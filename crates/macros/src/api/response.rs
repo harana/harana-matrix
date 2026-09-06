@@ -18,7 +18,7 @@ const KIND: MacroKind = MacroKind::Response;
 /// This uses the `#[derive(Response)]` macro internally.
 pub fn expand_response(attrs: ResponseAttrs, item: syn::ItemStruct) -> TokenStream {
     let ruma_common = RumaCommon::new();
-    let common_macros = ruma_common.reexported(RumaCommonReexport::RumaMacros);
+    let harana_matrix_macros = ruma_common.reexported(RumaCommonReexport::RumaMacros);
 
     let maybe_feature_error = ensure_feature_presence().map(syn::Error::to_compile_error);
 
@@ -44,12 +44,12 @@ pub fn expand_response(attrs: ResponseAttrs, item: syn::ItemStruct) -> TokenStre
             });
             crate::util::cfg_expand_struct(&mut derive_input);
 
-            let extra_derive = quote! { #common_macros::_FakeDeriveRumaApi };
+            let extra_derive = quote! { #harana_matrix_macros::_FakeDeriveRumaApi };
             let ruma_api_attribute = quote! {};
             let response_impls =
                 expand_derive_response(derive_input).unwrap_or_else(syn::Error::into_compile_error);
         } else {
-            let extra_derive = quote! { #common_macros::Response };
+            let extra_derive = quote! { #harana_matrix_macros::Response };
             let ruma_api_attribute = quote! {
                 #[ruma_api(error = #error_ty, status = #status_ident #manual_body_serde)]
             };

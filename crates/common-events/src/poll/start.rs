@@ -4,7 +4,7 @@ use std::ops::Deref;
 
 use js_int::{UInt, uint};
 use crate::__ruma::{MilliSecondsSinceUnixEpoch, serde::StringEnum};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

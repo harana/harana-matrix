@@ -3,7 +3,7 @@
 //! [`m.room.canonical_alias`]: https://spec.matrix.org/v1.19/client-server-api/#mroomcanonical_alias
 
 use crate::__ruma::OwnedRoomAliasId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::EmptyStateKey;

@@ -7,7 +7,7 @@
 
 use js_int::UInt;
 use crate::__ruma::{OwnedEventId, OwnedRoomId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of a to-device `m.stream.update` event.

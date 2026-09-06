@@ -3,7 +3,7 @@
 //! [`m.room.third_party_invite`]: https://spec.matrix.org/v1.19/client-server-api/#mroomthird_party_invite
 
 use crate::__ruma::third_party_invite::IdentityServerBase64PublicKey;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.room.third_party_invite` event.

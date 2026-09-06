@@ -3,7 +3,7 @@
 //! [`m.call.select_answer`]: https://spec.matrix.org/v1.19/client-server-api/#mcallselect_answer
 
 use crate::__ruma::{OwnedVoipId, VoipVersionId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// **Added in VoIP version 1.** The content of an `m.call.select_answer` event.

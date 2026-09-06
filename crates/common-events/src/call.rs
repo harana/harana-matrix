@@ -16,7 +16,7 @@ pub mod reject;
 pub mod sdp_stream_metadata_changed;
 pub mod select_answer;
 
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

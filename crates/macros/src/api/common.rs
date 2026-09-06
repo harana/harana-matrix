@@ -322,7 +322,7 @@ impl Body {
         let fields = self.fields.json_fields()?.iter().map(PrivateField);
         let ident = kind.as_struct_ident(StructSuffix::Body);
 
-        let common_macros = ruma_common.reexported(RumaCommonReexport::RumaMacros);
+        let harana_matrix_macros = ruma_common.reexported(RumaCommonReexport::RumaMacros);
         let mut extra_attrs = TokenStream::new();
 
         if !self.manual_serde {
@@ -355,8 +355,8 @@ impl Body {
         Some(quote! {
             /// Data in the request body.
             #[doc(hidden)]
-            #[derive(Debug, #common_macros::_FakeDeriveRumaApi, #common_macros::_FakeDeriveSerde)]
-            #[cfg_attr(feature = #outgoing_body_feature, derive(#common_macros::OutgoingBodyJson))]
+            #[derive(Debug, #harana_matrix_macros::_FakeDeriveRumaApi, #harana_matrix_macros::_FakeDeriveSerde)]
+            #[cfg_attr(feature = #outgoing_body_feature, derive(#harana_matrix_macros::OutgoingBodyJson))]
             #extra_attrs
             pub struct #ident { #( #fields ),* }
         })

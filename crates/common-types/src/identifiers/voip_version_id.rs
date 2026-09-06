@@ -3,7 +3,7 @@
 use std::fmt;
 
 use js_int::UInt;
-use common_macros::DisplayAsRefStr;
+use harana_matrix_macros::DisplayAsRefStr;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{self, Visitor},

@@ -5,7 +5,7 @@
 use std::fmt;
 
 use crate::__ruma::OwnedTransactionId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.secret.send` event.

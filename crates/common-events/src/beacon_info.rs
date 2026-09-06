@@ -4,7 +4,7 @@
 //! [MSC3489]: https://github.com/matrix-org/matrix-spec-proposals/pull/3489
 
 use crate::__ruma::{MilliSecondsSinceUnixEpoch, OwnedUserId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 use web_time::{Duration, SystemTime};
 

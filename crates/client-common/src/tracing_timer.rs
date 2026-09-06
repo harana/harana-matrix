@@ -119,7 +119,7 @@ macro_rules! timer {
 #[cfg(test)]
 mod tests {
     #[cfg(not(target_family = "wasm"))]
-    #[common_test_macros::async_test]
+    #[harana_matrix_macros::async_test]
     async fn test_timer_name() {
         use tracing::{Level, span};
 

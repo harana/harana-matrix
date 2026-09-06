@@ -10,7 +10,7 @@ use std::time::Duration;
 use js_int::UInt;
 use crate::__ruma::MilliSecondsSinceUnixEpoch;
 use crate::{Mentions, relation::Reference};
-use common_macros::{EventContent, StringEnum};
+use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

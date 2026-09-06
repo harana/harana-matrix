@@ -1,7 +1,7 @@
 //! Types for the `org.matrix.msc3381.poll.end` event, the unstable version of `m.poll.end`.
 
 use crate::__ruma::OwnedEventId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::relation::Reference;

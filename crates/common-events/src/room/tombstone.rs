@@ -3,7 +3,7 @@
 //! [`m.room.tombstone`]: https://spec.matrix.org/v1.19/client-server-api/#mroomtombstone
 
 use crate::__ruma::OwnedRoomId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::{

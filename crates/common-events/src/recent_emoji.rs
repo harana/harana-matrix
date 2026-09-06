@@ -3,7 +3,7 @@
 //! [`m.recent_emoji`]: https://spec.matrix.org/v1.19/client-server-api/#mrecent_emoji
 
 use js_int::{UInt, uint};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an [`m.recent_emoji`] event.

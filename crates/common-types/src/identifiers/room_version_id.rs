@@ -2,7 +2,7 @@
 
 use std::{cmp::Ordering, str::FromStr};
 
-use common_macros::DisplayAsRefStr;
+use harana_matrix_macros::DisplayAsRefStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::IdParseError;

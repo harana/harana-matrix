@@ -2,7 +2,7 @@
 //!
 //! [msc]: https://github.com/matrix-org/matrix-spec-proposals/pull/4362
 use crate::__ruma::room_version_rules::RedactionRules;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::{

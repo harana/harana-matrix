@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use js_int::UInt;
 use crate::__ruma::{OwnedUserId, OwnedVoipId, VoipVersionId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "unstable-msc2747")]

@@ -5,7 +5,7 @@
 //! [MSC4495]: https://github.com/matrix-org/matrix-spec-proposals/pull/4495
 
 use crate::__ruma::{OwnedRoomId, OwnedUserId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of the `m.presence.prompted` account data key.

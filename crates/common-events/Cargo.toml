@@ -93,7 +93,7 @@ js_option = "0.2.0"
 language-tags = { version = "0.3.2", optional = true, features = ["serde"] }
 maplit = "1.0.2"
 pulldown-cmark = { version = "0.13.0", optional = true, default-features = false, features = ["html"] }
-common-macros.workspace = true
+harana-matrix-macros.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["raw_value"] }
 thiserror.workspace = true

@@ -3,7 +3,7 @@
 //! [`m.room.pinned_events`]: https://spec.matrix.org/v1.19/client-server-api/#mroompinned_events
 
 use crate::__ruma::OwnedEventId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::EmptyStateKey;

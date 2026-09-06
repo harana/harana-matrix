@@ -119,7 +119,7 @@ priv_owned_str!(uniffi);
 pub mod exports {
     pub use bytes;
     pub use http;
-    pub use common_macros;
+    pub use harana_matrix_macros;
     pub use serde;
     pub use serde_html_form;
     pub use serde_json;

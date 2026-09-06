@@ -2,7 +2,7 @@
 //!
 //! [MSC4075]: https://github.com/matrix-org/matrix-spec-proposals/pull/4075
 
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::member::Application;

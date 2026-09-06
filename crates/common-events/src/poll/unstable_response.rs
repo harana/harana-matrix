@@ -2,7 +2,7 @@
 //! `m.poll.response`.
 
 use crate::__ruma::OwnedEventId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{PollResponseData, unstable_start::UnstablePollStartContentBlock, validate_selections};

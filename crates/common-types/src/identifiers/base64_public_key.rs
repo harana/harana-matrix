@@ -1,4 +1,4 @@
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 use super::{IdParseError, KeyName};
 use crate::serde::{Base64, Base64DecodeError, base64::Standard};

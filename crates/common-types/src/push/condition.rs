@@ -6,7 +6,7 @@ use std::{
 use js_int::{Int, UInt};
 use regex::bytes::Regex;
 #[cfg(feature = "unstable-msc3931")]
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use wildmatch::WildMatch;

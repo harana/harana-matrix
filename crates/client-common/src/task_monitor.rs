@@ -531,7 +531,7 @@ mod tests {
     };
 
     use assert_matches::assert_matches;
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
 
     use super::{BackgroundTaskFailureReason, TaskMonitor};
     use crate::{sleep::sleep, timeout::timeout};

@@ -23,7 +23,7 @@ use std::{
 };
 
 use server_state_res::{AuthCheckOutcome, Event, auth_check, check_state_dependent_auth_rules};
-use common_test_macros::async_test;
+use harana_matrix_macros::async_test;
 use common_ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
     events::{StateEventType, TimelineEventType},

@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::__ruma::OwnedRoomId;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an [`m.image_pack.rooms`] event.

@@ -3,7 +3,7 @@
 //! [`m.media_preview_config`]: https://github.com/matrix-org/matrix-spec-proposals/pull/4278
 
 use crate::__ruma::serde::JsonCastable;
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize};
 
 use crate::{PrivOwnedStr, macros::EventContent};

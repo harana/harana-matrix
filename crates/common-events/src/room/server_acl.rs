@@ -3,7 +3,7 @@
 //! [`m.room.server_acl`]: https://spec.matrix.org/v1.19/client-server-api/#mroomserver_acl
 
 use crate::__ruma::ServerName;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 use wildmatch::WildMatch;
 

@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::__ruma::{OwnedTransactionId, serde::Base64};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::relation::Reference;

@@ -1,6 +1,6 @@
 //! `m.space.child` order.
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 /// The order of an [`m.space.child`] event.
 ///

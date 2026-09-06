@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, error::Error, fmt, str::FromStr};
 #[cfg(feature = "compat-tag-info")]
 use crate::__ruma::serde::deserialize_as_optional_number_or_string;
 use crate::__ruma::serde::deserialize_cow_str;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

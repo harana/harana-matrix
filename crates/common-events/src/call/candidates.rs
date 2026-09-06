@@ -4,7 +4,7 @@
 
 use js_int::UInt;
 use crate::__ruma::{OwnedVoipId, VoipVersionId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.call.candidates` event.

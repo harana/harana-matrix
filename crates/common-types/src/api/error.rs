@@ -6,7 +6,7 @@ use std::{error::Error as StdError, fmt, num::ParseIntError, sync::Arc};
 
 use as_variant::as_variant;
 use bytes::Bytes;
-use common_macros::OutgoingBodyJson;
+use harana_matrix_macros::OutgoingBodyJson;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, from_slice as from_json_slice};
 use thiserror::Error;

@@ -9,7 +9,7 @@ use crate::__ruma::{
     EventEncryptionAlgorithm, OwnedRoomId,
     serde::{Base64, JsonObject, from_raw_json_value},
 };
-use common_macros::{EventContent, StringEnum};
+use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize, de};
 use serde_json::{Value as JsonValue, value::RawValue as RawJsonValue};
 

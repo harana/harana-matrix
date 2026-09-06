@@ -6,7 +6,7 @@ use js_int::UInt;
 use crate::__ruma::OwnedMxcUri;
 #[cfg(feature = "unstable-msc2448")]
 use crate::__ruma::serde::Base64;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::ThumbnailInfo;

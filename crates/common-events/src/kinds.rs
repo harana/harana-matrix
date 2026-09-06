@@ -5,7 +5,7 @@ use crate::__ruma::{
     room_version_rules::RedactionRules,
     serde::{JsonCastable, JsonObject, Raw, from_raw_json_value},
 };
-use common_macros::Event;
+use harana_matrix_macros::Event;
 use serde::{Deserialize, Deserializer, Serialize, ser::SerializeStruct};
 use serde_json::value::RawValue as RawJsonValue;
 

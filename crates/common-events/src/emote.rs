@@ -2,7 +2,7 @@
 //!
 //! [MSC3954]: https://github.com/matrix-org/matrix-spec-proposals/pull/3954
 
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use super::{message::TextContentBlock, room::message::Relation};

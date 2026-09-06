@@ -27,7 +27,7 @@ pub async fn sleep(duration: Duration) {
 
 #[cfg(test)]
 mod tests {
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
 
     use super::*;
 

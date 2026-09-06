@@ -1,4 +1,4 @@
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 use super::{
     Base64PublicKey, DeviceId, IdParseError, KeyName, OwnedBase64PublicKey, OwnedDeviceId,

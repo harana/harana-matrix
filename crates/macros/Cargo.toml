@@ -1,13 +1,13 @@
 [package]
 categories = ["api-bindings", "web-programming"]
-description = "Procedural macros used by the Ruma crates."
-homepage = "https://ruma.dev/"
+description = "Procedural macros for the harana-matrix crates."
+homepage = "https://github.com/harana/harana-matrix"
 keywords = ["matrix", "chat", "messaging", "ruma"]
 license = "MIT"
-name = "common-macros"
+name = "harana-matrix-macros"
 readme = "README.md"
-repository = "https://github.com/ruma/ruma"
-version = "0.19.0"
+repository = "https://github.com/harana/harana-matrix"
+version = "0.18.0"
 edition = "2024"
 rust-version = { workspace = true }
 
@@ -20,15 +20,25 @@ proc-macro = true
 # expand macro helper can render their output. Requires a nightly toolchain.
 __internal_macro_expand = ["syn/visit-mut"]
 
+# Identifier validation compat flags. These must be kept in sync with the
+# matching features of `harana-matrix-common`, so that an identifier literal
+# checked at macro expansion time is validated exactly like one parsed at
+# runtime.
+# Allow IDs to exceed 255 bytes.
+compat-arbitrary-length-ids = []
+# Don't validate the version in `validation::server_signing_key_version::validate`.
+compat-server-signing-key-version = []
+
 [dependencies]
 as_variant = { workspace = true }
 cfg-if = "1.0.0"
+js_int = "0.2.2"
 proc-macro-crate = "3.1.0"
 proc-macro2 = "1.0.24"
 quote = "1.0.8"
-common-identifiers-validation = { workspace = true }
 serde = { workspace = true }
 syn = { version = "3.0.0", features = ["extra-traits", "full", "visit"] }
+thiserror = { workspace = true }
 toml = { version = "1.1.0", default-features = false, features = ["parse", "serde"] }
 
 [lints]

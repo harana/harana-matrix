@@ -1,11 +1,11 @@
+//! Implementation of the `async_test` attribute macro.
+
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::parse_macro_input;
 
-/// Attribute to use `wasm_bindgen_test` for wasm32 targets and `tokio::test`
-/// for everything else with async-support and custom result-types
-#[proc_macro_attribute]
-pub fn async_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
+/// Expand `#[async_test]` on the given function.
+pub(crate) fn expand_async_test(item: TokenStream) -> TokenStream {
     let fun = parse_macro_input!(item as syn::ItemFn);
 
     if !fun.sig.ident.to_string().starts_with("test_") {

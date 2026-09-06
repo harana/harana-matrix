@@ -300,7 +300,7 @@ http = { workspace = true, features = ["std"] }
 insta.workspace = true
 js_int = { version = "0.2.2", features = ["serde"] }
 maplit = "1.0.2"
-common-macros.workspace = true
+harana-matrix-macros.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["raw_value"] }
 similar-asserts.workspace = true

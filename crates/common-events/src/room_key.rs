@@ -3,7 +3,7 @@
 //! [`m.room_key`]: https://spec.matrix.org/v1.19/client-server-api/#mroom_key
 
 use crate::__ruma::{EventEncryptionAlgorithm, OwnedRoomId};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 pub mod withheld;

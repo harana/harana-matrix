@@ -1,6 +1,6 @@
 #![doc(html_favicon_url = "https://ruma.dev/favicon.ico")]
 #![doc(html_logo_url = "https://ruma.dev/images/logo.png")]
-//! Procedural macros used by ruma crates.
+//! Procedural macros used by the harana-matrix crates.
 //!
 //! See the documentation for the individual macros for usage details.
 
@@ -12,7 +12,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use common_identifiers_validation::{
+use crate::validation::{
     base64_public_key, event_id, mxc_uri, room_alias_id, room_id, room_version_id, server_name,
     server_signing_key_version, user_id,
 };
@@ -22,7 +22,15 @@ mod api;
 mod events;
 mod identifiers;
 mod serde;
+mod test;
 mod util;
+
+/// Vendored copy of the identifier validation logic, kept byte-identical with
+/// `harana-matrix-common`'s `validation` module so that literals checked at
+/// macro expansion time are validated exactly like values parsed at runtime.
+/// `cargo xtask ci validation-sync` asserts the two copies match.
+#[allow(dead_code)]
+mod validation;
 
 use self::{
     api::{
@@ -165,7 +173,7 @@ use self::{
 ///
 /// ```ignore
 /// # // HACK: This is "ignore" because of cyclical dependency drama.
-/// use common_macros::event_enum;
+/// use harana_matrix_macros::event_enum;
 ///
 /// event_enum! {
 ///     enum ToDevice {
@@ -471,10 +479,10 @@ pub fn derive_from_event_to_enum(input: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// # // HACK: This is "ignore" because of cyclical dependency drama.
-/// use common_macros::IdDst;
+/// use harana_matrix_macros::IdDst;
 ///
 /// #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, IdDst)]
-/// #[ruma_id(validate = common_identifiers_validation::user_id::validate)]
+/// #[ruma_id(validate = harana_matrix_common::validation::user_id::validate)]
 /// pub struct UserId(str);
 /// ```
 #[proc_macro_derive(IdDst, attributes(ruma_id))]
@@ -564,7 +572,7 @@ pub fn base64_public_key(input: TokenStream) -> TokenStream {
 /// ## Example
 ///
 /// ```
-/// # use common_macros::AsRefStr;
+/// # use harana_matrix_macros::AsRefStr;
 /// #[derive(AsRefStr)]
 /// #[ruma_enum(rename_all = "lowercase")]
 /// pub enum MyEnum {
@@ -606,7 +614,7 @@ pub fn derive_enum_as_ref_str(input: TokenStream) -> TokenStream {
 /// ## Example
 ///
 /// ```
-/// # use common_macros::FromString;
+/// # use harana_matrix_macros::FromString;
 /// #[derive(FromString)]
 /// #[ruma_enum(rename_all = "lowercase")]
 /// pub enum MyEnum {
@@ -815,4 +823,13 @@ pub fn derive_outgoing_body_json(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(_FakeDeriveRumaApi, attributes(ruma_api))]
 pub fn fake_derive_ruma_api(_input: TokenStream) -> TokenStream {
     TokenStream::new()
+}
+
+/// Use `wasm_bindgen_test` on wasm targets and `tokio::test` everywhere else,
+/// with support for `async` test functions that return a `Result`.
+///
+/// The test function's name must start with `test_`.
+#[proc_macro_attribute]
+pub fn async_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    test::expand_async_test(item)
 }

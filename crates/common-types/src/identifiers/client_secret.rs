@@ -1,6 +1,6 @@
 //! Client secret identifier.
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 /// A client secret.
 ///

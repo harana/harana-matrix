@@ -354,7 +354,7 @@ pub fn make_tracing_subscriber(logger: Option<JsLogger>) -> JsLoggingSubscriber 
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
     use tracing::{debug, subscriber::with_default};
     use wasm_bindgen::{JsCast, JsValue};
 

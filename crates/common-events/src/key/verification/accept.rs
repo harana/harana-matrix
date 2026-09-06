@@ -8,7 +8,7 @@ use crate::__ruma::{
     OwnedTransactionId,
     serde::{Base64, JsonObject},
 };
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, from_value as from_json_value};
 

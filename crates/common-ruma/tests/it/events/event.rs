@@ -1,5 +1,5 @@
 use common_ruma::events::GlobalAccountDataEventContent;
-use common_macros::{Event, EventContent};
+use harana_matrix_macros::{Event, EventContent};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value as from_json_value, json};
 

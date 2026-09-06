@@ -14,7 +14,7 @@ pub use focus::*;
 pub use member_data::*;
 pub use member_state_key::*;
 use crate::__ruma::{MilliSecondsSinceUnixEpoch, OwnedDeviceId, room_version_rules::RedactionRules};
-use common_macros::{EventContent, StringEnum};
+use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
 use crate::{

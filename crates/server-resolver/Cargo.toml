@@ -22,7 +22,7 @@ serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-common-test-macros = { path = "../../testing/common-test-macros" }
+harana-matrix-macros.workspace = true
 common-test-utils.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
 

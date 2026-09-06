@@ -96,7 +96,7 @@ pub(crate) enum RumaCommonReexport {
 impl ToTokens for RumaCommonReexport {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let crate_name = match self {
-            Self::RumaMacros => "common_macros",
+            Self::RumaMacros => "harana_matrix_macros",
             Self::Serde => "serde",
             Self::SerdeHtmlForm => "serde_html_form",
             Self::SerdeJson => "serde_json",

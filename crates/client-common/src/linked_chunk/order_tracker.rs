@@ -165,7 +165,7 @@ where
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
 
     use crate::linked_chunk::{
         ChunkContent, ChunkIdentifier, ChunkIdentifierGenerator, ChunkMetadata, LinkedChunk,

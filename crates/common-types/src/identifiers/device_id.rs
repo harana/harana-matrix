@@ -1,4 +1,4 @@
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 #[cfg(feature = "rand")]
 use super::generate_localpart;

@@ -3,7 +3,7 @@
 //! [`m.sticker`]: https://spec.matrix.org/v1.19/client-server-api/#msticker
 
 use crate::__ruma::OwnedMxcUri;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize, de};
 
 #[cfg(feature = "compat-encrypted-stickers")]

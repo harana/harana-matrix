@@ -5,7 +5,7 @@
 
 use crate::__ruma::{MilliSecondsSinceUnixEpoch, OwnedEventId};
 use crate::{location::LocationContent, relation::Reference};
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of a beacon.

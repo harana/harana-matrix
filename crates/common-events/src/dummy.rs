@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{
     de::{self, Deserialize, Deserializer},
     ser::{Serialize, SerializeStruct as _, Serializer},

@@ -5,7 +5,7 @@
 use std::num::NonZeroU8;
 
 use common_identifiers_validation::{error::MxcUriError, mxc_uri::validate};
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 use super::ServerName;
 

@@ -9,7 +9,7 @@ use crate::__ruma::{
     RoomId, SpaceChildOrder,
     serde::{JsonCastable, JsonObject},
 };
-use common_macros::{Event, EventContent};
+use harana_matrix_macros::{Event, EventContent};
 use serde::{Deserialize, Serialize};
 
 use crate::{StateEvent, SyncStateEvent};

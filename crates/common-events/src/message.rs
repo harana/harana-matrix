@@ -82,7 +82,7 @@
 use std::ops::Deref;
 
 #[cfg(feature = "unstable-msc1767")]
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "unstable-msc1767")]

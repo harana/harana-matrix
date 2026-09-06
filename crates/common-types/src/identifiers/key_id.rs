@@ -4,7 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 use super::{
     Base64PublicKey, Base64PublicKeyOrDeviceId, DeviceId, DeviceKeyAlgorithm, KeyName,

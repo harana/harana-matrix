@@ -117,7 +117,7 @@ mod tests {
         FutureExt,
         future::{join, join_all, pending},
     };
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
 
     use super::SingleFlight;
 

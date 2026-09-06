@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use crate::__ruma::{OwnedRoomId, OwnedServerName, OwnedUserId};
-use common_macros::{EventContent, StringEnum};
+use harana_matrix_macros::{EventContent, StringEnum};
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

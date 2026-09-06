@@ -2,7 +2,7 @@
 
 use std::net::Ipv4Addr;
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 /// A Matrix-spec compliant [server name].
 ///

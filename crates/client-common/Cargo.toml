@@ -65,7 +65,7 @@ web-sys = { workspace = true, features = ["console"] }
 assert_matches.workspace = true
 assert_matches2.workspace = true
 insta.workspace = true
-common-test-macros = { path = "../../testing/common-test-macros" }
+harana-matrix-macros.workspace = true
 common-test-utils.workspace = true
 proptest.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }

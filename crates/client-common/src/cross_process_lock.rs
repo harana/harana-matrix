@@ -742,7 +742,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use assert_matches2::assert_let;
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
     use tokio::{spawn, task::yield_now, time::sleep};
 
     use super::{

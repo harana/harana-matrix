@@ -1,4 +1,4 @@
-use common_macros::{EventEnumFromEvent, event_enum};
+use harana_matrix_macros::{EventEnumFromEvent, event_enum};
 use serde::{Deserialize, Serialize, de};
 use serde_json::value::RawValue as RawJsonValue;
 

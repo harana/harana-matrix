@@ -1,7 +1,7 @@
 use std::{fmt, sync::LazyLock};
 
 use http::Response;
-pub use common_test_macros::async_test;
+pub use harana_matrix_macros::async_test;
 use common_ruma::{
     RoomId, UserId,
     api::{IncomingResponse, IncomingResponseExt as _, OutgoingResponse, OutgoingResponseExt as _},

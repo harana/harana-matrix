@@ -14,7 +14,7 @@ use crate::__ruma::{
     push::PushConditionPowerLevelsCtx,
     room_version_rules::{AuthorizationRules, RedactionRules, RoomPowerLevelsRules},
 };
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 use crate::{

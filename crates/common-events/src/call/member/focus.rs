@@ -1,6 +1,6 @@
 //! Types for MatrixRTC Focus/SFU configurations.
 
-use common_macros::StringEnum;
+use harana_matrix_macros::StringEnum;
 use serde::{Deserialize, Serialize};
 
 use crate::PrivOwnedStr;

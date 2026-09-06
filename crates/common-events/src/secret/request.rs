@@ -7,7 +7,7 @@ use crate::__ruma::{
     OwnedDeviceId, OwnedTransactionId,
     serde::{JsonObject, StringEnum},
 };
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize, de};
 use serde_json::{Value as JsonValue, from_value as from_json_value};
 

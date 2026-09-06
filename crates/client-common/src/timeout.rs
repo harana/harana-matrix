@@ -52,7 +52,7 @@ where
 pub(crate) mod tests {
     use std::{future, time::Duration};
 
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
 
     use super::timeout;
 

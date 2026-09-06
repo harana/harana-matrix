@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::__ruma::{IdParseError, OwnedRoomId, OwnedUserId, UserId};
-use common_macros::{EventContent, IdDst};
+use harana_matrix_macros::{EventContent, IdDst};
 use serde::{Deserialize, Serialize};
 
 /// An user identifier, it can be a [`UserId`] or a third-party identifier

@@ -219,7 +219,7 @@ fn hostname_of(dest: &str) -> String {
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use common_test_macros::async_test;
+    use harana_matrix_macros::async_test;
     use common_ruma::{OwnedServerName, ServerName};
 
     use super::{DEFAULT_PORT, FedDest, ResolvedServer, SrvTarget, resolve, srv_names};

@@ -1,6 +1,6 @@
 //! Matrix room identifiers.
 
-use common_macros::IdDst;
+use harana_matrix_macros::IdDst;
 
 use super::{
     IdParseError, MatrixToUri, MatrixUri, OwnedEventId, OwnedServerName, ServerName,

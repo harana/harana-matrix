@@ -3,7 +3,7 @@
 //! [`m.identity_server`]: https://spec.matrix.org/v1.19/client-server-api/#midentity_server
 
 use js_option::JsOption;
-use common_macros::EventContent;
+use harana_matrix_macros::EventContent;
 use serde::{Deserialize, Serialize};
 
 /// The content of an `m.identity_server` event.
