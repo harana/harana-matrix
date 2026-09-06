@@ -160,12 +160,14 @@ impl<'a> StateLockWriteGuard<'a, PinnedEventsCacheState> {
 
         self.state.chunk.reset();
 
+        // Nobody is listening, and a new subscriber receives the events reloaded
+        // from the store, so these diffs are of no use to anyone. Drain them
+        // first: reading them flushes the order tracker, which is itself a
+        // source of store updates.
+        let _ = self.state.chunk.updates_as_vector_diffs();
+
         // The events must stay in the store, so these updates must not reach it.
         let _ = self.state.chunk.store_updates().take();
-
-        // Nobody is listening, and a new subscriber receives the events reloaded
-        // from the store, so these diffs are of no use to anyone.
-        let _ = self.state.chunk.updates_as_vector_diffs();
 
         self.state.unloaded = true;
 
