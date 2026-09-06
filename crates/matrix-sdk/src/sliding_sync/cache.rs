@@ -6,8 +6,8 @@
 
 #[cfg(feature = "e2e-encryption")]
 use matrix_sdk_base::to_device_token;
-use matrix_sdk_base::{StateStore, StoreError};
-use matrix_sdk_common::timer;
+use matrix_sdk_base::{StateStore, StoreError, event_cache::store::EventCacheStoreLockGuard};
+use matrix_sdk_common::{cross_process_lock::MappedCrossProcessLockState, timer};
 use ruma::UserId;
 use tracing::{trace, warn};
 
@@ -24,9 +24,21 @@ pub(super) fn format_storage_key_prefix(id: &str, user_id: &UserId) -> String {
 
 /// Be careful: as this is used as a storage key; changing it requires migrating
 /// data!
-#[cfg(feature = "e2e-encryption")]
 fn format_storage_key_for_sliding_sync(storage_key: &str) -> String {
     format!("{storage_key}::instance")
+}
+
+/// Take the event cache store, whether or not another process wrote to it since
+/// we last held the lock.
+///
+/// The `pos` is read back from the store rather than from memory, so a dirty
+/// lock carries no extra work here.
+async fn event_cache_store(client: &Client) -> Result<EventCacheStoreLockGuard> {
+    Ok(match client.event_cache_store().lock().await? {
+        MappedCrossProcessLockState::Clean(guard) | MappedCrossProcessLockState::Dirty(guard) => {
+            guard
+        }
+    })
 }
 
 /// Be careful: as this is used as a storage key; changing it requires migrating
@@ -48,26 +60,25 @@ async fn remove_cached_list(
 /// Store the `SlidingSync`'s state in the storage.
 pub(super) async fn store_sliding_sync_state(
     sliding_sync: &SlidingSync,
-    _position: &SlidingSyncPositionMarkers,
+    position: &SlidingSyncPositionMarkers,
 ) -> Result<()> {
     let storage_key = &sliding_sync.inner.storage_key;
 
     trace!(storage_key, "Saving a `SlidingSync` to the state store");
     let storage = sliding_sync.inner.client.state_store();
 
-    #[cfg(feature = "e2e-encryption")]
+    // The `pos` is saved in the event cache store, which is shared between the
+    // processes that open it and is guarded by a cross-process lock, so that a
+    // second process resuming this sliding sync picks up where the first one
+    // left off.
     {
-        let position = _position;
         let instance_storage_key = format_storage_key_for_sliding_sync(storage_key);
+        let pos_blob = serde_json::to_vec(&FrozenSlidingSyncPos { pos: position.pos.clone() })?;
 
-        // FIXME (TERRIBLE HACK): we want to save `pos` in a cross-process safe manner,
-        // with both processes sharing the same database backend; that needs to
-        // go in the crypto process store at the moment, but should be fixed
-        // later on.
-        if let Some(olm_machine) = &*sliding_sync.inner.client.olm_machine().await {
-            let pos_blob = serde_json::to_vec(&FrozenSlidingSyncPos { pos: position.pos.clone() })?;
-            olm_machine.store().set_custom_value(&instance_storage_key, pos_blob).await?;
-        }
+        event_cache_store(&sliding_sync.inner.client)
+            .await?
+            .set_custom_value(instance_storage_key.as_bytes(), pos_blob)
+            .await?;
     }
 
     // Write every `SlidingSyncList` that's configured for caching into the store.
@@ -153,7 +164,6 @@ pub(super) struct RestoredFields {
 
 /// A sliding sync position marker that can be persisted or restored from a
 /// store.
-#[cfg(feature = "e2e-encryption")]
 #[derive(serde::Serialize, serde::Deserialize)]
 struct FrozenSlidingSyncPos {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -165,47 +175,62 @@ struct FrozenSlidingSyncPos {
 /// If one cache is obsolete (corrupted, and cannot be deserialized or
 /// anything), the entire `SlidingSync` cache is removed.
 pub(super) async fn restore_sliding_sync_state(
-    _client: &Client,
-    _storage_key: &str,
+    client: &Client,
+    storage_key: &str,
 ) -> Result<Option<RestoredFields>> {
-    #[cfg(not(feature = "e2e-encryption"))]
-    return Ok(Some(Default::default()));
+    let _timer = timer!(format!("loading sliding sync {storage_key} state from DB"));
+
+    let mut restored_fields = RestoredFields::default();
+    let instance_storage_key = format_storage_key_for_sliding_sync(storage_key);
 
     #[cfg(feature = "e2e-encryption")]
+    if let Some(olm_machine) = &*client.olm_machine().await {
+        match olm_machine.store().next_batch_token().await? {
+            // Only resume from a token that a sliding sync response produced. An
+            // untagged value is a sync v2 `next_batch` (or a token stored before
+            // the tagging existed), and sending it as the to-device `since` makes
+            // the server reject every sync.
+            Some(stored_value) => match to_device_token::untag(&stored_value) {
+                Some(token) => restored_fields.to_device_token = Some(token.to_owned()),
+                None => trace!(
+                    "Ignoring the to-device token from the crypto store: it doesn't come \
+                     from a sliding sync response"
+                ),
+            },
+            None => trace!("Couldn't read the previous to-device token from the crypto store"),
+        }
+    }
+
+    let store = event_cache_store(client).await?;
+
+    if let Ok(Some(blob)) = store.get_custom_value(instance_storage_key.as_bytes()).await
+        && let Ok(frozen_pos) = serde_json::from_slice::<FrozenSlidingSyncPos>(&blob)
     {
-        let _timer = timer!(format!("loading sliding sync {_storage_key} state from DB"));
+        trace!("Successfully read the `Sliding Sync` pos from the event cache store");
+        restored_fields.pos = frozen_pos.pos;
 
-        let mut restored_fields = RestoredFields::default();
+        return Ok(Some(restored_fields));
+    }
 
-        if let Some(olm_machine) = &*_client.olm_machine().await {
-            match olm_machine.store().next_batch_token().await? {
-                // Only resume from a token that a sliding sync response produced. An
-                // untagged value is a sync v2 `next_batch` (or a token stored before
-                // the tagging existed), and sending it as the to-device `since` makes
-                // the server reject every sync.
-                Some(stored_value) => match to_device_token::untag(&stored_value) {
-                    Some(token) => restored_fields.to_device_token = Some(token.to_owned()),
-                    None => trace!(
-                        "Ignoring the to-device token from the crypto store: it doesn't come \
-                         from a sliding sync response"
-                    ),
-                },
-                None => trace!("Couldn't read the previous to-device token from the crypto store"),
-            }
+    // Older versions kept the `pos` in the crypto store, because it was the only
+    // store that was cross-process safe at the time. Move it over, so a client
+    // that upgrades resumes from where it was rather than starting a new sliding
+    // sync.
+    #[cfg(feature = "e2e-encryption")]
+    if let Some(olm_machine) = &*client.olm_machine().await
+        && let Ok(Some(blob)) = olm_machine.store().get_custom_value(&instance_storage_key).await
+    {
+        if let Ok(frozen_pos) = serde_json::from_slice::<FrozenSlidingSyncPos>(&blob) {
+            trace!("Migrating the `Sliding Sync` pos out of the crypto store");
+            restored_fields.pos = frozen_pos.pos;
 
-            let instance_storage_key = format_storage_key_for_sliding_sync(_storage_key);
-
-            if let Ok(Some(blob)) =
-                olm_machine.store().get_custom_value(&instance_storage_key).await
-                && let Ok(frozen_pos) = serde_json::from_slice::<FrozenSlidingSyncPos>(&blob)
-            {
-                trace!("Successfully read the `Sliding Sync` pos from the crypto store cache");
-                restored_fields.pos = frozen_pos.pos;
-            }
+            store.set_custom_value(instance_storage_key.as_bytes(), blob).await?;
         }
 
-        Ok(Some(restored_fields))
+        olm_machine.store().remove_custom_value(&instance_storage_key).await?;
     }
+
+    Ok(Some(restored_fields))
 }
 
 #[cfg(test)]
@@ -215,10 +240,11 @@ mod tests {
     use matrix_sdk_test::async_test;
 
     #[cfg(feature = "e2e-encryption")]
-    use super::format_storage_key_for_sliding_sync;
+    use super::restore_sliding_sync_state;
     use super::{
-        super::SlidingSyncList, format_storage_key_for_sliding_sync_list,
-        format_storage_key_prefix, restore_sliding_sync_state, store_sliding_sync_state,
+        super::SlidingSyncList, FrozenSlidingSyncPos, event_cache_store,
+        format_storage_key_for_sliding_sync, format_storage_key_for_sliding_sync_list,
+        format_storage_key_prefix, store_sliding_sync_state,
     };
     use crate::{Result, test_utils::logged_in_client};
 
@@ -390,6 +416,91 @@ mod tests {
             let olm_machine = olm_machine.as_ref().unwrap();
             assert!(olm_machine.store().next_batch_token().await?.is_none());
         }
+
+        Ok(())
+    }
+
+    #[async_test]
+    async fn test_the_pos_is_stored_in_the_event_cache_store() -> Result<()> {
+        let client = logged_in_client(Some("https://foo.bar".to_owned())).await;
+
+        let sync_id = "test-sync-id";
+        let storage_key_prefix = format_storage_key_prefix(sync_id, client.user_id().unwrap());
+        let full_storage_key = format_storage_key_for_sliding_sync(&storage_key_prefix);
+        let sliding_sync = client.sliding_sync(sync_id)?.build().await?;
+
+        {
+            let mut position_guard = sliding_sync.inner.position.lock().await;
+            position_guard.pos = Some("pos".to_owned());
+
+            store_sliding_sync_state(&sliding_sync, &position_guard).await?;
+        }
+
+        // The `pos` is in the event cache store, which every client has, and not in
+        // the crypto store, which only a client built with encryption has.
+        let blob = event_cache_store(&client)
+            .await?
+            .get_custom_value(full_storage_key.as_bytes())
+            .await?
+            .expect("the pos must be in the event cache store");
+        let frozen: FrozenSlidingSyncPos = serde_json::from_slice(&blob)?;
+        assert_eq!(frozen.pos.as_deref(), Some("pos"));
+
+        #[cfg(feature = "e2e-encryption")]
+        {
+            let olm_machine = client.base_client().olm_machine().await;
+            let olm_machine = olm_machine.as_ref().unwrap();
+            assert!(olm_machine.store().get_custom_value(&full_storage_key).await?.is_none());
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "e2e-encryption")]
+    #[async_test]
+    async fn test_a_pos_from_the_crypto_store_is_migrated() -> Result<()> {
+        let client = logged_in_client(Some("https://foo.bar".to_owned())).await;
+
+        let sync_id = "test-sync-id";
+        let storage_key_prefix = format_storage_key_prefix(sync_id, client.user_id().unwrap());
+        let full_storage_key = format_storage_key_for_sliding_sync(&storage_key_prefix);
+
+        // A client that ran an older version of the SDK left its `pos` in the crypto
+        // store.
+        {
+            let olm_machine = client.base_client().olm_machine().await;
+            let olm_machine = olm_machine.as_ref().unwrap();
+            let blob = serde_json::to_vec(&FrozenSlidingSyncPos { pos: Some("older".to_owned()) })?;
+            olm_machine.store().set_custom_value(&full_storage_key, blob).await?;
+        }
+
+        let restored_fields = restore_sliding_sync_state(&client, &storage_key_prefix)
+            .await?
+            .expect("must have restored sliding sync fields");
+
+        // It resumes from that position, rather than starting a new sliding sync.
+        assert_eq!(restored_fields.pos.as_deref(), Some("older"));
+
+        // And the value moved to the event cache store, with nothing left behind.
+        let blob = event_cache_store(&client)
+            .await?
+            .get_custom_value(full_storage_key.as_bytes())
+            .await?
+            .expect("the pos must have been migrated");
+        let frozen: FrozenSlidingSyncPos = serde_json::from_slice(&blob)?;
+        assert_eq!(frozen.pos.as_deref(), Some("older"));
+
+        {
+            let olm_machine = client.base_client().olm_machine().await;
+            let olm_machine = olm_machine.as_ref().unwrap();
+            assert!(olm_machine.store().get_custom_value(&full_storage_key).await?.is_none());
+        }
+
+        // Reading it again takes the event cache store path.
+        let restored_fields = restore_sliding_sync_state(&client, &storage_key_prefix)
+            .await?
+            .expect("must have restored sliding sync fields");
+        assert_eq!(restored_fields.pos.as_deref(), Some("older"));
 
         Ok(())
     }

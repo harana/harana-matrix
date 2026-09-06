@@ -246,79 +246,6 @@ macro_rules! cryptostore_integration_tests {
             }
 
             #[async_test]
-            async fn test_clear_received_room_key_bundle_data() {
-                use ruma::owned_room_id;
-
-                use $crate::{
-                    store::types::StoredRoomKeyBundleData,
-                    types::events::room_key_bundle::RoomKeyBundleContent,
-                };
-
-                let store = get_store("clear_received_room_key_bundle_data", None, true).await;
-
-                let room_id = owned_room_id!("!room:localhost");
-                let sender = bob_id().to_owned();
-
-                let bundle_data = StoredRoomKeyBundleData {
-                    sender_user: sender.clone(),
-                    sender_key: $crate::vodozemac::Curve25519PublicKey::from_base64(
-                        "LTpv2DGMhggPAXO02+7f68CNEp6A7DcS1c1c3RRAWDs",
-                    )
-                    .unwrap(),
-                    sender_data: SenderData::unknown(),
-                    bundle_data: RoomKeyBundleContent {
-                        room_id: room_id.clone(),
-                        file: serde_json::from_value(serde_json::json!({
-                            "url": "mxc://localhost/bundle",
-                            "key": {
-                                "kty": "oct",
-                                "key_ops": ["encrypt", "decrypt"],
-                                "alg": "A256CTR",
-                                "k": "GRAOOjXCbAJtqA1kJqfxKQmDkjTBpXfNDvPnMBK5Yfg",
-                                "ext": true,
-                            },
-                            "iv": "AAAAAAAAAAAAAAAAAAAAAA",
-                            "hashes": {
-                                "sha256": "olqPHIZoBLZlWCRl7pOSMwLbz3Bo8gFxxxN6WdVCYAo",
-                            },
-                            "v": "v2",
-                        }))
-                        .unwrap(),
-                    },
-                };
-
-                store
-                    .save_changes(Changes {
-                        received_room_key_bundles: vec![bundle_data],
-                        ..Default::default()
-                    })
-                    .await
-                    .unwrap();
-
-                assert!(
-                    store
-                        .get_received_room_key_bundle_data(&room_id, &sender)
-                        .await
-                        .unwrap()
-                        .is_some()
-                );
-
-                store.clear_received_room_key_bundle_data(&room_id, &sender).await.unwrap();
-
-                assert!(
-                    store
-                        .get_received_room_key_bundle_data(&room_id, &sender)
-                        .await
-                        .unwrap()
-                        .is_none(),
-                    "The bundle data should be gone once it has been used",
-                );
-
-                // Clearing something that is not there is not an error.
-                store.clear_received_room_key_bundle_data(&room_id, &sender).await.unwrap();
-            }
-
-            #[async_test]
             async fn test_delete_sessions() {
                 let store = get_store("delete_sessions", None, true).await;
                 let (account, session) = get_account_and_session().await;
@@ -328,6 +255,7 @@ macro_rules! cryptostore_integration_tests {
                     .save_pending_changes(PendingChanges { account: Some(account.deep_clone()) })
                     .await
                     .expect("Can't save account");
+
                 store
                     .save_changes(Changes {
                         sessions: vec![session.clone()],
@@ -342,22 +270,20 @@ macro_rules! cryptostore_integration_tests {
 
                 assert_eq!(store.get_sessions(&sender_key).await.unwrap().unwrap().len(), 1);
 
-                // Deleting a session ID we do not have is not an error.
+                // Deleting a session that isn't there does nothing.
                 store
                     .delete_sessions(&sender_key, &["not-a-session".to_owned()])
                     .await
                     .unwrap();
                 assert_eq!(store.get_sessions(&sender_key).await.unwrap().unwrap().len(), 1);
 
+                // Deleting the session removes it, and nothing is left for the
+                // sender key.
                 store
                     .delete_sessions(&sender_key, &[session.session_id().to_owned()])
                     .await
                     .unwrap();
-
-                assert!(
-                    store.get_sessions(&sender_key).await.unwrap().is_none_or(|s| s.is_empty()),
-                    "The deleted session should be gone from the store",
-                );
+                assert!(store.get_sessions(&sender_key).await.unwrap().is_none());
             }
 
             #[async_test]
@@ -1577,6 +1503,79 @@ macro_rules! cryptostore_integration_tests {
 
                 let loaded_2 = store.get_custom_value("B").await.unwrap();
                 assert_eq!(None, loaded_2);
+            }
+
+            #[async_test]
+            async fn test_clear_received_room_key_bundle_data() {
+                use ruma::owned_room_id;
+
+                use $crate::{
+                    store::types::StoredRoomKeyBundleData,
+                    types::events::room_key_bundle::RoomKeyBundleContent,
+                };
+
+                let store = get_store("clear_received_room_key_bundle_data", None, true).await;
+
+                let room_id = owned_room_id!("!room:localhost");
+                let sender = bob_id().to_owned();
+
+                let bundle_data = StoredRoomKeyBundleData {
+                    sender_user: sender.clone(),
+                    sender_key: $crate::vodozemac::Curve25519PublicKey::from_base64(
+                        "LTpv2DGMhggPAXO02+7f68CNEp6A7DcS1c1c3RRAWDs",
+                    )
+                    .unwrap(),
+                    sender_data: SenderData::unknown(),
+                    bundle_data: RoomKeyBundleContent {
+                        room_id: room_id.clone(),
+                        file: serde_json::from_value(serde_json::json!({
+                            "url": "mxc://localhost/bundle",
+                            "key": {
+                                "kty": "oct",
+                                "key_ops": ["encrypt", "decrypt"],
+                                "alg": "A256CTR",
+                                "k": "GRAOOjXCbAJtqA1kJqfxKQmDkjTBpXfNDvPnMBK5Yfg",
+                                "ext": true,
+                            },
+                            "iv": "AAAAAAAAAAAAAAAAAAAAAA",
+                            "hashes": {
+                                "sha256": "olqPHIZoBLZlWCRl7pOSMwLbz3Bo8gFxxxN6WdVCYAo",
+                            },
+                            "v": "v2",
+                        }))
+                        .unwrap(),
+                    },
+                };
+
+                store
+                    .save_changes(Changes {
+                        received_room_key_bundles: vec![bundle_data],
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap();
+
+                assert!(
+                    store
+                        .get_received_room_key_bundle_data(&room_id, &sender)
+                        .await
+                        .unwrap()
+                        .is_some()
+                );
+
+                store.clear_received_room_key_bundle_data(&room_id, &sender).await.unwrap();
+
+                assert!(
+                    store
+                        .get_received_room_key_bundle_data(&room_id, &sender)
+                        .await
+                        .unwrap()
+                        .is_none(),
+                    "The bundle data should be gone once it has been used",
+                );
+
+                // Clearing something that is not there is not an error.
+                store.clear_received_room_key_bundle_data(&room_id, &sender).await.unwrap();
             }
 
             #[async_test]

@@ -438,15 +438,18 @@ impl CryptoStore for MemoryStore {
     }
 
     async fn delete_sessions(&self, sender_key: &str, session_ids: &[String]) -> Result<()> {
-        let mut session_store = self.sessions.write();
+        let mut sessions = self.sessions.write();
 
-        if let Some(entry) = session_store.get_mut(sender_key) {
+        if let Some(pickles) = sessions.get_mut(sender_key) {
             for session_id in session_ids {
-                entry.remove(session_id);
+                pickles.remove(session_id.as_str());
             }
 
-            if entry.is_empty() {
-                session_store.remove(sender_key);
+            // The other backends have nothing left to find for a sender key
+            // whose sessions are all gone, and `get_sessions` is expected to
+            // return `None` rather than an empty list.
+            if pickles.is_empty() {
+                sessions.remove(sender_key);
             }
         }
 
@@ -1685,19 +1688,19 @@ mod integration_tests {
             self.0.get_received_room_key_bundle_data(room_id, user_id).await
         }
 
+        async fn has_downloaded_all_room_keys(
+            &self,
+            room_id: &RoomId,
+        ) -> Result<bool, Self::Error> {
+            self.0.has_downloaded_all_room_keys(room_id).await
+        }
+
         async fn clear_received_room_key_bundle_data(
             &self,
             room_id: &RoomId,
             user_id: &UserId,
         ) -> Result<(), Self::Error> {
             self.0.clear_received_room_key_bundle_data(room_id, user_id).await
-        }
-
-        async fn has_downloaded_all_room_keys(
-            &self,
-            room_id: &RoomId,
-        ) -> Result<bool, Self::Error> {
-            self.0.has_downloaded_all_room_keys(room_id).await
         }
 
         async fn get_pending_key_bundle_details_for_room(

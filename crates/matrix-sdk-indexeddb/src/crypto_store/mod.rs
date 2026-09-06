@@ -1112,20 +1112,21 @@ impl_crypto_store! {
     }
 
     async fn delete_sessions(&self, sender_key: &str, session_ids: &[String]) -> Result<()> {
-        let tx = self
+        let transaction = self
             .inner
             .transaction(keys::SESSION)
             .with_mode(TransactionMode::Readwrite)
             .build()?;
-
-        let object_store = tx.object_store(keys::SESSION)?;
+        let object_store = transaction.object_store(keys::SESSION)?;
 
         for session_id in session_ids {
-            let key = self.serializer.encode_key(keys::SESSION, (sender_key, session_id));
+            let key = self.serializer.encode_key(keys::SESSION, (sender_key, session_id.as_str()));
             object_store.delete(&key).build()?;
         }
 
-        Ok(tx.commit().await?)
+        transaction.commit().await?;
+
+        Ok(())
     }
 
     async fn get_inbound_group_session(
@@ -1676,15 +1677,17 @@ impl_crypto_store! {
     ) -> Result<()> {
         let key = self.serializer.encode_key(keys::RECEIVED_ROOM_KEY_BUNDLES, (room_id, user_id));
 
-        let tx = self
+        let transaction = self
             .inner
             .transaction(keys::RECEIVED_ROOM_KEY_BUNDLES)
             .with_mode(TransactionMode::Readwrite)
             .build()?;
 
-        tx.object_store(keys::RECEIVED_ROOM_KEY_BUNDLES)?.delete(&key).build()?;
+        transaction.object_store(keys::RECEIVED_ROOM_KEY_BUNDLES)?.delete(&key).build()?;
 
-        Ok(tx.commit().await?)
+        transaction.commit().await?;
+
+        Ok(())
     }
 
     async fn has_downloaded_all_room_keys(&self, room_id: &RoomId) -> Result<bool> {

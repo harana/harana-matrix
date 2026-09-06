@@ -94,13 +94,13 @@ pub trait CryptoStore: AsyncTraitDeps {
     /// * `sender_key` - The sender key that was used to establish the sessions.
     async fn get_sessions(&self, sender_key: &str) -> Result<Option<Vec<Session>>, Self::Error>;
 
-    /// Delete the given Olm sessions.
+    /// Delete the Olm sessions with the given session IDs.
     ///
-    /// Session IDs that the store does not hold are ignored.
+    /// Sessions that are not in the store are ignored.
     ///
     /// # Arguments
     ///
-    /// * `sender_key` - The sender key the sessions were established with.
+    /// * `sender_key` - The sender key that was used to establish the sessions.
     /// * `session_ids` - The IDs of the sessions to delete.
     async fn delete_sessions(
         &self,

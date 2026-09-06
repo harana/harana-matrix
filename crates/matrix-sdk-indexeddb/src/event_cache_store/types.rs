@@ -33,6 +33,16 @@ pub struct Lease {
     pub generation: CrossProcessLockGeneration,
 }
 
+/// A value stored under an arbitrary key in the
+/// [`IndexeddbEventCacheStore`](crate::event_cache_store::IndexeddbEventCacheStore).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyValue {
+    /// The key the value is stored under.
+    pub key: Vec<u8>,
+    /// The stored value.
+    pub value: Vec<u8>,
+}
+
 /// Representation of a [`Chunk`](matrix_sdk_base::linked_chunk::Chunk)
 /// which can be stored in IndexedDB.
 #[derive(Debug, Serialize, Deserialize)]

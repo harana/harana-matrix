@@ -218,6 +218,21 @@ pub trait EventCacheStore: AsyncTraitDeps {
 
     /// Returns the size of the store in bytes, if known.
     async fn get_size(&self) -> Result<Option<usize>, Self::Error>;
+
+    /// Get a value that was stored under an arbitrary key.
+    ///
+    /// This is the read side of the key/value area of the event cache store,
+    /// which exists for data that has to be shared between processes that open
+    /// the same store, and that is not tied to a room.
+    async fn get_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
+    /// Store a value under an arbitrary key, replacing any previous value.
+    async fn set_custom_value(&self, key: &[u8], value: Vec<u8>) -> Result<(), Self::Error>;
+
+    /// Remove a value stored under an arbitrary key.
+    ///
+    /// Returns the value that was stored, if there was one.
+    async fn remove_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 }
 
 #[repr(transparent)]
@@ -358,6 +373,18 @@ impl<T: EventCacheStore> EventCacheStore for EraseEventCacheStoreError<T> {
 
     async fn get_size(&self) -> Result<Option<usize>, Self::Error> {
         Ok(self.0.get_size().await.map_err(Into::into)?)
+    }
+
+    async fn get_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.0.get_custom_value(key).await.map_err(Into::into)
+    }
+
+    async fn set_custom_value(&self, key: &[u8], value: Vec<u8>) -> Result<(), Self::Error> {
+        self.0.set_custom_value(key, value).await.map_err(Into::into)
+    }
+
+    async fn remove_custom_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.0.remove_custom_value(key).await.map_err(Into::into)
     }
 }
 

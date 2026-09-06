@@ -28,10 +28,10 @@ use crate::{
         serializer::indexed_types::{
             IndexedChunk, IndexedChunkIdKey, IndexedEvent, IndexedEventIdKey,
             IndexedEventPositionKey, IndexedEventRelationKey, IndexedEventRoomKey, IndexedGapIdKey,
-            IndexedLease, IndexedLeaseIdKey, IndexedNextChunkIdKey, IndexedThread,
-            IndexedThreadIdKey,
+            IndexedKeyValue, IndexedKeyValueIdKey, IndexedLease, IndexedLeaseIdKey,
+            IndexedNextChunkIdKey, IndexedThread, IndexedThreadIdKey,
         },
-        types::{Chunk, ChunkType, Event, Gap, Lease, Position, Thread},
+        types::{Chunk, ChunkType, Event, Gap, KeyValue, Lease, Position, Thread},
     },
     serializer::indexed_type::{
         IndexedTypeSerializer,
@@ -151,6 +151,25 @@ impl<'a> IndexeddbEventCacheStoreTransaction<'a> {
     /// inspection is needed.
     pub fn put_lease(&self, lease: &Lease) -> Result<IndexedLease, TransactionError> {
         self.put_item(lease)
+    }
+
+    /// Query IndexedDB for the value stored under the given key.
+    pub async fn get_key_value_by_key(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<KeyValue>, TransactionError> {
+        self.get_item_by_key_components::<KeyValue, IndexedKeyValueIdKey>(key).await
+    }
+
+    /// Puts a value into IndexedDB, replacing any value already stored under
+    /// the same key.
+    pub fn put_key_value(&self, key_value: &KeyValue) -> Result<IndexedKeyValue, TransactionError> {
+        self.put_item(key_value)
+    }
+
+    /// Deletes the value stored under the given key from IndexedDB.
+    pub async fn delete_key_value_by_key(&self, key: &[u8]) -> Result<(), TransactionError> {
+        self.delete_item_by_key::<KeyValue, IndexedKeyValueIdKey>(key).await
     }
 
     /// Query IndexedDB for chunks that match the given chunk identifier and the

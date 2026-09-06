@@ -2200,7 +2200,7 @@ impl matrix_sdk_common::cross_process_lock::TryLock for LockableCryptoStore {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, pin::pin, sync::Arc};
+    use std::{collections::BTreeMap, pin::pin};
 
     use assert_matches2::{assert_let, assert_matches};
     use futures_util::StreamExt;
@@ -2216,17 +2216,10 @@ mod tests {
     use vodozemac::{Ed25519Keypair, megolm::SessionKey};
 
     use crate::{
-        Account, DeviceData, OlmMachine,
+        Account, OlmMachine,
         machine::test_helpers::get_machine_pair,
         olm::{InboundGroupSession, SenderData},
-        store::{
-            Changes, MemoryStore,
-            crypto_store_wrapper::CryptoStoreWrapper,
-            types::{
-                DehydratedDeviceKey, DeviceChanges, PendingChanges, RoomKeyWithheldEntry,
-                StoredRoomKeyBundleData,
-            },
-        },
+        store::types::{DehydratedDeviceKey, RoomKeyWithheldEntry, StoredRoomKeyBundleData},
         types::{
             EventEncryptionAlgorithm,
             events::{
@@ -2235,117 +2228,6 @@ mod tests {
             },
         },
     };
-
-    /// Build `count` Olm sessions between two accounts, each with the given age
-    /// since it was last used.
-    fn sessions_with_ages(ages: &[std::time::Duration]) -> (Account, Vec<crate::olm::Session>) {
-        use ruma::SecondsSinceUnixEpoch;
-
-        let alice = Account::with_device_id(user_id!("@a:s.co"), device_id!("ABC"));
-        let mut bob = Account::with_device_id(user_id!("@b:s.co"), device_id!("DEF"));
-
-        bob.generate_one_time_keys(ages.len());
-        let one_time_keys: Vec<_> = bob.one_time_keys().values().copied().collect();
-        let sender_key = bob.identity_keys().curve25519;
-
-        let now = SecondsSinceUnixEpoch::now().to_system_time().unwrap();
-        let device_keys = alice.device_keys();
-
-        let sessions = ages
-            .iter()
-            .zip(one_time_keys)
-            .map(|(age, one_time_key)| {
-                let mut session = alice
-                    .create_outbound_session_helper(
-                        Default::default(),
-                        sender_key,
-                        one_time_key,
-                        false,
-                        device_keys.clone(),
-                    )
-                    .unwrap();
-
-                let last_use = SecondsSinceUnixEpoch::from_system_time(now - *age).unwrap();
-                session.creation_time = last_use;
-                session.last_use_time = last_use;
-
-                session
-            })
-            .collect();
-
-        (alice, sessions)
-    }
-
-    async fn store_with_sessions(
-        account: &Account,
-        sessions: Vec<crate::olm::Session>,
-    ) -> Arc<CryptoStoreWrapper> {
-        let store = Arc::new(CryptoStoreWrapper::new(
-            account.user_id(),
-            account.device_id(),
-            MemoryStore::new(),
-        ));
-
-        store
-            .save_pending_changes(PendingChanges { account: Some(account.deep_clone()) })
-            .await
-            .unwrap();
-
-        store
-            .save_changes(Changes {
-                devices: DeviceChanges {
-                    new: vec![DeviceData::from_account(account)],
-                    ..Default::default()
-                },
-                sessions,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        store
-    }
-
-    /// Olm sessions used to accumulate forever: nothing ever removed one, so a
-    /// device that kept getting wedged left a session behind every time.
-    #[async_test]
-    async fn test_stale_olm_sessions_are_expired() {
-        let year = std::time::Duration::from_secs(365 * 24 * 60 * 60);
-        let ages: Vec<_> = (1..=6).map(|n| year * n).collect();
-        let (account, sessions) = sessions_with_ages(&ages);
-
-        let sender_key = sessions[0].sender_key.to_base64();
-        let newest: Vec<String> = sessions[..4].iter().map(|s| s.session_id().to_owned()).collect();
-
-        let store = store_with_sessions(&account, sessions).await;
-
-        let stored = store.get_sessions(&sender_key).await.unwrap().unwrap();
-        let stored = stored.lock().await;
-        let stored_ids: Vec<_> = stored.iter().map(|s| s.session_id().to_owned()).collect();
-
-        assert_eq!(stored_ids.len(), 4, "only the four most recently used sessions should be kept");
-        for id in newest {
-            assert!(stored_ids.contains(&id), "session {id} should have been kept");
-        }
-    }
-
-    /// The cap must never drop a session the other side might still be
-    /// encrypting to, so recently used sessions are kept however many there
-    /// are.
-    #[async_test]
-    async fn test_recently_used_olm_sessions_are_never_expired() {
-        let day = std::time::Duration::from_secs(24 * 60 * 60);
-        let ages: Vec<_> = (1..=6).map(|n| day * n).collect();
-        let (account, sessions) = sessions_with_ages(&ages);
-
-        let sender_key = sessions[0].sender_key.to_base64();
-        let store = store_with_sessions(&account, sessions).await;
-
-        let stored = store.get_sessions(&sender_key).await.unwrap().unwrap();
-        let stored = stored.lock().await;
-
-        assert_eq!(stored.len(), 6, "sessions used within the grace period should all be kept");
-    }
 
     /// Regression test for issue #70: a transaction that only reads the
     /// account used to write it back anyway.

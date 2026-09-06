@@ -1,10 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    future,
-    ops::Deref,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeMap, future, ops::Deref, sync::Arc};
 
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -12,9 +6,7 @@ use matrix_sdk_common::{
     cross_process_lock::{CrossProcessLock, CrossProcessLockConfig},
     locks::RwLock as StdRwLock,
 };
-use ruma::{
-    DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, SecondsSinceUnixEpoch, UserId,
-};
+use ruma::{DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId};
 use tokio::sync::{Mutex, broadcast};
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{debug, trace, warn};
@@ -33,18 +25,17 @@ use crate::{
     },
 };
 
-/// How many Olm sessions we keep per device once the older ones have aged out.
+/// The number of Olm sessions we keep per sender key.
 ///
-/// The spec has us keep more than one so that a peer encrypting on a session we
-/// did not pick is still understood.
-const MAX_SESSIONS_PER_DEVICE: usize = 4;
-
-/// How long an Olm session has to have gone unused before it can be dropped.
+/// The spec asks clients to keep several sessions per device, so that a
+/// message encrypted with an older one can still be decrypted, and recommends
+/// at least four. We keep twice that, which leaves room for the sessions a
+/// device creates while it is unable to decrypt ours, and drop the rest.
 ///
-/// Dropping a session the peer is still encrypting to would create exactly the
-/// undecryptable messages that keeping several sessions is meant to avoid, so
-/// the cap only applies to sessions nobody has touched for this long.
-const SESSION_EVICTION_GRACE_PERIOD: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// See the [spec] on recovering from undecryptable messages.
+///
+/// [spec]: https://spec.matrix.org/v1.16/client-server-api/#recovering-from-undecryptable-messages
+pub(crate) const MAX_OLM_SESSIONS_PER_SENDER_KEY: usize = 8;
 
 /// A wrapper for crypto store implementations that adds update notifiers.
 ///
@@ -200,10 +191,6 @@ impl CryptoStoreWrapper {
         let room_key_bundle_updates: Vec<_> =
             changes.received_room_key_bundles.iter().map(RoomKeyBundleInfo::from).collect();
 
-        // The sender keys whose Olm sessions this write touches, so that the
-        // per-device cap can be applied to them once the write went through.
-        let mut touched_sender_keys: BTreeSet<String> = BTreeSet::new();
-
         if devices
             .changed
             .iter()
@@ -216,7 +203,6 @@ impl CryptoStoreWrapper {
         } else {
             // Otherwise add the sessions to the cache.
             for session in &changes.sessions {
-                touched_sender_keys.insert(session.sender_key.to_base64());
                 self.sessions.add(session.clone()).await;
             }
         }
@@ -236,10 +222,15 @@ impl CryptoStoreWrapper {
             }
         }
 
+        let sender_keys_with_new_sessions: Vec<String> =
+            changes.sessions.iter().map(|session| session.sender_key().to_base64()).collect();
+
         self.store.save_changes(changes).await?;
 
-        for sender_key in touched_sender_keys {
-            self.expire_old_sessions(&sender_key).await?;
+        for sender_key in sender_keys_with_new_sessions {
+            if let Err(error) = self.expire_old_sessions(&sender_key).await {
+                warn!("Failed to expire the old Olm sessions of a sender key: {error}");
+            }
         }
 
         if !room_settings_updates.is_empty() {
@@ -369,61 +360,48 @@ impl CryptoStoreWrapper {
         Ok(())
     }
 
-    /// Drop Olm sessions with the given device beyond the per-device cap.
+    /// Drop the least recently used Olm sessions of a sender key, keeping at
+    /// most [`MAX_OLM_SESSIONS_PER_SENDER_KEY`] of them.
     ///
-    /// Olm sessions are never replaced, only added: every unwedging, every
-    /// message from a device we had no session with, every one-time key claim
-    /// that crossed with theirs leaves another session behind, and they were
-    /// kept forever. The spec has us keep several — the peer may still be
-    /// encrypting to one we did not pick — but not all of them.
+    /// We create a new session whenever we cannot decrypt a message with the
+    /// ones we have, and never removed one, so a device we keep failing to
+    /// talk to grows the store without a bound and makes every later lookup
+    /// for that device slower.
     ///
-    /// The sessions kept are the [`MAX_SESSIONS_PER_DEVICE`] most recently
-    /// used, plus any session used within [`SESSION_EVICTION_GRACE_PERIOD`]
-    /// however many that is. The grace period is what keeps this from causing
-    /// the undecryptable messages it is meant to avoid: a session the peer is
-    /// still sending on gets used, and a session nobody has touched in a month
-    /// is one nobody is going to send on.
+    /// This works off the session cache rather than reading the store back:
+    /// the cache holds what we just saved, and everything the store had for a
+    /// sender key we have read since. Sessions this process has never seen are
+    /// left alone until a read pulls them in.
     async fn expire_old_sessions(&self, sender_key: &str) -> store::Result<()> {
-        let Some(sessions) = self.get_sessions(sender_key).await? else {
+        let Some(sessions_lock) = self.sessions.get(sender_key).await else {
             return Ok(());
         };
 
-        let mut sessions = sessions.lock().await;
+        let mut sessions = sessions_lock.lock().await;
 
-        if sessions.len() <= MAX_SESSIONS_PER_DEVICE {
+        if sessions.len() <= MAX_OLM_SESSIONS_PER_SENDER_KEY {
             return Ok(());
         }
 
-        // Most recently used last, so the tail is what we keep.
-        sessions.sort_by_key(|s| (s.last_use_time, s.creation_time));
+        // Most recently used last, so the ones to drop are at the front. A
+        // session that decrypted something counts as used then, since that is
+        // the time that matters when picking a session to decrypt with.
+        sessions
+            .sort_by_key(|session| session.last_decryption_time.unwrap_or(session.last_use_time));
 
-        let cutoff = SecondsSinceUnixEpoch::now()
-            .to_system_time()
-            .and_then(|now| now.checked_sub(SESSION_EVICTION_GRACE_PERIOD))
-            .and_then(SecondsSinceUnixEpoch::from_system_time);
-
-        let evict_up_to = sessions.len() - MAX_SESSIONS_PER_DEVICE;
-        let evicted: Vec<String> = sessions[..evict_up_to]
-            .iter()
-            .filter(|session| cutoff.is_none_or(|cutoff| session.last_use_time < cutoff))
+        let expired_count = sessions.len() - MAX_OLM_SESSIONS_PER_SENDER_KEY;
+        let expired: Vec<String> = sessions
+            .drain(..expired_count)
             .map(|session| session.session_id().to_owned())
             .collect();
 
-        if evicted.is_empty() {
-            return Ok(());
-        }
-
         debug!(
             sender_key,
-            evicted = ?evicted,
-            remaining = sessions.len() - evicted.len(),
-            "Expiring Olm sessions that have not been used in a long time",
+            expired_count = expired.len(),
+            "Expiring the least recently used Olm sessions of a device"
         );
 
-        sessions.retain(|session| !evicted.iter().any(|id| id == session.session_id()));
-        drop(sessions);
-
-        self.store.delete_sessions(sender_key, &evicted).await?;
+        self.store.delete_sessions(sender_key, &expired).await?;
 
         Ok(())
     }
@@ -601,10 +579,104 @@ impl Deref for CryptoStoreWrapper {
 #[cfg(test)]
 mod test {
     use matrix_sdk_test::async_test;
-    use ruma::user_id;
+    use ruma::{SecondsSinceUnixEpoch, UInt, device_id, user_id};
 
     use super::*;
-    use crate::machine::test_helpers::get_machine_pair_with_setup_sessions_test_helper;
+    use crate::{
+        Account, DeviceData,
+        machine::test_helpers::get_machine_pair_with_setup_sessions_test_helper,
+        store::{MemoryStore, PendingChanges},
+    };
+
+    #[async_test]
+    async fn test_the_least_recently_used_sessions_of_a_device_are_expired() {
+        let alice = Account::with_device_id(user_id!("@alice:localhost"), device_id!("ALICE"));
+        let mut bob = Account::with_device_id(user_id!("@bob:localhost"), device_id!("BOB"));
+
+        let store = CryptoStoreWrapper::new(alice.user_id(), alice.device_id(), MemoryStore::new());
+
+        store
+            .save_pending_changes(PendingChanges { account: Some(alice.deep_clone()) })
+            .await
+            .unwrap();
+        store
+            .save_changes(Changes {
+                devices: DeviceChanges {
+                    new: vec![DeviceData::from_account(&alice)],
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Two more sessions with the same device than we keep, each used at a
+        // different time. The most recently used one is created last.
+        let extra = 2;
+        let total = MAX_OLM_SESSIONS_PER_SENDER_KEY + extra;
+        let sender_key = bob.identity_keys().curve25519;
+
+        bob.generate_one_time_keys(total);
+        // `generate_one_time_keys` tops the account up to its maximum, which is
+        // more keys than we asked for.
+        let one_time_keys: Vec<_> = bob.one_time_keys().values().copied().take(total).collect();
+
+        let mut sessions = Vec::with_capacity(total);
+        let now = u64::from(SecondsSinceUnixEpoch::now().get());
+
+        for (index, one_time_key) in one_time_keys.into_iter().enumerate() {
+            let mut session = alice
+                .create_outbound_session_helper(
+                    Default::default(),
+                    sender_key,
+                    one_time_key,
+                    false,
+                    alice.device_keys(),
+                )
+                .unwrap();
+
+            // A minute apart, oldest first, and in the past: `Session::from_pickle`
+            // clamps a time in the future, and raises a last use that precedes the
+            // session's creation, so both have to be plausible to survive the round
+            // trip through the store.
+            let age = u64::try_from(total - index).unwrap() * 60;
+            let used_at = SecondsSinceUnixEpoch(UInt::try_from(now - age).unwrap());
+            session.creation_time = used_at;
+            session.last_use_time = used_at;
+
+            sessions.push(session);
+        }
+
+        let sender_key = sender_key.to_base64();
+        let expected_survivors: Vec<String> =
+            sessions[extra..].iter().map(|session| session.session_id().to_owned()).collect();
+
+        store.save_changes(Changes { sessions, ..Default::default() }).await.unwrap();
+
+        let stored = store.store.get_sessions(&sender_key).await.unwrap().unwrap();
+
+        assert_eq!(
+            stored.len(),
+            MAX_OLM_SESSIONS_PER_SENDER_KEY,
+            "only the sessions we cap at should be left"
+        );
+
+        let mut stored_ids: Vec<String> =
+            stored.iter().map(|session| session.session_id().to_owned()).collect();
+        stored_ids.sort();
+        let mut expected_survivors = expected_survivors;
+        expected_survivors.sort();
+
+        assert_eq!(
+            stored_ids, expected_survivors,
+            "the least recently used sessions should be the ones that went"
+        );
+
+        // The cache agrees with the store, so the expired sessions are not used
+        // for the lifetime of this process either.
+        let cached = store.sessions.get(&sender_key).await.expect("the cache has the sessions");
+        assert_eq!(cached.lock().await.len(), MAX_OLM_SESSIONS_PER_SENDER_KEY);
+    }
 
     #[async_test]
     async fn test_cache_cleared_after_device_update() {
