@@ -564,6 +564,7 @@ impl GroupSessionManager {
         &self,
         group_session: &OutboundGroupSession,
         withheld_devices: Vec<(DeviceData, WithheldCode)>,
+        message_index: u32,
     ) -> OlmResult<()> {
         // Convert a withheld code for the group session into a to-device event content.
         // Like every other to-device message we send, it carries an `org.matrix.msgid`
@@ -587,7 +588,11 @@ impl GroupSessionManager {
                 let user_id = device.user_id().to_owned();
                 let device_id = device.device_id().to_owned();
 
-                let share_info = ShareInfo::new_withheld(code.to_owned());
+                // Remember where the session had got to, so a later request for it
+                // from this device can be answered from the point at which it
+                // started missing messages rather than from wherever the ratchet
+                // has reached by then.
+                let share_info = ShareInfo::new_withheld(code.to_owned(), Some(message_index));
                 let content = to_content(code);
 
                 messages
@@ -784,7 +789,7 @@ impl GroupSessionManager {
 
         // Now handle and add the withheld recipients to the resulting requests to the
         // `OutboundGroupSession`.
-        self.handle_withheld_devices(&outbound, withheld_devices)?;
+        self.handle_withheld_devices(&outbound, withheld_devices, outbound.message_index().await)?;
 
         // The to-device requests get added to the outbound group session, this
         // way we're making sure that they are persisted and scoped to the

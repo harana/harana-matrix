@@ -228,7 +228,7 @@ pub enum ShareInfo {
     /// When the key has been shared
     Shared(SharedWith),
     /// When the session has been withheld
-    Withheld(WithheldCode),
+    Withheld(WithheldInfo),
 }
 
 impl ShareInfo {
@@ -242,8 +242,49 @@ impl ShareInfo {
     }
 
     /// Helper to create a Withheld info
-    pub fn new_withheld(code: WithheldCode) -> Self {
-        ShareInfo::Withheld(code)
+    pub fn new_withheld(code: WithheldCode, message_index: Option<u32>) -> Self {
+        ShareInfo::Withheld(WithheldInfo { code, message_index })
+    }
+}
+
+/// Why a session was not shared with a device, and how far it had got when we
+/// found out.
+#[derive(Clone, Debug, Serialize)]
+pub struct WithheldInfo {
+    /// The code we told the device.
+    pub code: WithheldCode,
+
+    /// The message index the session had reached when we could not share it.
+    ///
+    /// The device is missing every message from this index on, so this is
+    /// where a later attempt to get the session to it should start. `None` for
+    /// a notice recorded before the SDK tracked this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_index: Option<u32>,
+}
+
+impl<'de> Deserialize<'de> for WithheldInfo {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        /// Sessions pickled before the message index was tracked hold the bare
+        /// withheld code where the struct now is.
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Stored {
+            WithIndex {
+                code: WithheldCode,
+                #[serde(default)]
+                message_index: Option<u32>,
+            },
+            CodeOnly(WithheldCode),
+        }
+
+        Ok(match Stored::deserialize(deserializer)? {
+            Stored::WithIndex { code, message_index } => Self { code, message_index },
+            Stored::CodeOnly(code) => Self { code, message_index: None },
+        })
     }
 }
 
@@ -289,11 +330,36 @@ impl SharingView<'_> {
             .unwrap_or(ShareState::NotShared)
     }
 
+    /// If we told the given device that we could not establish an Olm session
+    /// with it, the message index the session had reached at that moment.
+    ///
+    /// That is the index from which the device is missing messages. Sharing the
+    /// session with it later, at whatever index the ratchet has reached by
+    /// then, leaves everything sent in between permanently undecryptable for
+    /// it; this is what lets us answer a later request for the session from the
+    /// right place instead.
+    ///
+    /// Only `m.no_olm` counts. The other withheld codes are deliberate
+    /// refusals, and are not something to make good on later.
+    #[cfg(feature = "automatic-room-key-forwarding")]
+    pub(crate) fn withheld_no_olm_index(&self, device: &DeviceData) -> Option<u32> {
+        self.iter_shares(Some(device.user_id()), Some(device.device_id()))
+            .filter_map(|(_, _, info)| match info {
+                ShareInfo::Withheld(info) if info.code == WithheldCode::NoOlm => {
+                    Some(info.message_index)
+                }
+                _ => None,
+            })
+            // The earliest failure is the one the device is missing messages from.
+            .min()
+            .flatten()
+    }
+
     /// Has the session been withheld for the given user/device pair (or if not,
     /// is there such a request pending).
     pub(crate) fn is_withheld_to(&self, device: &DeviceData, code: &WithheldCode) -> bool {
         self.iter_shares(Some(device.user_id()), Some(device.device_id()))
-            .any(|(_, _, info)| matches!(info, ShareInfo::Withheld(c) if c == code))
+            .any(|(_, _, info)| matches!(info, ShareInfo::Withheld(i) if &i.code == code))
     }
 
     /// Enumerate all sent or pending sharing requests for the given device (or
@@ -464,7 +530,9 @@ impl OutboundGroupSession {
             for (user_id, info) in request {
                 let no_olms: BTreeSet<OwnedDeviceId> = info
                     .iter()
-                    .filter(|(_, info)| matches!(info, ShareInfo::Withheld(WithheldCode::NoOlm)))
+                    .filter(|(_, info)| {
+                        matches!(info, ShareInfo::Withheld(i) if i.code == WithheldCode::NoOlm)
+                    })
                     .map(|(d, _)| d.to_owned())
                     .collect();
                 no_olm_devices.insert(user_id.to_owned(), no_olms);
@@ -787,6 +855,19 @@ impl OutboundGroupSession {
             .insert(device_id.to_owned(), share_info);
     }
 
+    /// Record that we told the given device we could not establish an Olm
+    /// session with it, at the session's current message index.
+    #[cfg(all(test, feature = "automatic-room-key-forwarding"))]
+    pub(crate) async fn mark_withheld_no_olm_to(&self, user_id: &UserId, device_id: &DeviceId) {
+        let share_info = ShareInfo::new_withheld(WithheldCode::NoOlm, Some(self.message_index().await));
+
+        self.shared_with_set
+            .write()
+            .entry(user_id.to_owned())
+            .or_default()
+            .insert(device_id.to_owned(), share_info);
+    }
+
     /// Get the list of requests that need to be sent out for this session to be
     /// marked as shared.
     pub(crate) fn pending_requests(&self) -> Vec<Arc<ToDeviceRequest>> {
@@ -914,8 +995,41 @@ mod tests {
         uint,
     };
 
-    use super::{EncryptionSettings, ROTATION_MESSAGES, ROTATION_PERIOD, ShareState};
+    use super::{EncryptionSettings, ROTATION_MESSAGES, ROTATION_PERIOD, ShareInfo, ShareState};
     use crate::CollectStrategy;
+
+    /// A pickled outbound session written before the index a withheld notice
+    /// was sent at was recorded holds the bare code where the struct now is.
+    #[test]
+    fn test_an_old_withheld_share_info_still_deserializes() {
+        use matrix_sdk_common::deserialized_responses::WithheldCode;
+
+        let old: ShareInfo = serde_json::from_value(serde_json::json!({
+            "Withheld": "m.no_olm",
+        }))
+        .expect("A withheld entry from an older pickle should still be readable");
+
+        assert_matches::assert_matches!(old, ShareInfo::Withheld(info) => {
+            assert_eq!(info.code, WithheldCode::NoOlm);
+            assert_eq!(info.message_index, None, "An old entry says nothing about the index");
+        });
+    }
+
+    #[test]
+    fn test_a_withheld_share_info_round_trips_with_its_index() {
+        use matrix_sdk_common::deserialized_responses::WithheldCode;
+
+        let info = ShareInfo::new_withheld(WithheldCode::NoOlm, Some(7));
+        let json = serde_json::to_value(&info).unwrap();
+
+        assert_eq!(json, serde_json::json!({ "Withheld": { "code": "m.no_olm", "message_index": 7 } }));
+
+        let parsed: ShareInfo = serde_json::from_value(json).unwrap();
+        assert_matches::assert_matches!(parsed, ShareInfo::Withheld(info) => {
+            assert_eq!(info.code, WithheldCode::NoOlm);
+            assert_eq!(info.message_index, Some(7));
+        });
+    }
 
     #[test]
     fn test_encryption_settings_conversion() {

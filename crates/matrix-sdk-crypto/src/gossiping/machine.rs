@@ -783,12 +783,25 @@ impl GossipMachine {
         // at. For this, we need an outbound session because this
         // information is recorded there.
         } else if let Some(outbound) = outbound_session {
-            match outbound.sharing_view().get_share_state(&device.inner) {
+            let sharing_view = outbound.sharing_view();
+
+            match sharing_view.get_share_state(&device.inner) {
                 ShareState::Shared { message_index, olm_wedging_index: _ } => {
                     Ok(Some(message_index))
                 }
                 ShareState::SharedButChangedSenderKey => Err(KeyForwardDecision::ChangedSenderKey),
-                ShareState::NotShared => Err(KeyForwardDecision::OutboundSessionNotShared),
+                ShareState::NotShared => {
+                    // We may have meant to share with this device and found we could
+                    // not establish an Olm session with it, in which case we told it so
+                    // and recorded where the session had got to. It is now asking for
+                    // the session, so answer from there: sharing from the ratchet's
+                    // current position instead would leave everything sent between the
+                    // failure and now permanently undecryptable for it.
+                    match sharing_view.withheld_no_olm_index(&device.inner) {
+                        Some(message_index) => Ok(Some(message_index)),
+                        None => Err(KeyForwardDecision::OutboundSessionNotShared),
+                    }
+                }
             }
         // Otherwise, there's not enough info to decide if we can safely share
         // the session.
@@ -1947,6 +1960,53 @@ mod tests {
 
         // However once our device is trusted, we share the entire session.
         assert_matches!(machine.should_share_key(&own_device, &other_inbound).await, Ok(None));
+    }
+
+    /// A device we could not reach when the session was first shared is missing
+    /// every message from that point on. When it later asks for the session, it
+    /// has to be answered from there: answering from wherever the ratchet has
+    /// got to by then leaves everything sent in between undecryptable for it
+    /// forever.
+    #[async_test]
+    #[cfg(feature = "automatic-room-key-forwarding")]
+    async fn test_a_key_request_after_a_no_olm_is_answered_from_the_failed_index() {
+        let machine = get_machine_test_helper().await;
+        let account = account();
+
+        let bob_device = DeviceData::from_account(&bob_account());
+        machine.inner.store.save_device_data(&[bob_device]).await.unwrap();
+        let bob_device =
+            machine.inner.store.get_device(bob_id(), bob_device_id()).await.unwrap().unwrap();
+        bob_device.set_trust_state(LocalTrust::Verified);
+
+        let (outbound, inbound) = account.create_group_session_pair_with_defaults(room_id()).await;
+
+        // Two messages go out, then we find we cannot establish an Olm session with
+        // Bob's device and tell it so.
+        for _ in 0..2 {
+            outbound.encrypt_helper("foo".to_owned()).await;
+        }
+        outbound.mark_withheld_no_olm_to(bob_device.user_id(), bob_device.device_id()).await;
+
+        // Three more messages go out under the same session, which Bob's device is
+        // also missing.
+        for _ in 0..3 {
+            outbound.encrypt_helper("foo".to_owned()).await;
+        }
+
+        let mut changes = Changes::default();
+        changes.outbound_group_sessions.push(outbound.clone());
+        changes.inbound_group_sessions.push(inbound.clone());
+        machine.inner.store.save_changes(changes).await.unwrap();
+        machine.inner.outbound_group_sessions.insert(outbound.clone());
+
+        // Bob's device asks for the session. It should get it from where it started
+        // missing messages, not from index 5.
+        assert_matches!(
+            machine.should_share_key(&bob_device, &inbound).await,
+            Ok(Some(2)),
+            "The session should be shared from the index we could not reach the device at",
+        );
     }
 
     #[cfg(feature = "automatic-room-key-forwarding")]
