@@ -30,7 +30,9 @@ use std::{
 
 use ruma::{
     DeviceId, DeviceKeyAlgorithm, OwnedDeviceId, OwnedRoomId, OwnedTransactionId, RoomId,
-    TransactionId, api::client::backup::RoomKeyBackup, serde::Raw,
+    TransactionId,
+    api::client::backup::{KeyBackupData, RoomKeyBackup},
+    serde::Raw,
 };
 use tokio::sync::RwLock;
 use tracing::{debug, info, instrument, trace, warn};
@@ -486,6 +488,73 @@ impl BackupMachine {
 
             Ok(new_request.map(|r| (r.request_id, r.request)))
         }
+    }
+
+    /// Encrypt the room keys we hold for a single room, ready to be uploaded to
+    /// the active backup.
+    ///
+    /// Unlike [`BackupMachine::backup`], which batches whatever has not been
+    /// backed up yet across all rooms, this takes every key we have for one
+    /// room, whether or not it has been backed up before. It is for a caller
+    /// that wants to push one room at the `/room_keys/keys/{roomId}` endpoint
+    /// rather than the bulk one.
+    ///
+    /// Returns the backup version to upload to and the keys, or `None` if no
+    /// backup is active or the room has no keys.
+    pub async fn encrypt_room_keys_for_room(
+        &self,
+        room_id: &RoomId,
+    ) -> Result<Option<(String, BTreeMap<String, KeyBackupData>)>, CryptoStoreError> {
+        let Some(version) = self.backup_version().await else {
+            warn!("Trying to back up the keys of a room but no backup is active");
+            return Ok(None);
+        };
+
+        let sessions = self.store.get_inbound_group_sessions_by_room_id(room_id).await?;
+
+        if sessions.is_empty() {
+            return Ok(None);
+        }
+
+        let backup_key = {
+            let guard = self.backup_key.read().await;
+            guard.as_ref().expect("We just read a backup version off this key").to_owned()
+        };
+
+        let mut keys = BTreeMap::new();
+
+        for session in sessions {
+            let session_id = session.session_id().to_owned();
+            keys.insert(session_id, backup_key.encrypt(session).await?);
+        }
+
+        Ok(Some((version, keys)))
+    }
+
+    /// Encrypt a single room key, ready to be uploaded to the active backup.
+    ///
+    /// Returns the backup version to upload to and the key, or `None` if no
+    /// backup is active or we do not have that session.
+    pub async fn encrypt_room_key(
+        &self,
+        room_id: &RoomId,
+        session_id: &str,
+    ) -> Result<Option<(String, KeyBackupData)>, CryptoStoreError> {
+        let Some(version) = self.backup_version().await else {
+            warn!("Trying to back up a room key but no backup is active");
+            return Ok(None);
+        };
+
+        let Some(session) = self.store.get_inbound_group_session(room_id, session_id).await? else {
+            return Ok(None);
+        };
+
+        let backup_key = {
+            let guard = self.backup_key.read().await;
+            guard.as_ref().expect("We just read a backup version off this key").to_owned()
+        };
+
+        Ok(Some((version, backup_key.encrypt(session).await?)))
     }
 
     pub(crate) async fn mark_request_as_sent(

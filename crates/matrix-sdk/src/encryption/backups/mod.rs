@@ -40,9 +40,11 @@ use ruma::{
     OwnedRoomId, RoomId, TransactionId,
     api::{
         client::backup::{
-            RoomKeyBackup, add_backup_keys, create_backup_version, get_backup_info,
-            get_backup_keys, get_backup_keys_for_room, get_backup_keys_for_session,
-            get_latest_backup_info,
+            RoomKeyBackup, add_backup_keys, add_backup_keys_for_room, add_backup_keys_for_session,
+            create_backup_version, delete_backup_keys, delete_backup_keys_for_room,
+            delete_backup_keys_for_session, get_backup_info, get_backup_keys,
+            get_backup_keys_for_room, get_backup_keys_for_session, get_latest_backup_info,
+            update_backup_version,
         },
         error::ErrorKind,
     },
@@ -519,6 +521,154 @@ impl Backups {
         })
     }
 
+    /// Get the info about a specific version of the server-side key backup.
+    ///
+    /// [`Backups::state`] and the enabling machinery work off the *latest*
+    /// version; this is for a caller that needs to look at one it names, for
+    /// instance to decide what to do about an older version left on the server.
+    pub async fn info_for_version(&self, version: &str) -> Result<RoomKeyBackupInfo, Error> {
+        let request = get_backup_info::v3::Request::new(version.to_owned());
+        let response = self.client.send(request).await?;
+
+        Ok(response.algorithm.deserialize_as::<RoomKeyBackupInfo>()?)
+    }
+
+    /// Re-sign the auth data of a backup version and upload it again.
+    ///
+    /// Signatures are what lets another of the account's devices decide whether
+    /// a backup can be trusted, and a backup created before cross-signing was
+    /// set up carries none it can use. This re-signs the version's existing
+    /// auth data - the public key it names is unchanged, so keys already in the
+    /// backup stay readable - and PUTs it back.
+    pub async fn update_version_auth_data(&self, version: &str) -> Result<(), Error> {
+        let olm_machine = self.client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
+
+        let mut backup_info = self.info_for_version(version).await?;
+
+        olm_machine.backup_machine().sign_backup(&mut backup_info).await?;
+
+        let request = update_backup_version::v3::Request::new(
+            version.to_owned(),
+            Raw::new(&backup_info)?.cast(),
+        );
+
+        self.client.send(request).await?;
+
+        Ok(())
+    }
+
+    /// Upload every room key we have for a single room to the active backup.
+    ///
+    /// The bulk upload the backup task drives batches whatever has not been
+    /// backed up yet, across all rooms. This is the targeted endpoint, for a
+    /// caller that wants one room in the backup now.
+    ///
+    /// Returns `false` if there is no active backup, or the room has no keys.
+    pub async fn upload_room_keys_for_room(&self, room_id: &RoomId) -> Result<bool, Error> {
+        let olm_machine = self.client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
+
+        let Some((version, sessions)) =
+            olm_machine.backup_machine().encrypt_room_keys_for_room(room_id).await?
+        else {
+            return Ok(false);
+        };
+
+        let session_ids: Vec<_> = sessions.keys().cloned().collect();
+        let sessions = sessions
+            .into_iter()
+            .map(|(session_id, data)| Ok((session_id, Raw::new(&data)?)))
+            .collect::<Result<_, serde_json::Error>>()?;
+
+        let request = add_backup_keys_for_room::v3::Request::new(
+            version.clone(),
+            room_id.to_owned(),
+            sessions,
+        );
+
+        self.client.send(request).await?;
+
+        let backed_up: Vec<_> =
+            session_ids.iter().map(|session_id| (room_id, session_id.as_str())).collect();
+
+        olm_machine.store().mark_inbound_group_sessions_as_backed_up(&version, &backed_up).await?;
+
+        Ok(true)
+    }
+
+    /// Upload a single room key to the active backup.
+    ///
+    /// Returns `false` if there is no active backup, or we do not have that
+    /// session.
+    pub async fn upload_room_key(&self, room_id: &RoomId, session_id: &str) -> Result<bool, Error> {
+        let olm_machine = self.client.olm_machine().await;
+        let olm_machine = olm_machine.as_ref().ok_or(Error::NoOlmMachine)?;
+
+        let Some((version, session_data)) =
+            olm_machine.backup_machine().encrypt_room_key(room_id, session_id).await?
+        else {
+            return Ok(false);
+        };
+
+        let request = add_backup_keys_for_session::v3::Request::new(
+            version.clone(),
+            room_id.to_owned(),
+            session_id.to_owned(),
+            Raw::new(&session_data)?,
+        );
+
+        self.client.send(request).await?;
+
+        olm_machine
+            .store()
+            .mark_inbound_group_sessions_as_backed_up(&version, &[(room_id, session_id)])
+            .await?;
+
+        Ok(true)
+    }
+
+    /// Delete every room key from the given backup version on the server.
+    ///
+    /// The version itself stays: use [`Backups::disable_and_delete`] to remove
+    /// it as well.
+    pub async fn delete_all_room_keys(&self, version: &str) -> Result<(), Error> {
+        let request = delete_backup_keys::v3::Request::new(version.to_owned());
+        self.client.send(request).await?;
+
+        Ok(())
+    }
+
+    /// Delete the room keys of a single room from the given backup version.
+    pub async fn delete_room_keys_for_room(
+        &self,
+        version: &str,
+        room_id: &RoomId,
+    ) -> Result<(), Error> {
+        let request =
+            delete_backup_keys_for_room::v3::Request::new(version.to_owned(), room_id.to_owned());
+        self.client.send(request).await?;
+
+        Ok(())
+    }
+
+    /// Delete a single room key from the given backup version.
+    pub async fn delete_room_key(
+        &self,
+        version: &str,
+        room_id: &RoomId,
+        session_id: &str,
+    ) -> Result<(), Error> {
+        let request = delete_backup_keys_for_session::v3::Request::new(
+            version.to_owned(),
+            room_id.to_owned(),
+            session_id.to_owned(),
+        );
+        self.client.send(request).await?;
+
+        Ok(())
+    }
+
     /// Download all room keys for a certain room from the server-side key
     /// backup.
     pub async fn download_room_keys_for_room(&self, room_id: &RoomId) -> Result<(), Error> {
@@ -652,27 +802,13 @@ impl Backups {
         backup_version: &str,
         olm_machine: &OlmMachine,
     ) -> BackupAuthenticity {
-        let request = get_backup_info::v3::Request::new(backup_version.to_owned());
-
-        let backup_info = match self.client.send(request).await {
-            Ok(response) => response.algorithm.deserialize_as::<RoomKeyBackupInfo>(),
-            Err(error) => {
-                warn!(
-                    backup_version,
-                    ?error,
-                    "Could not fetch the backup info to check the backup's signatures",
-                );
-                return BackupAuthenticity::Unauthenticated;
-            }
-        };
-
-        let backup_info = match backup_info {
+        let backup_info = match self.info_for_version(backup_version).await {
             Ok(info) => info,
             Err(error) => {
                 warn!(
                     backup_version,
                     ?error,
-                    "Could not parse the auth data of the backup we are importing keys from",
+                    "Could not read the auth data of the backup we are importing keys from",
                 );
                 return BackupAuthenticity::Unauthenticated;
             }
@@ -1327,13 +1463,14 @@ mod test {
         },
     };
     use matrix_sdk_test::async_test;
+    use ruma::room_id;
     #[cfg(feature = "experimental-push-secrets")]
     use ruma::{device_id, user_id};
     use serde_json::json;
     use vodozemac::Curve25519PublicKey;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
-        matchers::{header, method, path},
+        matchers::{header, method, path, path_regex},
     };
 
     use super::*;
@@ -1540,6 +1677,83 @@ mod test {
             })),
         )
         .await;
+
+        server.verify().await;
+    }
+
+    /// The seven per-room, per-session and version-management backup endpoints
+    /// had no caller outside ruma, so a client could only upload in bulk and
+    /// could not delete backed-up keys at all.
+    #[async_test]
+    async fn test_the_targeted_backup_endpoints_are_reachable() {
+        let server = MockServer::start().await;
+        let client = logged_in_client(Some(server.uri())).await;
+        let backups = client.encryption().backups();
+
+        let room_id = room_id!("!room:localhost");
+        let session_id = "session_id";
+
+        let etag = ResponseTemplate::new(200).set_body_json(json!({ "etag": "1", "count": 0 }));
+
+        let _get_version = Mock::given(method("GET"))
+            .and(path_regex(r"^/_matrix/client/.*/room_keys/version/1$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "algorithm": "m.megolm_backup.v1.curve25519-aes-sha2",
+                "auth_data": {
+                    "public_key": "hdVwYzhaWG1TenVOTk5VZ2VWZWZmSWVXcTJ3TDFEVFU",
+                    "signatures": {},
+                },
+                "count": 42,
+                "etag": "anopaquestring",
+                "version": "1",
+            })))
+            .expect(1)
+            .mount_as_scoped(&server)
+            .await;
+
+        let info = backups
+            .info_for_version("1")
+            .await
+            .expect("We should be able to read the info of a named backup version");
+        assert_matches!(info, RoomKeyBackupInfo::MegolmBackupV1Curve25519AesSha2(_));
+
+        let _delete_all = Mock::given(method("DELETE"))
+            .and(path_regex(r"^/_matrix/client/.*/room_keys/keys$"))
+            .respond_with(etag.clone())
+            .expect(1)
+            .mount_as_scoped(&server)
+            .await;
+
+        backups.delete_all_room_keys("1").await.expect("We should be able to delete every key");
+
+        let _delete_room = Mock::given(method("DELETE"))
+            .and(path_regex(format!(r"^/_matrix/client/.*/room_keys/keys/{room_id}$")))
+            .respond_with(etag.clone())
+            .expect(1)
+            .mount_as_scoped(&server)
+            .await;
+
+        backups
+            .delete_room_keys_for_room("1", room_id)
+            .await
+            .expect("We should be able to delete the keys of one room");
+
+        let _delete_session = Mock::given(method("DELETE"))
+            .and(path_regex(format!(r"^/_matrix/client/.*/room_keys/keys/{room_id}/{session_id}$")))
+            .respond_with(etag.clone())
+            .expect(1)
+            .mount_as_scoped(&server)
+            .await;
+
+        backups
+            .delete_room_key("1", room_id, session_id)
+            .await
+            .expect("We should be able to delete a single key");
+
+        // With no backup enabled there is nothing to upload, and we say so rather
+        // than sending a request.
+        assert!(!backups.upload_room_keys_for_room(room_id).await.unwrap());
+        assert!(!backups.upload_room_key(room_id, session_id).await.unwrap());
 
         server.verify().await;
     }
