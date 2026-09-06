@@ -17,7 +17,5 @@ pub fn default_room_id(format: &RoomIdFormatVersion) -> OwnedRoomId {
         RoomIdFormatVersion::V1 => owned_room_id!("!room:matrix.local"),
         // The default ID of the `m.room.create` event.
         RoomIdFormatVersion::V2 => owned_room_id!("!room-create"),
-        // The enum is `#[non_exhaustive]`, and it lives in another crate again.
-        _ => unimplemented!("unknown room ID format version"),
     }
 }

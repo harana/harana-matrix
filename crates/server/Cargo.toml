@@ -1,0 +1,59 @@
+[package]
+name = "harana-matrix-server"
+description = "Building blocks for a Matrix homeserver: appservice registrations, server name resolution, state resolution, a store codec and thumbnailing"
+version = "0.18.0"
+authors = ["Harana Contributors"]
+edition = "2024"
+homepage = "https://github.com/harana/harana-matrix"
+keywords = ["matrix", "chat", "messaging", "ruma", "homeserver"]
+license = "Apache-2.0"
+readme = "README.md"
+rust-version.workspace = true
+repository = "https://github.com/harana/harana-matrix"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+
+[features]
+default = ["appservice", "resolver", "state-res", "store-codec", "thumbnail"]
+
+# Application service registration files and namespace matching, in `appservice`.
+appservice = ["harana-matrix-common/appservice-api-s", "dep:regex"]
+# The `.well-known` and SRV ladder of the server-server API, in `resolver`.
+resolver = ["dep:serde", "dep:serde_json"]
+# Store-backed adapters over state resolution and event authorization, in
+# `state_res`.
+state-res = ["harana-matrix-common/state-res"]
+# An order-preserving binary codec for key-value store records, in `store_codec`.
+store-codec = ["dep:arrayvec", "dep:serde", "dep:serde_json"]
+# Thumbnail generation with a bounded decode budget, in `thumbnail`.
+thumbnail = ["dep:image"]
+
+[dependencies]
+harana-matrix-common.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# `appservice`. `unicode-case` is what makes the case-insensitive namespace
+# matching work; the workspace default enables `unicode-perl` only.
+regex = { workspace = true, optional = true, features = ["unicode-case"] }
+
+# `resolver` and `store-codec`
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+# `store-codec`
+arrayvec = { version = "0.7.8", optional = true }
+
+# `thumbnail`
+image = { workspace = true, optional = true }
+
+[dev-dependencies]
+harana-matrix-common = { workspace = true, features = ["testing"] }
+harana-matrix-macros.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

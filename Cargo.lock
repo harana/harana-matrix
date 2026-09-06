@@ -3286,6 +3286,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "harana-matrix-server"
+version = "0.18.0"
+dependencies = [
+ "arrayvec",
+ "harana-matrix-common",
+ "harana-matrix-macros",
+ "image",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6283,59 +6299,6 @@ checksum = "66cf8fedced2fcf12406bcb34223dffb92eaf34908ede12fed414c82b7f00b3e"
 dependencies = [
  "base16ct",
  "serde",
-]
-
-[[package]]
-name = "server-appservice"
-version = "0.18.0"
-dependencies = [
- "harana-matrix-common",
- "regex",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "server-resolver"
-version = "0.18.0"
-dependencies = [
- "harana-matrix-common",
- "harana-matrix-macros",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "server-state-res"
-version = "0.18.0"
-dependencies = [
- "harana-matrix-common",
- "harana-matrix-macros",
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "server-store-codec"
-version = "0.18.0"
-dependencies = [
- "arrayvec",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "server-thumbnail"
-version = "0.18.0"
-dependencies = [
- "harana-matrix-common",
- "image",
- "thiserror 2.0.19",
- "tracing",
 ]
 
 [[package]]
