@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use sdk_common::locks::Mutex;
+use client_common::locks::Mutex;
 use ratatui::{
     prelude::{Buffer, Rect, *},
     widgets::Paragraph,

@@ -1,0 +1,30 @@
+[package]
+name = "server-resolver"
+description = "Matrix server name resolution: the .well-known and SRV ladder of the server-server specification"
+version = "0.18.0"
+authors = ["Harana Contributors"]
+edition = "2024"
+homepage = "https://github.com/harana/harana-matrix"
+keywords = ["matrix", "chat", "messaging", "ruma", "federation"]
+license = "Apache-2.0"
+readme = "README.md"
+rust-version.workspace = true
+repository = "https://github.com/harana/harana-matrix"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+
+[dependencies]
+common-ruma.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+common-test-macros = { path = "../../testing/common-test-macros" }
+common-test-utils.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

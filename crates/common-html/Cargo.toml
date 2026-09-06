@@ -1,0 +1,28 @@
+[package]
+name = "common-html"
+version = "0.16.0"
+description = "Opinionated HTML parsing and manipulating, for the Matrix protocol."
+categories = ["api-bindings", "web-programming"]
+keywords = ["matrix", "chat", "messaging", "ruma"]
+license = "MIT"
+repository = "https://github.com/ruma/ruma"
+edition = "2024"
+rust-version = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+
+unstable-msc4286 = []
+
+[dependencies]
+common-types = { path = "../common-types", version = "0.16.0" }
+as_variant.workspace = true
+html5ever = "0.39.0"
+tracing = { workspace = true, features = ["attributes"] }
+wildmatch = "2.6.1"
+
+[lints]
+workspace = true

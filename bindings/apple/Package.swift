@@ -17,17 +17,17 @@ let package = Package(
         .target(name: "MatrixRustSDK",
                 path: "generated/swift",
                 swiftSettings: [
-                    .unsafeFlags(["-I", "./generated/matrix_ffi"])
+                    .unsafeFlags(["-I", "./generated/client_matrix_ffi"])
                 ]),
         .testTarget(name: "MatrixRustSDKTests",
                     dependencies: ["MatrixRustSDK"],
                     swiftSettings: [
-                        .unsafeFlags(["-I", "./generated/matrix_ffi"])
+                        .unsafeFlags(["-I", "./generated/client_matrix_ffi"])
                     ],
                     linkerSettings: [
-                        .linkedLibrary("matrix_ffi", .when(platforms: [.macOS])),
-                        .linkedLibrary("matrix_ffiFFI", .when(platforms: [.linux])),
-                        .unsafeFlags(["-L./generated/matrix_ffi"])
+                        .linkedLibrary("client_matrix_ffi", .when(platforms: [.macOS])),
+                        .linkedLibrary("client_matrix_ffiFFI", .when(platforms: [.linux])),
+                        .unsafeFlags(["-L./generated/client_matrix_ffi"])
                     ])
     ]
 )

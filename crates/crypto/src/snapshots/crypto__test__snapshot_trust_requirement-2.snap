@@ -1,5 +1,0 @@
----
-source: crates/crypto/src/lib.rs
-expression: "TrustRequirement::CrossSignedOrLegacy"
----
-"CrossSignedOrLegacy"

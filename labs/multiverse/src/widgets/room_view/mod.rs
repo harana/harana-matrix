@@ -5,7 +5,7 @@ use futures_util::StreamExt;
 use imbl::Vector;
 use input::MessageOrCommand;
 use invited_room::InvitedRoomView;
-use matrix::{
+use client_matrix::{
     Client, Room, RoomState,
     locks::Mutex,
     ruma::{
@@ -14,7 +14,7 @@ use matrix::{
         events::room::message::RoomMessageEventContent,
     },
 };
-use ui::{
+use client_ui::{
     Timeline,
     timeline::{TimelineBuilder, TimelineFocus, TimelineItem, TimelineReadReceiptTracking},
 };

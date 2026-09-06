@@ -1,0 +1,112 @@
+[package]
+name = "common-events"
+version = "0.16.0"
+description = "Serializable types for the events in the Matrix specification."
+categories = ["api-bindings", "web-programming"]
+keywords = ["matrix", "chat", "messaging", "ruma"]
+license = "MIT"
+repository = "https://github.com/ruma/ruma"
+edition = "2024"
+rust-version = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+
+# Parse markdown to construct messages.
+markdown = ["dep:pulldown-cmark"]
+# HTML parsing and sanitizing of message bodies.
+html = ["dep:common-html"]
+# UniFFI bindings for the event type enums. Work in progress.
+unstable-uniffi = ["dep:uniffi", "common-types/unstable-uniffi"]
+
+# Allow some mandatory fields to be missing, defaulting them to an empty string.
+compat-empty-string-null = ["common-types/compat-empty-string-null"]
+# Allow certain spec-mandatory fields to be absent, yielding a default value.
+compat-optional = ["common-types/compat-optional"]
+# Allow `TagInfo` to contain a stringified floating-point value for the `order` field.
+compat-tag-info = []
+# Support encrypted stickers, as sent by several bridges.
+# https://github.com/matrix-org/matrix-spec/issues/1667
+compat-encrypted-stickers = []
+# Ignore the `predecessor` field of `RoomCreateEventContent` if it fails to deserialize.
+compat-lax-room-create-deser = []
+# Ignore the `m.topic` field of `RoomTopicEventContent` if it fails to deserialize.
+compat-lax-room-topic-deser = []
+unstable-msc1763 = []
+unstable-msc1767 = []
+unstable-msc2448 = []
+unstable-msc2747 = []
+unstable-msc2867 = []
+unstable-msc3230 = []
+unstable-msc3245 = ["unstable-msc3246"]
+# Support the m.room.message fallback fields from the first version of MSC3245, implemented in
+# Element Web and documented at
+# https://github.com/matrix-org/matrix-spec-proposals/blob/83f6c5b469c1d78f714e335dcaa25354b255ffa5/proposals/3245-voice-messages.md
+unstable-msc3245-v1-compat = []
+unstable-msc3246 = ["unstable-msc3927"]
+unstable-msc3381 = ["unstable-msc1767"]
+unstable-msc3401 = []
+unstable-msc3417 = ["common-types/unstable-msc3417"]
+unstable-msc3488 = ["unstable-msc1767"]
+unstable-msc3489 = ["unstable-msc3488"]
+unstable-msc3551 = ["unstable-msc3956"]
+unstable-msc3552 = ["unstable-msc3551"]
+unstable-msc3553 = ["unstable-msc3552"]
+unstable-msc3554 = ["unstable-msc1767"]
+unstable-msc3834 = ["common-types/unstable-msc3834"]
+unstable-msc3927 = ["unstable-msc3551"]
+unstable-msc3954 = ["unstable-msc1767"]
+unstable-msc3955 = ["unstable-msc1767"]
+unstable-msc3956 = ["unstable-msc1767"]
+unstable-msc4075 = ["unstable-msc3401"]
+unstable-msc4095 = []
+unstable-msc4171 = []
+unstable-msc4274 = []
+unstable-msc4278 = []
+unstable-msc4293 = []
+unstable-msc4310 = []
+unstable-msc4319 = []
+unstable-msc4334 = ["dep:language-tags", "common-types/unstable-msc4334"]
+# Sticky Events
+unstable-msc4354 = []
+unstable-msc4359 = []
+unstable-msc4362 = []
+unstable-msc4380 = []
+unstable-msc4385 = []
+unstable-msc4471 = []
+unstable-msc4494 = ["common-types/unstable-msc4494"]
+# Selective Presence
+unstable-msc4495 = ["common-types/unstable-msc4495"]
+
+[dependencies]
+common-types = { path = "../common-types", version = "0.16.0" }
+common-html = { path = "../common-html", version = "0.16.0", optional = true }
+as_variant.workspace = true
+assign = "1.1.1"
+base64.workspace = true
+indexmap = { workspace = true, features = ["serde", "std"] }
+js_int = { version = "0.2.2", features = ["serde"] }
+js_option = "0.2.0"
+language-tags = { version = "0.3.2", optional = true, features = ["serde"] }
+maplit = "1.0.2"
+pulldown-cmark = { version = "0.13.0", optional = true, default-features = false, features = ["html"] }
+common-macros.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+thiserror.workspace = true
+time = "0.3.47"
+tracing = { workspace = true, features = ["attributes"] }
+uniffi = { workspace = true, optional = true }
+web-time = "1.1.0"
+wildmatch = "2.6.1"
+zeroize.workspace = true
+
+[dev-dependencies]
+assert_matches2.workspace = true
+common-ruma = { path = "../common-ruma", features = ["full"] }
+
+[lints]
+workspace = true

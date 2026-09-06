@@ -17,14 +17,14 @@ codspeed = []
 assert_matches.workspace = true
 criterion = { version = "4.2.1", features = ["async", "async_tokio", "html_reports"], package = "codspeed-criterion-compat" }
 futures-util.workspace = true
-matrix = { workspace = true, features = ["e2e-encryption", "sqlite", "testing", "rustls-aws-lc-rs"] }
-base.workspace = true
-crypto.workspace = true
-sqlite = { workspace = true, features = ["crypto-store"] }
-sdk-test.workspace = true
-ui.workspace = true
+client-matrix = { workspace = true, features = ["e2e-encryption", "sqlite", "testing", "rustls-aws-lc-rs"] }
+client-base.workspace = true
+client-crypto.workspace = true
+client-sqlite = { workspace = true, features = ["crypto-store"] }
+common-test.workspace = true
+client-ui.workspace = true
 rand.workspace = true
-ruma.workspace = true
+common-ruma.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

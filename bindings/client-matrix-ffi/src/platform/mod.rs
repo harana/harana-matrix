@@ -1,0 +1,984 @@
+// Copyright 2025 The Matrix.org Foundation C.I.C.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for that specific language governing permissions and
+// limitations under the License.
+
+use std::sync::OnceLock;
+#[cfg(feature = "sentry")]
+use std::sync::{Arc, atomic::AtomicBool};
+
+use ::tracing::info;
+#[cfg(feature = "sentry")]
+use ::tracing::warn;
+use tracing_appender::rolling::Rotation;
+#[cfg(feature = "sentry")]
+use tracing_core::Level;
+use tracing_core::Subscriber;
+use tracing_subscriber::{
+    EnvFilter, Layer, Registry,
+    field::RecordFields,
+    fmt::{
+        self, FormatEvent, FormatFields, FormattedFields,
+        format::{DefaultFields, Writer},
+        time::FormatTime,
+    },
+    layer::{Layered, SubscriberExt as _},
+    registry::LookupSpan,
+    reload::{self, Handle},
+    util::SubscriberInitExt as _,
+};
+
+use crate::error::ClientError;
+
+/// Default maximum total size of all log files combined (10MB).
+const DEFAULT_MAX_TOTAL_SIZE_BYTES: u64 = 10 * 1024 * 1024;
+
+/// Default maximum age of log files in seconds (1 week).
+const DEFAULT_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
+
+mod log_listener;
+pub mod panic;
+mod rolling_writer;
+pub mod telemetry;
+pub mod tracing;
+
+#[cfg(target_os = "android")]
+mod android_platform;
+
+use rolling_writer::SizeAndDateRollingWriter;
+
+#[cfg(feature = "sentry")]
+use self::tracing::BRIDGE_SPAN_NAME;
+use self::{log_listener::LogEventListenerLayer, tracing::LogLevel};
+
+// Adjusted version of tracing_subscriber::fmt::Format
+struct EventFormatter {
+    display_timestamp: bool,
+    display_level: bool,
+}
+
+impl EventFormatter {
+    fn new() -> Self {
+        Self { display_timestamp: true, display_level: true }
+    }
+
+    #[cfg(target_os = "android")]
+    fn for_logcat() -> Self {
+        // Level and time are already captured by logcat separately
+        Self { display_timestamp: false, display_level: false }
+    }
+
+    fn format_timestamp(&self, writer: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
+        if fmt::time::SystemTime.format_time(writer).is_err() {
+            writer.write_str("<unknown time>")?;
+        }
+        Ok(())
+    }
+
+    fn write_filename(
+        &self,
+        writer: &mut fmt::format::Writer<'_>,
+        filename: &str,
+    ) -> std::fmt::Result {
+        const CRATES_IO_PATH_MATCHER: &str = ".cargo/registry/src/index.crates.io";
+        let crates_io_filename = filename
+            .split_once(CRATES_IO_PATH_MATCHER)
+            .and_then(|(_, rest)| rest.split_once('/').map(|(_, rest)| rest));
+
+        if let Some(filename) = crates_io_filename {
+            writer.write_str("<crates.io>/")?;
+            writer.write_str(filename)
+        } else {
+            writer.write_str(filename)
+        }
+    }
+}
+
+impl<S, N> FormatEvent<S, N> for EventFormatter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &fmt::FmtContext<'_, S, N>,
+        mut writer: fmt::format::Writer<'_>,
+        event: &tracing_core::Event<'_>,
+    ) -> std::fmt::Result {
+        let meta = event.metadata();
+
+        if self.display_timestamp {
+            self.format_timestamp(&mut writer)?;
+            writer.write_char(' ')?;
+        }
+
+        if self.display_level {
+            // For info and warn, add a padding space to the left
+            write!(writer, "{:>5} ", meta.level())?;
+        }
+
+        write!(writer, "{}: ", meta.target())?;
+
+        ctx.format_fields(writer.by_ref(), event)?;
+
+        if let Some(filename) = meta.file() {
+            writer.write_str(" | ")?;
+            self.write_filename(&mut writer, filename)?;
+            if let Some(line_number) = meta.line() {
+                write!(writer, ":{line_number}")?;
+            }
+        }
+
+        if let Some(scope) = ctx.event_scope() {
+            writer.write_str(" | spans: ")?;
+
+            let mut first = true;
+
+            for span in scope.from_root() {
+                if !first {
+                    writer.write_str(" > ")?;
+                }
+
+                first = false;
+
+                write!(writer, "{}", span.name())?;
+
+                if let Some(fields) = &span.extensions().get::<FormattedFields<N>>()
+                    && !fields.is_empty()
+                {
+                    write!(writer, "{{{fields}}}")?;
+                }
+            }
+        }
+
+        writeln!(writer)
+    }
+}
+
+// Another fields formatter is necessary because of this bug
+// https://github.com/tokio-rs/tracing/issues/1372. Using a new
+// formatter for the fields forces to record them in different span
+// extensions, and thus remove the duplicated fields in the span.
+#[derive(Default)]
+struct FieldsFormatterForFiles(DefaultFields);
+
+impl<'writer> FormatFields<'writer> for FieldsFormatterForFiles {
+    fn format_fields<R: RecordFields>(
+        &self,
+        writer: Writer<'writer>,
+        fields: R,
+    ) -> std::fmt::Result {
+        self.0.format_fields(writer, fields)
+    }
+}
+
+/// The registry with the installed [`telemetry`] layers attached.
+///
+/// The bindings' own layers sit on top of this, so that a telemetry provider
+/// sees the same events the text log does. The type is the same whether or not
+/// any provider was installed, since the vector of layers is simply empty in
+/// that case.
+type TelemetryRegistry = Layered<Vec<telemetry::TelemetryLayer>, Registry>;
+
+/// The subscriber the bindings' own text layers are attached to.
+type BaseSubscriber = Layered<EnvFilter, TelemetryRegistry>;
+
+type ReloadHandle = Handle<
+    tracing_subscriber::fmt::Layer<
+        BaseSubscriber,
+        FieldsFormatterForFiles,
+        EventFormatter,
+        SizeAndDateRollingWriter,
+    >,
+    BaseSubscriber,
+>;
+
+fn text_layers(config: TracingConfiguration) -> (impl Layer<BaseSubscriber>, Option<ReloadHandle>) {
+    let (file_layer, reload_handle) = config
+        .write_to_files
+        .map(|c| {
+            let layer = make_file_layer(c);
+            reload::Layer::new(layer)
+        })
+        .unzip();
+
+    let layers = Layer::and_then(
+        file_layer,
+        config.write_to_stdout_or_system.then(|| {
+            // Another fields formatter is necessary because of this bug
+            // https://github.com/tokio-rs/tracing/issues/1372. Using a new
+            // formatter for the fields forces to record them in different span
+            // extensions, and thus remove the duplicated fields in the span.
+            #[derive(Default)]
+            struct FieldsFormatterFormStdoutOrSystem(DefaultFields);
+
+            impl<'writer> FormatFields<'writer> for FieldsFormatterFormStdoutOrSystem {
+                fn format_fields<R: RecordFields>(
+                    &self,
+                    writer: Writer<'writer>,
+                    fields: R,
+                ) -> std::fmt::Result {
+                    self.0.format_fields(writer, fields)
+                }
+            }
+
+            #[cfg(not(target_os = "android"))]
+            return fmt::layer()
+                .fmt_fields(FieldsFormatterFormStdoutOrSystem::default())
+                .event_format(EventFormatter::new())
+                // See comment above.
+                .with_ansi(false)
+                .with_writer(std::io::stderr);
+
+            #[cfg(target_os = "android")]
+            return fmt::layer()
+                .fmt_fields(FieldsFormatterFormStdoutOrSystem::default())
+                .event_format(EventFormatter::for_logcat())
+                // See comment above.
+                .with_ansi(false)
+                .with_writer(paranoid_android::AndroidLogMakeWriter::new(
+                    "org.matrix.rust.sdk".to_owned(),
+                ));
+        }),
+    );
+
+    (layers, reload_handle)
+}
+
+fn make_file_layer(
+    file_configuration: TracingFileConfiguration,
+) -> tracing_subscriber::fmt::Layer<
+    BaseSubscriber,
+    FieldsFormatterForFiles,
+    EventFormatter,
+    SizeAndDateRollingWriter,
+> {
+    let writer = SizeAndDateRollingWriter::new(
+        &file_configuration.path,
+        file_configuration.file_prefix,
+        file_configuration.file_suffix.unwrap_or_else(|| String::from(".log")),
+        Rotation::HOURLY,
+        file_configuration.max_total_size_bytes.unwrap_or(DEFAULT_MAX_TOTAL_SIZE_BYTES),
+        file_configuration.max_age_seconds.unwrap_or(DEFAULT_MAX_AGE_SECONDS),
+    )
+    .expect("Failed to create a rolling file appender.");
+
+    fmt::layer()
+        .fmt_fields(FieldsFormatterForFiles::default())
+        .event_format(EventFormatter::new())
+        // EventFormatter doesn't support ANSI colors anyways, but the
+        // default field formatter does, which is unhelpful for iOS +
+        // Android logs, but enabled by default.
+        .with_ansi(false)
+        .with_writer(writer)
+}
+
+/// Configuration to save logs to (rotated) log-files.
+#[derive(uniffi::Record)]
+pub struct TracingFileConfiguration {
+    /// Base location for all the log files.
+    path: String,
+
+    /// Prefix for the log files' names.
+    file_prefix: String,
+
+    /// Optional suffix for the log file's names.
+    ///
+    /// Default is ".log" if not specified.
+    file_suffix: Option<String>,
+
+    /// Maximum total size of all log files combined in bytes.
+    ///
+    /// When the total size of all log files with the configured prefix and
+    /// suffix exceeds this limit, the oldest files will be removed until
+    /// the total is below the limit.
+    ///
+    /// This is useful to prevent log files from consuming too much disk space
+    /// over time, even with multiple rotated files.
+    ///
+    /// Default: 10MB (10 * 1024 * 1024 bytes) if not specified.
+    max_total_size_bytes: Option<u64>,
+
+    /// Maximum age of log files in seconds.
+    ///
+    /// Log files older than this age will be automatically removed during
+    /// cleanup. This is checked when the writer is created and during
+    /// rotation operations.
+    ///
+    /// Default: 1 week (7 * 24 * 60 * 60 seconds) if not specified.
+    max_age_seconds: Option<u64>,
+}
+
+#[derive(PartialEq, PartialOrd)]
+enum LogTarget {
+    // External crates.
+    Hyper,
+
+    // FFI modules.
+    MatrixFfi,
+
+    // SDK base modules.
+    BaseEventCache,
+    BaseSlidingSync,
+    BaseStoreAmbiguityMap,
+    BaseResponseProcessors,
+
+    // SDK common modules.
+    SdkCommonCrossProcessLock,
+    SdkCommonDeserializedResponses,
+
+    // SDK modules.
+    Matrix,
+    MatrixClient,
+    Crypto,
+    CryptoIdentitiesManager,
+    CryptoAccount,
+    MatrixEventCache,
+    MatrixEventCacheStore,
+    MatrixHttpClient,
+    MatrixLatestEvents,
+    MatrixOauth,
+    MatrixSendQueue,
+    MatrixSlidingSync,
+
+    // SDK UI modules.
+    UiTimeline,
+    UiNotificationClient,
+
+    // SDK search modules
+    Search,
+}
+
+impl LogTarget {
+    fn as_str(&self) -> &'static str {
+        match self {
+            LogTarget::Hyper => "hyper",
+            LogTarget::MatrixFfi => "client_matrix_ffi",
+            LogTarget::BaseEventCache => "client_base::event_cache",
+            LogTarget::BaseSlidingSync => "client_base::sliding_sync",
+            LogTarget::BaseStoreAmbiguityMap => "client_base::store::ambiguity_map",
+            LogTarget::BaseResponseProcessors => "client_base::response_processors",
+            LogTarget::SdkCommonCrossProcessLock => "client_common::cross_process_lock",
+            LogTarget::SdkCommonDeserializedResponses => {
+                "client_common::deserialized_responses"
+            }
+            LogTarget::Matrix => "client_matrix",
+            LogTarget::MatrixClient => "client_matrix::client",
+            LogTarget::Crypto => "client_crypto",
+            LogTarget::CryptoIdentitiesManager => "client_crypto::identities::manager",
+            LogTarget::CryptoAccount => "client_crypto::olm::account",
+            LogTarget::MatrixOauth => "client_matrix::authentication::oauth",
+            LogTarget::MatrixHttpClient => "client_matrix::http_client",
+            LogTarget::MatrixSlidingSync => "client_matrix::sliding_sync",
+            LogTarget::MatrixEventCache => "client_matrix::event_cache",
+            LogTarget::MatrixLatestEvents => "client_matrix::latest_events",
+            LogTarget::MatrixSendQueue => "client_matrix::send_queue",
+            LogTarget::MatrixEventCacheStore => EVENT_CACHE_STORE_LOG_TARGET,
+            LogTarget::UiTimeline => "client_ui::timeline",
+            LogTarget::UiNotificationClient => "client_ui::notification_client",
+            LogTarget::Search => "client_search",
+        }
+    }
+}
+
+/// The `tracing` target the event cache store logs under.
+///
+/// Store backends are pluggable, so this comes from whichever one the bindings
+/// were built with rather than being a module path spelled out here. An
+/// application running a store backend of its own instead names its target in
+/// [`TracingConfiguration::extra_targets`].
+#[cfg(feature = "sqlite")]
+const EVENT_CACHE_STORE_LOG_TARGET: &str = client_matrix::sqlite_log_targets::EVENT_CACHE_STORE;
+
+#[cfg(not(feature = "sqlite"))]
+const EVENT_CACHE_STORE_LOG_TARGET: &str = "client_base::event_cache::store";
+
+const DEFAULT_TARGET_LOG_LEVELS: &[(LogTarget, LogLevel)] = &[
+    (LogTarget::Hyper, LogLevel::Warn),
+    (LogTarget::MatrixFfi, LogLevel::Info),
+    (LogTarget::Matrix, LogLevel::Info),
+    (LogTarget::MatrixClient, LogLevel::Trace),
+    (LogTarget::Crypto, LogLevel::Debug),
+    (LogTarget::CryptoIdentitiesManager, LogLevel::Info),
+    (LogTarget::CryptoAccount, LogLevel::Trace),
+    (LogTarget::MatrixOauth, LogLevel::Trace),
+    (LogTarget::MatrixHttpClient, LogLevel::Debug),
+    (LogTarget::MatrixSlidingSync, LogLevel::Info),
+    (LogTarget::BaseSlidingSync, LogLevel::Info),
+    (LogTarget::UiTimeline, LogLevel::Info),
+    (LogTarget::MatrixSendQueue, LogLevel::Info),
+    (LogTarget::MatrixEventCache, LogLevel::Info),
+    (LogTarget::MatrixLatestEvents, LogLevel::Info),
+    (LogTarget::BaseEventCache, LogLevel::Info),
+    (LogTarget::MatrixEventCacheStore, LogLevel::Info),
+    (LogTarget::SdkCommonCrossProcessLock, LogLevel::Warn),
+    (LogTarget::SdkCommonDeserializedResponses, LogLevel::Warn),
+    (LogTarget::BaseStoreAmbiguityMap, LogLevel::Warn),
+    (LogTarget::UiNotificationClient, LogLevel::Info),
+    (LogTarget::BaseResponseProcessors, LogLevel::Info),
+    (LogTarget::Search, LogLevel::Info),
+];
+
+const IMMUTABLE_LOG_TARGETS: &[LogTarget] = &[
+    LogTarget::Hyper,                           // Too verbose
+    LogTarget::Matrix,                       // Too generic
+    LogTarget::MatrixFfi,                    // Too verbose
+    LogTarget::SdkCommonCrossProcessLock, // Too verbose
+    LogTarget::BaseStoreAmbiguityMap,  // Too verbose
+];
+
+/// A log pack can be used to set the trace log level for a group of multiple
+/// log targets at once, for debugging purposes.
+#[derive(uniffi::Enum)]
+pub enum TraceLogPacks {
+    /// Enables all the logs relevant to the event cache.
+    EventCache,
+    /// Enables all the logs relevant to the send queue.
+    SendQueue,
+    /// Enables all the logs relevant to the timeline.
+    Timeline,
+    /// Enables all the logs relevant to the notification client.
+    NotificationClient,
+    /// Enables all the logs relevant to sync profiling.
+    SyncProfiling,
+    /// Enables all the logs relevant to the latest events.
+    LatestEvents,
+    /// Enables all the logs relevant to message search.
+    Search,
+}
+
+impl TraceLogPacks {
+    // Note: all the log targets returned here must be part of
+    // `DEFAULT_TARGET_LOG_LEVELS`.
+    fn targets(&self) -> &[LogTarget] {
+        match self {
+            TraceLogPacks::EventCache => &[
+                LogTarget::MatrixEventCache,
+                LogTarget::BaseEventCache,
+                LogTarget::MatrixEventCacheStore,
+                LogTarget::SdkCommonCrossProcessLock,
+                LogTarget::SdkCommonDeserializedResponses,
+            ],
+            TraceLogPacks::SendQueue => &[LogTarget::MatrixSendQueue],
+            TraceLogPacks::Timeline => {
+                &[LogTarget::UiTimeline, LogTarget::SdkCommonDeserializedResponses]
+            }
+            TraceLogPacks::NotificationClient => &[LogTarget::UiNotificationClient],
+            TraceLogPacks::SyncProfiling => &[
+                LogTarget::MatrixSlidingSync,
+                LogTarget::BaseSlidingSync,
+                LogTarget::BaseResponseProcessors,
+                LogTarget::Crypto,
+                LogTarget::SdkCommonCrossProcessLock,
+                LogTarget::SdkCommonDeserializedResponses,
+            ],
+            TraceLogPacks::LatestEvents => &[
+                LogTarget::MatrixLatestEvents,
+                LogTarget::MatrixSendQueue,
+                LogTarget::MatrixEventCache,
+            ],
+            TraceLogPacks::Search => &[LogTarget::Search],
+        }
+    }
+}
+
+#[cfg(feature = "sentry")]
+struct SentryLoggingCtx {
+    /// The Sentry client guard, which keeps the Sentry context alive.
+    _guard: sentry::ClientInitGuard,
+
+    /// Whether the Sentry layer is enabled or not, at a global level.
+    enabled: Arc<AtomicBool>,
+}
+
+struct LoggingCtx {
+    reload_handle: Option<ReloadHandle>,
+    #[cfg(feature = "sentry")]
+    sentry: Option<SentryLoggingCtx>,
+}
+
+static LOGGING: OnceLock<LoggingCtx> = OnceLock::new();
+
+#[derive(uniffi::Record)]
+pub struct TracingConfiguration {
+    /// The desired log level.
+    log_level: LogLevel,
+
+    /// All the log packs, that will be set to `TRACE` when they're enabled.
+    trace_log_packs: Vec<TraceLogPacks>,
+
+    /// Additional targets that the FFI client would like to use.
+    ///
+    /// This can include, for instance, the target names for created
+    /// [`crate::tracing::Span`]. These targets will use the global log level by
+    /// default.
+    extra_targets: Vec<String>,
+
+    /// Whether to log to stdout, or in the logcat on Android.
+    write_to_stdout_or_system: bool,
+
+    /// If set, configures rotated log files where to write additional logs.
+    write_to_files: Option<TracingFileConfiguration>,
+
+    /// If set, the Sentry configuration to use for error reporting.
+    #[cfg(feature = "sentry")]
+    sentry_config: Option<SentryConfig>,
+}
+
+#[cfg(feature = "sentry")]
+#[derive(uniffi::Record)]
+pub struct SentryConfig {
+    dsn: String,
+    app_version: String,
+    app_platform: String,
+}
+
+impl TracingConfiguration {
+    /// Sets up the tracing configuration and return a [`Logger`] instance
+    /// holding onto it.
+    #[cfg_attr(not(feature = "sentry"), allow(unused_mut))]
+    fn build(mut self) -> LoggingCtx {
+        // Show full backtraces, if we run into panics.
+        //
+        // FIXME: Use safe API for this once stable. Tracking issue:
+        //        https://github.com/rust-lang/rust/issues/93346
+        unsafe {
+            std::env::set_var("RUST_BACKTRACE", "1");
+        }
+
+        // Log panics.
+        log_panics::init();
+
+        let env_filter = build_tracing_filter(&self);
+
+        let logging_ctx;
+        #[cfg(feature = "sentry")]
+        {
+            // Prepare the Sentry layer, if a DSN is provided.
+            let (sentry_layer, sentry_logging_ctx) =
+                if let Some(sentry_config) = self.sentry_config.take() {
+                    // Initialize the Sentry client with the given options.
+                    let sentry_guard = sentry::init((
+                        sentry_config.dsn,
+                        sentry::ClientOptions::new()
+                            .traces_sampler(|ctx| {
+                                // Make sure bridge spans are always uploaded
+                                if ctx.name() == BRIDGE_SPAN_NAME { 1.0 } else { 0.0 }
+                            })
+                            .attach_stacktrace(true)
+                            .release(env!("VERGEN_GIT_SHA")),
+                    ));
+
+                    sentry::configure_scope(|scope| {
+                        scope.set_tag("app_version", sentry_config.app_version);
+                        scope.set_tag("app_platform", sentry_config.app_platform);
+                    });
+
+                    let sentry_enabled = Arc::new(AtomicBool::new(true));
+
+                    // Add a Sentry layer to the tracing subscriber.
+                    //
+                    // Pass custom event and span filters, which will ignore
+                    // anything, if the Sentry support has been
+                    // globally disabled, or if the statement doesn't include a
+                    // `sentry` field set to `true`.
+                    let sentry_layer = sentry_tracing::layer()
+                        .event_filter({
+                            let enabled = sentry_enabled.clone();
+
+                            move |metadata| {
+                                if enabled.load(std::sync::atomic::Ordering::SeqCst)
+                                    && metadata.fields().field("sentry").is_some()
+                                {
+                                    sentry_tracing::default_event_filter(metadata)
+                                } else {
+                                    // Ignore the event.
+                                    sentry_tracing::EventFilter::Ignore
+                                }
+                            }
+                        })
+                        .span_filter({
+                            let enabled = sentry_enabled.clone();
+
+                            move |metadata| {
+                                if enabled.load(std::sync::atomic::Ordering::SeqCst) {
+                                    matches!(
+                                        metadata.level(),
+                                        &Level::ERROR | &Level::WARN | &Level::INFO | &Level::DEBUG
+                                    )
+                                } else {
+                                    // Ignore, if sentry is globally disabled.
+                                    false
+                                }
+                            }
+                        });
+
+                    (
+                        Some(sentry_layer),
+                        Some(SentryLoggingCtx { _guard: sentry_guard, enabled: sentry_enabled }),
+                    )
+                } else {
+                    (None, None)
+                };
+            let (text_layers, reload_handle) = crate::platform::text_layers(self);
+
+            tracing_subscriber::registry()
+                .with(telemetry::layers())
+                .with(tracing_subscriber::EnvFilter::new(&env_filter))
+                .with(text_layers)
+                .with(LogEventListenerLayer)
+                .with(sentry_layer)
+                .init();
+            logging_ctx = LoggingCtx { reload_handle, sentry: sentry_logging_ctx };
+        }
+        #[cfg(not(feature = "sentry"))]
+        {
+            let (text_layers, reload_handle) = crate::platform::text_layers(self);
+            tracing_subscriber::registry()
+                .with(telemetry::layers())
+                .with(tracing_subscriber::EnvFilter::new(&env_filter))
+                .with(text_layers)
+                .with(LogEventListenerLayer)
+                .init();
+            logging_ctx = LoggingCtx { reload_handle };
+        }
+
+        // Log the log levels 🧠.
+        info!(env_filter, "Logging has been set up");
+
+        logging_ctx
+    }
+}
+
+fn build_tracing_filter(config: &TracingConfiguration) -> String {
+    // We are intentionally not setting a global log level because we don't want
+    // to risk third party crates logging sensitive information.
+    // As such we need to make sure that panics will be properly logged.
+    // On 2025-01-08, `log_panics` uses the `panic` target, at the error log
+    // level.
+    let mut filters = vec!["panic=error".to_owned()];
+
+    let global_level = config.log_level;
+
+    DEFAULT_TARGET_LOG_LEVELS.iter().for_each(|(target, default_level)| {
+        let level = if IMMUTABLE_LOG_TARGETS.contains(target) {
+            // If the target is immutable, keep the log level.
+            *default_level
+        } else if config.trace_log_packs.iter().any(|pack| pack.targets().contains(target)) {
+            // If a log pack includes that target, set the associated log level
+            // to TRACE.
+            LogLevel::Trace
+        } else if *default_level > global_level {
+            // If the default level is more verbose than the global level, keep
+            // the default.
+            *default_level
+        } else {
+            // Otherwise, use the global level.
+            global_level
+        };
+
+        filters.push(format!("{}={}", target.as_str(), level.as_str()));
+    });
+
+    // Finally append the extra targets requested by the client.
+    for target in &config.extra_targets {
+        filters.push(format!("{}={}", target, config.log_level.as_str()));
+    }
+
+    filters.join(",")
+}
+
+/// Sets up logs and the tokio runtime for the current application.
+///
+/// If `use_lightweight_tokio_runtime` is set to true, this will set up a
+/// lightweight tokio runtime, for processes that have memory limitations (like
+/// the NSE process on iOS). Otherwise, this can remain false, in which case a
+/// multithreaded tokio runtime will be set up.
+#[client_matrix_ffi_macros::export]
+pub fn init_platform(
+    config: TracingConfiguration,
+    use_lightweight_tokio_runtime: bool,
+) -> Result<(), ClientError> {
+    #[cfg(all(feature = "js", target_family = "wasm"))]
+    {
+        console_error_panic_hook::set_once();
+    }
+    #[cfg(not(target_family = "wasm"))]
+    {
+        LOGGING.set(config.build()).map_err(|_| ClientError::Generic {
+            msg: "logger already initialized".to_owned(),
+            details: None,
+        })?;
+
+        if use_lightweight_tokio_runtime {
+            setup_lightweight_tokio_runtime();
+        } else {
+            setup_multithreaded_tokio_runtime();
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    android_platform::init();
+
+    // Installed last, so it chains to the panic hooks set up above and any
+    // registered `PanicListener` is notified after they have run.
+    panic::install_hook();
+
+    Ok(())
+}
+
+/// Set the global enablement level for the Sentry layer (after the logs have
+/// been set up).
+#[client_matrix_ffi_macros::export]
+#[cfg(feature = "sentry")]
+pub fn enable_sentry_logging(enabled: bool) {
+    if let Some(ctx) = LOGGING.get() {
+        if let Some(sentry_ctx) = &ctx.sentry {
+            sentry_ctx.enabled.store(enabled, std::sync::atomic::Ordering::SeqCst);
+        } else {
+            warn!("Sentry logging is not enabled");
+        }
+    } else {
+        // Can't use log statements here, since logging hasn't been enabled yet
+        // 🧠
+        eprintln!("Logging hasn't been enabled yet");
+    };
+}
+
+/// Updates the tracing subscriber with a new file writer based on the provided
+/// configuration.
+///
+/// This method will throw if `init_platform` hasn't been called, or if it was
+/// called with `write_to_files` set to `None`.
+#[client_matrix_ffi_macros::export]
+pub fn reload_tracing_file_writer(
+    configuration: TracingFileConfiguration,
+) -> Result<(), ClientError> {
+    let Some(logging_context) = LOGGING.get() else {
+        return Err(ClientError::Generic {
+            msg: "Logging hasn't been initialized yet".to_owned(),
+            details: None,
+        });
+    };
+
+    let Some(reload_handle) = logging_context.reload_handle.as_ref() else {
+        return Err(ClientError::Generic {
+            msg: "Logging wasn't initialized with a file config".to_owned(),
+            details: None,
+        });
+    };
+
+    let layer = make_file_layer(configuration);
+    reload_handle.reload(layer).map_err(|error| ClientError::Generic {
+        msg: format!("Failed to reload file config: {error}"),
+        details: None,
+    })
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn setup_multithreaded_tokio_runtime() {
+    async_compat::set_runtime_builder(Box::new(|| {
+        eprintln!("spawning a multithreaded tokio runtime");
+
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+        builder.enable_all();
+        #[cfg(target_os = "android")]
+        builder.on_thread_start(|| {
+            _ = android_platform::android_attach_current_thread_permanently();
+        });
+        builder
+    }));
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn setup_lightweight_tokio_runtime() {
+    async_compat::set_runtime_builder(Box::new(|| {
+        eprintln!("spawning a lightweight tokio runtime");
+
+        // Get the number of available cores through the system, if possible.
+        let num_available_cores =
+            std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+
+        // The number of worker threads will be either that or 4, whichever is
+        // smaller.
+        let num_worker_threads = num_available_cores.min(4);
+
+        // Chosen by a fair dice roll.
+        let num_blocking_threads = 2;
+
+        // 1 MiB of memory per worker thread. Should be enough for everyone™.
+        let max_memory_bytes = 1024 * 1024;
+
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+
+        builder
+            .enable_all()
+            .worker_threads(num_worker_threads)
+            .thread_stack_size(max_memory_bytes)
+            .max_blocking_threads(num_blocking_threads);
+
+        builder
+    }));
+}
+
+#[cfg(test)]
+mod tests {
+    use similar_asserts::assert_eq;
+
+    use super::build_tracing_filter;
+    use crate::platform::TraceLogPacks;
+
+    #[test]
+    fn test_default_tracing_filter() {
+        let config = super::TracingConfiguration {
+            log_level: super::LogLevel::Error,
+            trace_log_packs: Vec::new(),
+            extra_targets: vec!["super_duper_app".to_owned()],
+            write_to_stdout_or_system: true,
+            write_to_files: None,
+            #[cfg(feature = "sentry")]
+            sentry_config: None,
+        };
+
+        let filter = build_tracing_filter(&config);
+
+        assert_eq!(
+            filter,
+            r#"panic=error,
+            hyper=warn,
+            client_matrix_ffi=info,
+            client_matrix=info,
+            client_matrix::client=trace,
+            client_crypto=debug,
+            client_crypto::identities::manager=info,
+            client_crypto::olm::account=trace,
+            client_matrix::authentication::oauth=trace,
+            client_matrix::http_client=debug,
+            client_matrix::sliding_sync=info,
+            client_base::sliding_sync=info,
+            client_ui::timeline=info,
+            client_matrix::send_queue=info,
+            client_matrix::event_cache=info,
+            client_matrix::latest_events=info,
+            client_base::event_cache=info,
+            client_sqlite::event_cache_store=info,
+            client_common::cross_process_lock=warn,
+            client_common::deserialized_responses=warn,
+            client_base::store::ambiguity_map=warn,
+            client_ui::notification_client=info,
+            client_base::response_processors=info,
+            client_search=info,
+            super_duper_app=error"#
+                .split('\n')
+                .map(|s| s.trim())
+                .collect::<Vec<_>>()
+                .join("")
+        );
+    }
+
+    #[test]
+    fn test_trace_tracing_filter() {
+        let config = super::TracingConfiguration {
+            log_level: super::LogLevel::Trace,
+            trace_log_packs: Vec::new(),
+            extra_targets: vec!["super_duper_app".to_owned(), "some_other_span".to_owned()],
+            write_to_stdout_or_system: true,
+            write_to_files: None,
+            #[cfg(feature = "sentry")]
+            sentry_config: None,
+        };
+
+        let filter = build_tracing_filter(&config);
+
+        assert_eq!(
+            filter,
+            r#"panic=error,
+            hyper=warn,
+            client_matrix_ffi=info,
+            client_matrix=info,
+            client_matrix::client=trace,
+            client_crypto=trace,
+            client_crypto::identities::manager=trace,
+            client_crypto::olm::account=trace,
+            client_matrix::authentication::oauth=trace,
+            client_matrix::http_client=trace,
+            client_matrix::sliding_sync=trace,
+            client_base::sliding_sync=trace,
+            client_ui::timeline=trace,
+            client_matrix::send_queue=trace,
+            client_matrix::event_cache=trace,
+            client_matrix::latest_events=trace,
+            client_base::event_cache=trace,
+            client_sqlite::event_cache_store=trace,
+            client_common::cross_process_lock=warn,
+            client_common::deserialized_responses=trace,
+            client_base::store::ambiguity_map=warn,
+            client_ui::notification_client=trace,
+            client_base::response_processors=trace,
+            client_search=trace,
+            super_duper_app=trace,
+            some_other_span=trace"#
+                .split('\n')
+                .map(|s| s.trim())
+                .collect::<Vec<_>>()
+                .join("")
+        );
+    }
+
+    #[test]
+    fn test_trace_log_packs() {
+        let config = super::TracingConfiguration {
+            log_level: super::LogLevel::Info,
+            trace_log_packs: vec![TraceLogPacks::EventCache, TraceLogPacks::SendQueue],
+            extra_targets: vec!["super_duper_app".to_owned()],
+            write_to_stdout_or_system: true,
+            write_to_files: None,
+            #[cfg(feature = "sentry")]
+            sentry_config: None,
+        };
+
+        let filter = build_tracing_filter(&config);
+
+        assert_eq!(
+            filter,
+            r#"panic=error,
+            hyper=warn,
+            client_matrix_ffi=info,
+            client_matrix=info,
+            client_matrix::client=trace,
+            client_crypto=debug,
+            client_crypto::identities::manager=info,
+            client_crypto::olm::account=trace,
+            client_matrix::authentication::oauth=trace,
+            client_matrix::http_client=debug,
+            client_matrix::sliding_sync=info,
+            client_base::sliding_sync=info,
+            client_ui::timeline=info,
+            client_matrix::send_queue=trace,
+            client_matrix::event_cache=trace,
+            client_matrix::latest_events=info,
+            client_base::event_cache=trace,
+            client_sqlite::event_cache_store=trace,
+            client_common::cross_process_lock=warn,
+            client_common::deserialized_responses=trace,
+            client_base::store::ambiguity_map=warn,
+            client_ui::notification_client=info,
+            client_base::response_processors=info,
+            client_search=info,
+            super_duper_app=info"#
+                .split('\n')
+                .map(|s| s.trim())
+                .collect::<Vec<_>>()
+                .join("")
+        );
+    }
+}

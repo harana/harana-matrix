@@ -1,7 +1,0 @@
----
-source: crates/crypto/src/types/mod.rs
-expression: decryption_key
----
-BackupDecryptionKey(
-    "...",
-)

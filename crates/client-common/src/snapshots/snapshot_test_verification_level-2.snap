@@ -1,0 +1,5 @@
+---
+source: crates/client-common/src/deserialized_responses.rs
+expression: "VerificationLevel::UnsignedDevice"
+---
+"UnsignedDevice"

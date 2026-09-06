@@ -68,14 +68,14 @@ fn fix_clippy() -> Result<()> {
         sh,
         "rustup run {NIGHTLY} cargo clippy --workspace --all-targets
             --fix --allow-dirty --allow-staged
-            --exclude crypto --exclude xtask
+            --exclude client-crypto --exclude xtask
             --no-default-features --features rustls-tls,sso-login
             -- -D warnings"
     )
     .run()?;
     cmd!(
         sh,
-        "rustup run {NIGHTLY} cargo clippy --all-targets -p crypto
+        "rustup run {NIGHTLY} cargo clippy --all-targets -p client-crypto
             --allow-dirty --allow-staged --fix
             --no-default-features -- -D warnings"
     )

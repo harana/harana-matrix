@@ -1,7 +1,0 @@
----
-source: crates/sdk-common/src/deserialized_responses.rs
-expression: "VerificationLevel::None(DeviceLinkProblem::MissingDevice)"
----
-{
-  "None": "MissingDevice"
-}

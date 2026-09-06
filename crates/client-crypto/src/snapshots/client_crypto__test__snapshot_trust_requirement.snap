@@ -1,0 +1,5 @@
+---
+source: crates/client-crypto/src/lib.rs
+expression: "TrustRequirement::Untrusted"
+---
+"Untrusted"

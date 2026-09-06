@@ -1,6 +1,6 @@
-use matrix::Room;
-use base::read_receipts::ReadReceipts as RoomReadReceipts;
-use ui::timeline::TimelineItem;
+use client_matrix::Room;
+use client_base::read_receipts::ReadReceipts as RoomReadReceipts;
+use client_ui::timeline::TimelineItem;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph, Wrap},

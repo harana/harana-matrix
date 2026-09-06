@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use futures_util::{StreamExt, pin_mut};
-use matrix::{
+use client_matrix::{
     Client,
     config::SyncSettings,
     encryption::{backups::BackupState, secret_storage::SecretStore},

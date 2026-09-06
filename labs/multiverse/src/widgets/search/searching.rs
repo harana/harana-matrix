@@ -1,5 +1,5 @@
 use crossterm::event::KeyEvent;
-use matrix::{
+use client_matrix::{
     deserialized_responses::TimelineEvent,
     ruma::{
         OwnedRoomId, OwnedUserId,

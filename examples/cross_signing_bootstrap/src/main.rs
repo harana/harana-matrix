@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
-use matrix::{
+use client_matrix::{
     Client, LoopCtrl,
     config::SyncSettings,
     encryption::CrossSigningResetAuthType,
@@ -44,7 +44,7 @@ async fn bootstrap(client: Client, user_id: OwnedUserId, password: String) -> Re
     Ok(())
 }
 
-async fn login(homeserver_url: String, username: &str, password: &str) -> matrix::Result<()> {
+async fn login(homeserver_url: String, username: &str, password: &str) -> client_matrix::Result<()> {
     let homeserver_url = Url::parse(&homeserver_url).expect("Couldn't parse the homeserver URL");
     let client = Client::new(homeserver_url).await.unwrap();
 

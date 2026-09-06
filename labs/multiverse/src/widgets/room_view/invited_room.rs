@@ -1,6 +1,6 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use futures_util::FutureExt;
-use matrix::{Room, RoomState, room::Invite};
+use client_matrix::{Room, RoomState, room::Invite};
 use ratatui::{prelude::*, widgets::*};
 use throbber_widgets_tui::{Throbber, ThrobberState};
 use tokio::{spawn, task::JoinHandle};
@@ -11,9 +11,9 @@ use crate::widgets::{
 };
 
 enum Mode {
-    Loading { task: JoinHandle<Result<Invite, matrix::Error>> },
-    Joining { task: JoinHandle<Result<(), matrix::Error>> },
-    Leaving { task: JoinHandle<Result<(), matrix::Error>> },
+    Loading { task: JoinHandle<Result<Invite, client_matrix::Error>> },
+    Joining { task: JoinHandle<Result<(), client_matrix::Error>> },
+    Leaving { task: JoinHandle<Result<(), client_matrix::Error>> },
     Loaded { invite_details: Invite },
     Done,
 }

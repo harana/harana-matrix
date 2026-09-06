@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use imbl::Vector;
 use indexmap::IndexMap;
-use matrix::ruma::{
+use client_matrix::ruma::{
     OwnedUserId,
     events::{receipt::Receipt, room::message::MessageType},
 };
-use ui::timeline::{
+use client_ui::timeline::{
     MembershipChange, Message, MsgLikeContent, MsgLikeKind, RoomMembershipChange, ThreadSummary,
     TimelineDetails, TimelineItem, TimelineItemContent, TimelineItemKind, VirtualTimelineItem,
 };

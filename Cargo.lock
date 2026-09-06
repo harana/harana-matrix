@@ -108,24 +108,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "appservice"
-version = "0.18.0"
-dependencies = [
- "regex",
- "ruma",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "appservice-api"
-version = "0.16.0"
-dependencies = [
- "common",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -526,46 +508,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "base"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "as_variant",
- "assert_matches",
- "assert_matches2",
- "assign",
- "async-trait",
- "bitflags 2.13.1",
- "crypto",
- "decancer",
- "eyeball",
- "eyeball-im",
- "futures-executor",
- "futures-util",
- "getrandom 0.3.4",
- "gloo-timers",
- "growable-bloom-filter",
- "http",
- "proptest",
- "regex",
- "ruma",
- "sdk-common",
- "sdk-test",
- "sdk-test-utils",
- "serde",
- "serde_json",
- "similar-asserts",
- "store-encryption",
- "stream_assert",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "unicode-normalization",
- "uniffi",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "base16ct"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -603,20 +545,20 @@ name = "benchmarks"
 version = "1.0.0"
 dependencies = [
  "assert_matches",
- "base",
+ "client-base",
+ "client-crypto",
+ "client-matrix",
+ "client-sqlite",
+ "client-ui",
  "codspeed-criterion-compat",
- "crypto",
+ "common-ruma",
+ "common-test",
  "futures-util",
- "matrix",
  "rand 0.10.2",
- "ruma",
- "sdk-test",
  "serde",
  "serde_json",
- "sqlite",
  "tempfile",
  "tokio",
- "ui",
  "wiremock",
 ]
 
@@ -1025,27 +967,562 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
-name = "client-api"
-version = "0.16.0"
+name = "client-base"
+version = "0.18.0"
 dependencies = [
+ "anyhow",
  "as_variant",
+ "assert_matches",
  "assert_matches2",
  "assign",
- "bytes",
- "common",
- "events",
+ "async-trait",
+ "bitflags 2.13.1",
+ "client-common",
+ "client-crypto",
+ "client-store-encryption",
+ "common-ruma",
+ "common-test",
+ "common-test-utils",
+ "decancer",
+ "eyeball",
+ "eyeball-im",
+ "futures-executor",
+ "futures-util",
+ "getrandom 0.3.4",
+ "gloo-timers",
+ "growable-bloom-filter",
+ "http",
+ "proptest",
+ "regex",
+ "serde",
+ "serde_json",
+ "similar-asserts",
+ "stream_assert",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+ "unicode-normalization",
+ "uniffi",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "client-common"
+version = "0.18.0"
+dependencies = [
+ "assert_matches",
+ "assert_matches2",
+ "common-ruma",
+ "common-test-macros",
+ "common-test-utils",
+ "eyeball-im",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-util",
+ "getrandom 0.3.4",
+ "getrandom 0.4.3",
+ "gloo-timers",
+ "imbl",
+ "insta",
+ "js-sys",
+ "proptest",
+ "sanitize-filename",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uniffi",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
+name = "client-contentscanner"
+version = "0.18.0"
+dependencies = [
+ "assert_matches2",
+ "client-crypto",
+ "client-matrix",
+ "common-ruma",
+ "common-test",
+ "serde",
+ "tokio",
+ "tracing",
+ "uniffi",
+ "wiremock",
+]
+
+[[package]]
+name = "client-crypto"
+version = "0.18.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "as_variant",
+ "assert_matches",
+ "assert_matches2",
+ "async-trait",
+ "bs58",
+ "byteorder",
+ "cfg-if",
+ "client-common",
+ "client-qrcode",
+ "cms",
+ "common-olm",
+ "common-ruma",
+ "common-test",
+ "common-test-utils",
+ "ctr",
+ "eyeball",
+ "futures-core",
+ "futures-executor",
+ "futures-util",
+ "hkdf",
+ "hmac",
+ "http",
+ "insta",
+ "itertools 0.15.0",
+ "js_option",
+ "pbkdf2",
+ "pkcs1",
+ "proptest",
+ "rand 0.10.2",
+ "rcgen",
+ "ring",
+ "rmp-serde",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sha2 0.11.0",
+ "similar-asserts",
+ "stream_assert",
+ "subtle",
+ "thiserror 2.0.19",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "ulid",
+ "uniffi",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "client-crypto-ffi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_matches2",
+ "client-common",
+ "client-crypto",
+ "client-matrix-ffi-macros",
+ "client-sqlite",
+ "common-olm",
+ "common-ruma",
+ "futures-util",
+ "hmac",
  "http",
  "js_int",
- "js_option",
- "maplit",
- "ruma",
+ "pbkdf2",
+ "rand 0.10.2",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uniffi",
+ "vergen-gitcl",
+ "zeroize",
+]
+
+[[package]]
+name = "client-indexeddb"
+version = "0.18.0"
+dependencies = [
+ "assert_matches",
+ "assert_matches2",
+ "async-trait",
+ "base64 0.23.0",
+ "client-base",
+ "client-common",
+ "client-crypto",
+ "client-store-encryption",
+ "common-ruma",
+ "common-test",
+ "futures-util",
+ "getrandom 0.4.3",
+ "gloo-timers",
+ "gloo-utils",
+ "growable-bloom-filter",
+ "hkdf",
+ "js-sys",
+ "matrix_indexed_db_futures",
+ "rand 0.10.2",
+ "rmp-serde",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+ "web-sys",
+ "zeroize",
+]
+
+[[package]]
+name = "client-integration-testing"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "as_variant",
+ "assert_matches",
+ "assert_matches2",
+ "assign",
+ "client-base",
+ "client-common",
+ "client-crypto",
+ "client-matrix",
+ "client-ui",
+ "common-test",
+ "common-test-utils",
+ "eyeball",
+ "eyeball-im",
+ "futures",
+ "futures-core",
+ "futures-util",
+ "http",
+ "json-structural-diff",
+ "rand 0.10.2",
+ "rcgen",
+ "reqwest",
+ "rustls",
+ "serde_json",
+ "sha2 0.11.0",
+ "similar-asserts",
+ "stream_assert",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
+name = "client-matrix"
+version = "0.18.0"
+dependencies = [
+ "anyhow",
+ "anymap2",
+ "as_variant",
+ "assert-json-diff",
+ "assert_matches",
+ "assert_matches2",
+ "async-channel",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "backon",
+ "blurhash",
+ "bytes",
+ "bytesize",
+ "cfg-if",
+ "client-base",
+ "client-common",
+ "client-indexeddb",
+ "client-matrix-ffi-macros",
+ "client-search",
+ "client-sqlite",
+ "common-olm",
+ "common-ruma",
+ "common-test",
+ "common-test-utils",
+ "ctor 1.0.12",
+ "dirs",
+ "event-listener",
+ "eyeball",
+ "eyeball-im",
+ "eyre",
+ "futures-core",
+ "futures-executor",
+ "futures-util",
+ "gloo-timers",
+ "hex",
+ "http",
+ "image",
+ "imbl",
+ "indexmap",
+ "insta",
+ "itertools 0.15.0",
+ "js_int",
+ "language-tags",
+ "mime",
+ "mime2ext",
+ "oauth2",
+ "percent-encoding",
+ "pin-project-lite",
+ "proptest",
+ "pulldown-cmark",
+ "rand 0.10.2",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_html_form",
  "serde_json",
+ "serde_urlencoded",
+ "sha2 0.11.0",
+ "similar-asserts",
+ "stream_assert",
+ "tempfile",
  "thiserror 2.0.19",
- "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-test",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uniffi",
  "url",
- "web-time",
+ "urlencoding",
+ "uuid",
+ "wasm-bindgen-test",
+ "wiremock",
+ "zeroize",
+]
+
+[[package]]
+name = "client-matrix-ffi"
+version = "0.18.0"
+dependencies = [
+ "anyhow",
+ "assert_matches2",
+ "async-compat",
+ "async-trait",
+ "chrono",
+ "client-base",
+ "client-common",
+ "client-contentscanner",
+ "client-crypto",
+ "client-matrix",
+ "client-matrix-ffi-macros",
+ "client-ui",
+ "common-ruma",
+ "common-test",
+ "console_error_panic_hook",
+ "extension-trait",
+ "eyeball-im",
+ "futures-executor",
+ "futures-util",
+ "http",
+ "jni",
+ "jvm-getter",
+ "language-tags",
+ "log-panics",
+ "mime",
+ "oauth2",
+ "once_cell",
+ "paranoid-android",
+ "rustls-platform-verifier",
+ "sentry",
+ "sentry-tracing",
+ "serde",
+ "serde_json",
+ "similar-asserts",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-core",
+ "tracing-subscriber",
+ "uniffi",
+ "url",
+ "uuid",
+ "vergen-gitcl",
+ "wiremock",
+ "zeroize",
+ "zxcvbn",
+]
+
+[[package]]
+name = "client-matrix-ffi-macros"
+version = "0.7.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
+name = "client-qrcode"
+version = "0.18.0"
+dependencies = [
+ "byteorder",
+ "common-olm",
+ "common-ruma",
+ "image",
+ "qrcode",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "client-ruma"
+version = "0.20.0"
+dependencies = [
+ "as_variant",
+ "assign",
+ "async-stream",
+ "bytes",
+ "common-ruma",
+ "futures-core",
+ "http",
+ "reqwest",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
+name = "client-search"
+version = "0.18.0"
+dependencies = [
+ "aes",
+ "byteorder",
+ "common-ruma",
+ "common-test",
+ "ctr",
+ "hkdf",
+ "hmac",
+ "once_cell",
+ "pbkdf2",
+ "rand 0.10.2",
+ "sha2 0.11.0",
+ "tantivy",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
+name = "client-sqlite"
+version = "0.18.0"
+dependencies = [
+ "as_variant",
+ "assert_matches",
+ "async-trait",
+ "client-base",
+ "client-common",
+ "client-crypto",
+ "client-store-encryption",
+ "common-olm",
+ "common-ruma",
+ "common-test",
+ "common-test-utils",
+ "deadpool 0.13.0",
+ "erased-serde",
+ "glob",
+ "itertools 0.15.0",
+ "num_cpus",
+ "rmp-serde",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "similar-asserts",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
+name = "client-store-encryption"
+version = "0.18.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.0",
+ "blake3",
+ "chacha20poly1305",
+ "erased-serde",
+ "getrandom 0.4.3",
+ "hkdf",
+ "hmac",
+ "pbkdf2",
+ "rand 0.10.2",
+ "rmp-serde",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror 2.0.19",
+ "zeroize",
+]
+
+[[package]]
+name = "client-ui"
+version = "0.18.0"
+dependencies = [
+ "anyhow",
+ "as_variant",
+ "assert-json-diff",
+ "assert_matches",
+ "assert_matches2",
+ "async-rx",
+ "async-stream",
+ "async_cell",
+ "bitflags 2.13.1",
+ "chrono",
+ "client-base",
+ "client-common",
+ "client-matrix",
+ "common-ruma",
+ "common-test",
+ "common-test-utils",
+ "emojis",
+ "eyeball",
+ "eyeball-im",
+ "eyeball-im-util",
+ "futures-core",
+ "futures-util",
+ "fuzzy-matcher",
+ "growable-bloom-filter",
+ "imbl",
+ "indexmap",
+ "itertools 0.15.0",
+ "mime",
+ "pin-project-lite",
+ "proptest",
+ "serde",
+ "serde_json",
+ "stream_assert",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "unicode-normalization",
+ "unicode-segmentation",
+ "uniffi",
+ "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -1191,7 +1668,263 @@ dependencies = [
 ]
 
 [[package]]
-name = "common"
+name = "common-appservice-api"
+version = "0.16.0"
+dependencies = [
+ "common-types",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "common-client-api"
+version = "0.16.0"
+dependencies = [
+ "as_variant",
+ "assert_matches2",
+ "assign",
+ "bytes",
+ "common-events",
+ "common-ruma",
+ "common-types",
+ "http",
+ "js_int",
+ "js_option",
+ "maplit",
+ "serde",
+ "serde_html_form",
+ "serde_json",
+ "thiserror 2.0.19",
+ "time",
+ "url",
+ "web-time",
+]
+
+[[package]]
+name = "common-events"
+version = "0.16.0"
+dependencies = [
+ "as_variant",
+ "assert_matches2",
+ "assign",
+ "base64 0.23.0",
+ "common-html",
+ "common-macros",
+ "common-ruma",
+ "common-types",
+ "indexmap",
+ "js_int",
+ "js_option",
+ "language-tags",
+ "maplit",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "time",
+ "tracing",
+ "uniffi",
+ "web-time",
+ "wildmatch",
+ "zeroize",
+]
+
+[[package]]
+name = "common-federation-api"
+version = "0.16.0"
+dependencies = [
+ "assert_matches2",
+ "bytes",
+ "common-events",
+ "common-ruma",
+ "common-signatures",
+ "common-types",
+ "headers",
+ "http",
+ "http-auth",
+ "httparse",
+ "js_int",
+ "memchr",
+ "mime",
+ "rand 0.10.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tracing",
+]
+
+[[package]]
+name = "common-html"
+version = "0.16.0"
+dependencies = [
+ "as_variant",
+ "common-types",
+ "html5ever",
+ "tracing",
+ "wildmatch",
+]
+
+[[package]]
+name = "common-identifiers-validation"
+version = "0.12.1"
+dependencies = [
+ "js_int",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "common-macros"
+version = "0.19.0"
+dependencies = [
+ "as_variant",
+ "cfg-if",
+ "common-identifiers-validation",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 3.0.3",
+ "toml 1.1.2+spec-1.1.0",
+]
+
+[[package]]
+name = "common-olm"
+version = "0.10.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "arrayvec",
+ "assert_matches2",
+ "base64 0.22.1",
+ "base64ct",
+ "cbc",
+ "chacha20poly1305",
+ "cipher",
+ "curve25519-dalek",
+ "ed25519-dalek",
+ "getrandom 0.4.3",
+ "hkdf",
+ "hmac",
+ "hpke",
+ "insta",
+ "matrix-pickle",
+ "ntest",
+ "olm-rs",
+ "proptest",
+ "prost",
+ "rand 0.10.2",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.11.0",
+ "subtle",
+ "thiserror 2.0.19",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
+name = "common-ruma"
+version = "0.16.0"
+dependencies = [
+ "assert_matches2",
+ "assign",
+ "bytes",
+ "common-appservice-api",
+ "common-client-api",
+ "common-events",
+ "common-federation-api",
+ "common-html",
+ "common-macros",
+ "common-signatures",
+ "common-state-res",
+ "common-types",
+ "http",
+ "insta",
+ "js_int",
+ "maplit",
+ "serde",
+ "serde_json",
+ "similar-asserts",
+ "tracing",
+]
+
+[[package]]
+name = "common-signatures"
+version = "0.16.0"
+dependencies = [
+ "assert_matches2",
+ "base64 0.23.0",
+ "common-events",
+ "common-ruma",
+ "common-types",
+ "ed25519-dalek",
+ "pkcs8",
+ "rand 0.10.2",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "common-state-res"
+version = "0.16.0"
+dependencies = [
+ "assert_matches2",
+ "base64 0.23.0",
+ "common-events",
+ "common-ruma",
+ "common-signatures",
+ "common-types",
+ "js_int",
+ "serde",
+ "serde_json",
+ "test-log",
+ "thiserror 2.0.19",
+ "tracing",
+]
+
+[[package]]
+name = "common-test"
+version = "0.18.0"
+dependencies = [
+ "as_variant",
+ "client-common",
+ "common-olm",
+ "common-ruma",
+ "common-test-macros",
+ "ctor 0.2.9",
+ "getrandom 0.4.3",
+ "http",
+ "insta",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tokio",
+ "tracing-subscriber",
+ "wasm-bindgen-test",
+ "wiremock",
+]
+
+[[package]]
+name = "common-test-macros"
+version = "0.18.0"
+dependencies = [
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "common-test-utils"
+version = "0.18.0"
+dependencies = [
+ "ctor 0.2.9",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "common-types"
 version = "0.16.0"
 dependencies = [
  "as_variant",
@@ -1199,6 +1932,9 @@ dependencies = [
  "assign",
  "base64 0.23.0",
  "bytes",
+ "common-identifiers-validation",
+ "common-macros",
+ "common-ruma",
  "date_header",
  "form_urlencoded",
  "getrandom 0.4.3",
@@ -1213,9 +1949,6 @@ dependencies = [
  "percent-encoding",
  "rand 0.10.2",
  "regex",
- "ruma",
- "ruma-identifiers-validation",
- "ruma-macros",
  "serde",
  "serde_html_form",
  "serde_json",
@@ -1300,22 +2033,6 @@ name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
-
-[[package]]
-name = "contentscanner"
-version = "0.18.0"
-dependencies = [
- "assert_matches2",
- "crypto",
- "matrix",
- "ruma",
- "sdk-test",
- "serde",
- "tokio",
- "tracing",
- "uniffi",
- "wiremock",
-]
 
 [[package]]
 name = "convert_case"
@@ -1463,65 +2180,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
-name = "crypto"
-version = "0.18.0"
-dependencies = [
- "aes",
- "anyhow",
- "as_variant",
- "assert_matches",
- "assert_matches2",
- "async-trait",
- "bs58",
- "byteorder",
- "cfg-if",
- "cms",
- "ctr",
- "eyeball",
- "futures-core",
- "futures-executor",
- "futures-util",
- "hkdf",
- "hmac",
- "http",
- "insta",
- "itertools 0.15.0",
- "js_option",
- "pbkdf2",
- "pkcs1",
- "proptest",
- "qrcode 0.18.0",
- "rand 0.10.2",
- "rcgen",
- "ring",
- "rmp-serde",
- "ruma",
- "rustls",
- "rustls-pki-types",
- "rustls-webpki",
- "sdk-common",
- "sdk-test",
- "sdk-test-utils",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sha2 0.11.0",
- "similar-asserts",
- "stream_assert",
- "subtle",
- "thiserror 2.0.19",
- "time",
- "tokio",
- "tokio-stream",
- "tracing",
- "ulid",
- "uniffi",
- "url",
- "vodozemac",
- "zeroize",
-]
-
-[[package]]
 name = "crypto-common"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1540,37 +2198,6 @@ dependencies = [
  "getrandom 0.4.3",
  "hybrid-array",
  "rand_core 0.10.1",
-]
-
-[[package]]
-name = "crypto-ffi"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_matches2",
- "crypto",
- "futures-util",
- "hmac",
- "http",
- "js_int",
- "matrix-ffi-macros",
- "pbkdf2",
- "rand 0.10.2",
- "ruma",
- "sdk-common",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "sqlite",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uniffi",
- "vergen-gitcl",
- "vodozemac",
- "zeroize",
 ]
 
 [[package]]
@@ -2138,40 +2765,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "events"
-version = "0.16.0"
-dependencies = [
- "as_variant",
- "assert_matches2",
- "assign",
- "base64 0.23.0",
- "common",
- "html",
- "indexmap",
- "js_int",
- "js_option",
- "language-tags",
- "maplit",
- "pulldown-cmark",
- "ruma",
- "ruma-macros",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "time",
- "tracing",
- "uniffi",
- "web-time",
- "wildmatch",
- "zeroize",
-]
-
-[[package]]
 name = "example-autojoin"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "tokio",
  "tracing-subscriber",
 ]
@@ -2182,8 +2780,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "client-matrix",
  "futures-util",
- "matrix",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2194,7 +2792,7 @@ name = "example-command-bot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "tokio",
  "tracing-subscriber",
 ]
@@ -2204,7 +2802,7 @@ name = "example-cross-signing-bootstrap"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2215,7 +2813,7 @@ name = "example-custom-events"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "serde",
  "tokio",
  "tracing-subscriber",
@@ -2227,8 +2825,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "client-matrix",
  "futures-util",
- "matrix",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2239,7 +2837,7 @@ name = "example-get-profiles"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2250,7 +2848,7 @@ name = "example-getting-started"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "tokio",
  "tracing-subscriber",
 ]
@@ -2260,7 +2858,7 @@ name = "example-image-bot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "mime",
  "tokio",
  "tracing-subscriber",
@@ -2272,7 +2870,7 @@ name = "example-login"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "matrix",
+ "client-matrix",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2283,15 +2881,15 @@ name = "example-oauth-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "client-matrix",
+ "client-ui",
  "dirs",
  "futures-util",
- "matrix",
  "rand 0.10.2",
  "serde",
  "serde_json",
  "tokio",
  "tracing-subscriber",
- "ui",
  "url",
 ]
 
@@ -2300,8 +2898,8 @@ name = "example-persist-session"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "client-matrix",
  "dirs",
- "matrix",
  "rand 0.10.2",
  "serde",
  "serde_json",
@@ -2315,8 +2913,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "client-matrix",
  "futures-util",
- "matrix",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2328,7 +2926,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "matrix",
+ "client-matrix",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2340,11 +2938,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "client-matrix",
+ "client-ui",
  "futures-util",
- "matrix",
  "tokio",
  "tracing-subscriber",
- "ui",
  "url",
 ]
 
@@ -2473,30 +3071,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
-]
-
-[[package]]
-name = "federation-api"
-version = "0.16.0"
-dependencies = [
- "assert_matches2",
- "bytes",
- "common",
- "events",
- "headers",
- "http",
- "http-auth",
- "httparse",
- "js_int",
- "memchr",
- "mime",
- "rand 0.10.2",
- "ruma",
- "serde",
- "serde_json",
- "signatures",
- "thiserror 2.0.19",
- "tracing",
 ]
 
 [[package]]
@@ -3027,17 +3601,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "html"
-version = "0.16.0"
-dependencies = [
- "as_variant",
- "common",
- "html5ever",
- "tracing",
- "wildmatch",
-]
-
-[[package]]
 name = "html5ever"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3436,46 +3999,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
-name = "indexeddb"
-version = "0.18.0"
-dependencies = [
- "assert_matches",
- "assert_matches2",
- "async-trait",
- "base",
- "base64 0.23.0",
- "crypto",
- "futures-util",
- "getrandom 0.4.3",
- "gloo-timers",
- "gloo-utils",
- "growable-bloom-filter",
- "hkdf",
- "js-sys",
- "matrix_indexed_db_futures",
- "rand 0.10.2",
- "rmp-serde",
- "ruma",
- "sdk-common",
- "sdk-test",
- "serde",
- "serde-wasm-bindgen",
- "serde_bytes",
- "serde_json",
- "sha2 0.11.0",
- "store-encryption",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-test",
- "web-sys",
- "zeroize",
-]
-
-[[package]]
 name = "indexmap"
 version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3532,43 +4055,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "integration-testing"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "as_variant",
- "assert_matches",
- "assert_matches2",
- "assign",
- "base",
- "crypto",
- "eyeball",
- "eyeball-im",
- "futures",
- "futures-core",
- "futures-util",
- "http",
- "json-structural-diff",
- "matrix",
- "rand 0.10.2",
- "rcgen",
- "reqwest",
- "rustls",
- "sdk-common",
- "sdk-test",
- "sdk-test-utils",
- "serde_json",
- "sha2 0.11.0",
- "similar-asserts",
- "stream_assert",
- "tempfile",
- "tokio",
- "tracing",
- "ui",
- "wiremock",
 ]
 
 [[package]]
@@ -4010,152 +4496,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
-name = "matrix"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "anymap2",
- "as_variant",
- "assert-json-diff",
- "assert_matches",
- "assert_matches2",
- "async-channel",
- "async-stream",
- "async-trait",
- "axum",
- "backon",
- "base",
- "blurhash",
- "bytes",
- "bytesize",
- "cfg-if",
- "ctor 1.0.12",
- "dirs",
- "event-listener",
- "eyeball",
- "eyeball-im",
- "eyre",
- "futures-core",
- "futures-executor",
- "futures-util",
- "gloo-timers",
- "hex",
- "http",
- "image",
- "imbl",
- "indexeddb",
- "indexmap",
- "insta",
- "itertools 0.15.0",
- "js_int",
- "language-tags",
- "matrix-ffi-macros",
- "mime",
- "mime2ext",
- "oauth2",
- "percent-encoding",
- "pin-project-lite",
- "proptest",
- "pulldown-cmark",
- "rand 0.10.2",
- "reqwest",
- "ruma",
- "rustls",
- "sdk-common",
- "sdk-test",
- "sdk-test-utils",
- "search",
- "serde",
- "serde_html_form",
- "serde_json",
- "serde_urlencoded",
- "sha2 0.11.0",
- "similar-asserts",
- "sqlite",
- "stream_assert",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tokio-stream",
- "tokio-test",
- "tokio-util",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uniffi",
- "url",
- "urlencoding",
- "uuid",
- "vodozemac",
- "wasm-bindgen-test",
- "wiremock",
- "zeroize",
-]
-
-[[package]]
-name = "matrix-ffi"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "assert_matches2",
- "async-compat",
- "async-trait",
- "base",
- "chrono",
- "console_error_panic_hook",
- "contentscanner",
- "crypto",
- "extension-trait",
- "eyeball-im",
- "futures-executor",
- "futures-util",
- "http",
- "jni",
- "jvm-getter",
- "language-tags",
- "log-panics",
- "matrix",
- "matrix-ffi-macros",
- "mime",
- "oauth2",
- "once_cell",
- "paranoid-android",
- "ruma",
- "rustls-platform-verifier",
- "sdk-common",
- "sdk-test",
- "sentry",
- "sentry-tracing",
- "serde",
- "serde_json",
- "similar-asserts",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-core",
- "tracing-subscriber",
- "ui",
- "uniffi",
- "url",
- "uuid",
- "vergen-gitcl",
- "wiremock",
- "zeroize",
- "zxcvbn",
-]
-
-[[package]]
-name = "matrix-ffi-macros"
-version = "0.7.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.3",
-]
-
-[[package]]
 name = "matrix-pickle"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4319,19 +4659,20 @@ dependencies = [
 name = "multiverse"
 version = "0.1.0"
 dependencies = [
- "base",
  "clap",
+ "client-base",
+ "client-common",
+ "client-matrix",
+ "client-ui",
  "color-eyre",
  "crossterm",
  "futures-util",
  "imbl",
  "indexmap",
  "itertools 0.15.0",
- "matrix",
  "ratatui",
  "ratatui-textarea",
  "rpassword",
- "sdk-common",
  "serde_json",
  "strum",
  "textwrap",
@@ -4341,7 +4682,6 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "tui-widget-list",
- "ui",
 ]
 
 [[package]]
@@ -5166,18 +5506,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "qrcode"
-version = "0.18.0"
-dependencies = [
- "byteorder",
- "image",
- "qrcode 0.14.1",
- "ruma",
- "thiserror 2.0.19",
- "vodozemac",
-]
-
-[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5595,19 +5923,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "resolver"
-version = "0.18.0"
-dependencies = [
- "ruma",
- "sdk-test-macros",
- "sdk-test-utils",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5659,71 +5974,6 @@ checksum = "c247d24e63230cdb56463ae328478bd5eac8b8faa8c69461a77e8e323afac90e"
 dependencies = [
  "libc",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "ruma"
-version = "0.16.0"
-dependencies = [
- "appservice-api",
- "assert_matches2",
- "assign",
- "bytes",
- "client-api",
- "common",
- "events",
- "federation-api",
- "html",
- "http",
- "insta",
- "js_int",
- "maplit",
- "ruma-macros",
- "serde",
- "serde_json",
- "signatures",
- "similar-asserts",
- "state-res",
- "tracing",
-]
-
-[[package]]
-name = "ruma-client"
-version = "0.20.0"
-dependencies = [
- "as_variant",
- "assign",
- "async-stream",
- "bytes",
- "futures-core",
- "http",
- "reqwest",
- "ruma",
- "tokio-stream",
- "tracing",
-]
-
-[[package]]
-name = "ruma-identifiers-validation"
-version = "0.12.1"
-dependencies = [
- "js_int",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "ruma-macros"
-version = "0.19.0"
-dependencies = [
- "as_variant",
- "cfg-if",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "ruma-identifiers-validation",
- "serde",
- "syn 3.0.3",
- "toml 1.1.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -5951,92 +6201,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk-common"
-version = "0.18.0"
-dependencies = [
- "assert_matches",
- "assert_matches2",
- "eyeball-im",
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-util",
- "getrandom 0.3.4",
- "getrandom 0.4.3",
- "gloo-timers",
- "imbl",
- "insta",
- "js-sys",
- "proptest",
- "ruma",
- "sanitize-filename",
- "sdk-test-macros",
- "sdk-test-utils",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uniffi",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
-]
-
-[[package]]
-name = "sdk-state-res"
-version = "0.18.0"
-dependencies = [
- "ruma",
- "sdk-test-macros",
- "sdk-test-utils",
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "sdk-test"
-version = "0.18.0"
-dependencies = [
- "as_variant",
- "ctor 0.2.9",
- "getrandom 0.4.3",
- "http",
- "insta",
- "ruma",
- "sdk-common",
- "sdk-test-macros",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tokio",
- "tracing-subscriber",
- "vodozemac",
- "wasm-bindgen-test",
- "wiremock",
-]
-
-[[package]]
-name = "sdk-test-macros"
-version = "0.18.0"
-dependencies = [
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "sdk-test-utils"
-version = "0.18.0"
-dependencies = [
- "ctor 0.2.9",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "sealed"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6045,28 +6209,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "search"
-version = "0.18.0"
-dependencies = [
- "aes",
- "byteorder",
- "ctr",
- "hkdf",
- "hmac",
- "once_cell",
- "pbkdf2",
- "rand 0.10.2",
- "ruma",
- "sdk-test",
- "sha2 0.11.0",
- "tantivy",
- "tempfile",
- "thiserror 2.0.19",
- "tracing",
- "zeroize",
 ]
 
 [[package]]
@@ -6341,6 +6483,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "server-appservice"
+version = "0.18.0"
+dependencies = [
+ "common-ruma",
+ "regex",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "server-resolver"
+version = "0.18.0"
+dependencies = [
+ "common-ruma",
+ "common-test-macros",
+ "common-test-utils",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "server-state-res"
+version = "0.18.0"
+dependencies = [
+ "common-ruma",
+ "common-test-macros",
+ "common-test-utils",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "server-store-codec"
+version = "0.18.0"
+dependencies = [
+ "arrayvec",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "server-thumbnail"
+version = "0.18.0"
+dependencies = [
+ "common-ruma",
+ "image",
+ "thiserror 2.0.19",
+ "tracing",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6425,24 +6622,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d567dcbaf0049cb8ac2608a76cd95ff9e4412e1899d389ee400918ca7537f5"
 dependencies = [
  "rand_core 0.10.1",
-]
-
-[[package]]
-name = "signatures"
-version = "0.16.0"
-dependencies = [
- "assert_matches2",
- "base64 0.23.0",
- "common",
- "ed25519-dalek",
- "events",
- "pkcs8",
- "rand 0.10.2",
- "ruma",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -6569,61 +6748,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "sqlite"
-version = "0.18.0"
-dependencies = [
- "as_variant",
- "assert_matches",
- "async-trait",
- "base",
- "crypto",
- "deadpool 0.13.0",
- "erased-serde",
- "glob",
- "itertools 0.15.0",
- "num_cpus",
- "rmp-serde",
- "ruma",
- "rusqlite",
- "sdk-common",
- "sdk-test",
- "sdk-test-utils",
- "serde",
- "serde_json",
- "serde_path_to_error",
- "similar-asserts",
- "store-encryption",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tracing",
- "vodozemac",
- "zeroize",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "state-res"
-version = "0.16.0"
-dependencies = [
- "assert_matches2",
- "base64 0.23.0",
- "common",
- "events",
- "js_int",
- "ruma",
- "serde",
- "serde_json",
- "signatures",
- "test-log",
- "thiserror 2.0.19",
- "tracing",
-]
 
 [[package]]
 name = "static_assertions"
@@ -6639,39 +6767,6 @@ checksum = "2a3fe7c28c6512e766b0874335db33c94ad7b8f9054228ae1c2abd47ce7d335e"
 dependencies = [
  "approx",
  "num-traits",
-]
-
-[[package]]
-name = "store-codec"
-version = "0.18.0"
-dependencies = [
- "arrayvec",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "store-encryption"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "base64 0.23.0",
- "blake3",
- "chacha20poly1305",
- "erased-serde",
- "getrandom 0.4.3",
- "hkdf",
- "hmac",
- "pbkdf2",
- "rand 0.10.2",
- "rmp-serde",
- "serde",
- "serde_bytes",
- "serde_json",
- "sha2 0.11.0",
- "thiserror 2.0.19",
- "zeroize",
 ]
 
 [[package]]
@@ -7136,16 +7231,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thumbnail"
-version = "0.18.0"
-dependencies = [
- "image",
- "ruma",
- "thiserror 2.0.19",
- "tracing",
-]
-
-[[package]]
 name = "time"
 version = "0.3.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7570,55 +7655,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
 
 [[package]]
-name = "ui"
-version = "0.18.0"
-dependencies = [
- "anyhow",
- "as_variant",
- "assert-json-diff",
- "assert_matches",
- "assert_matches2",
- "async-rx",
- "async-stream",
- "async_cell",
- "base",
- "bitflags 2.13.1",
- "chrono",
- "emojis",
- "eyeball",
- "eyeball-im",
- "eyeball-im-util",
- "futures-core",
- "futures-util",
- "fuzzy-matcher",
- "growable-bloom-filter",
- "imbl",
- "indexmap",
- "itertools 0.15.0",
- "matrix",
- "mime",
- "pin-project-lite",
- "proptest",
- "ruma",
- "sdk-common",
- "sdk-test",
- "sdk-test-utils",
- "serde",
- "serde_json",
- "stream_assert",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tokio-stream",
- "tracing",
- "unicode-normalization",
- "unicode-segmentation",
- "uniffi",
- "url",
- "wiremock",
-]
-
-[[package]]
 name = "ulid"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7973,42 +8009,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "vodozemac"
-version = "0.10.0"
-dependencies = [
- "aes",
- "anyhow",
- "arrayvec",
- "assert_matches2",
- "base64 0.22.1",
- "base64ct",
- "cbc",
- "chacha20poly1305",
- "cipher",
- "curve25519-dalek",
- "ed25519-dalek",
- "getrandom 0.4.3",
- "hkdf",
- "hmac",
- "hpke",
- "insta",
- "matrix-pickle",
- "ntest",
- "olm-rs",
- "proptest",
- "prost",
- "rand 0.10.2",
- "serde",
- "serde_bytes",
- "serde_json",
- "sha2 0.11.0",
- "subtle",
- "thiserror 2.0.19",
- "x25519-dalek",
- "zeroize",
-]
 
 [[package]]
 name = "vtparse"

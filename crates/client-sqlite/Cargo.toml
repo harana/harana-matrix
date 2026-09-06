@@ -1,0 +1,74 @@
+[package]
+name = "client-sqlite"
+version = "0.18.0"
+edition = "2024"
+repository = "https://github.com/matrix-org/matrix-rust-sdk"
+description = "Sqlite storage backend for matrix"
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--generate-link-to-definition"]
+
+[features]
+default = ["state-store", "event-cache-store", "media-store", "tokio-runtime"]
+testing = ["client-crypto?/testing"]
+
+bundled = ["rusqlite/bundled"]
+crypto-store = ["dep:client-base", "dep:client-crypto"]
+event-cache-store = ["dep:client-base"]
+media-store = ["dep:client-base"]
+state-store = ["dep:client-base"]
+
+experimental-encrypted-state-events = [
+    "client-crypto?/experimental-encrypted-state-events"
+]
+experimental-push-secrets = [
+    "client-crypto?/experimental-push-secrets"
+]
+
+# Use Tokio as the async runtime, unless another one is installed with
+# `client_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = [
+    "client-common/tokio-runtime",
+    "client-base?/tokio-runtime",
+    "client-crypto?/tokio-runtime",
+]
+
+[dependencies]
+as_variant.workspace = true
+async-trait.workspace = true
+deadpool = { version = "0.13", default-features = false, features = ["managed"] }
+itertools.workspace = true
+client-base = { workspace = true, optional = true }
+client-common.workspace = true
+client-crypto = { workspace = true, optional = true }
+client-store-encryption.workspace = true
+num_cpus = { version = "1.17.0", default-features = false }
+rmp-serde.workspace = true
+common-ruma.workspace = true
+rusqlite = { version = "0.40.1", default-features = false, features = ["limits", "fallible_uint", "cache"] }
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error = { version = "0.1.20", default-features = false }
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+common-olm.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
+erased-serde.workspace = true
+glob = "0.3.4"
+client-base = { workspace = true, features = ["testing"] }
+client-crypto = { workspace = true, features = ["testing"] }
+common-test.workspace = true
+common-test-utils.workspace = true
+similar-asserts.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

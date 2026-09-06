@@ -239,19 +239,19 @@ struct FfiPackage {
     framework_name: &'static str,
 }
 
-/// The full SDK, `matrix-ffi`.
+/// The full SDK, `client-matrix-ffi`.
 const FULL_SDK: FfiPackage = FfiPackage {
-    crate_name: "matrix-ffi",
-    library_name: "libmatrix_ffi.a",
+    crate_name: "client-matrix-ffi",
+    library_name: "libclient_matrix_ffi.a",
     features: "sentry",
     framework_name: "MatrixSDKFFI",
 };
 
-/// The crypto module on its own, `crypto-ffi`, for clients that
+/// The crypto module on its own, `client-crypto-ffi`, for clients that
 /// already depend on another SDK.
 const CRYPTO_SDK: FfiPackage = FfiPackage {
-    crate_name: "crypto-ffi",
-    library_name: "libcrypto_ffi.a",
+    crate_name: "client-crypto-ffi",
+    library_name: "libclient_crypto_ffi.a",
     features: "",
     framework_name: "MatrixSDKCryptoFFI",
 };
@@ -319,7 +319,7 @@ fn build_library() -> Result<()> {
 
     let root_directory = workspace::root_path()?;
     let target_directory = workspace::target_path()?;
-    let ffi_directory = root_directory.join("bindings/apple/generated/matrix_ffi");
+    let ffi_directory = root_directory.join("bindings/apple/generated/client_matrix_ffi");
     let lib_output_dir = target_directory.join("debug");
 
     create_dir_all(ffi_directory.as_path())?;
@@ -858,9 +858,9 @@ mod tests {
         let full = build_path_for_target(target, "release", &FULL_SDK).unwrap();
         let crypto = build_path_for_target(target, "release", &CRYPTO_SDK).unwrap();
 
-        assert!(full.as_str().ends_with("aarch64-apple-ios/release/libmatrix_ffi.a"), "{full}");
+        assert!(full.as_str().ends_with("aarch64-apple-ios/release/libclient_matrix_ffi.a"), "{full}");
         assert!(
-            crypto.as_str().ends_with("aarch64-apple-ios/release/libcrypto_ffi.a"),
+            crypto.as_str().ends_with("aarch64-apple-ios/release/libclient_crypto_ffi.a"),
             "{crypto}"
         );
     }

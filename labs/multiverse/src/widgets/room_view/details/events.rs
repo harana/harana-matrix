@@ -1,6 +1,6 @@
 use itertools::Itertools;
-use matrix::Room;
-use sdk_common::executor::Handle;
+use client_matrix::Room;
+use client_common::executor::Handle;
 use ratatui::{
     prelude::*,
     widgets::{Paragraph, Wrap},

@@ -218,8 +218,8 @@ jobs:
       - name: Test
         run: |
           cargo nextest run --workspace \
-            --exclude integration-testing \
-            --features testing,matrix/sqlite
+            --exclude client-integration-testing \
+            --features testing,client-matrix/sqlite
 
       - name: Test documentation
         run: |
@@ -418,11 +418,11 @@ jobs:
 
       - name: Test
         env:
-          RUST_LOG: "info,matrix=trace"
+          RUST_LOG: "info,client_matrix=trace"
           HOMESERVER_URL: "http://localhost:8008"
           HOMESERVER_DOMAIN: "synapse"
         run: |
-          cargo nextest run --profile ci -p integration-testing --features "${{ matrix.feature }}"
+          cargo nextest run --profile ci -p client-integration-testing --features "${{ matrix.feature }}"
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

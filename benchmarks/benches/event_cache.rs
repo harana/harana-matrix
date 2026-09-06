@@ -1,16 +1,16 @@
 use std::{pin::Pin, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use matrix::{
+use client_matrix::{
     RoomInfo, RoomState, SqliteEventCacheStore, StateStore,
     cross_process_lock::CrossProcessLockConfig,
     store::StoreConfig,
     sync::{JoinedRoomUpdate, RoomUpdates},
     test_utils::client::MockClientBuilder,
 };
-use base::event_cache::store::{DynEventCacheStore, IntoEventCacheStore, MemoryStore};
-use sdk_test::{ALICE, base64_sha256_hash, event_factory::EventFactory};
-use ruma::{
+use client_base::event_cache::store::{DynEventCacheStore, IntoEventCacheStore, MemoryStore};
+use common_test::{ALICE, base64_sha256_hash, event_factory::EventFactory};
+use common_ruma::{
     OwnedRoomId, RoomId,
     events::{relation::RelationType, room::message::RoomMessageEventContentWithoutRelation},
     room_id,
@@ -37,7 +37,7 @@ fn handle_room_updates(c: &mut Criterion) {
         // Add some joined rooms, each with NUM_EVENTS in it, to the sync response.
         let mut room_updates = RoomUpdates::default();
 
-        let mut changes = matrix::StateChanges::default();
+        let mut changes = client_matrix::StateChanges::default();
 
         for i in 0..num_rooms {
             // Synapse's room IDs for rooms v1 to v11 have an 18 characters localpart.
@@ -98,7 +98,7 @@ fn handle_room_updates(c: &mut Criterion) {
         ];
 
         let state_store = runtime.block_on(async {
-            let state_store = matrix::MemoryStore::new();
+            let state_store = client_matrix::MemoryStore::new();
             state_store.save_changes(&changes).await.unwrap();
             Arc::new(state_store)
         });
@@ -187,11 +187,11 @@ fn find_event_relations(c: &mut Criterion) {
 
     // Make the state store aware of the room, so that `client.get_room()` works
     // with it.
-    let mut changes = matrix::StateChanges::default();
+    let mut changes = client_matrix::StateChanges::default();
     changes.add_room(RoomInfo::new(room_id, RoomState::Joined));
     changes.add_room(RoomInfo::new(other_room_id, RoomState::Joined));
     let state_store = runtime.block_on(async {
-        let state_store = matrix::MemoryStore::new();
+        let state_store = client_matrix::MemoryStore::new();
         state_store.save_changes(&changes).await.unwrap();
         Arc::new(state_store)
     });

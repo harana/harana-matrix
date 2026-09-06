@@ -9,7 +9,7 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use futures_util::FutureExt as _;
 use layout::Flex;
-use matrix::{
+use client_matrix::{
     Client,
     encryption::{
         backups::BackupState,
@@ -17,7 +17,7 @@ use matrix::{
     },
     executor::JoinHandle,
 };
-use sdk_common::executor::spawn;
+use client_common::executor::spawn;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},

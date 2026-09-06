@@ -1,10 +1,10 @@
 use std::{ops::Deref, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use crypto::{EncryptionSettings, OlmMachine, OlmMachineBuilder};
-use sqlite::SqliteCryptoStore;
-use sdk_test::ruma_response_from_json;
-use ruma::{
+use client_crypto::{EncryptionSettings, OlmMachine, OlmMachineBuilder};
+use client_sqlite::SqliteCryptoStore;
+use common_test::ruma_response_from_json;
+use common_ruma::{
     DeviceId, OwnedUserId, TransactionId, UserId,
     api::client::{
         keys::{claim_keys, get_keys},

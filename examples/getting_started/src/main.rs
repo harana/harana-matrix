@@ -12,7 +12,7 @@
 // The imports we need
 use std::{env, process::exit};
 
-use matrix::{
+use client_matrix::{
     Client, Room, RoomState,
     config::SyncSettings,
     ruma::events::room::{

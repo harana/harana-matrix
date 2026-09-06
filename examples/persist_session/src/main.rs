@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use matrix::{
+use client_matrix::{
     Client, Error, LoopCtrl, Room, RoomState,
     authentication::matrix::MatrixSession,
     config::SyncSettings,
@@ -196,9 +196,9 @@ async fn build_client(data_dir: &Path) -> anyhow::Result<(Client, ClientSession)
         {
             Ok(client) => return Ok((client, ClientSession { homeserver, db_path, passphrase })),
             Err(error) => match &error {
-                matrix::ClientBuildError::AutoDiscovery(_)
-                | matrix::ClientBuildError::Url(_)
-                | matrix::ClientBuildError::Http(_) => {
+                client_matrix::ClientBuildError::AutoDiscovery(_)
+                | client_matrix::ClientBuildError::Url(_)
+                | client_matrix::ClientBuildError::Http(_) => {
                     println!("Error checking the homeserver: {error}");
                     println!("Please try again\n");
                 }

@@ -11,7 +11,7 @@ version = 2
 ignore = [
     { id = "RUSTSEC-2024-0388", reason = "Unmaintained derivative crate, not a direct dependency" },
     { id = "RUSTSEC-2026-0247", reason = "Unmaintained bitmaps crate; not a direct dependency" },
-    { id = "RUSTSEC-2024-0368", reason = "Unmaintained olm-sys, only pulled in by the libolm interoperability tests of crates/harana-olm" },
+    { id = "RUSTSEC-2024-0368", reason = "Unmaintained olm-sys, only pulled in by the libolm interoperability tests of crates/common-olm" },
 ]
 
 [licenses]
@@ -50,7 +50,7 @@ allow-git = [
     # This is our fork of Ruma, needed until the fix for https://github.com/mozilla/uniffi-rs/issues/2939 is merged.
     "https://github.com/matrix-org/ruma",
     # libolm bindings, used only by the interoperability tests of the vendored
-    # crates/harana-olm crate.
+    # crates/common-olm crate.
     "https://github.com/poljar/olm-rs",
     "https://github.com/poljar/olm-sys",
     # A patch override for the bindings: https://github.com/rodrimati1992/const_panic/pull/10

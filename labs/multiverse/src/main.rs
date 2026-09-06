@@ -20,7 +20,7 @@ use crossterm::{
 use futures_util::{StreamExt as _, pin_mut};
 use imbl::Vector;
 use layout::Flex;
-use matrix::{
+use client_matrix::{
     AuthSession, Client, SqliteCryptoStore, SqliteEventCacheStore, SqliteStateStore,
     ThreadingSupport,
     authentication::matrix::MatrixSession,
@@ -30,9 +30,9 @@ use matrix::{
     ruma::{OwnedRoomId, api::client::room::create_room::v3::Request as CreateRoomRequest},
     search_index::{SearchIndexGuard, SearchIndexStoreKind},
 };
-use base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard};
-use sdk_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex};
-use ui::{
+use client_base::{RoomStateFilter, event_cache::store::EventCacheStoreLockGuard};
+use client_common::{cross_process_lock::CrossProcessLockConfig, locks::Mutex};
+use client_ui::{
     Timeline as SdkTimeline,
     room_list_service::{self, State, filters::new_filter_non_left},
     sync_service::SyncService,

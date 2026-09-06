@@ -1,0 +1,35 @@
+[package]
+name = "common-state-res"
+version = "0.16.0"
+description = "State resolution and PDU authorization for the Matrix specification."
+categories = ["api-bindings", "web-programming"]
+keywords = ["matrix", "chat", "messaging", "ruma"]
+license = "MIT"
+repository = "https://github.com/ruma/ruma"
+edition = "2024"
+rust-version = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+
+[dependencies]
+common-types = { path = "../common-types", version = "0.16.0" }
+common-events = { path = "../common-events", version = "0.16.0" }
+common-signatures = { path = "../common-signatures", version = "0.16.0" }
+base64.workspace = true
+js_int = { version = "0.2.2", features = ["serde"] }
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+thiserror.workspace = true
+tracing = { workspace = true, features = ["attributes"] }
+
+[dev-dependencies]
+assert_matches2.workspace = true
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
+common-ruma = { path = "../common-ruma", features = ["full"] }
+
+[lints]
+workspace = true

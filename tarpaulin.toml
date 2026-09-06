@@ -13,16 +13,16 @@ workspace = true
 features = "crypto-store"
 exclude = [
     # bindings
-    "crypto-ffi",
-    "matrix-ffi",
+    "client-crypto-ffi",
+    "client-matrix-ffi",
     # wasm only, can't get coverage
-    "indexeddb",
+    "client-indexeddb",
     # testing
-    "sdk-test",
-    "sdk-test-macros",
+    "common-test",
+    "common-test-macros",
     # repo automation (ci, codegen)
     "uniffi-bindgen",
     "xtask",
     # until it doesn't segfault anymore, this is excluded :(
-    "base",
+    "client-base",
 ]

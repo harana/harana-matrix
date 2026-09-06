@@ -21,9 +21,9 @@ enum Package {
 impl Package {
     fn values(self) -> PackageValues {
         match self {
-            Package::CryptoSDK => PackageValues { name: "crypto-ffi", features: "" },
+            Package::CryptoSDK => PackageValues { name: "client-crypto-ffi", features: "" },
             Package::FullSDK => PackageValues {
-                name: "matrix-ffi",
+                name: "client-matrix-ffi",
                 features: "sentry,experimental-x509-identity-verification",
             },
         }
@@ -294,11 +294,11 @@ mod tests {
     #[test]
     fn each_package_builds_the_crate_it_names() {
         let crypto = Package::CryptoSDK.values();
-        assert_eq!(crypto.name, "crypto-ffi");
+        assert_eq!(crypto.name, "client-crypto-ffi");
         assert_eq!(crypto.features, "");
 
         let full = Package::FullSDK.values();
-        assert_eq!(full.name, "matrix-ffi");
+        assert_eq!(full.name, "client-matrix-ffi");
         assert!(full.features.contains("sentry"));
     }
 }

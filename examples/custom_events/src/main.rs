@@ -18,7 +18,7 @@ use std::{
     },
 };
 
-use matrix::{
+use client_matrix::{
     Client, Room, RoomState,
     config::SyncSettings,
     event_handler::Ctx,

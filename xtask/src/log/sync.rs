@@ -23,7 +23,7 @@ pub(super) fn run(log_path: path::PathBuf, output_path: path::PathBuf) -> Result
             (?<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)
 
             # Ensure it's about the `http_client` scope.
-            .*matrix::http_client
+            .*client_matrix::http_client
 
             # Ensure it's about a sync.
             .*>\ssync_once\{

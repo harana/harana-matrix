@@ -3,8 +3,8 @@
 use anyhow::Result;
 use clap::Parser;
 use futures_util::StreamExt;
-use matrix::{Client, config::SyncSettings, ruma::OwnedRoomId};
-use ui::timeline::RoomExt;
+use client_matrix::{Client, config::SyncSettings, ruma::OwnedRoomId};
+use client_ui::timeline::RoomExt;
 use url::Url;
 
 #[derive(Parser, Debug)]

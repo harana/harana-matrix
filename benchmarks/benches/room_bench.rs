@@ -3,18 +3,18 @@
 use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use matrix::{
+use client_matrix::{
     cross_process_lock::CrossProcessLockConfig, store::RoomLoadSettings,
     test_utils::mocks::MatrixMockServer,
 };
-use base::{
+use client_base::{
     BaseClient, DmRoomDefinition, RoomInfo, RoomState, SessionMeta, StateChanges, StateStore,
     ThreadingSupport, store::StoreConfig,
 };
-use sqlite::SqliteStateStore;
-use sdk_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
-use ui::timeline::{TimelineBuilder, TimelineFocus};
-use ruma::{
+use client_sqlite::SqliteStateStore;
+use common_test::{JoinedRoomBuilder, base64_sha256_hash, event_factory::EventFactory};
+use client_ui::timeline::{TimelineBuilder, TimelineFocus};
+use common_ruma::{
     EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedUserId,
     api::client::membership::get_member_events,
     events::room::member::{MembershipState, RoomMemberEvent},

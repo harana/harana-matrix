@@ -25,8 +25,8 @@ If you want to execute only one part of CI, there are a few sub-commands (see
 
 Some tests are not automatically run in `cargo xtask ci`, for example the
 integration tests that need a running synapse instance. These tests reside in
-`./testing/integration-testing`. See its
-[README](./testing/integration-testing/README.md) to easily set up a
+`./testing/client-integration-testing`. See its
+[README](./testing/client-integration-testing/README.md) to easily set up a
 synapse for testing purposes.
 
 ### Snapshot testing

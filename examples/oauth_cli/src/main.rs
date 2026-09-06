@@ -21,7 +21,7 @@ use std::{
 
 use anyhow::bail;
 use futures_util::StreamExt;
-use matrix::{
+use client_matrix::{
     Client, ClientBuildError, Result, RoomState,
     authentication::oauth::{
         ClientId, OAuthAuthorizationData, OAuthError, OAuthSession, UserSession,
@@ -40,7 +40,7 @@ use matrix::{
     },
     utils::local_server::{LocalServerBuilder, LocalServerRedirectHandle, QueryString},
 };
-use ui::sync_service::SyncService;
+use client_ui::sync_service::SyncService;
 use rand::{RngExt, distr::Alphanumeric, rng};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io::AsyncBufReadExt as _};
@@ -463,25 +463,25 @@ impl OAuthCli {
                     res = sync_service_state.next() => {
                         if let Some(state) = res {
                             match state {
-                                ui::sync_service::State::Idle
-                                | ui::sync_service::State::Terminated => {
+                                client_ui::sync_service::State::Idle
+                                | client_ui::sync_service::State::Terminated => {
                                     num_errors = 0;
                                     num_running = 0;
                                 }
 
-                                ui::sync_service::State::Running => {
+                                client_ui::sync_service::State::Running => {
                                     num_running += 1;
                                     if num_running > 1 {
                                         num_errors = 0;
                                     }
                                 }
 
-                                ui::sync_service::State::Backoff => {
+                                client_ui::sync_service::State::Backoff => {
                                     // The sync service is waiting before restarting the
                                     // syncs on its own; nothing to do here.
                                 }
 
-                                ui::sync_service::State::Error(_) | ui::sync_service::State::Offline => {
+                                client_ui::sync_service::State::Error(_) | client_ui::sync_service::State::Offline => {
                                     num_errors += 1;
                                     num_running = 0;
 
@@ -525,13 +525,13 @@ impl OAuthCli {
         tokio::spawn(async move {
             while let Ok(update) = this.client.subscribe_to_session_changes().recv().await {
                 match update {
-                    matrix::SessionChange::UnknownToken(unknown_token) => {
+                    client_matrix::SessionChange::UnknownToken(unknown_token) => {
                         println!(
                             "Received an unknown token error; soft logout? {:?}",
                             unknown_token.soft_logout
                         );
                     }
-                    matrix::SessionChange::TokensRefreshed => {
+                    client_matrix::SessionChange::TokensRefreshed => {
                         // The tokens have been refreshed, persist them to disk.
                         if let Err(err) = this.update_stored_session().await {
                             println!("Unable to store a session in the background: {err}");

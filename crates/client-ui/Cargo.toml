@@ -1,0 +1,107 @@
+[package]
+name = "client-ui"
+description = "GUI-centric utilities on top of matrix-rust-sdk (experimental)."
+version = "0.18.0"
+edition = "2024"
+repository = "https://github.com/matrix-org/matrix-rust-sdk"
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--generate-link-to-definition"]
+
+[features]
+default = ["rustls-aws-lc-rs", "tokio-runtime"]
+js = ["client-matrix/js"]
+uniffi = ["dep:uniffi", "client-matrix/uniffi", "client-base/uniffi"]
+
+rustls-aws-lc-rs = ["reqwest-transport", "client-matrix/rustls-aws-lc-rs"]
+
+# Use ring rather than aws-lc-rs as the rustls crypto provider; see
+# `matrix`'s feature of the same name.
+rustls-ring = ["reqwest-transport", "client-matrix/rustls-ring"]
+
+# Send HTTP requests with `reqwest`; see `matrix`'s feature of the same
+# name.
+reqwest-transport = ["client-matrix/reqwest-transport"]
+
+# Add support for encrypted extensible events.
+unstable-msc3956 = ["common-ruma/unstable-msc3956"]
+
+# Add support for inline media galleries via msgtypes
+unstable-msc4274 = ["client-matrix/unstable-msc4274"]
+
+# Add support for user status profile fields (m.status, m.call).
+unstable-msc4426 = ["client-matrix/unstable-msc4426"]
+
+# Enable the global, reactive search service built on top of the SDK's
+# message search.
+experimental-search = ["client-matrix/experimental-search"]
+
+# Enable experimental support for encrypting state events; see
+# https://github.com/matrix-org/matrix-rust-sdk/issues/5397.
+experimental-encrypted-state-events = [
+    "client-base/experimental-encrypted-state-events",
+    "common-ruma/unstable-msc4362"
+]
+
+# Use Tokio as the async runtime, unless another one is installed with
+# `client_common::runtime::set_runtime()`. Turn this off to build without
+# any built-in runtime, and install your own instead.
+tokio-runtime = [
+    "client-matrix/tokio-runtime",
+    "client-base/tokio-runtime",
+    "client-common/tokio-runtime",
+]
+
+[dependencies]
+as_variant.workspace = true
+async-rx = { workspace = true, features = ["alloc"] }
+async-stream.workspace = true
+async_cell.workspace = true
+bitflags.workspace = true
+chrono.workspace = true
+emojis = { version = "0.9.0", default-features = false }
+eyeball.workspace = true
+eyeball-im.workspace = true
+eyeball-im-util.workspace = true
+futures-core.workspace = true
+futures-util.workspace = true
+fuzzy-matcher = { version = "0.3.7", default-features = false }
+growable-bloom-filter.workspace = true
+imbl = { workspace = true, features = ["serde"] }
+indexmap.workspace = true
+itertools.workspace = true
+client-matrix = { workspace = true, features = ["e2e-encryption"] }
+client-base.workspace = true
+client-common.workspace = true
+mime.workspace = true
+pin-project-lite.workspace = true
+common-ruma = { workspace = true, features = ["html", "unstable-msc3381"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream = { workspace = true, features = ["sync"] }
+tracing = { workspace = true, features = ["attributes"] }
+unicode-normalization.workspace = true
+unicode-segmentation.workspace = true
+uniffi = { workspace = true, optional = true }
+
+[dev-dependencies]
+anyhow.workspace = true
+assert-json-diff.workspace = true
+assert_matches.workspace = true
+assert_matches2.workspace = true
+eyeball-im-util.workspace = true
+client-matrix = { workspace = true, features = ["testing", "sqlite", "rustls-aws-lc-rs"] }
+common-test.workspace = true
+common-test-utils.workspace = true
+proptest.workspace = true
+stream_assert.workspace = true
+tempfile.workspace = true
+url.workspace = true
+wiremock.workspace = true
+
+[lints]
+workspace = true
