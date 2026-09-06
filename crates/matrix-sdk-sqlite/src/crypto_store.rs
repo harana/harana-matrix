@@ -1420,6 +1420,27 @@ impl CryptoStore for SqliteCryptoStore {
         if sessions.is_empty() { Ok(None) } else { Ok(Some(sessions)) }
     }
 
+    #[instrument(skip(self, session_ids))]
+    async fn delete_sessions(&self, sender_key: &str, session_ids: &[String]) -> Result<()> {
+        let sender_key = self.encode_key("session", sender_key.as_bytes());
+        let session_ids: Vec<_> =
+            session_ids.iter().map(|id| self.encode_key("session", id.as_bytes())).collect();
+
+        self.write()
+            .await?
+            .with_transaction(move |txn| {
+                for session_id in session_ids {
+                    txn.execute(
+                        "DELETE FROM session WHERE session_id = ? AND sender_key = ?",
+                        (session_id, &sender_key),
+                    )?;
+                }
+
+                Result::<_, Error>::Ok(())
+            })
+            .await
+    }
+
     #[instrument(skip(self))]
     async fn get_inbound_group_session(
         &self,

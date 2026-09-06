@@ -94,6 +94,20 @@ pub trait CryptoStore: AsyncTraitDeps {
     /// * `sender_key` - The sender key that was used to establish the sessions.
     async fn get_sessions(&self, sender_key: &str) -> Result<Option<Vec<Session>>, Self::Error>;
 
+    /// Delete the Olm sessions with the given session IDs.
+    ///
+    /// Sessions that are not in the store are ignored.
+    ///
+    /// # Arguments
+    ///
+    /// * `sender_key` - The sender key that was used to establish the sessions.
+    /// * `session_ids` - The IDs of the sessions to delete.
+    async fn delete_sessions(
+        &self,
+        sender_key: &str,
+        session_ids: &[String],
+    ) -> Result<(), Self::Error>;
+
     /// Get the inbound group session from our store.
     ///
     /// # Arguments
@@ -474,6 +488,10 @@ impl<T: CryptoStore> CryptoStore for EraseCryptoStoreError<T> {
 
     async fn get_sessions(&self, sender_key: &str) -> Result<Option<Vec<Session>>> {
         self.0.get_sessions(sender_key).await.map_err(Into::into)
+    }
+
+    async fn delete_sessions(&self, sender_key: &str, session_ids: &[String]) -> Result<()> {
+        self.0.delete_sessions(sender_key, session_ids).await.map_err(Into::into)
     }
 
     async fn get_inbound_group_session(

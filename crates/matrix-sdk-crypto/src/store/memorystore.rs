@@ -437,6 +437,25 @@ impl CryptoStore for MemoryStore {
         }
     }
 
+    async fn delete_sessions(&self, sender_key: &str, session_ids: &[String]) -> Result<()> {
+        let mut sessions = self.sessions.write();
+
+        if let Some(pickles) = sessions.get_mut(sender_key) {
+            for session_id in session_ids {
+                pickles.remove(session_id.as_str());
+            }
+
+            // The other backends have nothing left to find for a sender key
+            // whose sessions are all gone, and `get_sessions` is expected to
+            // return `None` rather than an empty list.
+            if pickles.is_empty() {
+                sessions.remove(sender_key);
+            }
+        }
+
+        Ok(())
+    }
+
     async fn get_inbound_group_session(
         &self,
         room_id: &RoomId,
@@ -1443,6 +1462,14 @@ mod integration_tests {
             sender_key: &str,
         ) -> Result<Option<Vec<Session>>, Self::Error> {
             self.0.get_sessions(sender_key).await
+        }
+
+        async fn delete_sessions(
+            &self,
+            sender_key: &str,
+            session_ids: &[String],
+        ) -> Result<(), Self::Error> {
+            self.0.delete_sessions(sender_key, session_ids).await
         }
 
         async fn get_inbound_group_session(

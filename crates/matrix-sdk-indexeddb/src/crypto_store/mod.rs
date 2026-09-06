@@ -1103,6 +1103,24 @@ impl_crypto_store! {
         }
     }
 
+    async fn delete_sessions(&self, sender_key: &str, session_ids: &[String]) -> Result<()> {
+        let transaction = self
+            .inner
+            .transaction(keys::SESSION)
+            .with_mode(TransactionMode::Readwrite)
+            .build()?;
+        let object_store = transaction.object_store(keys::SESSION)?;
+
+        for session_id in session_ids {
+            let key = self.serializer.encode_key(keys::SESSION, (sender_key, session_id.as_str()));
+            object_store.delete(&key).build()?;
+        }
+
+        transaction.commit().await?;
+
+        Ok(())
+    }
+
     async fn get_inbound_group_session(
         &self,
         room_id: &RoomId,

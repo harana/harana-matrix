@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 <!-- changelog start -->
 
+## Unreleased
+
+### Added
+
+- [**breaking**] Add `CryptoStore::delete_sessions`, so Olm sessions can be
+  removed from a store. Third-party `CryptoStore` implementations need to
+  implement it. ([#86](https://github.com/harana/harana-matrix/issues/86))
+
+### Fixed
+
+- Cap the number of Olm sessions kept per sender key at 8 and drop the least
+  recently used ones beyond that. Sessions were only ever added, so a device
+  we repeatedly failed to decrypt from grew the store without a bound.
+  ([#86](https://github.com/harana/harana-matrix/issues/86))
+
 ## [0.18.0](https://github.com/matrix-org/matrix-rust-sdk/tree/0.18.0) - 2026-06-02
 
 ### Fixed
