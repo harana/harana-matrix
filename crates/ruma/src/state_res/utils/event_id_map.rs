@@ -80,7 +80,8 @@ where
         self.0.get(event_id)
     }
 
-    /// Returns a mutable reference to the value corresponding to given event ID.
+    /// Returns a mutable reference to the value corresponding to given event
+    /// ID.
     pub fn get_mut(&mut self, event_id: &EventId) -> Option<&mut V> {
         self.0.get_mut(event_id)
     }
@@ -90,7 +91,8 @@ where
         self.0.get_key_value(event_id)
     }
 
-    /// Gets the given event ID's corresponding entry in the map for in-place manipulation.
+    /// Gets the given event ID's corresponding entry in the map for in-place
+    /// manipulation.
     pub fn entry(&mut self, event_id: E) -> EventIdMapEntry<'_, E, V> {
         EventIdMapEntry(self.0.entry(event_id))
     }
@@ -99,20 +101,20 @@ where
     ///
     /// If the map did not have this event ID present, `None` is returned.
     ///
-    /// If the map did have this event ID present, the value is updated, and the old value is
-    /// returned.
+    /// If the map did have this event ID present, the value is updated, and the
+    /// old value is returned.
     pub fn insert(&mut self, event_id: E, value: V) -> Option<V> {
         self.0.insert(event_id, value)
     }
 
-    /// Removes an event ID from the map, returning the value at the event ID if the event ID was
-    /// previously in the map.
+    /// Removes an event ID from the map, returning the value at the event ID if
+    /// the event ID was previously in the map.
     pub fn remove(&mut self, event_id: &EventId) -> Option<V> {
         self.0.remove(event_id)
     }
 
-    /// Removes an event ID from the map, returning the stored event ID and value if the event ID
-    /// was previously in the map.
+    /// Removes an event ID from the map, returning the stored event ID and
+    /// value if the event ID was previously in the map.
     pub fn remove_entry(&mut self, event_id: &EventId) -> Option<(E, V)> {
         self.0.remove_entry(event_id)
     }
@@ -377,35 +379,39 @@ impl<E, V> FusedIterator for EventIdMapIntoValues<E, V> {}
 pub struct EventIdMapEntry<'a, E: Borrow<EventId>, V>(hash_map::Entry<'a, E, V>);
 
 impl<'a, E: Borrow<EventId>, V> EventIdMapEntry<'a, E, V> {
-    /// Ensures a value is in the entry by inserting the default if empty, and returns a mutable
-    /// reference to the value in the entry.
+    /// Ensures a value is in the entry by inserting the default if empty, and
+    /// returns a mutable reference to the value in the entry.
     pub fn or_insert(self, default: V) -> &'a mut V {
         self.0.or_insert(default)
     }
 
-    /// Ensures a value is in the entry by inserting the result of the default function if empty,
-    /// and returns a mutable reference to the value in the entry.
+    /// Ensures a value is in the entry by inserting the result of the default
+    /// function if empty, and returns a mutable reference to the value in
+    /// the entry.
     pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
         self.0.or_insert_with(default)
     }
 
-    /// Ensures a value is in the entry by inserting, if empty, the result of the default function.
+    /// Ensures a value is in the entry by inserting, if empty, the result of
+    /// the default function.
     ///
-    /// This method allows for generating key-derived values for insertion by providing the default
-    /// function a reference to the key that was moved during the .entry(key) method call.
+    /// This method allows for generating key-derived values for insertion by
+    /// providing the default function a reference to the key that was moved
+    /// during the .entry(key) method call.
     pub fn or_insert_with_key<F: FnOnce(&E) -> V>(self, default: F) -> &'a mut V {
         self.0.or_insert_with_key(default)
     }
 
-    /// Sets the value of the entry, and returns a mutable reference to the value.
+    /// Sets the value of the entry, and returns a mutable reference to the
+    /// value.
     pub fn insert_entry(self, value: V) -> &'a mut V {
         self.0.insert_entry(value).into_mut()
     }
 }
 
 impl<'a, E: Borrow<EventId>, V: Default> EventIdMapEntry<'a, E, V> {
-    /// Ensures a value is in the entry by inserting the default value if empty, and returns a
-    /// mutable reference to the value in the entry.
+    /// Ensures a value is in the entry by inserting the default value if empty,
+    /// and returns a mutable reference to the value in the entry.
     pub fn or_default(self) -> &'a mut V {
         self.0.or_default()
     }

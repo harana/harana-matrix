@@ -1,5 +1,6 @@
-use crate::OwnedEventId;
 use thiserror::Error;
+
+use crate::OwnedEventId;
 
 /// Result type for state resolution.
 pub type Result<T> = std::result::Result<T, Error>;

@@ -2,13 +2,13 @@
 
 use std::{borrow::Cow, collections::HashSet, ops::Deref};
 
+use serde::{Deserialize, de::IgnoredAny};
+
+use super::Event;
 use crate::{
     OwnedUserId, RoomVersionId, UserId, room_version_rules::AuthorizationRules,
     serde::from_raw_json_value,
 };
-use serde::{Deserialize, de::IgnoredAny};
-
-use super::Event;
 
 /// A helper type for an [`Event`] of type `m.room.create`.
 ///
@@ -53,12 +53,13 @@ impl<E: Event> RoomCreateEvent<E> {
 
     /// The creator of the room.
     ///
-    /// If the `use_room_create_sender` field of `AuthorizationRules` is set, the creator is the
-    /// sender of this `m.room.create` event, otherwise it is deserialized from the `creator`
-    /// field of this event's content.
+    /// If the `use_room_create_sender` field of `AuthorizationRules` is set,
+    /// the creator is the sender of this `m.room.create` event, otherwise
+    /// it is deserialized from the `creator` field of this event's content.
     ///
-    /// This function ignores any `content.additional_creators`, and should only be used in
-    /// `check_room_member_join`. Otherwise, you should use `creators` instead.
+    /// This function ignores any `content.additional_creators`, and should only
+    /// be used in `check_room_member_join`. Otherwise, you should use
+    /// `creators` instead.
     pub(crate) fn creator(&self, rules: &AuthorizationRules) -> Result<Cow<'_, UserId>, String> {
         #[derive(Deserialize)]
         struct RoomCreateContentCreator {
@@ -80,11 +81,12 @@ impl<E: Event> RoomCreateEvent<E> {
     /// The additional creators of the room (if any).
     ///
     /// If the `explicitly_privilege_room_creators`
-    /// field of `AuthorizationRules` is set, any additional user IDs in `additional_creators`, if
-    /// present, will also be considered creators.
+    /// field of `AuthorizationRules` is set, any additional user IDs in
+    /// `additional_creators`, if present, will also be considered creators.
     ///
-    /// This function ignores the primary room creator, and should only be used in
-    /// `check_room_member_join`. Otherwise, you should use `creators` instead.
+    /// This function ignores the primary room creator, and should only be used
+    /// in `check_room_member_join`. Otherwise, you should use `creators`
+    /// instead.
     pub(crate) fn additional_creators(
         &self,
         rules: &AuthorizationRules,
@@ -109,11 +111,12 @@ impl<E: Event> RoomCreateEvent<E> {
 
     /// The creators of the room.
     ///
-    /// If the `use_room_create_sender` field of `AuthorizationRules` is set, the creator is the
-    /// sender of this `m.room.create` event, otherwise it is deserialized from the `creator`
-    /// field of this event's content. Additionally if the `explicitly_privilege_room_creators`
-    /// field of `AuthorizationRules` is set, any additional user IDs in `additional_creators`, if
-    /// present, will also be considered creators.
+    /// If the `use_room_create_sender` field of `AuthorizationRules` is set,
+    /// the creator is the sender of this `m.room.create` event, otherwise
+    /// it is deserialized from the `creator` field of this event's content.
+    /// Additionally if the `explicitly_privilege_room_creators`
+    /// field of `AuthorizationRules` is set, any additional user IDs in
+    /// `additional_creators`, if present, will also be considered creators.
     pub fn creators(&self, rules: &AuthorizationRules) -> Result<HashSet<OwnedUserId>, String> {
         let mut creators = self.additional_creators(rules)?;
 

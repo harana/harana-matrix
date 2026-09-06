@@ -7,8 +7,8 @@ pub mod event_id_set;
 
 /// Convenience extension trait for [`RoomId`].
 pub(crate) trait RoomIdExt {
-    /// Get the event ID of the `m.room.create` event of the room from a PDU, for room versions
-    /// using it as the room ID.
+    /// Get the event ID of the `m.room.create` event of the room from a PDU,
+    /// for room versions using it as the room ID.
     fn room_create_event_id(&self) -> Result<OwnedEventId, IdParseError>;
 }
 
