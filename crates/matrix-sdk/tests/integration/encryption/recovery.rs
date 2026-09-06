@@ -45,6 +45,7 @@ use crate::{encryption::mock_secret_store_with_backup_key, logged_in_client_with
 
 async fn test_client(user_id: &UserId) -> (Client, wiremock::MockServer) {
     let session = MatrixSession {
+        homeserver: None,
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
     };
@@ -170,6 +171,7 @@ async fn test_recovery_status_secret_storage_set_up() {
     let user_id = user_id!("@example:morpheus.localhost");
 
     let session = MatrixSession {
+        homeserver: None,
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
     };
@@ -191,6 +193,7 @@ async fn test_recovery_status_secret_storage_not_set_up() {
     let user_id = user_id!("@example:morpheus.localhost");
 
     let session = MatrixSession {
+        homeserver: None,
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
     };
@@ -779,6 +782,7 @@ async fn test_recover_and_reset() {
     const KEY_ID: &str = "yJWwBm2Ts8jHygTBslKpABFyykavhhfA";
 
     let session = MatrixSession {
+        homeserver: None,
         meta: SessionMeta { user_id: user_id.into(), device_id: owned_device_id!("DEVICEID") },
         tokens: mock_session_tokens(),
     };

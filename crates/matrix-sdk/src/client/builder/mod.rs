@@ -850,6 +850,10 @@ impl ClientBuilder {
         #[allow(unused_variables)]
         let HomeserverDiscoveryResult { server, homeserver, supported_versions, well_known } =
             homeserver_cfg.discover(&http_client, self.well_known_lookup_disabled).await?;
+        // A client that resolved its homeserver from a server name follows that
+        // server name if the delegation later moves; one handed a homeserver
+        // URL stays where it was put.
+        let homeserver_from_discovery = server.is_some();
 
         let sliding_sync_version = {
             let supported_versions = match supported_versions {
@@ -908,6 +912,7 @@ impl ClientBuilder {
             self.respect_login_well_known,
             self.well_known_lookup_disabled,
             self.discovery_cache_timeout,
+            homeserver_from_discovery,
             event_cache,
             self.enable_automatic_back_pagination,
             send_queue,

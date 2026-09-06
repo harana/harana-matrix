@@ -178,6 +178,7 @@ impl AuthState {
                                 access_token: token.unwrap_or("1234".to_owned()).to_owned(),
                                 refresh_token: None,
                             },
+                            homeserver: None,
                         },
                         RoomLoadSettings::default(),
                     )
@@ -255,7 +256,7 @@ pub fn mock_prev_session_tokens_with_refresh() -> SessionTokens {
 
 /// A [`MatrixSession`], for unit or integration tests.
 pub fn mock_matrix_session() -> MatrixSession {
-    MatrixSession { meta: mock_session_meta(), tokens: mock_session_tokens() }
+    MatrixSession { meta: mock_session_meta(), tokens: mock_session_tokens(), homeserver: None }
 }
 
 /// Mock client data for the OAuth 2.0 API.

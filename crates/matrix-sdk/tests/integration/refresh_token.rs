@@ -39,6 +39,7 @@ use wiremock::{
 
 fn session() -> MatrixSession {
     MatrixSession {
+        homeserver: None,
         meta: mock_session_meta(),
         tokens: SessionTokens {
             access_token: "1234".to_owned(),

@@ -37,7 +37,8 @@ use ruma::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
+use url::Url;
 
 use crate::{
     Client, Error, RefreshTokenError, Result,
@@ -649,7 +650,11 @@ impl MatrixAuth {
     pub fn session(&self) -> Option<MatrixSession> {
         let meta = self.client.session_meta()?;
         let tokens = self.client.session_tokens()?;
-        Some(MatrixSession { meta: meta.to_owned(), tokens })
+        Some(MatrixSession {
+            meta: meta.to_owned(),
+            tokens,
+            homeserver: Some(self.client.homeserver()),
+        })
     }
 
     /// Restore a previously logged in session.
@@ -731,6 +736,23 @@ impl MatrixAuth {
         room_load_settings: RoomLoadSettings,
     ) -> Result<()> {
         debug!("Restoring Matrix auth session");
+
+        // The tokens are only good for the homeserver that issued them, so a
+        // session that remembers which one that was saves resolving the server
+        // name again, over a network that may not be there yet.
+        if let Some(homeserver) = &session.homeserver {
+            let current = self.client.homeserver();
+
+            if *homeserver != current {
+                warn!(
+                    %current, restored = %homeserver,
+                    "The restored session names a different homeserver than the client was \
+                     built with; using the session's",
+                );
+                self.client.set_homeserver(homeserver.clone());
+            }
+        }
+
         self.set_session(
             session,
             room_load_settings,
@@ -794,8 +816,11 @@ impl MatrixAuth {
             .await?;
 
         let device_id = response.device_id.ok_or(Error::MissingDeviceId)?;
-        let session =
-            MatrixSession { meta: SessionMeta { user_id: response.user_id, device_id }, tokens };
+        let session = MatrixSession {
+            meta: SessionMeta { user_id: response.user_id, device_id },
+            tokens,
+            homeserver: Some(self.client.homeserver()),
+        };
 
         self.restore_session(session.clone(), room_load_settings).await?;
 
@@ -915,6 +940,32 @@ pub struct MatrixSession {
     /// The tokens used for authentication.
     #[serde(flatten)]
     pub tokens: SessionTokens,
+
+    /// The URL of the homeserver this session was created against.
+    ///
+    /// A session's tokens are only good for the homeserver that issued them,
+    /// so knowing it saves the client from resolving the server name again
+    /// through `.well-known` on every restart: that is a network round trip
+    /// before anything else can happen, and it fails when the device is
+    /// offline. [`MatrixAuth::restore_session`] points the client at this URL
+    /// when it is set.
+    ///
+    /// `None` for a session that predates this field, or one built by hand;
+    /// the client then keeps the homeserver it was built with.
+    ///
+    /// A homeserver can move: a server name that delegated to one host can
+    /// come to delegate to another. The client notices that on its own, as it
+    /// revalidates the well-known file in the background, and follows the
+    /// move; save the session again afterwards to keep the stored URL in step.
+    ///
+    /// This is not the place to point a client at a proxy. Overriding the
+    /// homeserver by hand, here or with
+    /// [`ClientBuilder::homeserver_url`][crate::ClientBuilder::homeserver_url],
+    /// is for a deployment that fronts its homeserver with something else; for
+    /// an ordinary account, the server name in the user ID is what decides
+    /// where the requests go.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homeserver: Option<Url>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -933,6 +984,9 @@ impl From<&login::v3::Response> for MatrixSession {
                 access_token: access_token.clone(),
                 refresh_token: refresh_token.clone(),
             },
+            // A login response doesn't name the homeserver it came from;
+            // `MatrixAuth::session` fills it in from the client.
+            homeserver: None,
         }
     }
 }
@@ -948,6 +1002,9 @@ impl MatrixSession {
                 access_token: access_token.clone()?,
                 refresh_token: refresh_token.clone(),
             },
+            // Same as for a login response: the client knows the homeserver,
+            // this response doesn't.
+            homeserver: None,
         })
     }
 }

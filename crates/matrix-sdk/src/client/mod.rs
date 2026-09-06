@@ -384,6 +384,16 @@ pub(crate) struct ClientInner {
     /// See [`ClientBuilder::discovery_cache_timeout`].
     discovery_cache_timeout: Duration,
 
+    /// Whether the homeserver URL was resolved from a server name rather than
+    /// given directly.
+    ///
+    /// Such a client follows the server name: when the well-known file comes
+    /// to name a different homeserver, the delegation moved and the client
+    /// moves with it. A client pointed at a homeserver URL by hand, which is
+    /// how a deployment fronts its homeserver with a proxy, stays where it was
+    /// put.
+    homeserver_from_discovery: bool,
+
     /// An event that can be listened on to wait for a successful sync. The
     /// event will only be fired if a sync loop is running. Can be used for
     /// synchronization, e.g. if we send out a request to create a room, we can
@@ -485,6 +495,7 @@ impl ClientInner {
         respect_login_well_known: bool,
         well_known_lookup_disabled: bool,
         discovery_cache_timeout: Duration,
+        homeserver_from_discovery: bool,
         event_cache: OnceCell<EventCache>,
         enable_automatic_back_pagination: bool,
         send_queue: Arc<SendQueueData>,
@@ -525,6 +536,7 @@ impl ClientInner {
             respect_login_well_known,
             well_known_lookup_disabled: StdRwLock::new(well_known_lookup_disabled),
             discovery_cache_timeout,
+            homeserver_from_discovery,
             sync_beat: event_listener::Event::new(),
             is_syncing: Arc::new(AtomicBool::new(false)),
             event_cache,
@@ -644,12 +656,22 @@ impl Client {
     /// # Arguments
     ///
     /// * `homeserver_url` - The new URL to use.
-    fn set_homeserver(&self, homeserver_url: Url) {
+    pub(crate) fn set_homeserver(&self, homeserver_url: Url) {
         let mut homeserver = self.inner.homeserver.write().unwrap();
         let mut server = self.inner.server.write().unwrap();
 
         *homeserver = homeserver_url;
         *server = None;
+    }
+
+    /// Follow the homeserver URL the server's discovery information names,
+    /// keeping the server name this client resolves from.
+    ///
+    /// Unlike [`Self::set_homeserver`], the server name survives: a delegation
+    /// that moves to another host is still the same server name, and the next
+    /// well-known lookup has to go to it again.
+    fn follow_discovered_homeserver(&self, homeserver_url: Url) {
+        *self.inner.homeserver.write().unwrap() = homeserver_url;
     }
 
     /// Change to a different homeserver and re-resolve well-known.
@@ -2969,7 +2991,12 @@ impl Client {
             }
         };
 
-        let well_known = TtlValue::new(self.fetch_client_well_known().await.map(Into::into));
+        let well_known: TtlValue<Option<WellKnownResponse>> =
+            TtlValue::new(self.fetch_client_well_known().await.map(Into::into));
+
+        if let Some(discovered) = well_known.data() {
+            self.handle_discovered_homeserver(&discovered.homeserver.base_url);
+        }
 
         if let Err(err) = self
             .state_store()
@@ -2985,6 +3012,43 @@ impl Client {
         well_known_cache.set_value(well_known.clone());
 
         well_known.into_data()
+    }
+
+    /// React to the homeserver URL a freshly fetched well-known file names.
+    ///
+    /// A server name's delegation can change: the well-known file that pointed
+    /// at one host comes to point at another. Since the well-known is
+    /// revalidated in the background once it is older than
+    /// [`Client::discovery_cache_timeout`], this is where a client resolving
+    /// its homeserver from a server name notices the move and follows it.
+    ///
+    /// A client that was handed a homeserver URL instead is left where it was
+    /// put: that is how a deployment points its clients at a proxy, and
+    /// following the origin's well-known would send the requests around it.
+    /// The move is still logged.
+    fn handle_discovered_homeserver(&self, discovered_base_url: &str) {
+        let Ok(discovered) = Url::parse(discovered_base_url) else {
+            warn!("The well-known file names a homeserver that is not a URL, ignoring it");
+            return;
+        };
+
+        if discovered == self.homeserver() {
+            return;
+        }
+
+        if self.inner.homeserver_from_discovery {
+            warn!(
+                previous = %self.homeserver(), %discovered,
+                "The server name now delegates to a different homeserver, following it",
+            );
+            self.follow_discovered_homeserver(discovered);
+        } else {
+            warn!(
+                current = %self.homeserver(), %discovered,
+                "The well-known file names a different homeserver than the one this client was \
+                 given; keeping the one it was given",
+            );
+        }
     }
 
     /// Whether this client is allowed to look up the homeserver's
@@ -4019,6 +4083,7 @@ impl Client {
                 self.inner.respect_login_well_known,
                 self.well_known_lookup_disabled(),
                 self.inner.discovery_cache_timeout,
+                self.inner.homeserver_from_discovery,
                 self.inner.event_cache.clone(),
                 false,
                 self.inner.send_queue_data.clone(),
@@ -5218,6 +5283,70 @@ pub(crate) mod tests {
                 assert!(value.has_expired_after(impatient_client.discovery_cache_timeout()));
             }
         );
+    }
+
+    /// A server name whose delegation moves to another homeserver takes the
+    /// client with it, which is what the background revalidation of the
+    /// well-known file is for.
+    #[async_test]
+    async fn test_a_client_built_from_a_server_name_follows_a_moved_homeserver() {
+        let server = MatrixMockServer::new().await;
+        let server_url = server.uri();
+        let domain = server_url.strip_prefix("http://").unwrap();
+        let server_name = <&ServerName>::try_from(domain).unwrap();
+
+        let first_lookup =
+            server.mock_well_known().ok().named("first well known").mount_as_scoped().await;
+
+        let client = Client::builder()
+            .insecure_server_name_no_tls(server_name)
+            .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+            .build()
+            .await
+            .unwrap();
+
+        assert_eq!(client.homeserver().as_str(), format!("{server_url}/"));
+
+        drop(first_lookup);
+
+        let _moved = server
+            .mock_well_known()
+            .ok_with_homeserver_url("https://moved.example.org")
+            .named("well known after the move")
+            .mount_as_scoped()
+            .await;
+
+        client.rediscover().await;
+
+        assert_eq!(client.homeserver().as_str(), "https://moved.example.org/");
+        // The server name is what was resolved, and it did not change.
+        assert_eq!(client.server_name().as_deref(), Some(server_name));
+    }
+
+    /// A client handed a homeserver URL is pointed somewhere on purpose, at a
+    /// proxy for instance, so the origin's well-known does not move it.
+    #[async_test]
+    async fn test_a_client_built_from_a_homeserver_url_stays_where_it_was_put() {
+        let server = MatrixMockServer::new().await;
+        let server_url = server.uri();
+
+        let client = Client::builder()
+            .homeserver_url(&server_url)
+            .store_config(StoreConfig::new(CrossProcessLockConfig::SingleProcess))
+            .build()
+            .await
+            .unwrap();
+
+        let _moved = server
+            .mock_well_known()
+            .ok_with_homeserver_url("https://moved.example.org")
+            .named("well known naming another homeserver")
+            .mount_as_scoped()
+            .await;
+
+        client.rediscover().await;
+
+        assert_eq!(client.homeserver().as_str(), format!("{server_url}/"));
     }
 
     #[async_test]

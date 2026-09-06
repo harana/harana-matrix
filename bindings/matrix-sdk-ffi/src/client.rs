@@ -3195,6 +3195,9 @@ impl Session {
                 let matrix_sdk::authentication::matrix::MatrixSession {
                     meta: matrix_sdk::SessionMeta { user_id, device_id },
                     tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                    // The FFI session carries the homeserver in its own field,
+                    // which the caller passed in.
+                    homeserver: _,
                 } = a.session().context("Missing session")?;
 
                 Ok(Session {
@@ -3244,7 +3247,7 @@ impl TryFrom<Session> for AuthSession {
             refresh_token,
             user_id,
             device_id,
-            homeserver_url: _,
+            homeserver_url,
             oauth_data: oauth_data_string,
             sliding_sync_version: _,
         } = value;
@@ -3272,6 +3275,9 @@ impl TryFrom<Session> for AuthSession {
                     device_id: device_id.into(),
                 },
                 tokens: matrix_sdk::SessionTokens { access_token, refresh_token },
+                // Hand the stored homeserver to the SDK, so restoring the
+                // session doesn't have to resolve the server name again.
+                homeserver: Url::parse(&homeserver_url).ok(),
             };
 
             Ok(AuthSession::Matrix(session))

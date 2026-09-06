@@ -370,6 +370,7 @@ async fn test_restore_cross_signing_from_secret_store() {
     let user_id = user_id!("@example:morpheus.localhost");
 
     let session = MatrixSession {
+        homeserver: None,
         meta: SessionMeta {
             user_id: owned_user_id!("@example:morpheus.localhost"),
             device_id: owned_device_id!("DEVICEID"),
@@ -571,6 +572,7 @@ async fn test_is_secret_storage_enabled() {
     let user_id = user_id!("@example:morpheus.localhost");
 
     let session = MatrixSession {
+        homeserver: None,
         meta: SessionMeta {
             user_id: owned_user_id!("@example:morpheus.localhost"),
             device_id: owned_device_id!("DEVICEID"),
