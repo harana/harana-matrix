@@ -75,6 +75,21 @@ async fn test_unread_count_new_message_no_receipt() {
     assert_eq!(room.num_unread_messages(), 2);
 }
 
+/// Wait until the room's send queue has sent everything it had.
+///
+/// Read receipts go through the send queue, so they land on the server a moment
+/// after the call that asked for them returned.
+async fn wait_for_empty_send_queue(client: &matrix_sdk::Client, room_id: &ruma::RoomId) {
+    for _ in 0..200 {
+        let requests = client.state_store().load_send_queue_requests(room_id).await.unwrap();
+        if requests.is_empty() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("the send queue still has pending requests");
+}
+
 /// Test that sending a read receipt clears the unread count right away, rather
 /// than only once the receipt comes back through sync.
 #[async_test]
@@ -116,12 +131,16 @@ async fn test_sending_a_read_receipt_updates_the_unread_count_locally() {
 
     // No sync in between: the receipt was applied locally.
     assert_eq!(room.num_unread_messages(), 0);
+
+    // The send queue owns the round trip, so the request lands a moment later.
+    wait_for_empty_send_queue(&client, room_id).await;
 }
 
-/// Test that a read receipt applied locally is rolled back when the request to
-/// send it fails.
+/// Test that a read receipt the server rejects stays applied locally: the send
+/// queue owns the round trip and retries it, so the failure is not the caller's
+/// to see, and the local echo is not rolled back.
 #[async_test]
-async fn test_a_failed_read_receipt_rolls_back_the_unread_count() {
+async fn test_a_rejected_read_receipt_is_left_to_the_send_queue() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
 
@@ -149,16 +168,18 @@ async fn test_a_failed_read_receipt_rolls_back_the_unread_count() {
 
     server.mock_send_receipt(CreateReceiptType::Read).error500().mount().await;
 
+    // Queueing the receipt succeeds, whatever the server later makes of it.
     room.send_single_receipt(
         CreateReceiptType::Read,
         ReceiptThread::Unthreaded,
         event_id!("$2").to_owned(),
     )
     .await
-    .unwrap_err();
+    .unwrap();
 
-    // The server never saw the receipt, so the room is unread again.
-    assert_eq!(room.num_unread_messages(), 2);
+    // The local echo is applied, and stays applied: the send queue is the one
+    // that retries the request.
+    assert_eq!(room.num_unread_messages(), 0);
 }
 
 /// Test that the unread count only includes messages after the last known read

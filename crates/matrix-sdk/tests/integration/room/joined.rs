@@ -670,19 +670,8 @@ async fn test_send_single_receipt_has_a_local_echo() {
     // Two messages from somebody else are unread.
     assert_eq!(room.num_unread_messages(), 2);
 
-    // Sending the receipt fails: the counts must be left untouched.
-    {
-        let _guard = server.mock_send_receipt(ReceiptType::Read).error500().mount_as_scoped().await;
-
-        room.send_single_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, event_id.clone())
-            .await
-            .unwrap_err();
-    }
-
-    assert_eq!(room.num_unread_messages(), 2);
-
-    // Sending the receipt succeeds: the counts drop right away, without waiting for
-    // the receipt to come back through sync.
+    // The counts drop as soon as the receipt is queued, without waiting for it to
+    // come back through sync.
     {
         let _guard =
             server.mock_send_receipt(ReceiptType::Read).ok().mock_once().mount_as_scoped().await;
@@ -690,6 +679,10 @@ async fn test_send_single_receipt_has_a_local_echo() {
         room.send_single_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, event_id)
             .await
             .unwrap();
+
+        assert_eq!(room.num_unread_messages(), 0);
+
+        wait_for_empty_send_queue(&client, room_id).await;
     }
 
     assert_eq!(room.num_unread_messages(), 0);
