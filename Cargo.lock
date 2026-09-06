@@ -5795,6 +5795,7 @@ dependencies = [
  "serde_html_form",
  "serde_json",
  "sha2 0.11.0",
+ "similar-asserts",
  "smol-macros",
  "test-log",
  "thiserror 2.0.19",

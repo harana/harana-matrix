@@ -107,6 +107,25 @@ pub use js_option::JsOption;
 pub use language_tags::LanguageTag;
 pub use web_time as time;
 
+/// Alias for [`Sync`] off WASM, an empty trait implemented by everything on it.
+///
+/// A few futures here borrow a caller-supplied event type across an await, and
+/// the SDK built on this crate spawns them, so they have to be `Send`, which in
+/// turn makes the borrowed type `Sync`. WASM has no threads and its host types
+/// are not `Sync`, so requiring it there would rule out valid callers and
+/// nothing else. `matrix_sdk_common` has the same pair of markers; this crate
+/// cannot use them, since that crate depends on this one.
+#[cfg(not(target_family = "wasm"))]
+pub trait SyncOutsideWasm: Sync {}
+#[cfg(not(target_family = "wasm"))]
+impl<T: Sync + ?Sized> SyncOutsideWasm for T {}
+
+/// Alias for [`Sync`] off WASM, an empty trait implemented by everything on it.
+#[cfg(target_family = "wasm")]
+pub trait SyncOutsideWasm {}
+#[cfg(target_family = "wasm")]
+impl<T: ?Sized> SyncOutsideWasm for T {}
+
 pub use self::{
     canonical_json::{CanonicalJsonError, CanonicalJsonObject, CanonicalJsonValue},
     identifiers::*,

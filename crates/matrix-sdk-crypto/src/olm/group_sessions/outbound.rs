@@ -24,7 +24,9 @@ use std::{
     time::Duration,
 };
 
-use matrix_sdk_common::{deserialized_responses::WithheldCode, locks::RwLock as StdRwLock};
+use matrix_sdk_common::{
+    SyncOutsideWasm, deserialized_responses::WithheldCode, locks::RwLock as StdRwLock,
+};
 #[cfg(feature = "experimental-encrypted-state-events")]
 use ruma::events::AnyStateEventContent;
 use ruma::{
@@ -591,7 +593,7 @@ impl OutboundGroupSession {
     /// # Panics
     ///
     /// Panics if the content can't be serialized.
-    async fn encrypt_inner<T: Serialize>(
+    async fn encrypt_inner<T: Serialize + SyncOutsideWasm>(
         &self,
         payload: &T,
         relates_to: Option<serde_json::Value>,

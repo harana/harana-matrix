@@ -5,9 +5,9 @@ use std::{
     sync::Arc,
 };
 
+use crate::{EventId, MilliSecondsSinceUnixEpoch, RoomId, UserId};
+use crate::events::TimelineEventType;
 use serde_json::value::RawValue as RawJsonValue;
-
-use crate::{EventId, MilliSecondsSinceUnixEpoch, RoomId, UserId, events::TimelineEventType};
 
 /// Abstraction of a PDU so users can have their own PDU types.
 pub trait Event {
@@ -46,8 +46,7 @@ pub trait Event {
     /// If this event is a redaction event this is the event it redacts.
     fn redacts(&self) -> Option<&Self::Id>;
 
-    /// Whether this event was rejected for not passing the checks on reception
-    /// of a PDU.
+    /// Whether this event was rejected for not passing the checks on reception of a PDU.
     fn rejected(&self) -> bool;
 }
 

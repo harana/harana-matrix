@@ -1,13 +1,11 @@
 use js_int::int;
-use serde_json::json;
-use test_log::test;
-
 use crate::{
-    RoomVersionId,
-    events::TimelineEventType,
-    owned_event_id, owned_room_id,
+    RoomVersionId, owned_event_id, owned_room_id,
     room_version_rules::{AuthorizationRules, RoomIdFormatVersion},
 };
+use crate::events::TimelineEventType;
+use serde_json::json;
+use test_log::test;
 
 mod room_power_levels;
 
@@ -30,8 +28,7 @@ fn valid_room_create() {
     let mut pdu = RoomCreatePduBuilder::new(RoomVersionId::V6).build();
     check_room_create(RoomCreateEvent::new(&pdu), &AuthorizationRules::V6).unwrap();
 
-    // Only keep the required `creator` field, which means the room version is the
-    // default of v1.
+    // Only keep the required `creator` field, which means the room version is the default of v1.
     pdu.set_content(json!({ "creator": alice_id }));
     check_room_create(RoomCreateEvent::new(&pdu), &AuthorizationRules::V1).unwrap();
 
@@ -39,8 +36,8 @@ fn valid_room_create() {
     let mut pdu = RoomCreatePduBuilder::new(RoomVersionId::V11).build();
     check_room_create(RoomCreateEvent::new(&pdu), &AuthorizationRules::V11).unwrap();
 
-    // Check various contents that might not match the definition of `m.room.create`
-    // in the spec, to ensure that we only care about a few fields.
+    // Check various contents that might not match the definition of `m.room.create` in the
+    // spec, to ensure that we only care about a few fields.
     let contents_to_check = vec![
         // With an invalid predecessor, but we don't care about it. Inspired by a real-life
         // example.
@@ -67,8 +64,7 @@ fn valid_room_create() {
     }));
     check_room_create(RoomCreateEvent::new(&pdu), &AuthorizationRules::V11).unwrap();
 
-    // Since room v12, check that `additional_creators` only contains valid user
-    // IDs.
+    // Since room v12, check that `additional_creators` only contains valid user IDs.
     let pdu =
         RoomCreatePduBuilder::new(RoomVersionId::V12).additional_creators(vec![alice_id]).build();
     check_room_create(RoomCreateEvent::new(pdu), &AuthorizationRules::V12).unwrap();
@@ -130,8 +126,8 @@ fn invalid_room_create() {
 
 #[test]
 fn redact_higher_power_level() {
-    // The `m.room.redaction` checks are only done on room v1-v2 which are not
-    // supported by RoomTimelineFactory, so construct the PDUs manually.
+    // The `m.room.redaction` checks are only done on room v1-v2 which are not supported by
+    // RoomTimelineFactory, so construct the PDUs manually.
     let alice_id = UserFactory::Alice.user_id();
 
     let mut room_redaction_event = Pdu::with_minimal_fields(
@@ -145,7 +141,7 @@ fn redact_higher_power_level() {
 
     let room_power_levels_event = Pdu::with_minimal_state_fields(
         owned_event_id!("$powerlevels:matrix.local"),
-        alice_id,
+        alice_id.clone(),
         TimelineEventType::RoomPowerLevels,
         String::new(),
         // All users have the default power level.
@@ -167,8 +163,8 @@ fn redact_higher_power_level() {
 
 #[test]
 fn redact_same_power_level() {
-    // The `m.room.redaction` checks are only done on room v1-v2 which are not
-    // supported by RoomTimelineFactory, so construct the PDUs manually.
+    // The `m.room.redaction` checks are only done on room v1-v2 which are not supported by
+    // RoomTimelineFactory, so construct the PDUs manually.
     let alice_id = UserFactory::Alice.user_id();
 
     let mut room_redaction_event = Pdu::with_minimal_fields(
@@ -201,8 +197,8 @@ fn redact_same_power_level() {
 
 #[test]
 fn redact_same_server() {
-    // The `m.room.redaction` checks are only done on room v1-v2 which are not
-    // supported by RoomTimelineFactory, so construct the PDUs manually.
+    // The `m.room.redaction` checks are only done on room v1-v2 which are not supported by
+    // RoomTimelineFactory, so construct the PDUs manually.
     let alice_id = UserFactory::Alice.user_id();
 
     let mut room_redaction_event = Pdu::with_minimal_fields(
@@ -216,7 +212,7 @@ fn redact_same_server() {
 
     let room_power_levels_event = Pdu::with_minimal_state_fields(
         owned_event_id!("$powerlevels:matrix.local"),
-        alice_id,
+        alice_id.clone(),
         TimelineEventType::RoomPowerLevels,
         String::new(),
         // All users have the default power level of `0`.
@@ -286,8 +282,7 @@ fn no_federate() {
 
 #[test]
 fn room_aliases_no_state_key() {
-    // The event format didn't change between v4 and v6 so let's just create a v6
-    // room.
+    // The event format didn't change between v4 and v6 so let's just create a v6 room.
     let mut factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V6);
 
     let mut pdu = Pdu::with_minimal_fields(
@@ -317,8 +312,7 @@ fn room_aliases_no_state_key() {
 
 #[test]
 fn room_aliases_other_server() {
-    // The event format didn't change between v4 and v6 so let's just create a v6
-    // room.
+    // The event format didn't change between v4 and v6 so let's just create a v6 room.
     let mut factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V6);
 
     let mut pdu = Pdu::with_minimal_state_fields(
@@ -335,8 +329,8 @@ fn room_aliases_other_server() {
     );
     factory.prepare_to_add_pdu(&mut pdu);
 
-    // In room v1-v5, we cannot accept `m.room.aliases` with different state key
-    // server name than sender.
+    // In room v1-v5, we cannot accept `m.room.aliases` with different state key server name than
+    // sender.
     assert_eq!(
         check_state_dependent_auth_rules(&AuthorizationRules::V3, &pdu, factory.state_event_fn())
             .unwrap_err(),
@@ -350,8 +344,7 @@ fn room_aliases_other_server() {
 
 #[test]
 fn room_aliases_same_server() {
-    // The event format didn't change between v4 and v6 so let's just create a v6
-    // room.
+    // The event format didn't change between v4 and v6 so let's just create a v6 room.
     let mut factory = RoomTimelineFactory::with_public_chat_preset(RoomVersionId::V6);
 
     let mut pdu = Pdu::with_minimal_state_fields(
@@ -439,7 +432,7 @@ fn event_type_not_enough_power() {
     let alice_id = UserFactory::Alice.user_id();
     factory.add_room_power_levels(
         owned_event_id!("$room-power-levels-invite"),
-        alice_id,
+        alice_id.clone(),
         RoomPowerLevelsPduContent::Events {
             event_types: vec![TimelineEventType::RoomMessage],
             value: 10,
@@ -468,8 +461,7 @@ fn user_id_state_key_not_sender() {
     );
     factory.prepare_to_add_pdu(&mut pdu);
 
-    // Cannot send state event with a user ID as a state key that doesn't match the
-    // sender.
+    // Cannot send state event with a user ID as a state key that doesn't match the sender.
     assert_eq!(
         check_state_dependent_auth_rules(&AuthorizationRules::V6, pdu, factory.state_event_fn())
             .unwrap_err(),
@@ -591,9 +583,8 @@ fn rejected_auth_event() {
 
 #[test]
 fn room_create_with_allowed_or_rejected_room_id() {
-    // The check ignores the `room_version` field in the content so we can use a PDU
-    // with the wrong value regardless of the version of the authorization
-    // rules.
+    // The check ignores the `room_version` field in the content so we can use a PDU with the
+    // wrong value regardless of the version of the authorization rules.
 
     // A room v11 PDU, with a room ID.
     let room_create_v11 = RoomCreatePduBuilder::new(RoomVersionId::V11).build();

@@ -15,9 +15,11 @@
 //! Authorization against an asynchronous store.
 
 use std::{
-    cell::RefCell,
     collections::HashMap,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use matrix_sdk_state_res::{AuthCheckOutcome, Event, auth_check, check_state_dependent_auth_rules};
@@ -120,7 +122,9 @@ struct Room {
     events: HashMap<OwnedEventId, TestPdu>,
     state: HashMap<(StateEventType, String), TestPdu>,
     /// Every state key the checks looked up, in order.
-    state_reads: RefCell<Vec<(StateEventType, String)>>,
+    // A `Mutex` rather than a `RefCell`: the futures handed to `auth_check`
+    // have to be `Send`, and a `RefCell` is not `Sync`.
+    state_reads: Mutex<Vec<(StateEventType, String)>>,
     event_reads: AtomicUsize,
 }
 
@@ -166,7 +170,7 @@ impl Room {
         Self {
             events,
             state,
-            state_reads: RefCell::new(Vec::new()),
+            state_reads: Mutex::new(Vec::new()),
             event_reads: AtomicUsize::new(0),
         }
     }
@@ -181,7 +185,7 @@ impl Room {
 
     #[allow(clippy::unused_async)]
     async fn fetch_state(&self, event_type: StateEventType, state_key: String) -> Option<TestPdu> {
-        self.state_reads.borrow_mut().push((event_type.clone(), state_key.clone()));
+        self.state_reads.lock().unwrap().push((event_type.clone(), state_key.clone()));
         self.state.get(&(event_type, state_key)).cloned()
     }
 }
@@ -251,7 +255,7 @@ async fn test_missing_state_is_fetched_once_rather_than_re_requested() {
 
     // A key the room does not hold is an answer, not a miss, so no key is read
     // twice however many rounds the check takes.
-    let reads = room.state_reads.borrow();
+    let reads = room.state_reads.lock().unwrap();
     let mut seen = reads.clone();
     seen.sort();
     seen.dedup();

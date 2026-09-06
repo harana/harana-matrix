@@ -1,85 +1,74 @@
 //! State resolution and checks on incoming PDUs according to the [Matrix](https://matrix.org/) specification.
 //!
-//! When creating or receiving a PDU (or event), a server must check whether it
-//! is valid and how it affects the room state. The purpose of this crate is to
-//! provide functions that solve that.
+//! When creating or receiving a PDU (or event), a server must check whether it is valid and how it
+//! affects the room state. The purpose of this module is to provide functions that solve
+//! that.
 //!
 //! # Supported room versions
 //!
-//! Only room versions enforcing [canonical JSON] (introduced with [room version
-//! 6]) are supported.
+//! Only room versions enforcing [canonical JSON] (introduced with [room version 6]) are supported.
 //!
 //! Room versions 1 through 5 are supported on a best effort basis:
 //!
-//! * The authorization rules should work for most events but some
-//!   unconventional JSON encoding of values might fail to deserialize while
-//!   still considered to be valid by other implementations.
-//! * The [state resolution algorithm from room version 1][state-res-v1] is not
-//!   implemented.
+//! * The authorization rules should work for most events but some unconventional JSON encoding of
+//!   values might fail to deserialize while still considered to be valid by other implementations.
+//! * The [state resolution algorithm from room version 1][state-res-v1] is not implemented.
 //!
-//! Homeservers using this crate **should not** advertise support for those room
-//! versions.
+//! Homeservers using this module **should not** advertise support for those room versions.
 //!
 //! # Checks performed on receipt of a PDU
 //!
-//! This module used with [`crate::signatures`] should allow to perform all the
-//! [necessary checks on receipt of a PDU].
+//! This module used with [`crate::signatures`] should allow to perform all the [necessary checks on
+//! receipt of a PDU].
 //!
-//! To respect the Matrix specification, the following functions should be
-//! called for a PDU:
+//! To respect the Matrix specification, the following functions should be called for a PDU:
 //!
 //! 1. [`check_pdu_format()`] - The event should be dropped on error.
-//! 2. [`crate::signatures::verify_event()`] - The event should be dropped on
-//!    error. The PDU should be redacted before checking the authorization rules
-//!    if the result is `Verified::Signatures`.
-//! 3. [`check_state_independent_auth_rules()`] - The event should be rejected
-//!    on error.
-//! 4. [`check_state_dependent_auth_rules()`] - This function must be called 3
-//!    times:
-//!     1. With the `auth_events` for the state, the event should be rejected on
-//!        error.
-//!     2. With the state before the event, the event should be rejected on
-//!        error.
-//!     3. With the current state of the room, the event should be "soft failed"
-//!        on error.
+//! 2. [`crate::signatures::verify_event()`] - The event should be dropped on error. The PDU should be
+//!    redacted before checking the authorization rules if the result is `Verified::Signatures`.
+//! 3. [`check_state_independent_auth_rules()`] - The event should be rejected on error.
+//! 4. [`check_state_dependent_auth_rules()`] - This function must be called 3 times:
+//!     1. With the `auth_events` for the state, the event should be rejected on error.
+//!     2. With the state before the event, the event should be rejected on error.
+//!     3. With the current state of the room, the event should be "soft failed" on error.
 //!
 //! # Room State Resolution
 //!
-//! Because of the distributed nature of Matrix, homeservers might not receive
-//! all events in the same order, which might cause the room state to diverge
-//! temporarily between homeservers. The purpose of [state resolution] is to
-//! make sure that all homeservers arrive at the same room state given the same
-//! events.
+//! Because of the distributed nature of Matrix, homeservers might not receive all events in the
+//! same order, which might cause the room state to diverge temporarily between homeservers. The
+//! purpose of [state resolution] is to make sure that all homeservers arrive at the same room state
+//! given the same events.
 //!
-//! The [`resolve()`] function allows to do that. It takes an iterator of state
-//! maps and applies the proper state resolution algorithm for the current room
-//! version to output the map of events in the current room state.
+//! The [`resolve()`] function allows to do that. It takes an iterator of state maps and applies the
+//! proper state resolution algorithm for the current room version to output the map of events in
+//! the current room state.
 //!
 //! # Event helper types
 //!
-//! The event content types from [`crate::events`] use strict deserialization
-//! rules according to their definition in the specification, which means that
-//! they also validate fields that are not checked when receiving a PDU. Since
-//! it is not appropriate for servers to reject an event that passes those
-//! checks, this module provides helper types in the [`events`] module, built
-//! around the [`Event`] trait, to deserialize lazily a handful of fields from
-//! the most common state events. Since these are the same types used for
-//! checking the authorization rules, they are guaranteed to not perform
+//! The types from [`crate::events`] use strict deserialization rules according to their definition in
+//! the specification, which means that they also validate fields that are not checked when
+//! receiving a PDU. Since it is not appropriate for servers to reject an event that passes those
+//! checks, this module provides helper types in the [`events`] module, built around the [`Event`]
+//! trait, to deserialize lazily a handful of fields from the most common state events. Since these
+//! are the same types used for checking the authorization rules, they are guaranteed to not perform
 //! extra validation on unvalidated fields.
 //!
-//! The event content types from [`crate::events`] are still appropriate to be
-//! used to create a new event, or to validate an event received from a client.
+//! The types from [`crate::events`] are still appropriate to be used to create a new event, or to
+//! validate an event received from a client.
 //!
-//! [canonical JSON]: https://spec.matrix.org/v1.18/appendices/#canonical-json
-//! [room version 6]: https://spec.matrix.org/v1.18/rooms/v6/
-//! [state-res-v1]: https://spec.matrix.org/v1.18/rooms/v1/#state-resolution
-//! [necessary checks on receipt of a PDU]: https://spec.matrix.org/v1.18/server-server-api/#checks-performed-on-receipt-of-a-pdu
+//! [canonical JSON]: https://spec.matrix.org/v1.19/appendices/#canonical-json
+//! [room version 6]: https://spec.matrix.org/v1.19/rooms/v6/
+//! [state-res-v1]: https://spec.matrix.org/v1.19/rooms/v1/#state-resolution
+//! [state resolution]: https://spec.matrix.org/v1.19/server-server-api/#room-state-resolution
+//! [necessary checks on receipt of a PDU]: https://spec.matrix.org/v1.19/server-server-api/#checks-performed-on-receipt-of-a-pdu
 
 mod error;
 mod event_auth;
 mod event_format;
 pub mod events;
-mod resolve;
+mod state_res;
+// The upstream crate also exposed this behind its benchmark feature; the
+// benchmarks are not vendored, so the tests are the only consumer left.
 #[cfg(test)]
 mod test_utils;
 pub mod utils;
@@ -91,5 +80,5 @@ pub use self::{
     },
     event_format::check_pdu_format,
     events::Event,
-    resolve::{StateMap, resolve, reverse_topological_power_sort},
+    state_res::{StateMap, resolve, reverse_topological_power_sort},
 };

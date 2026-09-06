@@ -42,7 +42,7 @@ use matrix_sdk_base::crypto::{
 pub use matrix_sdk_base::store::StoredThreadSubscription;
 use matrix_sdk_base::{
     ComposerDraft, DmRoomDefinition, EncryptionState, RoomInfoNotableUpdateReasons,
-    RoomMemberships, SendOutsideWasm, StateStoreDataKey, StateStoreDataValue,
+    RoomMemberships, SendOutsideWasm, StateStoreDataKey, StateStoreDataValue, SyncOutsideWasm,
     deserialized_responses::{
         RawAnySyncOrStrippedState, RawSyncOrStrippedState, SyncOrStrippedState,
     },
@@ -256,7 +256,10 @@ impl PushContext {
     }
 
     /// Compute the push rules for a given event.
-    pub async fn for_event<T>(&self, event: &Raw<T>) -> Vec<Action> {
+    ///
+    /// `T` is `Sync` so that the returned future is `Send`: `Raw<T>` is only
+    /// `Sync` when `T` is, and push rules are evaluated on spawned tasks.
+    pub async fn for_event<T: SyncOutsideWasm>(&self, event: &Raw<T>) -> Vec<Action> {
         self.push_rules.get_actions(event, &self.push_condition_room_ctx).await.to_owned()
     }
 
@@ -264,7 +267,7 @@ impl PushContext {
     /// debugging.
     #[doc(hidden)]
     #[instrument(skip_all)]
-    pub async fn traced_for_event<T>(&self, event: &Raw<T>) -> Vec<Action> {
+    pub async fn traced_for_event<T: SyncOutsideWasm>(&self, event: &Raw<T>) -> Vec<Action> {
         let rules = self
             .push_rules
             .iter()
@@ -3267,7 +3270,7 @@ impl Room {
     #[instrument(skip_all)]
     pub async fn send_state_event(
         &self,
-        content: impl StateEventContent<StateKey = EmptyStateKey>,
+        content: impl StateEventContent<StateKey = EmptyStateKey> + SendOutsideWasm,
     ) -> Result<send_state_event::v3::Response> {
         self.send_state_event_for_key(&EmptyStateKey, content).await
     }
@@ -3378,9 +3381,9 @@ impl Room {
         content: C,
     ) -> Result<send_state_event::v3::Response>
     where
-        C: StateEventContent,
+        C: StateEventContent + SendOutsideWasm,
         C::StateKey: Borrow<K>,
-        K: AsRef<str> + ?Sized,
+        K: AsRef<str> + SyncOutsideWasm + ?Sized,
     {
         self.ensure_room_joined()?;
         let request =
@@ -3901,7 +3904,10 @@ impl Room {
     ///
     /// Note that it is possible that no push action is returned because the
     /// current room state does not have all the required state events.
-    pub async fn event_push_actions<T>(&self, event: &Raw<T>) -> Result<Option<Vec<Action>>> {
+    pub async fn event_push_actions<T: SyncOutsideWasm>(
+        &self,
+        event: &Raw<T>,
+    ) -> Result<Option<Vec<Action>>> {
         if let Some(ctx) = self.push_context().await? {
             Ok(Some(ctx.for_event(event).await))
         } else {

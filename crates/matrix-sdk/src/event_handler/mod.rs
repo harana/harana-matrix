@@ -347,7 +347,7 @@ impl Client {
         handle
     }
 
-    pub(crate) async fn handle_sync_events<T>(
+    pub(crate) async fn handle_sync_events<T: SyncOutsideWasm>(
         &self,
         kind: HandlerKind,
         room: Option<&Room>,

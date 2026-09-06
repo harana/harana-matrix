@@ -16,6 +16,11 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs, missing_debug_implementations)]
+// Async methods must hand back futures that can be spawned on a
+// multi-threaded runtime, which is what consumers of this crate do with
+// them. WASM has no threads and its host types are not `Send`, so the lint
+// is only applied elsewhere.
+#![cfg_attr(not(target_family = "wasm"), deny(clippy::future_not_send))]
 #![cfg_attr(target_family = "wasm", allow(clippy::arc_with_non_send_sync))]
 
 pub mod backups;
